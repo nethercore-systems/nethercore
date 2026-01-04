@@ -1,6 +1,6 @@
 [game]
-id = "procedural-shapes"
-title = "Procedural Shapes"
+id = "viewport-test"
+title = "Viewport Test"
 author = "Nethercore Examples"
 version = "0.1.0"
 render_mode = 0

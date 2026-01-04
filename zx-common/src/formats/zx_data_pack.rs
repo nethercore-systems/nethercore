@@ -20,6 +20,7 @@ use std::sync::OnceLock;
 /// Determined by the `compress_textures` flag in nether.toml at pack time.
 /// - compress_textures = false: RGBA8 — pixel-perfect, full alpha
 /// - compress_textures = true: BC7 — 4× compression, stipple transparency
+/// - Normal maps: BC5 — 2-channel RG, optimal for tangent-space normals
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Encode, Decode)]
 pub enum TextureFormat {
     /// Uncompressed RGBA8 (4 bytes per pixel)
@@ -30,12 +31,26 @@ pub enum TextureFormat {
     /// BC7 compressed (8 bits per pixel, linear color space)
     /// Used for all textures in modes 1-3
     Bc7,
+
+    /// BC5 compressed (8 bits per pixel, 2-channel RG)
+    /// Used for normal maps — Z reconstructed in shader: z = sqrt(1 - x² - y²)
+    Bc5,
 }
 
 impl TextureFormat {
-    /// Check if this format is BC7 (compressed)
+    /// Check if this format is BC7 (compressed color)
     pub fn is_bc7(&self) -> bool {
         matches!(self, TextureFormat::Bc7)
+    }
+
+    /// Check if this format is BC5 (compressed 2-channel)
+    pub fn is_bc5(&self) -> bool {
+        matches!(self, TextureFormat::Bc5)
+    }
+
+    /// Check if this format is compressed (BC5 or BC7)
+    pub fn is_compressed(&self) -> bool {
+        matches!(self, TextureFormat::Bc7 | TextureFormat::Bc5)
     }
 
     /// Calculate data size for given dimensions
@@ -45,7 +60,8 @@ impl TextureFormat {
 
         match self {
             TextureFormat::Rgba8 => w * h * 4,
-            TextureFormat::Bc7 => {
+            TextureFormat::Bc7 | TextureFormat::Bc5 => {
+                // Both BC7 and BC5 use 16 bytes per 4x4 block
                 let blocks_x = w.div_ceil(4);
                 let blocks_y = h.div_ceil(4);
                 blocks_x * blocks_y * 16
@@ -58,6 +74,7 @@ impl TextureFormat {
         match self {
             TextureFormat::Rgba8 => "Rgba8Unorm",
             TextureFormat::Bc7 => "Bc7RgbaUnorm",
+            TextureFormat::Bc5 => "Bc5RgUnorm",
         }
     }
 }

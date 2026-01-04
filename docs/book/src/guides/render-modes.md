@@ -11,35 +11,18 @@ Nethercore ZX supports 4 rendering modes, each with different lighting and mater
 | 2 | Metallic-Roughness | PBR-style Blinn-Phong | Realistic materials |
 | 3 | Specular-Shininess | Traditional Blinn-Phong | Classic 3D, arcade |
 
-Set the mode once in `init()`:
+Set the mode in your `nether.toml`:
 
-{{#tabs global="lang"}}
-
-{{#tab name="Rust"}}
-```rust
-fn init() {
-    render_mode(2); // PBR-style lighting
-}
+```toml
+[game]
+id = "my-game"
+title = "My Game"
+author = "Developer"
+version = "1.0.0"
+render_mode = 2  # 0=Lambert, 1=Matcap, 2=PBR, 3=Hybrid
 ```
-{{#endtab}}
 
-{{#tab name="C/C++"}}
-```c
-NCZX_EXPORT void init(void) {
-    render_mode(2); // PBR-style lighting
-}
-```
-{{#endtab}}
-
-{{#tab name="Zig"}}
-```zig
-export fn init() void {
-    render_mode(2); // PBR-style lighting
-}
-```
-{{#endtab}}
-
-{{#endtabs}}
+If not specified, defaults to mode 0 (Lambert). The render mode cannot be changed at runtime.
 
 ---
 
@@ -59,9 +42,7 @@ Supports both flat shading (without normals) and Lambert diffuse shading (with n
 
 {{#tab name="Rust"}}
 ```rust
-fn init() {
-    render_mode(0);
-}
+// nether.toml: render_mode = 0
 
 fn render() {
     // Color comes purely from texture + set_color tint
@@ -74,9 +55,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-NCZX_EXPORT void init(void) {
-    render_mode(0);
-}
+// nether.toml: render_mode = 0
 
 NCZX_EXPORT void render(void) {
     // Color comes purely from texture + set_color tint
@@ -89,9 +68,7 @@ NCZX_EXPORT void render(void) {
 
 {{#tab name="Zig"}}
 ```zig
-export fn init() void {
-    render_mode(0);
-}
+// nether.toml: render_mode = 0
 
 export fn render() void {
     // Color comes purely from texture + set_color tint
@@ -140,8 +117,9 @@ Uses matcap textures for pre-baked lighting. Fast and stylized.
 
 {{#tab name="Rust"}}
 ```rust
+// nether.toml: render_mode = 1
+
 fn init() {
-    render_mode(1);
     SHADOW_MATCAP = rom_texture(b"matcap_shadow".as_ptr(), 13);
     HIGHLIGHT_MATCAP = rom_texture(b"matcap_highlight".as_ptr(), 16);
 }
@@ -159,8 +137,9 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
+// nether.toml: render_mode = 1
+
 NCZX_EXPORT void init(void) {
-    render_mode(1);
     SHADOW_MATCAP = rom_texture("matcap_shadow", 13);
     HIGHLIGHT_MATCAP = rom_texture("matcap_highlight", 16);
 }
@@ -178,8 +157,9 @@ NCZX_EXPORT void render(void) {
 
 {{#tab name="Zig"}}
 ```zig
+// nether.toml: render_mode = 1
+
 export fn init() void {
-    render_mode(1);
     SHADOW_MATCAP = rom_texture("matcap_shadow", 13);
     HIGHLIGHT_MATCAP = rom_texture("matcap_highlight", 16);
 }
@@ -263,9 +243,7 @@ material_rim(0.2, 0.15);   // Rim light intensity and power
 
 {{#tab name="Rust"}}
 ```rust
-fn init() {
-    render_mode(2);
-}
+// nether.toml: render_mode = 2
 
 fn render() {
     // Set up lighting
@@ -292,9 +270,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-NCZX_EXPORT void init(void) {
-    render_mode(2);
-}
+// nether.toml: render_mode = 2
 
 NCZX_EXPORT void render(void) {
     // Set up lighting
@@ -321,9 +297,7 @@ NCZX_EXPORT void render(void) {
 
 {{#tab name="Zig"}}
 ```zig
-export fn init() void {
-    render_mode(2);
-}
+// nether.toml: render_mode = 2
 
 export fn render() void {
     // Set up lighting
@@ -426,9 +400,7 @@ material_rim(0.2, 0.15);           // Rim light
 
 {{#tab name="Rust"}}
 ```rust
-fn init() {
-    render_mode(3);
-}
+// nether.toml: render_mode = 3
 
 fn render() {
     // Gold armor
@@ -450,9 +422,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-NCZX_EXPORT void init(void) {
-    render_mode(3);
-}
+// nether.toml: render_mode = 3
 
 NCZX_EXPORT void render(void) {
     // Gold armor
@@ -474,9 +444,7 @@ NCZX_EXPORT void render(void) {
 
 {{#tab name="Zig"}}
 ```zig
-export fn init() void {
-    render_mode(3);
-}
+// nether.toml: render_mode = 3
 
 export fn render() void {
     // Gold armor
@@ -529,9 +497,9 @@ All lit modes benefit from proper environment and light setup:
 
 {{#tab name="Rust"}}
 ```rust
-fn init() {
-    render_mode(2); // or 1 or 3
+// nether.toml: render_mode = 1, 2, or 3
 
+fn init() {
     // Set up environment (provides ambient light)
     env_gradient(
         0,           // layer (0=base)
@@ -566,9 +534,9 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-NCZX_EXPORT void init(void) {
-    render_mode(2); // or 1 or 3
+// nether.toml: render_mode = 1, 2, or 3
 
+NCZX_EXPORT void init(void) {
     // Set up environment (provides ambient light)
     env_gradient(
         0,           // layer (0=base)
@@ -603,9 +571,9 @@ NCZX_EXPORT void render(void) {
 
 {{#tab name="Zig"}}
 ```zig
-export fn init() void {
-    render_mode(2); // or 1 or 3
+// nether.toml: render_mode = 1, 2, or 3
 
+export fn init() void {
     // Set up environment (provides ambient light)
     env_gradient(
         0,           // layer (0=base)

@@ -145,7 +145,6 @@ pub extern "C" fn on_debug_change() {
 pub extern "C" fn init() {
     unsafe {
         set_clear_color(0x1a1a2eFF);
-        render_mode(2); // MR-Blinn-Phong
 
         // Generate meshes
         SPHERE_MESH = sphere(1.5, 32, 16);

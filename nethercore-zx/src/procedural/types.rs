@@ -5,7 +5,7 @@
 use bytemuck::cast_slice;
 use glam::Vec3;
 
-use crate::graphics::{pack_normal_octahedral, pack_position_f16, pack_uv_unorm16};
+use crate::graphics::{pack_normal_octahedral, pack_position_f16, pack_tangent, pack_uv_unorm16};
 
 /// Trait for mesh construction - enables generic geometry generation
 ///
@@ -24,6 +24,21 @@ pub trait MeshBuilder: Default {
 pub trait MeshBuilderUV: MeshBuilder {
     /// Add a vertex with position, UV coordinates, and normal, returning its index
     fn add_vertex_uv(&mut self, position: Vec3, uv: (f32, f32), normal: Vec3) -> u16;
+}
+
+/// Trait extension for tangent-mapped meshes (requires UV and Normal)
+pub trait MeshBuilderTangent: MeshBuilderUV {
+    /// Add a vertex with position, UV, normal, tangent, and handedness, returning its index
+    /// Tangent is the direction of increasing U in tangent space
+    /// Handedness is +1.0 or -1.0 for bitangent direction
+    fn add_vertex_tangent(
+        &mut self,
+        position: Vec3,
+        uv: (f32, f32),
+        normal: Vec3,
+        tangent: Vec3,
+        handedness: f32,
+    ) -> u16;
 }
 
 /// Vertex with position and normal (no UVs - for solid color rendering)
@@ -55,6 +70,29 @@ impl VertexUV {
             position,
             uv,
             normal,
+        }
+    }
+}
+
+/// Vertex with position, UV, normal, tangent, and handedness (for normal-mapped rendering)
+#[derive(Clone, Copy, Debug)]
+pub(super) struct VertexTangent {
+    pub position: Vec3,
+    pub uv: (f32, f32),
+    pub normal: Vec3,
+    pub tangent: Vec3,
+    pub handedness: f32,
+}
+
+impl VertexTangent {
+    /// Create a new tangent vertex
+    pub fn new(position: Vec3, uv: (f32, f32), normal: Vec3, tangent: Vec3, handedness: f32) -> Self {
+        Self {
+            position,
+            uv,
+            normal,
+            tangent,
+            handedness,
         }
     }
 }
@@ -168,6 +206,95 @@ impl MeshBuilder for MeshDataUV {
 impl MeshBuilderUV for MeshDataUV {
     fn add_vertex_uv(&mut self, position: Vec3, uv: (f32, f32), normal: Vec3) -> u16 {
         self.add_vertex_internal(VertexUV::new(position, uv, normal))
+    }
+}
+
+/// Generated mesh data with UVs and Tangents (PACKED FORMAT - POS_UV_NORMAL_TANGENT)
+pub struct MeshDataTangent {
+    /// Packed vertex data: [f16x4, unorm16x2, octahedral u32, tangent u32] = 20 bytes per vertex
+    pub vertices: Vec<u8>,
+    /// Triangle indices (u16 for GPU compatibility)
+    pub indices: Vec<u16>,
+}
+
+impl MeshDataTangent {
+    /// Create empty mesh data
+    pub fn new() -> Self {
+        Self {
+            vertices: Vec::new(),
+            indices: Vec::new(),
+        }
+    }
+
+    /// Add a packed tangent vertex and return its index
+    pub(super) fn add_vertex_internal(&mut self, vertex: VertexTangent) -> u16 {
+        let index = (self.vertices.len() / 20) as u16;
+
+        // Pack position as [f16; 4] and cast to bytes using bytemuck
+        let pos_packed = pack_position_f16(vertex.position.x, vertex.position.y, vertex.position.z);
+        self.vertices.extend_from_slice(cast_slice(&pos_packed)); // [f16; 4] → &[u8]
+
+        // Pack UV as [u16; 2] (unorm16) and cast to bytes using bytemuck
+        let uv_packed = pack_uv_unorm16(vertex.uv.0, vertex.uv.1);
+        self.vertices.extend_from_slice(cast_slice(&uv_packed)); // [u16; 2] → &[u8]
+
+        // Pack normal as octahedral u32 (4 bytes)
+        let norm_packed = pack_normal_octahedral(vertex.normal.x, vertex.normal.y, vertex.normal.z);
+        self.vertices.extend_from_slice(&norm_packed.to_le_bytes()); // u32 → &[u8; 4]
+
+        // Pack tangent as octahedral u32 with sign bit (4 bytes)
+        let tangent_packed = pack_tangent(
+            [vertex.tangent.x, vertex.tangent.y, vertex.tangent.z],
+            vertex.handedness,
+        );
+        self.vertices.extend_from_slice(&tangent_packed.to_le_bytes()); // u32 → &[u8; 4]
+
+        index
+    }
+}
+
+impl Default for MeshDataTangent {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl MeshBuilder for MeshDataTangent {
+    fn add_vertex(&mut self, position: Vec3, normal: Vec3) -> u16 {
+        // Default tangent pointing along +X with positive handedness
+        self.add_vertex_internal(VertexTangent::new(
+            position,
+            (0.0, 0.0),
+            normal,
+            Vec3::X,
+            1.0,
+        ))
+    }
+
+    fn add_triangle(&mut self, i0: u16, i1: u16, i2: u16) {
+        self.indices.push(i0);
+        self.indices.push(i1);
+        self.indices.push(i2);
+    }
+}
+
+impl MeshBuilderUV for MeshDataTangent {
+    fn add_vertex_uv(&mut self, position: Vec3, uv: (f32, f32), normal: Vec3) -> u16 {
+        // Default tangent pointing along +X with positive handedness
+        self.add_vertex_internal(VertexTangent::new(position, uv, normal, Vec3::X, 1.0))
+    }
+}
+
+impl MeshBuilderTangent for MeshDataTangent {
+    fn add_vertex_tangent(
+        &mut self,
+        position: Vec3,
+        uv: (f32, f32),
+        normal: Vec3,
+        tangent: Vec3,
+        handedness: f32,
+    ) -> u16 {
+        self.add_vertex_internal(VertexTangent::new(position, uv, normal, tangent, handedness))
     }
 }
 

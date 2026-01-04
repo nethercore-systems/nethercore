@@ -1,6 +1,6 @@
 [game]
-id = "mode2-inspector"
-title = "Mode 2 Inspector"
+id = "env-rectangles-inspector"
+title = "Env Rectangles Inspector"
 author = "Nethercore Examples"
 version = "0.1.0"
 render_mode = 2

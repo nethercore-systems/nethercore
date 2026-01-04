@@ -1,6 +1,6 @@
 [game]
-id = "procedural-shapes"
-title = "Procedural Shapes"
+id = "rear-mirror"
+title = "Rear Mirror"
 author = "Nethercore Examples"
 version = "0.1.0"
 render_mode = 0

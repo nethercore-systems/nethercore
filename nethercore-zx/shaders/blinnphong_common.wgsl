@@ -126,9 +126,12 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     // Mode 3 has no metallic, so diffuse_factor = 1.0
     //FS_MODE2_3_DIFFUSE_FACTOR
 
+    // === Shading Normal (vertex normal or TBN-transformed normal map) ===
+    //FS_SHADING_NORMAL
+
     // === Environment Lighting (IBL-lite) ===
     // Re-normalize after interpolation - interpolated normals become shorter than unit length
-    let N = normalize(in.world_normal);
+    let N = normalize(shading_normal);
     let NdotV = max(dot(N, view_dir), 0.0);
 
     // Fresnel: F0 = specular_color (works for both MR and SS workflows)

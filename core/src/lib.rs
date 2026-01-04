@@ -10,7 +10,6 @@
 //! - [`GameInstance`] - WASM game loaded and instantiated
 //! - [`RollbackSession`] - GGRS integration for rollback netcode
 
-pub mod analysis;
 pub mod app;
 pub mod capture;
 pub mod console;
@@ -50,9 +49,6 @@ pub use rollback::{
 
 // Re-export GGRS types for convenience
 pub use ggrs::{GgrsError, GgrsEvent, GgrsRequest, InputStatus, PlayerType, SessionState};
-
-// Re-export analysis types for build-time WASM analysis
-pub use analysis::{AnalysisError, AnalysisResult, TextureFormatHint, analyze_wasm};
 
 // Re-export debug types
 pub use debug::DebugStat;

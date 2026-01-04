@@ -144,8 +144,11 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     //FS_COLOR
     //FS_UV
 
+    // Compute shading normal (may be perturbed by normal map if tangent data present)
+    //FS_MATCAP_SHADING_NORMAL
+
     // Compute matcap UV once for all matcaps (perspective-correct)
-    let matcap_uv = compute_matcap_uv(in.view_position, in.view_normal);
+    let matcap_uv = compute_matcap_uv(in.view_position, shading_view_normal);
 
     // Check use_matcap_reflection flag:
     // 0 = use procedural sky for reflection (default)
@@ -164,9 +167,8 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
         color = blend_colors(color, matcap3, blend_mode_3);
     } else {
         // Use procedural environment for reflection instead of matcaps
-        // Sample 4-color environment gradient in world normal direction
-        let N = normalize(in.world_normal);
-        let env_color = sample_environment_ambient(shading.environment_index, N);
+        // Sample 4-color environment gradient in shading normal direction
+        let env_color = sample_environment_ambient(shading.environment_index, shading_world_normal);
         // Apply using first blend mode for consistency
         color = blend_colors(color, env_color, blend_mode_1);
     }

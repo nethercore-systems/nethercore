@@ -1,6 +1,6 @@
 [game]
-id = "procedural-shapes"
-title = "Procedural Shapes"
+id = "stencil-demo"
+title = "Stencil Demo"
 author = "Nethercore Examples"
 version = "0.1.0"
 render_mode = 0

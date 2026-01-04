@@ -62,7 +62,6 @@ static DEMO_DESCRIPTIONS: [&str; 4] = [
 pub extern "C" fn init() {
     unsafe {
         set_clear_color(0x1a1a2eFF);
-        render_mode(0); // Lambert mode
 
         // Generate scene objects
         CUBE_MESH = cube(1.0, 1.0, 1.0);

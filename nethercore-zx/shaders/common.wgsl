@@ -144,6 +144,15 @@ const FLAG_USE_UNIFORM_SPECULAR: u32 = 64u;
 // Matcap reflection override (bit 7, Mode 1 only): 0 = sky, 1 = matcap texture
 const FLAG_USE_MATCAP_REFLECTION: u32 = 128u;
 
+// ============================================================================
+// Normal Mapping Flag (Bit 16)
+// ============================================================================
+
+// Skip normal map flag (opt-out): when set, normal map sampling is disabled
+// Default behavior (flag NOT set): sample normal map from slot 3 when tangent data exists
+// This is developer-friendly: tangent data → normal mapping works automatically
+const FLAG_SKIP_NORMAL_MAP: u32 = 0x10000u;
+
 // Helper function to check if a flag is set
 fn has_flag(flags: u32, flag: u32) -> bool {
     return (flags & flag) != 0u;
@@ -268,6 +277,86 @@ fn unpack_octahedral(packed: u32) -> vec3<f32> {
     }
 
     return normalize(dir);
+}
+
+// ============================================================================
+// Tangent Unpacking and TBN Matrix Construction (Normal Mapping)
+// ============================================================================
+
+// Unpack tangent from u32 (octahedral encoding with sign bit for handedness)
+// Format: bits 0-15 = octahedral UV (snorm16x2), bit 16 = handedness sign (0=+1, 1=-1)
+// Returns (tangent_direction, handedness_sign)
+fn unpack_tangent(packed: u32) -> vec4<f32> {
+    // Extract handedness from bit 16
+    let handedness = select(1.0, -1.0, (packed & 0x10000u) != 0u);
+
+    // Mask out bit 16 to get clean octahedral encoding
+    let oct = packed & 0xFFFEFFFFu;
+
+    // Extract i16 components with sign extension (same as unpack_octahedral)
+    let u_i16 = bitcast<i32>((oct & 0xFFFFu) << 16u) >> 16;
+    let v_i16 = bitcast<i32>(oct) >> 16;
+
+    // Convert snorm16 to float [-1, 1]
+    let u = f32(u_i16) / 32767.0;
+    let v = f32(v_i16) / 32767.0;
+
+    // Reconstruct 3D direction
+    var dir: vec3<f32>;
+    dir.x = u;
+    dir.y = v;
+    dir.z = 1.0 - abs(u) - abs(v);
+
+    // Unfold lower hemisphere (z < 0 case)
+    if (dir.z < 0.0) {
+        let old_x = dir.x;
+        dir.x = (1.0 - abs(dir.y)) * select(-1.0, 1.0, old_x >= 0.0);
+        dir.y = (1.0 - abs(old_x)) * select(-1.0, 1.0, dir.y >= 0.0);
+    }
+
+    return vec4<f32>(normalize(dir), handedness);
+}
+
+// Build TBN (Tangent-Bitangent-Normal) matrix for normal mapping
+// tangent: world-space tangent vector
+// normal: world-space normal vector
+// handedness: sign for bitangent direction (+1 or -1)
+// Returns 3x3 matrix where columns are [T, B, N]
+fn build_tbn(tangent: vec3<f32>, normal: vec3<f32>, handedness: f32) -> mat3x3<f32> {
+    let T = normalize(tangent);
+    let N = normalize(normal);
+    let B = cross(N, T) * handedness;
+    // Column-major: mat3x3 columns are T, B, N
+    return mat3x3<f32>(T, B, N);
+}
+
+// Sample BC5 normal map and reconstruct world-space normal
+// BC5 stores only RG channels; Z is reconstructed: z = sqrt(1 - x² - y²)
+// tex: BC5 normal map texture (slot 3)
+// uv: texture coordinates
+// tbn: tangent-bitangent-normal matrix
+// flags: shading flags to check FLAG_SKIP_NORMAL_MAP
+//
+// Default behavior: sample normal map (when tangent data exists)
+// When FLAG_SKIP_NORMAL_MAP is set: return vertex normal instead
+fn sample_normal_map(tex: texture_2d<f32>, uv: vec2<f32>, tbn: mat3x3<f32>, flags: u32) -> vec3<f32> {
+    // If skip flag is set, return vertex normal (column 2 of TBN = N)
+    if ((flags & FLAG_SKIP_NORMAL_MAP) != 0u) {
+        return tbn[2];
+    }
+
+    // Sample BC5 texture (RG channels contain XY of normal)
+    let normal_sample = textureSample(tex, sampler_linear, uv).rg;
+
+    // Convert from [0,1] to [-1,1] range
+    let xy = normal_sample * 2.0 - 1.0;
+
+    // Reconstruct Z component (always positive for tangent-space normals)
+    let z = sqrt(max(0.0, 1.0 - dot(xy, xy)));
+
+    // Transform from tangent space to world space
+    let tangent_normal = vec3<f32>(xy, z);
+    return normalize(tbn * tangent_normal);
 }
 
 // ============================================================================
@@ -1289,6 +1378,7 @@ struct VertexIn {
     //VIN_COLOR
     //VIN_NORMAL
     //VIN_SKINNED
+    //VIN_TANGENT
 }
 
 struct VertexOut {
@@ -1299,6 +1389,8 @@ struct VertexOut {
     @location(3) @interpolate(flat) shading_state_index: u32,
     //VOUT_VIEW_POS
     //VOUT_CAMERA_POS
+    //VOUT_TANGENT
+    //VOUT_VIEW_TANGENT
     //VOUT_UV
     //VOUT_COLOR
 }
@@ -1346,6 +1438,8 @@ fn vs(in: VertexIn, @builtin(instance_index) instance_index: u32) -> VertexOut {
     //VS_WORLD_NORMAL
     //VS_VIEW_NORMAL
     //VS_VIEW_POS
+    //VS_TANGENT
+    //VS_VIEW_TANGENT
 
     out.clip_position = projection_matrix * view_matrix * model_pos;
     out.shading_state_index = shading_state_idx;

@@ -15,8 +15,8 @@ use std::path::Path;
 
 use crate::formats::write_nether_mesh;
 use crate::{
-    pack_bone_weights_unorm8, vertex_stride_packed, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED,
-    FORMAT_UV,
+    pack_bone_weights_unorm8, pack_tangent_f32x4, vertex_stride_packed, FORMAT_COLOR, FORMAT_NORMAL,
+    FORMAT_SKINNED, FORMAT_TANGENT, FORMAT_UV,
 };
 
 /// Result of in-memory mesh conversion
@@ -197,6 +197,14 @@ pub fn convert_gltf_to_memory(input: &Path) -> Result<ConvertedMesh> {
     // Normals (optional)
     let normals: Option<Vec<[f32; 3]>> = reader.read_normals().map(|iter| iter.collect());
 
+    // Tangents (optional) - vec4: xyz=tangent direction, w=handedness sign (+1 or -1)
+    // Requires normals to be present (tangent without normal is invalid)
+    let tangents: Option<Vec<[f32; 4]>> = if normals.is_some() {
+        reader.read_tangents().map(|iter| iter.collect())
+    } else {
+        None
+    };
+
     // Colors (optional) - COLOR_0 as RGBA
     let colors: Option<Vec<[f32; 4]>> = reader
         .read_colors(0)
@@ -267,6 +275,20 @@ pub fn convert_gltf_to_memory(input: &Path) -> Result<ConvertedMesh> {
         Vec::new()
     };
 
+    // Validate tangent data consistency
+    let tangents = match tangents {
+        Some(ref t) if t.len() == positions.len() => tangents,
+        Some(_) => {
+            tracing::warn!(
+                "Mesh has mismatched tangent count ({} vs {} vertices), ignoring tangents",
+                tangents.as_ref().map(|t| t.len()).unwrap_or(0),
+                positions.len()
+            );
+            None
+        }
+        None => None,
+    };
+
     // Determine format
     let mut format = 0u8;
     if uvs.is_some() {
@@ -281,6 +303,9 @@ pub fn convert_gltf_to_memory(input: &Path) -> Result<ConvertedMesh> {
     if skinning.is_some() {
         format |= FORMAT_SKINNED;
     }
+    if tangents.is_some() {
+        format |= FORMAT_TANGENT;
+    }
 
     // Pack vertex data
     let vertex_data = pack_vertices_skinned(
@@ -288,6 +313,7 @@ pub fn convert_gltf_to_memory(input: &Path) -> Result<ConvertedMesh> {
         uvs.as_deref(),
         colors.as_deref(),
         normals.as_deref(),
+        tangents.as_deref(),
         skinning,
         format,
     );
@@ -333,6 +359,20 @@ pub fn convert_gltf(input: &Path, output: &Path, format_override: Option<&str>) 
     // Normals (optional)
     let normals: Option<Vec<[f32; 3]>> = reader.read_normals().map(|iter| iter.collect());
 
+    // Tangents (optional) - requires normals
+    let tangents: Option<Vec<[f32; 4]>> = if normals.is_some() {
+        reader.read_tangents().map(|iter| iter.collect())
+    } else {
+        None
+    };
+
+    // Validate tangent count matches vertex count
+    let tangents = match tangents {
+        Some(ref t) if t.len() == positions.len() => tangents,
+        Some(_) => None,
+        None => None,
+    };
+
     // Determine format
     let format = if let Some(fmt_str) = format_override {
         parse_format_string(fmt_str)
@@ -344,6 +384,9 @@ pub fn convert_gltf(input: &Path, output: &Path, format_override: Option<&str>) 
         }
         if normals.is_some() {
             fmt |= FORMAT_NORMAL;
+        }
+        if tangents.is_some() {
+            fmt |= FORMAT_TANGENT;
         }
         fmt
     };
@@ -370,8 +413,16 @@ pub fn convert_gltf(input: &Path, output: &Path, format_override: Option<&str>) 
         None
     };
 
-    // Pack vertex data
-    let vertex_data = pack_vertices(&positions, uvs.as_deref(), normals.as_deref(), format);
+    // Pack vertex data (use pack_vertices_skinned for tangent support)
+    let vertex_data = pack_vertices_skinned(
+        &positions,
+        uvs.as_deref(),
+        None, // no colors
+        normals.as_deref(),
+        tangents.as_deref(),
+        None, // no skinning
+        format,
+    );
 
     // Write output
     let file =
@@ -407,6 +458,9 @@ fn parse_format_string(s: &str) -> u8 {
     if s.contains("SKINNED") {
         format |= crate::FORMAT_SKINNED;
     }
+    if s.contains("TANGENT") {
+        format |= FORMAT_TANGENT;
+    }
     format
 }
 
@@ -416,20 +470,22 @@ fn pack_vertices(
     normals: Option<&[[f32; 3]]>,
     format: u8,
 ) -> Vec<u8> {
-    // Delegate to the skinned version with no skinning data or colors
-    pack_vertices_skinned(positions, uvs, None, normals, None, format)
+    // Delegate to the skinned version with no skinning data, colors, or tangents
+    pack_vertices_skinned(positions, uvs, None, normals, None, None, format)
 }
 
-/// Pack vertices with optional color and skinning support
+/// Pack vertices with optional color, tangent, and skinning support
 ///
-/// Vertex layout (in order): Position → UV → Color → Normal → Skinning
+/// Vertex layout (in order): Position → UV → Color → Normal → Tangent → Skinning
 /// - Color adds 4 bytes per vertex (unorm8 × 4)
+/// - Tangent adds 4 bytes per vertex (octahedral u32 with sign bit)
 /// - Skinning adds 8 bytes per vertex (bone indices u8×4 + weights unorm8×4)
 fn pack_vertices_skinned(
     positions: &[[f32; 3]],
     uvs: Option<&[[f32; 2]]>,
     colors: Option<&[[f32; 4]]>,
     normals: Option<&[[f32; 3]]>,
+    tangents: Option<&[[f32; 4]]>,
     skinning: Option<(&[[u8; 4]], &[[f32; 4]])>,
     format: u8,
 ) -> Vec<u8> {
@@ -441,6 +497,7 @@ fn pack_vertices_skinned(
     let has_uv = format & FORMAT_UV != 0;
     let has_color = format & FORMAT_COLOR != 0;
     let has_normal = format & FORMAT_NORMAL != 0;
+    let has_tangent = format & FORMAT_TANGENT != 0;
     let has_skinning = format & FORMAT_SKINNED != 0;
 
     let stride = vertex_stride_packed(format) as usize;
@@ -471,6 +528,13 @@ fn pack_vertices_skinned(
             let n = normals.map(|n| n[i]).unwrap_or([0.0, 1.0, 0.0]);
             let packed_normal = pack_normal_octahedral(n[0], n[1], n[2]);
             data.extend_from_slice(&packed_normal.to_le_bytes());
+        }
+
+        // Tangent (octahedral u32 with sign bit) - 4 bytes
+        if has_tangent {
+            let t = tangents.map(|t| t[i]).unwrap_or([1.0, 0.0, 0.0, 1.0]);
+            let packed_tangent = pack_tangent_f32x4(t);
+            data.extend_from_slice(&packed_tangent.to_le_bytes());
         }
 
         // Skinning (bone indices + weights) - 8 bytes

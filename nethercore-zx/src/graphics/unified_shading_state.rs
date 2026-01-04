@@ -957,6 +957,16 @@ pub const FLAG_DITHER_OFFSET_Y_SHIFT: u32 = 14;
 /// Default flags value with uniform_alpha = 15 (opaque)
 pub const DEFAULT_FLAGS: u32 = 0xF << 8;
 
+// ============================================================================
+// Normal Mapping Flags (Bit 16)
+// ============================================================================
+
+/// Flag bit to disable normal map sampling in PackedUnifiedShadingState.flags
+/// When NOT set (default) and mesh has tangent data: slot 3 is sampled as normal map
+/// When SET: normal map sampling is skipped, vertex normal is used instead
+/// This is an opt-out flag - normal mapping is enabled by default when tangent data exists
+pub const FLAG_SKIP_NORMAL_MAP: u32 = 1 << 16;
+
 impl PackedUnifiedShadingState {
     /// Create from all f32 parameters (used during FFI calls)
     /// For Mode 2: metallic, roughness, emissive packed into uniform_set_0
@@ -1010,6 +1020,25 @@ impl PackedUnifiedShadingState {
     #[inline]
     pub fn skinning_mode(&self) -> bool {
         (self.flags & FLAG_SKINNING_MODE) != 0
+    }
+
+    /// Set skip normal map flag (opt-out)
+    /// When set to true: normal map sampling is disabled, vertex normal is used
+    /// When set to false (default): normal map is sampled from slot 3 (if tangent data exists)
+    #[inline]
+    pub fn set_skip_normal_map(&mut self, skip: bool) {
+        if skip {
+            self.flags |= FLAG_SKIP_NORMAL_MAP;
+        } else {
+            self.flags &= !FLAG_SKIP_NORMAL_MAP;
+        }
+    }
+
+    /// Check if normal map sampling is skipped
+    /// Returns true if normal map is disabled, false if enabled (default)
+    #[inline]
+    pub fn skips_normal_map(&self) -> bool {
+        (self.flags & FLAG_SKIP_NORMAL_MAP) != 0
     }
 }
 
@@ -1343,6 +1372,58 @@ mod tests {
             (state.flags & FLAG_DITHER_OFFSET_Y_MASK) >> FLAG_DITHER_OFFSET_Y_SHIFT,
             3
         );
+    }
+
+    // ========================================================================
+    // Normal Mapping Tests
+    // ========================================================================
+
+    #[test]
+    fn test_skip_normal_map_flag() {
+        let mut state = PackedUnifiedShadingState::default();
+        // Default: normal map NOT skipped (i.e., normal mapping is enabled)
+        assert!(!state.skips_normal_map());
+
+        // Opt-out: skip normal map
+        state.set_skip_normal_map(true);
+        assert!(state.skips_normal_map());
+
+        // Re-enable normal map (clear skip flag)
+        state.set_skip_normal_map(false);
+        assert!(!state.skips_normal_map());
+    }
+
+    #[test]
+    fn test_skip_normal_map_flag_bit_position() {
+        // Verify the flag is at bit 16 (value 0x10000)
+        assert_eq!(FLAG_SKIP_NORMAL_MAP, 0x10000);
+        assert_eq!(FLAG_SKIP_NORMAL_MAP, 1 << 16);
+
+        // Verify it doesn't overlap with other flags
+        assert_ne!(FLAG_SKIP_NORMAL_MAP & FLAG_SKINNING_MODE, FLAG_SKINNING_MODE);
+        assert_ne!(FLAG_SKIP_NORMAL_MAP & FLAG_TEXTURE_FILTER_LINEAR, FLAG_TEXTURE_FILTER_LINEAR);
+        assert_ne!(FLAG_SKIP_NORMAL_MAP & FLAG_UNIFORM_ALPHA_MASK, FLAG_UNIFORM_ALPHA_MASK);
+    }
+
+    #[test]
+    fn test_skip_normal_map_flag_independence() {
+        // Verify skip normal map flag doesn't interfere with other flags
+        let mut state = PackedUnifiedShadingState::default();
+
+        // Set multiple flags
+        state.flags |= FLAG_SKINNING_MODE | FLAG_TEXTURE_FILTER_LINEAR;
+        state.set_skip_normal_map(true);
+
+        // Verify all flags are set correctly
+        assert!(state.skinning_mode());
+        assert_ne!(state.flags & FLAG_TEXTURE_FILTER_LINEAR, 0);
+        assert!(state.skips_normal_map());
+
+        // Clear skip flag, others should remain
+        state.set_skip_normal_map(false);
+        assert!(state.skinning_mode());
+        assert_ne!(state.flags & FLAG_TEXTURE_FILTER_LINEAR, 0);
+        assert!(!state.skips_normal_map());
     }
 
     // ========================================================================

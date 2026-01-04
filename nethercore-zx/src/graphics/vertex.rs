@@ -5,14 +5,20 @@
 
 // Re-export format constants from zx-common
 pub use zx_common::{
-    FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV, vertex_stride, vertex_stride_packed,
+    FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_TANGENT, FORMAT_UV, vertex_stride,
+    vertex_stride_packed,
 };
 
-/// All format flags combined
+/// All format flags combined (without tangent - tangent requires normal)
 pub const FORMAT_ALL: u8 = FORMAT_UV | FORMAT_COLOR | FORMAT_NORMAL | FORMAT_SKINNED;
 
-/// Number of vertex format permutations (16: 0-15)
-pub const VERTEX_FORMAT_COUNT: usize = 16;
+/// All format flags including tangent
+#[allow(dead_code)]
+pub const FORMAT_ALL_WITH_TANGENT: u8 =
+    FORMAT_UV | FORMAT_COLOR | FORMAT_NORMAL | FORMAT_TANGENT | FORMAT_SKINNED;
+
+/// Number of vertex format permutations (32: 0-31, includes tangent flag)
+pub const VERTEX_FORMAT_COUNT: usize = 32;
 
 /// Vertex format information for creating vertex buffer layouts
 #[derive(Debug, Clone)]
@@ -26,7 +32,7 @@ pub struct VertexFormatInfo {
 }
 
 impl VertexFormatInfo {
-    /// Get vertex format info for a format index (0-15)
+    /// Get vertex format info for a format index (0-31)
     ///
     /// Returns info for GPU vertex buffers, which always use packed formats.
     pub const fn for_format(format: u8) -> Self {
@@ -47,6 +53,24 @@ impl VertexFormatInfo {
             13 => "POS_UV_NORMAL_SKINNED",
             14 => "POS_COLOR_NORMAL_SKINNED",
             15 => "POS_UV_COLOR_NORMAL_SKINNED",
+            // Formats 16-31: Same as 0-15 but with tangent flag (bit 4)
+            // Note: Tangent requires normal, so formats 16-19 and 24-27 are invalid
+            16 => "POS_TANGENT", // Invalid: tangent requires normal
+            17 => "POS_UV_TANGENT", // Invalid
+            18 => "POS_COLOR_TANGENT", // Invalid
+            19 => "POS_UV_COLOR_TANGENT", // Invalid
+            20 => "POS_NORMAL_TANGENT",
+            21 => "POS_UV_NORMAL_TANGENT",
+            22 => "POS_COLOR_NORMAL_TANGENT",
+            23 => "POS_UV_COLOR_NORMAL_TANGENT",
+            24 => "POS_TANGENT_SKINNED", // Invalid
+            25 => "POS_UV_TANGENT_SKINNED", // Invalid
+            26 => "POS_COLOR_TANGENT_SKINNED", // Invalid
+            27 => "POS_UV_COLOR_TANGENT_SKINNED", // Invalid
+            28 => "POS_NORMAL_TANGENT_SKINNED",
+            29 => "POS_UV_NORMAL_TANGENT_SKINNED",
+            30 => "POS_COLOR_NORMAL_TANGENT_SKINNED",
+            31 => "POS_UV_COLOR_NORMAL_TANGENT_SKINNED",
             _ => "UNKNOWN",
         };
 
@@ -75,10 +99,26 @@ impl VertexFormatInfo {
         self.format & FORMAT_NORMAL != 0
     }
 
+    /// Check if this format has tangent vectors
+    #[inline]
+    pub const fn has_tangent(&self) -> bool {
+        self.format & FORMAT_TANGENT != 0
+    }
+
     /// Check if this format has skinning data
     #[inline]
     pub const fn has_skinned(&self) -> bool {
         self.format & FORMAT_SKINNED != 0
+    }
+
+    /// Check if this is a valid format (tangent requires normal)
+    #[inline]
+    pub const fn is_valid(&self) -> bool {
+        // Tangent requires normal
+        if self.format & FORMAT_TANGENT != 0 && self.format & FORMAT_NORMAL == 0 {
+            return false;
+        }
+        true
     }
 
     /// Creates a wgpu vertex buffer layout descriptor for this format.
@@ -126,6 +166,7 @@ mod wgpu_attrs {
     const SIZE_UV: u64 = 4; // Unorm16x2
     const SIZE_COLOR: u64 = 4; // Unorm8x4
     const SIZE_NORMAL: u64 = 4; // Octahedral u32
+    const SIZE_TANGENT: u64 = 4; // Octahedral u32 with sign bit
     const SIZE_BONE_INDICES: u64 = 4; // Uint8x4
     // Note: SIZE_BONE_WEIGHTS not needed - bone weights is always the last attribute
     // so its size never appears in offset calculations
@@ -137,6 +178,7 @@ mod wgpu_attrs {
     const LOC_NORMAL: u32 = 3;
     const LOC_BONE_INDICES: u32 = 4;
     const LOC_BONE_WEIGHTS: u32 = 5;
+    const LOC_TANGENT: u32 = 6;
 
     /// Creates a position attribute at offset 0 (Float16x4, padded)
     const fn attr_pos() -> wgpu::VertexAttribute {
@@ -174,6 +216,15 @@ mod wgpu_attrs {
         }
     }
 
+    /// Creates a tangent attribute at the given offset (Uint32 - octahedral with sign bit)
+    const fn attr_tangent(offset: u64) -> wgpu::VertexAttribute {
+        wgpu::VertexAttribute {
+            format: wgpu::VertexFormat::Uint32,
+            offset,
+            shader_location: LOC_TANGENT,
+        }
+    }
+
     /// Creates bone indices attribute at the given offset (Uint8x4)
     const fn attr_bone_indices(offset: u64) -> wgpu::VertexAttribute {
         wgpu::VertexAttribute {
@@ -192,12 +243,18 @@ mod wgpu_attrs {
         }
     }
 
-    /// Pre-computed vertex attribute arrays for all 16 formats.
+    /// Pre-computed vertex attribute arrays for all 32 formats.
     ///
-    /// Vertex layout order: Position → UV → Color → Normal → Bone Indices → Bone Weights
+    /// Vertex layout order: Position → UV → Color → Normal → Tangent → Bone Indices → Bone Weights
     /// Each attribute is only present if its corresponding flag is set.
     /// Offsets are computed based on which attributes precede each one.
-    pub static VERTEX_ATTRIBUTES: [&[wgpu::VertexAttribute]; 16] = [
+    ///
+    /// Note: Formats 16-19 and 24-27 have tangent but no normal - these are invalid
+    /// but still defined to avoid runtime panics. They should never be used.
+    pub static VERTEX_ATTRIBUTES: [&[wgpu::VertexAttribute]; 32] = [
+        // ============================================================================
+        // Formats 0-15: Without tangent (same as before)
+        // ============================================================================
         // Format 0: POS
         &[attr_pos()],
         // Format 1: POS_UV
@@ -290,6 +347,118 @@ mod wgpu_attrs {
             attr_normal(SIZE_POS + SIZE_UV + SIZE_COLOR),
             attr_bone_indices(SIZE_POS + SIZE_UV + SIZE_COLOR + SIZE_NORMAL),
             attr_bone_weights(SIZE_POS + SIZE_UV + SIZE_COLOR + SIZE_NORMAL + SIZE_BONE_INDICES),
+        ],
+        // ============================================================================
+        // Formats 16-31: With tangent flag (bit 4)
+        // ============================================================================
+        // Format 16: POS_TANGENT (INVALID - tangent requires normal)
+        &[attr_pos(), attr_tangent(SIZE_POS)],
+        // Format 17: POS_UV_TANGENT (INVALID)
+        &[attr_pos(), attr_uv(SIZE_POS), attr_tangent(SIZE_POS + SIZE_UV)],
+        // Format 18: POS_COLOR_TANGENT (INVALID)
+        &[attr_pos(), attr_color(SIZE_POS), attr_tangent(SIZE_POS + SIZE_COLOR)],
+        // Format 19: POS_UV_COLOR_TANGENT (INVALID)
+        &[
+            attr_pos(),
+            attr_uv(SIZE_POS),
+            attr_color(SIZE_POS + SIZE_UV),
+            attr_tangent(SIZE_POS + SIZE_UV + SIZE_COLOR),
+        ],
+        // Format 20: POS_NORMAL_TANGENT
+        &[
+            attr_pos(),
+            attr_normal(SIZE_POS),
+            attr_tangent(SIZE_POS + SIZE_NORMAL),
+        ],
+        // Format 21: POS_UV_NORMAL_TANGENT
+        &[
+            attr_pos(),
+            attr_uv(SIZE_POS),
+            attr_normal(SIZE_POS + SIZE_UV),
+            attr_tangent(SIZE_POS + SIZE_UV + SIZE_NORMAL),
+        ],
+        // Format 22: POS_COLOR_NORMAL_TANGENT
+        &[
+            attr_pos(),
+            attr_color(SIZE_POS),
+            attr_normal(SIZE_POS + SIZE_COLOR),
+            attr_tangent(SIZE_POS + SIZE_COLOR + SIZE_NORMAL),
+        ],
+        // Format 23: POS_UV_COLOR_NORMAL_TANGENT
+        &[
+            attr_pos(),
+            attr_uv(SIZE_POS),
+            attr_color(SIZE_POS + SIZE_UV),
+            attr_normal(SIZE_POS + SIZE_UV + SIZE_COLOR),
+            attr_tangent(SIZE_POS + SIZE_UV + SIZE_COLOR + SIZE_NORMAL),
+        ],
+        // Format 24: POS_TANGENT_SKINNED (INVALID)
+        &[
+            attr_pos(),
+            attr_tangent(SIZE_POS),
+            attr_bone_indices(SIZE_POS + SIZE_TANGENT),
+            attr_bone_weights(SIZE_POS + SIZE_TANGENT + SIZE_BONE_INDICES),
+        ],
+        // Format 25: POS_UV_TANGENT_SKINNED (INVALID)
+        &[
+            attr_pos(),
+            attr_uv(SIZE_POS),
+            attr_tangent(SIZE_POS + SIZE_UV),
+            attr_bone_indices(SIZE_POS + SIZE_UV + SIZE_TANGENT),
+            attr_bone_weights(SIZE_POS + SIZE_UV + SIZE_TANGENT + SIZE_BONE_INDICES),
+        ],
+        // Format 26: POS_COLOR_TANGENT_SKINNED (INVALID)
+        &[
+            attr_pos(),
+            attr_color(SIZE_POS),
+            attr_tangent(SIZE_POS + SIZE_COLOR),
+            attr_bone_indices(SIZE_POS + SIZE_COLOR + SIZE_TANGENT),
+            attr_bone_weights(SIZE_POS + SIZE_COLOR + SIZE_TANGENT + SIZE_BONE_INDICES),
+        ],
+        // Format 27: POS_UV_COLOR_TANGENT_SKINNED (INVALID)
+        &[
+            attr_pos(),
+            attr_uv(SIZE_POS),
+            attr_color(SIZE_POS + SIZE_UV),
+            attr_tangent(SIZE_POS + SIZE_UV + SIZE_COLOR),
+            attr_bone_indices(SIZE_POS + SIZE_UV + SIZE_COLOR + SIZE_TANGENT),
+            attr_bone_weights(SIZE_POS + SIZE_UV + SIZE_COLOR + SIZE_TANGENT + SIZE_BONE_INDICES),
+        ],
+        // Format 28: POS_NORMAL_TANGENT_SKINNED
+        &[
+            attr_pos(),
+            attr_normal(SIZE_POS),
+            attr_tangent(SIZE_POS + SIZE_NORMAL),
+            attr_bone_indices(SIZE_POS + SIZE_NORMAL + SIZE_TANGENT),
+            attr_bone_weights(SIZE_POS + SIZE_NORMAL + SIZE_TANGENT + SIZE_BONE_INDICES),
+        ],
+        // Format 29: POS_UV_NORMAL_TANGENT_SKINNED
+        &[
+            attr_pos(),
+            attr_uv(SIZE_POS),
+            attr_normal(SIZE_POS + SIZE_UV),
+            attr_tangent(SIZE_POS + SIZE_UV + SIZE_NORMAL),
+            attr_bone_indices(SIZE_POS + SIZE_UV + SIZE_NORMAL + SIZE_TANGENT),
+            attr_bone_weights(SIZE_POS + SIZE_UV + SIZE_NORMAL + SIZE_TANGENT + SIZE_BONE_INDICES),
+        ],
+        // Format 30: POS_COLOR_NORMAL_TANGENT_SKINNED
+        &[
+            attr_pos(),
+            attr_color(SIZE_POS),
+            attr_normal(SIZE_POS + SIZE_COLOR),
+            attr_tangent(SIZE_POS + SIZE_COLOR + SIZE_NORMAL),
+            attr_bone_indices(SIZE_POS + SIZE_COLOR + SIZE_NORMAL + SIZE_TANGENT),
+            attr_bone_weights(SIZE_POS + SIZE_COLOR + SIZE_NORMAL + SIZE_TANGENT + SIZE_BONE_INDICES),
+        ],
+        // Format 31: POS_UV_COLOR_NORMAL_TANGENT_SKINNED
+        &[
+            attr_pos(),
+            attr_uv(SIZE_POS),
+            attr_color(SIZE_POS + SIZE_UV),
+            attr_normal(SIZE_POS + SIZE_UV + SIZE_COLOR),
+            attr_tangent(SIZE_POS + SIZE_UV + SIZE_COLOR + SIZE_NORMAL),
+            attr_bone_indices(SIZE_POS + SIZE_UV + SIZE_COLOR + SIZE_NORMAL + SIZE_TANGENT),
+            attr_bone_weights(SIZE_POS + SIZE_UV + SIZE_COLOR + SIZE_NORMAL + SIZE_TANGENT + SIZE_BONE_INDICES),
         ],
     ];
 }
@@ -388,8 +557,8 @@ mod tests {
     }
 
     #[test]
-    fn test_all_16_vertex_formats() {
-        // Verify all 16 formats have valid packed strides
+    fn test_all_32_vertex_formats() {
+        // Verify all 32 formats have valid packed strides
         for i in 0..VERTEX_FORMAT_COUNT {
             let info = VertexFormatInfo::for_format(i as u8);
             assert!(
@@ -399,12 +568,43 @@ mod tests {
                 info.stride
             );
             assert!(
-                info.stride <= 44, // Maximum: full format packed = 44 bytes
-                "Format {} has stride {} > 44",
+                info.stride <= 32, // Maximum: full format with tangent packed = 32 bytes
+                "Format {} has stride {} > 32",
                 i,
                 info.stride
             );
         }
+    }
+
+    #[test]
+    fn test_tangent_format_strides() {
+        // Test tangent format strides (packed)
+        // Format 20: POS_NORMAL_TANGENT = 8 + 4 + 4 = 16
+        assert_eq!(vertex_stride_packed(FORMAT_NORMAL | FORMAT_TANGENT), 16);
+        // Format 21: POS_UV_NORMAL_TANGENT = 8 + 4 + 4 + 4 = 20
+        assert_eq!(vertex_stride_packed(FORMAT_UV | FORMAT_NORMAL | FORMAT_TANGENT), 20);
+        // Format 31: Full with tangent = 8 + 4 + 4 + 4 + 4 + 8 = 32
+        assert_eq!(vertex_stride_packed(FORMAT_ALL_WITH_TANGENT), 32);
+    }
+
+    #[test]
+    fn test_tangent_format_names() {
+        assert_eq!(VertexFormatInfo::for_format(20).name, "POS_NORMAL_TANGENT");
+        assert_eq!(VertexFormatInfo::for_format(21).name, "POS_UV_NORMAL_TANGENT");
+        assert_eq!(VertexFormatInfo::for_format(31).name, "POS_UV_COLOR_NORMAL_TANGENT_SKINNED");
+    }
+
+    #[test]
+    fn test_tangent_requires_normal_validation() {
+        // Formats with tangent but without normal should be invalid
+        assert!(!VertexFormatInfo::for_format(16).is_valid()); // POS_TANGENT
+        assert!(!VertexFormatInfo::for_format(17).is_valid()); // POS_UV_TANGENT
+        assert!(!VertexFormatInfo::for_format(24).is_valid()); // POS_TANGENT_SKINNED
+
+        // Formats with tangent AND normal should be valid
+        assert!(VertexFormatInfo::for_format(20).is_valid()); // POS_NORMAL_TANGENT
+        assert!(VertexFormatInfo::for_format(21).is_valid()); // POS_UV_NORMAL_TANGENT
+        assert!(VertexFormatInfo::for_format(31).is_valid()); // Full with tangent
     }
 
     #[test]

@@ -51,7 +51,6 @@ static mut CAMERA_ANGLES: [f32; 4] = [0.0, 90.0, 180.0, 270.0];
 pub extern "C" fn init() {
     unsafe {
         set_clear_color(0x2a2a3aFF);
-        render_mode(0);
 
         // Generate scene objects
         CUBE_MESH = cube(1.0, 1.0, 1.0);

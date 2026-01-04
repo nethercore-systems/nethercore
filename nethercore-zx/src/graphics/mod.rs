@@ -33,10 +33,10 @@ use nethercore_core::console::Graphics;
 
 // Re-export packing utilities from zx-common (for FFI and backwards compat)
 pub use zx_common::{
-    FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV, pack_bone_weights_unorm8,
-    pack_color_rgba_unorm8, pack_normal_octahedral, pack_normal_snorm16, pack_octahedral_u32,
-    pack_position_f16, pack_uv_f16, pack_uv_unorm16, pack_vertex_data, unpack_octahedral_u32,
-    vertex_stride, vertex_stride_packed,
+    FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_TANGENT, FORMAT_UV,
+    pack_bone_weights_unorm8, pack_color_rgba_unorm8, pack_normal_octahedral, pack_normal_snorm16,
+    pack_octahedral_u32, pack_position_f16, pack_tangent, pack_uv_f16, pack_uv_unorm16,
+    pack_vertex_data, unpack_octahedral_u32, unpack_tangent, vertex_stride, vertex_stride_packed,
 };
 
 // Re-export public types from submodules
@@ -54,6 +54,7 @@ pub use unified_shading_state::{
     FLAG_DITHER_OFFSET_X_SHIFT,
     FLAG_DITHER_OFFSET_Y_MASK,
     FLAG_DITHER_OFFSET_Y_SHIFT,
+    FLAG_SKIP_NORMAL_MAP,
     FLAG_SKINNING_MODE,
     FLAG_TEXTURE_FILTER_LINEAR,
     FLAG_UNIFORM_ALPHA_MASK,

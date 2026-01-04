@@ -47,7 +47,6 @@ pub extern "C" fn on_debug_change() {
 pub extern "C" fn init() {
     unsafe {
         set_clear_color(0x0A0A14FF);
-        render_mode(2);
         SPHERE_MESH = sphere(1.5, 32, 24);
         CUBE_MESH = cube(2.0, 2.0, 2.0);
         TORUS_MESH = torus(1.3, 0.5, 32, 16);

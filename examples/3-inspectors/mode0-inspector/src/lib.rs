@@ -109,9 +109,6 @@ pub extern "C" fn init() {
         // Dark background
         set_clear_color(0x1a1a2eFF);
 
-        // Set render mode 0 (Lambert diffuse shading)
-        render_mode(0);
-
         // Generate meshes
         SPHERE_MESH = sphere(1.5, 32, 16);
         CUBE_MESH = cube(1.2, 1.2, 1.2);

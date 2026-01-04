@@ -434,9 +434,6 @@ unsafe fn register_debug_values() {
 #[no_mangle]
 pub extern "C" fn init() {
     unsafe {
-        // Set matcap render mode
-        render_mode(1);
-
         // Setup camera
         CAMERA.apply();
         camera_fov(60.0);

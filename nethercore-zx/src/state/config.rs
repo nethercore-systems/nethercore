@@ -20,8 +20,6 @@ pub struct ZXInitConfig {
     pub tick_rate_set: bool,
     /// Whether set_clear_color() has been called
     pub clear_color_set: bool,
-    /// Whether render_mode() has been called
-    pub render_mode_set: bool,
 }
 
 impl Default for ZXInitConfig {
@@ -34,7 +32,6 @@ impl Default for ZXInitConfig {
             // No config functions called yet
             tick_rate_set: false,
             clear_color_set: false,
-            render_mode_set: false,
         }
     }
 }

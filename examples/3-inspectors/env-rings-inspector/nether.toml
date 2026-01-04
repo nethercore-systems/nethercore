@@ -1,6 +1,6 @@
 [game]
-id = "mode2-inspector"
-title = "Mode 2 Inspector"
+id = "env-rings-inspector"
+title = "Env Rings Inspector"
 author = "Nethercore Examples"
 version = "0.1.0"
 render_mode = 2

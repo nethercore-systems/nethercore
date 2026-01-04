@@ -78,9 +78,6 @@ pub extern "C" fn init() {
         // Dark blue background
         set_clear_color(0x1a1a3eFF);
 
-        // Use Lambert mode with normals for clear visibility
-        render_mode(0);
-
         // Set up lighting
         light_set(0, -0.5, -1.0, -0.5);
         light_color(0, 0xFFEEDDFF);

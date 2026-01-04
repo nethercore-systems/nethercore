@@ -81,9 +81,6 @@ pub extern "C" fn init() {
         // Dark background
         set_clear_color(0x1A1A2EFF);
 
-        // Set Mode 2 (PBR Metallic-Roughness)
-        render_mode(2);
-
         // Setup lighting
         light_set(0, -0.5, -0.7, -0.5);
         light_color(0, 0xFFFFFFFF);

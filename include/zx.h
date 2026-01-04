@@ -116,12 +116,6 @@ NCZX_IMPORT void set_tick_rate(uint32_t rate);
 /** * `color` — Color in 0xRRGGBBAA format (default: black) */
 NCZX_IMPORT void set_clear_color(uint32_t color);
 
-/** Set the render mode. Must be called during `init()`. */
-/**  */
-/** # Arguments */
-/** * `mode` — 0=Lambert, 1=Matcap, 2=PBR, 3=Hybrid */
-NCZX_IMPORT void render_mode(uint32_t mode);
-
 /** Set the camera position and target (look-at point). */
 /**  */
 /** Uses a Y-up, right-handed coordinate system. */
@@ -512,6 +506,27 @@ NCZX_IMPORT uint32_t torus_uv(float major_radius, float minor_radius, uint32_t m
 /** Generate a capsule mesh with hybrid UV mapping. **Init-only.** */
 NCZX_IMPORT uint32_t capsule_uv(float radius, float height, uint32_t segments, uint32_t rings);
 
+/** Generate a sphere mesh with tangent data for normal mapping. **Init-only.** */
+/**  */
+/** Tangent follows direction of increasing U (longitude). */
+/** Use with material_normal() for normal-mapped rendering. */
+NCZX_IMPORT uint32_t sphere_tangent(float radius, uint32_t segments, uint32_t rings);
+
+/** Generate a plane mesh with tangent data for normal mapping. **Init-only.** */
+/**  */
+/** Tangent points along +X, bitangent along +Z, normal along +Y. */
+NCZX_IMPORT uint32_t plane_tangent(float size_x, float size_z, uint32_t subdivisions_x, uint32_t subdivisions_z);
+
+/** Generate a cube mesh with tangent data for normal mapping. **Init-only.** */
+/**  */
+/** Each face has correct tangent space for normal map sampling. */
+NCZX_IMPORT uint32_t cube_tangent(float size_x, float size_y, float size_z);
+
+/** Generate a torus mesh with tangent data for normal mapping. **Init-only.** */
+/**  */
+/** Tangent follows the major circle direction. */
+NCZX_IMPORT uint32_t torus_tangent(float major_radius, float minor_radius, uint32_t major_segments, uint32_t minor_segments);
+
 /** Draw triangles immediately (non-indexed). */
 /**  */
 /** # Arguments */
@@ -808,6 +823,25 @@ NCZX_IMPORT void material_mre(uint32_t texture);
 
 /** Bind an albedo texture to slot 0. */
 NCZX_IMPORT void material_albedo(uint32_t texture);
+
+/** Bind a normal map texture to slot 3. */
+/**  */
+/** # Arguments */
+/** * `texture` — Handle to a BC5 or RGBA normal map texture */
+/**  */
+/** Normal maps perturb surface normals for detailed lighting without extra geometry. */
+/** Requires mesh with tangent data (FORMAT_TANGENT) and UVs. */
+/** Works in all lit modes (0=Lambert, 2=PBR, 3=Hybrid) and Mode 1 (Matcap). */
+NCZX_IMPORT void material_normal(uint32_t texture);
+
+/** Skip normal map sampling (use vertex normal instead). */
+/**  */
+/** # Arguments */
+/** * `skip` — 1 to skip normal map, 0 to use normal map (default) */
+/**  */
+/** When a mesh has tangent data, normal mapping is enabled by default. */
+/** Use this flag to opt out temporarily for debugging or artistic control. */
+NCZX_IMPORT void skip_normal_map(uint32_t skip);
 
 /** Set material metallic value (0.0 = dielectric, 1.0 = metal). */
 NCZX_IMPORT void material_metallic(float value);
@@ -1482,6 +1516,7 @@ NCZX_IMPORT float debug_get_time_scale(void);
 #define NCZX_FORMAT_COLOR 2
 #define NCZX_FORMAT_NORMAL 4
 #define NCZX_FORMAT_SKINNED 8
+#define NCZX_FORMAT_TANGENT 16
 #define NCZX_FORMAT_POS_UV UV
 #define NCZX_FORMAT_POS_COLOR COLOR
 #define NCZX_FORMAT_POS_NORMAL NORMAL
@@ -1491,6 +1526,8 @@ NCZX_IMPORT float debug_get_time_scale(void);
 #define NCZX_FORMAT_POS_SKINNED SKINNED
 #define NCZX_FORMAT_POS_NORMAL_SKINNED NORMAL | SKINNED
 #define NCZX_FORMAT_POS_UV_NORMAL_SKINNED UV | NORMAL | SKINNED
+#define NCZX_FORMAT_POS_UV_NORMAL_TANGENT UV | NORMAL | TANGENT
+#define NCZX_FORMAT_POS_UV_COLOR_NORMAL_TANGENT UV | COLOR | NORMAL | TANGENT
 
 // billboard constants
 #define NCZX_BILLBOARD_SPHERICAL 1

@@ -92,7 +92,6 @@ pub fn execute(args: CompileArgs) -> Result<PathBuf> {
 ///
 /// Checks:
 /// - Magic bytes (\0asm)
-/// - Static analysis (render_mode, set_resolution called at most once, valid values)
 fn validate_wasm(bytes: &[u8]) -> Result<()> {
     // Check magic bytes
     if bytes.len() < 8 {
@@ -105,10 +104,6 @@ fn validate_wasm(bytes: &[u8]) -> Result<()> {
             &bytes[0..4]
         );
     }
-
-    // Run static analysis to validate config function usage
-    nethercore_core::analysis::analyze_wasm(bytes)
-        .map_err(|e| anyhow::anyhow!("WASM validation failed: {}", e))?;
 
     Ok(())
 }

@@ -1,7 +1,7 @@
 //! Texture management for Nethercore ZX graphics.
 //!
 //! Handles texture loading, VRAM tracking, and fallback textures.
-//! Supports both RGBA8 (uncompressed) and BC7 (compressed) texture formats.
+//! Supports RGBA8 (uncompressed), BC7 (compressed RGBA), and BC5 (compressed RG for normal maps).
 
 use hashbrown::HashMap;
 
@@ -137,10 +137,11 @@ impl TextureManager {
         self.load_texture_internal(device, queue, width, height, pixels, true)
     }
 
-    /// Load a texture with explicit format (RGBA8 or BC7).
+    /// Load a texture with explicit format (RGBA8, BC7, or BC5).
     ///
     /// This is the main entry point for loading textures from ROM data packs.
     /// BC7 textures provide 4× compression compared to RGBA8.
+    /// BC5 textures are 2-channel (RG) for normal maps where Z is reconstructed.
     pub fn load_texture_with_format(
         &mut self,
         device: &wgpu::Device,
@@ -154,20 +155,33 @@ impl TextureManager {
             TextureFormat::Rgba8 => {
                 self.load_texture_internal(device, queue, width, height, data, true)
             }
-            TextureFormat::Bc7 => self.load_texture_bc7_internal(
+            TextureFormat::Bc7 => self.load_texture_bc_internal(
                 device,
                 queue,
                 width,
                 height,
                 data,
                 wgpu::TextureFormat::Bc7RgbaUnorm,
+                "BC7",
+                true,
+            ),
+            TextureFormat::Bc5 => self.load_texture_bc_internal(
+                device,
+                queue,
+                width,
+                height,
+                data,
+                wgpu::TextureFormat::Bc5RgUnorm,
+                "BC5",
                 true,
             ),
         }
     }
 
-    /// Internal BC7 texture loading
-    fn load_texture_bc7_internal(
+    /// Internal block-compressed texture loading (BC7 or BC5)
+    ///
+    /// Both BC7 and BC5 use 4×4 blocks with 16 bytes per block.
+    fn load_texture_bc_internal(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -175,16 +189,18 @@ impl TextureManager {
         height: u32,
         data: &[u8],
         wgpu_format: wgpu::TextureFormat,
+        format_name: &str,
         track_vram: bool,
     ) -> Result<TextureHandle> {
-        // BC7: 4×4 blocks, 16 bytes per block
+        // BC7/BC5: 4×4 blocks, 16 bytes per block
         let blocks_x = width.div_ceil(4);
         let blocks_y = height.div_ceil(4);
         let expected_size = (blocks_x * blocks_y * 16) as usize;
 
         if data.len() != expected_size {
             anyhow::bail!(
-                "BC7 data size mismatch: expected {} bytes for {}x{} ({}x{} blocks), got {}",
+                "{} data size mismatch: expected {} bytes for {}x{} ({}x{} blocks), got {}",
+                format_name,
                 expected_size,
                 width,
                 height,
@@ -207,11 +223,11 @@ impl TextureManager {
             );
         }
 
-        // Create texture with BC7 format
+        // Create texture with block-compressed format
         let texture = device.create_texture_with_data(
             queue,
             &wgpu::TextureDescriptor {
-                label: Some("BC7 Texture"),
+                label: Some(format_name),
                 size: wgpu::Extent3d {
                     width,
                     height,
@@ -247,11 +263,6 @@ impl TextureManager {
         if track_vram {
             self.vram_used += size_bytes;
         }
-
-        let format_name = match wgpu_format {
-            wgpu::TextureFormat::Bc7RgbaUnorm => "BC7",
-            _ => "BC7",
-        };
 
         tracing::debug!(
             "Loaded {} texture {}: {}x{}, {} bytes (VRAM: {}/{})",

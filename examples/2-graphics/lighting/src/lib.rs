@@ -3,15 +3,15 @@
 //! Demonstrates Nethercore ZX's PBR lighting system (render mode 2).
 //!
 //! Features demonstrated:
-//! - `render_mode()` to select PBR rendering (mode 2)
+//! - PBR rendering (mode 2) via `render_mode = 2` in nether.toml
 //! - `sphere()` to generate a smooth sphere procedurally
 //! - `set_sky()` for procedural sky lighting
 //! - `light_set()`, `light_color()`, `light_intensity()` for dynamic lights
 //! - `material_metallic()`, `material_roughness()` for PBR materials
 //! - Interactive light positioning via analog sticks
 //!
-//! Note: render_mode is init-only (cannot change at runtime).
-//! To see other modes, change RENDER_MODE constant and rebuild.
+//! Note: render_mode is set in nether.toml (cannot change at runtime).
+//! To see other modes, change render_mode in nether.toml and rebuild.
 //!
 //! Note: Rollback state is automatic (entire WASM memory is snapshotted). No save_state/load_state needed.
 //!
@@ -79,8 +79,8 @@ fn fast_cos(x: f32) -> f32 {
 }
 
 
-/// Render mode: 0=Lambert, 1=Matcap, 2=PBR, 3=Hybrid
-/// Change this and rebuild to see different modes
+/// Render mode for display text (should match nether.toml render_mode)
+/// 0=Lambert, 1=Matcap, 2=PBR, 3=Hybrid
 const RENDER_MODE: u32 = 2;
 
 /// Sphere mesh handle
@@ -125,9 +125,6 @@ pub extern "C" fn init() {
     unsafe {
         // Dark background
         set_clear_color(0x101020FF);
-
-        // Set render mode (PBR)
-        render_mode(RENDER_MODE);
 
         // Note: Sky uses reasonable defaults (blue gradient with sun) from the renderer
         // No need to set sky explicitly unless you want custom sky settings

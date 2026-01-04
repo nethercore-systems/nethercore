@@ -60,7 +60,6 @@ static mut ENEMY_OFFSET: f32 = 0.0;
 pub extern "C" fn init() {
     unsafe {
         set_clear_color(0x87CEEBFF);
-        render_mode(0);
 
         // Generate meshes
         CAR_BODY = cube(2.0, 0.8, 4.0);      // Car body

@@ -3,3 +3,4 @@ id = "mode0-inspector"
 title = "Mode 0 Inspector"
 author = "Nethercore Examples"
 version = "0.1.0"
+render_mode = 0

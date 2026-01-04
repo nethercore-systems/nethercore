@@ -33,6 +33,11 @@ pub struct GameSection {
     /// Default: false (uncompressed RGBA8)
     #[serde(default)]
     pub compress_textures: bool,
+
+    /// Render mode: 0=Lambert, 1=Matcap, 2=PBR, 3=Hybrid
+    /// Default: 0 (Lambert)
+    #[serde(default)]
+    pub render_mode: u8,
 }
 
 /// Build configuration section
@@ -166,6 +171,17 @@ impl NetherManifest {
             )
         })
     }
+
+    /// Validate manifest fields
+    pub fn validate(&self) -> Result<()> {
+        if self.game.render_mode > 3 {
+            anyhow::bail!(
+                "Invalid render_mode {} in nether.toml (must be 0-3: 0=Lambert, 1=Matcap, 2=PBR, 3=Hybrid)",
+                self.game.render_mode
+            );
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -285,5 +301,57 @@ script = "zig build -Drelease"
         .unwrap();
 
         assert_eq!(manifest.build_script(false), "zig build -Drelease");
+    }
+
+    #[test]
+    fn test_render_mode_explicit() {
+        let manifest = NetherManifest::parse(
+            r#"
+[game]
+id = "test"
+title = "Test"
+author = "Author"
+version = "1.0.0"
+render_mode = 2
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(manifest.game.render_mode, 2);
+        assert!(manifest.validate().is_ok());
+    }
+
+    #[test]
+    fn test_render_mode_default() {
+        let manifest = NetherManifest::parse(
+            r#"
+[game]
+id = "test"
+title = "Test"
+author = "Author"
+version = "1.0.0"
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(manifest.game.render_mode, 0); // Default to Lambert
+        assert!(manifest.validate().is_ok());
+    }
+
+    #[test]
+    fn test_render_mode_invalid() {
+        let manifest = NetherManifest::parse(
+            r#"
+[game]
+id = "test"
+title = "Test"
+author = "Author"
+version = "1.0.0"
+render_mode = 5
+"#,
+        )
+        .unwrap();
+
+        assert!(manifest.validate().is_err());
     }
 }

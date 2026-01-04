@@ -701,6 +701,85 @@ export fn render() void {
 
 ---
 
+### material_normal
+
+Binds a normal map texture to slot 3. Requires mesh to have tangent data (FORMAT_TANGENT).
+
+**Signature:**
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+fn material_normal(texture: u32)
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_IMPORT void material_normal(uint32_t texture);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+pub extern fn material_normal(texture: u32) void;
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| texture | `u32` | Texture handle for normal map (BC5 RG format recommended) |
+
+**Normal Map Format:**
+- **BC5 RG:** 2-channel compressed format (8 bytes/16 pixels). Blue channel reconstructed from RG.
+- **RGBA8:** Also supported, but wastes storage. Only RG channels are used.
+
+**Developer-Friendly Default:** When a mesh has tangent data, normal mapping is enabled automatically. Use `skip_normal_map(1)` to opt out if needed.
+
+**Example:**
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+fn render() {
+    material_albedo(brick_albedo);
+    material_mre(brick_mre);
+    material_normal(brick_normal);  // Adds surface detail
+    draw_mesh(wall);
+}
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_EXPORT void render(void) {
+    material_albedo(brick_albedo);
+    material_mre(brick_mre);
+    material_normal(brick_normal);  // Adds surface detail
+    draw_mesh(wall);
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+export fn render() void {
+    material_albedo(brick_albedo);
+    material_mre(brick_mre);
+    material_normal(brick_normal);  // Adds surface detail
+    draw_mesh(wall);
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+---
+
 ## Override Flags
 
 These functions enable uniform values instead of texture sampling.
@@ -867,6 +946,98 @@ NCZX_IMPORT void use_uniform_emissive(uint32_t enabled);
 {{#tab name="Zig"}}
 ```zig
 pub extern fn use_uniform_emissive(enabled: u32) void;
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+---
+
+### skip_normal_map
+
+Skip normal map sampling and use vertex normals instead.
+
+**Signature:**
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+fn skip_normal_map(skip: u32)
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_IMPORT void skip_normal_map(uint32_t skip);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+pub extern fn skip_normal_map(skip: u32) void;
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| skip | `u32` | 0 = use normal map (default when tangent data exists), 1 = skip normal map |
+
+**Use Cases:**
+- **Debugging:** See the raw vertex normals without normal map perturbation
+- **Artistic control:** Prefer smooth vertex normals for certain materials
+- **Performance:** Skip texture sampling when normal detail isn't needed
+
+**Note:** This flag only affects meshes with tangent data. Meshes without tangent data always use vertex normals regardless of this setting.
+
+**Example:**
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+fn render() {
+    // Use normal map for detailed brick wall
+    skip_normal_map(0);
+    material_normal(brick_normal);
+    draw_mesh(wall);
+
+    // Skip normal map for smooth character skin
+    skip_normal_map(1);
+    draw_mesh(character_face);
+}
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_EXPORT void render(void) {
+    // Use normal map for detailed brick wall
+    skip_normal_map(0);
+    material_normal(brick_normal);
+    draw_mesh(wall);
+
+    // Skip normal map for smooth character skin
+    skip_normal_map(1);
+    draw_mesh(character_face);
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+export fn render() void {
+    // Use normal map for detailed brick wall
+    skip_normal_map(0);
+    material_normal(brick_normal);
+    draw_mesh(wall);
+
+    // Skip normal map for smooth character skin
+    skip_normal_map(1);
+    draw_mesh(character_face);
+}
 ```
 {{#endtab}}
 

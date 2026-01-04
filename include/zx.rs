@@ -163,12 +163,6 @@ extern "C" {
     /// * `color` — Color in 0xRRGGBBAA format (default: black)
     pub fn set_clear_color(color: u32);
 
-    /// Set the render mode. Must be called during `init()`.
-    ///
-    /// # Arguments
-    /// * `mode` — 0=Lambert, 1=Matcap, 2=PBR, 3=Hybrid
-    pub fn render_mode(mode: u32);
-
     // =========================================================================
     // Camera Functions
     // =========================================================================
@@ -646,6 +640,29 @@ extern "C" {
     /// Generate a capsule mesh with hybrid UV mapping. **Init-only.**
     pub fn capsule_uv(radius: f32, height: f32, segments: u32, rings: u32) -> u32;
 
+    // Tangent-enabled variants (Format 21: POS_UV_NORMAL_TANGENT) — for normal mapping
+
+    /// Generate a sphere mesh with tangent data for normal mapping. **Init-only.**
+    ///
+    /// Tangent follows direction of increasing U (longitude).
+    /// Use with material_normal() for normal-mapped rendering.
+    pub fn sphere_tangent(radius: f32, segments: u32, rings: u32) -> u32;
+
+    /// Generate a plane mesh with tangent data for normal mapping. **Init-only.**
+    ///
+    /// Tangent points along +X, bitangent along +Z, normal along +Y.
+    pub fn plane_tangent(size_x: f32, size_z: f32, subdivisions_x: u32, subdivisions_z: u32) -> u32;
+
+    /// Generate a cube mesh with tangent data for normal mapping. **Init-only.**
+    ///
+    /// Each face has correct tangent space for normal map sampling.
+    pub fn cube_tangent(size_x: f32, size_y: f32, size_z: f32) -> u32;
+
+    /// Generate a torus mesh with tangent data for normal mapping. **Init-only.**
+    ///
+    /// Tangent follows the major circle direction.
+    pub fn torus_tangent(major_radius: f32, minor_radius: f32, major_segments: u32, minor_segments: u32) -> u32;
+
     // =========================================================================
     // Immediate Mode 3D Drawing
     // =========================================================================
@@ -1006,6 +1023,25 @@ extern "C" {
 
     /// Bind an albedo texture to slot 0.
     pub fn material_albedo(texture: u32);
+
+    /// Bind a normal map texture to slot 3.
+    ///
+    /// # Arguments
+    /// * `texture` — Handle to a BC5 or RGBA normal map texture
+    ///
+    /// Normal maps perturb surface normals for detailed lighting without extra geometry.
+    /// Requires mesh with tangent data (FORMAT_TANGENT) and UVs.
+    /// Works in all lit modes (0=Lambert, 2=PBR, 3=Hybrid) and Mode 1 (Matcap).
+    pub fn material_normal(texture: u32);
+
+    /// Skip normal map sampling (use vertex normal instead).
+    ///
+    /// # Arguments
+    /// * `skip` — 1 to skip normal map, 0 to use normal map (default)
+    ///
+    /// When a mesh has tangent data, normal mapping is enabled by default.
+    /// Use this flag to opt out temporarily for debugging or artistic control.
+    pub fn skip_normal_map(skip: u32);
 
     /// Set material metallic value (0.0 = dielectric, 1.0 = metal).
     pub fn material_metallic(value: f32);
@@ -1726,6 +1762,7 @@ pub mod format {
     pub const COLOR: u8 = 2;
     pub const NORMAL: u8 = 4;
     pub const SKINNED: u8 = 8;
+    pub const TANGENT: u8 = 16;
 
     // Common combinations
     pub const POS_UV: u8 = UV;
@@ -1737,6 +1774,10 @@ pub mod format {
     pub const POS_SKINNED: u8 = SKINNED;
     pub const POS_NORMAL_SKINNED: u8 = NORMAL | SKINNED;
     pub const POS_UV_NORMAL_SKINNED: u8 = UV | NORMAL | SKINNED;
+
+    // Tangent combinations (requires NORMAL)
+    pub const POS_UV_NORMAL_TANGENT: u8 = UV | NORMAL | TANGENT;
+    pub const POS_UV_COLOR_NORMAL_TANGENT: u8 = UV | COLOR | NORMAL | TANGENT;
 }
 
 /// Billboard modes for `draw_billboard()`

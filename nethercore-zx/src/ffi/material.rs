@@ -13,6 +13,7 @@ pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     // Texture binding functions
     linker.func_wrap("env", "material_mre", material_mre)?;
     linker.func_wrap("env", "material_albedo", material_albedo)?;
+    linker.func_wrap("env", "material_normal", material_normal)?;
 
     // Material value setters
     linker.func_wrap("env", "material_metallic", material_metallic)?;
@@ -38,6 +39,7 @@ pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     linker.func_wrap("env", "use_uniform_emissive", use_uniform_emissive)?;
     linker.func_wrap("env", "use_uniform_specular", use_uniform_specular)?;
     linker.func_wrap("env", "use_matcap_reflection", use_matcap_reflection)?;
+    linker.func_wrap("env", "skip_normal_map", skip_normal_map)?;
 
     // Aliases for override flags (for semantic clarity in different modes)
     linker.func_wrap("env", "use_uniform_specular_damping", use_uniform_metallic)?;
@@ -68,6 +70,20 @@ fn material_mre(mut caller: Caller<'_, ZXGameContext>, texture: u32) {
 fn material_albedo(mut caller: Caller<'_, ZXGameContext>, texture: u32) {
     let state = &mut caller.data_mut().ffi;
     state.bound_textures[0] = texture;
+}
+
+/// Bind a normal map texture
+///
+/// # Arguments
+/// * `texture` — Texture handle for the tangent-space normal map (BC5 RG format)
+///
+/// Binds to slot 3. The normal map is sampled using the TBN matrix from vertex tangent data.
+/// When mesh has tangent data, normal mapping is enabled by default (opt-out via skip_normal_map).
+/// Note: In Mode 1 (Matcap), slot 3 is shared - it becomes a normal map when tangent data exists,
+/// otherwise it acts as the 4th matcap texture.
+fn material_normal(mut caller: Caller<'_, ZXGameContext>, texture: u32) {
+    let state = &mut caller.data_mut().ffi;
+    state.bound_textures[3] = texture;
 }
 
 /// Set the material metallic value
@@ -296,4 +312,19 @@ fn use_uniform_specular(mut caller: Caller<'_, ZXGameContext>, enabled: u32) {
 fn use_matcap_reflection(mut caller: Caller<'_, ZXGameContext>, enabled: u32) {
     let state = &mut caller.data_mut().ffi;
     state.set_use_matcap_reflection(enabled != 0);
+}
+
+/// Set whether to skip normal map sampling (use vertex normal instead)
+///
+/// # Arguments
+/// * `skip` — 0 = use normal map (default when tangent data exists), 1 = skip normal map
+///
+/// When a mesh has tangent data, normal mapping is enabled by default for developer convenience.
+/// This flag allows opting out, which can be useful for:
+/// - Temporary debugging (see the "raw" surface normal)
+/// - Artistic control (prefer vertex normals for certain materials)
+/// - Performance optimization (skip texture sampling)
+fn skip_normal_map(mut caller: Caller<'_, ZXGameContext>, skip: u32) {
+    let state = &mut caller.data_mut().ffi;
+    state.current_shading_state.set_skip_normal_map(skip != 0);
 }

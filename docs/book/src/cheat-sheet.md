@@ -74,7 +74,7 @@ local_player_mask() u32                // Bitmask of local players
 ```rust
 set_tick_rate(fps)                     // 0=24, 1=30, 2=60, 3=120
 set_clear_color(0xRRGGBBAA)            // Background color
-render_mode(mode)                      // 0=Lambert, 1=Matcap, 2=MR, 3=SS
+// render_mode set via nether.toml     // 0=Lambert, 1=Matcap, 2=MR, 3=SS
 ```
 {{#endtab}}
 
@@ -82,7 +82,7 @@ render_mode(mode)                      // 0=Lambert, 1=Matcap, 2=MR, 3=SS
 ```c
 void set_tick_rate(uint32_t fps);      // NCZX_TICK_RATE_24/30/60/120
 void set_clear_color(uint32_t color);  // Background color
-void render_mode(uint32_t mode);       // NCZX_RENDER_LAMBERT/MATCAP/PBR/HYBRID
+// render_mode set via nether.toml     // NCZX_RENDER_LAMBERT/MATCAP/PBR/HYBRID
 ```
 {{#endtab}}
 
@@ -90,7 +90,7 @@ void render_mode(uint32_t mode);       // NCZX_RENDER_LAMBERT/MATCAP/PBR/HYBRID
 ```zig
 set_tick_rate(fps: u32) void           // 0=24, 1=30, 2=60, 3=120
 set_clear_color(color: u32) void       // Background color
-render_mode(mode: u32) void            // 0=Lambert, 1=Matcap, 2=MR, 3=SS
+// render_mode set via nether.toml     // 0=Lambert, 1=Matcap, 2=MR, 3=SS
 ```
 {{#endtab}}
 
@@ -408,7 +408,7 @@ draw_triangles(data_ptr, vertex_count, format)
 draw_triangles_indexed(data_ptr, vcount, idx_ptr, icount, fmt)
 ```
 
-**Vertex Formats:** POS=0, UV=1, COLOR=2, UV_COLOR=3, NORMAL=4, UV_NORMAL=5, COLOR_NORMAL=6, UV_COLOR_NORMAL=7, +SKINNED=8
+**Vertex Formats:** POS=0, UV=1, COLOR=2, UV_COLOR=3, NORMAL=4, UV_NORMAL=5, COLOR_NORMAL=6, UV_COLOR_NORMAL=7, SKINNED=8, TANGENT=16 (combine with NORMAL)
 {{#endtab}}
 
 {{#tab name="C/C++"}}
@@ -428,7 +428,7 @@ void draw_triangles_indexed(const float* data, uint32_t vcount,
                             const uint16_t* idx, uint32_t icount, uint32_t fmt);
 ```
 
-**Vertex Formats:** `NCZX_FORMAT_POS`=0, `NCZX_FORMAT_UV`=1, `NCZX_FORMAT_COLOR`=2, `NCZX_FORMAT_NORMAL`=4, `NCZX_FORMAT_SKINNED`=8 (combinable)
+**Vertex Formats:** `NCZX_FORMAT_POS`=0, `NCZX_FORMAT_UV`=1, `NCZX_FORMAT_COLOR`=2, `NCZX_FORMAT_NORMAL`=4, `NCZX_FORMAT_SKINNED`=8, `NCZX_FORMAT_TANGENT`=16 (combinable, TANGENT requires NORMAL)
 {{#endtab}}
 
 {{#tab name="Zig"}}
@@ -443,7 +443,7 @@ draw_triangles(data: [*]const f32, vcount: u32, fmt: u32) void
 draw_triangles_indexed(data: [*]const f32, vcount: u32, idx: [*]const u16, icount: u32, fmt: u32) void
 ```
 
-**Vertex Formats:** `Format.pos`=0, `Format.uv`=1, `Format.color`=2, `Format.normal`=4, `Format.skinned`=8 (combinable)
+**Vertex Formats:** `Format.pos`=0, `Format.uv`=1, `Format.color`=2, `Format.normal`=4, `Format.skinned`=8, `Format.tangent`=16 (combinable, tangent requires normal)
 {{#endtab}}
 
 {{#endtabs}}
@@ -513,6 +513,7 @@ material_emissive(value)               // Glow intensity
 material_rim(intensity, power)         // Rim light
 material_albedo(texture)               // Bind to slot 0
 material_mre(texture)                  // Bind MRE to slot 1
+material_normal(texture)               // Bind normal map to slot 3
 
 // Mode 3 (Specular-Shininess)
 material_shininess(value)              // 0.0-1.0 → 1-256
@@ -523,6 +524,7 @@ use_uniform_color(enabled)
 use_uniform_metallic(enabled)
 use_uniform_roughness(enabled)
 use_uniform_emissive(enabled)
+skip_normal_map(skip)                  // 0=use normal map, 1=use vertex normal
 ```
 {{#endtab}}
 
@@ -535,6 +537,7 @@ void material_emissive(float value);   // Glow intensity
 void material_rim(float intensity, float power);  // Rim light
 void material_albedo(uint32_t texture);    // Bind to slot 0
 void material_mre(uint32_t texture);       // Bind MRE to slot 1
+void material_normal(uint32_t texture);    // Bind normal map to slot 3
 
 // Mode 3 (Specular-Shininess)
 void material_shininess(float value);  // 0.0-1.0 → 1-256
@@ -545,6 +548,7 @@ void use_uniform_color(uint32_t enabled);
 void use_uniform_metallic(uint32_t enabled);
 void use_uniform_roughness(uint32_t enabled);
 void use_uniform_emissive(uint32_t enabled);
+void skip_normal_map(uint32_t skip);       // 0=use normal map, 1=use vertex normal
 ```
 {{#endtab}}
 
@@ -557,6 +561,7 @@ material_emissive(value: f32) void     // Glow intensity
 material_rim(intensity: f32, power: f32) void  // Rim light
 material_albedo(texture: u32) void     // Bind to slot 0
 material_mre(texture: u32) void        // Bind MRE to slot 1
+material_normal(texture: u32) void     // Bind normal map to slot 3
 
 // Mode 3 (Specular-Shininess)
 material_shininess(value: f32) void    // 0.0-1.0 → 1-256
@@ -567,6 +572,7 @@ use_uniform_color(enabled: u32) void
 use_uniform_metallic(enabled: u32) void
 use_uniform_roughness(enabled: u32) void
 use_uniform_emissive(enabled: u32) void
+skip_normal_map(skip: u32) void        // 0=use normal map, 1=use vertex normal
 ```
 {{#endtab}}
 

@@ -1,19 +1,22 @@
 //! Shader generation system for Nethercore ZX
 //!
-//! All 40 shader permutations are pregenerated at build time by build.rs and validated
+//! All 72 shader permutations are pregenerated at build time by build.rs and validated
 //! with naga. This module provides access to the pregenerated shaders.
 //!
 //! - Render mode (0-3): Lambert, Matcap, MR-Blinn-Phong, Blinn-Phong
-//! - Vertex format flags (UV, COLOR, NORMAL, SKINNED)
+//! - Vertex format flags (UV, COLOR, NORMAL, SKINNED, TANGENT)
 //!
-//! Total shader count: 40
-//! - Mode 0: 16 shaders (all vertex formats)
-//! - Modes 1-3: 8 shaders each (only formats with NORMAL flag)
+//! Total shader count: 72
+//! - Mode 0: 24 shaders (all vertex formats, tangent requires normal)
+//! - Modes 1-3: 16 shaders each (formats with NORMAL, optionally TANGENT)
+//!
+//! TANGENT flag (bit 4) is only valid when NORMAL flag (bit 2) is also set,
+//! as tangent-space normal mapping requires vertex normals for TBN construction.
 //!
 //! Additionally, SKY_SHADER and QUAD_SHADER are generated from templates
 //! (sky_template.wgsl, quad_template.wgsl) combined with common.wgsl utilities.
 
-use crate::graphics::FORMAT_NORMAL;
+use crate::graphics::{FORMAT_NORMAL, FORMAT_TANGENT};
 use std::fmt;
 
 // Include pregenerated shaders from build.rs
@@ -126,8 +129,10 @@ pub fn mode_name(mode: u8) -> &'static str {
 #[allow(dead_code)] // Debugging/testing helper
 pub fn shader_count_for_mode(mode: u8) -> usize {
     match mode {
-        0 => 16,    // All vertex formats
-        1..=3 => 8, // Only formats with NORMAL
+        // Mode 0: 16 (no tangent) + 8 (tangent+normal) = 24
+        0 => 24,
+        // Modes 1-3: 8 (normal, no tangent) + 8 (normal+tangent) = 16
+        1..=3 => 16,
         _ => 0,
     }
 }
@@ -135,12 +140,23 @@ pub fn shader_count_for_mode(mode: u8) -> usize {
 /// Get all valid vertex formats for a render mode
 #[allow(dead_code)] // Debugging/testing helper
 pub fn valid_formats_for_mode(mode: u8) -> Vec<u8> {
+    // Tangent requires normal: filter out formats with TANGENT but without NORMAL
+    let tangent_valid = |f: &u8| {
+        let has_tangent = (*f & FORMAT_TANGENT) != 0;
+        let has_normal = (*f & FORMAT_NORMAL) != 0;
+        !has_tangent || has_normal // tangent requires normal
+    };
+
     match mode {
-        0 => (0..16).collect(), // All formats
-        1..=3 => {
-            // Only formats with NORMAL flag (formats 4-7 and 12-15)
-            (0..16).filter(|&f| f & FORMAT_NORMAL != 0).collect()
-        }
+        // Mode 0: all combinations except invalid tangent-without-normal
+        // Valid: 0-15 (no tangent), 20-23 (tangent+normal), 28-31 (tangent+normal+skinned)
+        0 => (0..32).filter(tangent_valid).collect(),
+        // Modes 1-3: require NORMAL, plus tangent validation
+        // Valid: 4-7, 12-15, 20-23, 28-31
+        1..=3 => (0..32)
+            .filter(|&f| f & FORMAT_NORMAL != 0)
+            .filter(tangent_valid)
+            .collect(),
         _ => vec![],
     }
 }
@@ -156,9 +172,9 @@ mod tests {
 
     #[test]
     fn test_shader_generation_mode0() {
-        // Mode 0 should support all 16 formats
-        for format in 0..16 {
-            let shader = generate_shader(0, format).expect("Mode 0 should support all formats");
+        // Mode 0 should support all 24 valid formats
+        for format in valid_formats_for_mode(0) {
+            let shader = generate_shader(0, format).expect("Mode 0 should support valid formats");
             assert!(!shader.is_empty());
             assert!(shader.contains("@vertex"));
             assert!(shader.contains("@fragment"));
@@ -225,16 +241,16 @@ mod tests {
 
     #[test]
     fn test_shader_counts() {
-        assert_eq!(shader_count_for_mode(0), 16);
-        assert_eq!(shader_count_for_mode(1), 8);
-        assert_eq!(shader_count_for_mode(2), 8);
-        assert_eq!(shader_count_for_mode(3), 8);
+        assert_eq!(shader_count_for_mode(0), 24);
+        assert_eq!(shader_count_for_mode(1), 16);
+        assert_eq!(shader_count_for_mode(2), 16);
+        assert_eq!(shader_count_for_mode(3), 16);
     }
 
     #[test]
     fn test_total_shader_count() {
         let total: usize = (0..4).map(shader_count_for_mode).sum();
-        assert_eq!(total, 40); // 16 + 8 + 8 + 8 = 40
+        assert_eq!(total, 72); // 24 + 16 + 16 + 16 = 72
     }
 
     // ========================================================================
@@ -275,18 +291,11 @@ mod tests {
     }
 
     #[test]
-    fn test_compile_all_40_shaders() {
+    fn test_compile_all_72_shaders() {
         let mut errors = Vec::new();
 
-        // Mode 0: All 16 vertex formats
-        for format in 0u8..16 {
-            if let Err(e) = compile_and_validate_shader(0, format) {
-                errors.push(e);
-            }
-        }
-
-        // Modes 1-3: Only formats with NORMAL flag
-        for mode in 1u8..=3 {
+        // All modes: iterate through valid formats
+        for mode in 0u8..=3 {
             for format in valid_formats_for_mode(mode) {
                 if let Err(e) = compile_and_validate_shader(mode, format) {
                     errors.push(e);
@@ -305,7 +314,7 @@ mod tests {
 
     #[test]
     fn test_compile_mode0_all_formats() {
-        for format in 0u8..16 {
+        for format in valid_formats_for_mode(0) {
             compile_and_validate_shader(0, format).unwrap_or_else(|e| panic!("{}", e));
         }
     }
@@ -333,16 +342,20 @@ mod tests {
 
     #[test]
     fn test_compile_skinned_variants() {
-        // Test all skinned formats (formats 8-15)
+        // Test all skinned formats: 8-15 (no tangent) and 28-31 (with tangent+normal)
         // Mode 0 supports all skinned formats
-        for format in 8u8..16 {
-            compile_and_validate_shader(0, format).unwrap_or_else(|e| panic!("{}", e));
+        for format in valid_formats_for_mode(0) {
+            if format >= 8 {
+                compile_and_validate_shader(0, format).unwrap_or_else(|e| panic!("{}", e));
+            }
         }
 
-        // Modes 1-3 only support skinned formats with NORMAL (12-15)
+        // Modes 1-3: skinned formats with NORMAL (12-15, 28-31)
         for mode in 1u8..=3 {
-            for format in [12, 13, 14, 15] {
-                compile_and_validate_shader(mode, format).unwrap_or_else(|e| panic!("{}", e));
+            for format in valid_formats_for_mode(mode) {
+                if format >= 8 {
+                    compile_and_validate_shader(mode, format).unwrap_or_else(|e| panic!("{}", e));
+                }
             }
         }
     }
@@ -387,17 +400,20 @@ mod tests {
                     "//VIN_COLOR",
                     "//VIN_NORMAL",
                     "//VIN_SKINNED",
+                    "//VIN_TANGENT",
                     "//VOUT_UV",
                     "//VOUT_COLOR",
                     "//VOUT_WORLD_NORMAL",
                     "//VOUT_VIEW_NORMAL",
                     "//VOUT_CAMERA_POS",
+                    "//VOUT_TANGENT",
                     "//VS_UV",
                     "//VS_COLOR",
                     "//VS_WORLD_NORMAL",
                     "//VS_VIEW_NORMAL",
                     "//VS_CAMERA_POS",
                     "//VS_SKINNED",
+                    "//VS_TANGENT",
                     "//VS_POSITION",
                     "//FS_COLOR",
                     "//FS_UV",

@@ -22,6 +22,8 @@ pub const FORMAT_COLOR: u8 = 2;
 pub const FORMAT_NORMAL: u8 = 4;
 /// Vertex format flag: Has bone indices/weights for skinning
 pub const FORMAT_SKINNED: u8 = 8;
+/// Vertex format flag: Has tangent vectors for normal mapping (4 floats: xyz + handedness)
+pub const FORMAT_TANGENT: u8 = 16;
 
 /// Calculate vertex stride in bytes for unpacked f32 format
 #[inline]
@@ -36,6 +38,9 @@ pub const fn vertex_stride(format: u8) -> u32 {
     }
     if format & FORMAT_NORMAL != 0 {
         stride += 12; // Normal: Float32x3
+    }
+    if format & FORMAT_TANGENT != 0 {
+        stride += 16; // Tangent: Float32x4 (xyz + handedness)
     }
     if format & FORMAT_SKINNED != 0 {
         stride += 20; // Bone indices (4 u8) + weights (4 f32)
@@ -57,6 +62,9 @@ pub const fn vertex_stride_packed(format: u8) -> u32 {
     }
     if format & FORMAT_NORMAL != 0 {
         stride += 4; // Octahedral u32
+    }
+    if format & FORMAT_TANGENT != 0 {
+        stride += 4; // Octahedral u32 with sign bit (bit 16)
     }
     if format & FORMAT_SKINNED != 0 {
         stride += 8; // Bone indices (u8x4) + weights (unorm8x4)
@@ -223,6 +231,57 @@ pub fn pack_normal_octahedral(nx: f32, ny: f32, nz: f32) -> u32 {
 }
 
 // ============================================================================
+// Tangent Packing
+// ============================================================================
+
+/// Pack tangent vector + handedness into u32
+///
+/// Uses octahedral encoding for tangent direction (16 bits), with handedness sign in bit 16.
+/// This packs the tangent into 4 bytes for efficient GPU storage.
+///
+/// # Arguments
+/// * `tangent` - Tangent vector (xyz), will be normalized
+/// * `handedness` - Bitangent handedness: +1.0 for right-handed, -1.0 for left-handed
+///
+/// # Returns
+/// Packed u32: bits 0-15 = octahedral tangent, bit 16 = sign (1 = negative handedness)
+#[inline]
+pub fn pack_tangent(tangent: [f32; 3], handedness: f32) -> u32 {
+    let dir = glam::Vec3::new(tangent[0], tangent[1], tangent[2]);
+    let (u, v) = encode_octahedral(dir);
+    let u_snorm = f32_to_snorm16(u);
+    let v_snorm = f32_to_snorm16(v);
+    let oct = (u_snorm as u16 as u32) | ((v_snorm as u16 as u32) << 16);
+    // Clear bit 16 (will be in v_snorm's sign bit area), then set sign bit
+    let oct_masked = oct & 0xFFFEFFFF; // Clear bit 16
+    let sign_bit = if handedness < 0.0 { 1u32 << 16 } else { 0 };
+    oct_masked | sign_bit
+}
+
+/// Unpack tangent from u32 to (tangent_xyz, handedness_sign)
+///
+/// # Returns
+/// Tuple of (tangent direction as Vec3, handedness as +1.0 or -1.0)
+#[inline]
+pub fn unpack_tangent(packed: u32) -> (glam::Vec3, f32) {
+    // Extract sign bit
+    let sign = if (packed & 0x10000) != 0 { -1.0 } else { 1.0 };
+    // Restore bit 16 for proper snorm16 decoding (assume positive if sign was stored there)
+    let oct = packed & 0xFFFEFFFF; // Clear our sign bit
+    let u_i16 = (oct & 0xFFFF) as i16;
+    let v_i16 = ((oct >> 16) & 0xFFFF) as i16;
+    let u = u_i16 as f32 / 32767.0;
+    let v = v_i16 as f32 / 32767.0;
+    (decode_octahedral(u, v), sign)
+}
+
+/// Pack tangent with handedness from f32x4 (xyz = tangent, w = handedness)
+#[inline]
+pub fn pack_tangent_f32x4(tangent: [f32; 4]) -> u32 {
+    pack_tangent([tangent[0], tangent[1], tangent[2]], tangent[3])
+}
+
+// ============================================================================
 // Color Packing
 // ============================================================================
 
@@ -264,11 +323,12 @@ pub fn pack_bone_weights_unorm8(weights: [f32; 4]) -> [u8; 4] {
 
 /// Pack unpacked f32 vertex data to GPU-ready packed format
 ///
-/// Converts f32 positions/UVs/normals/colors to packed formats based on format flags.
+/// Converts f32 positions/UVs/normals/colors/tangents to packed formats based on format flags.
 pub fn pack_vertex_data(data: &[f32], format: u8) -> Vec<u8> {
     let has_uv = format & FORMAT_UV != 0;
     let has_color = format & FORMAT_COLOR != 0;
     let has_normal = format & FORMAT_NORMAL != 0;
+    let has_tangent = format & FORMAT_TANGENT != 0;
     let has_skinning = format & FORMAT_SKINNED != 0;
 
     let mut f32_stride = 3; // Position
@@ -280,6 +340,9 @@ pub fn pack_vertex_data(data: &[f32], format: u8) -> Vec<u8> {
     }
     if has_normal {
         f32_stride += 3;
+    }
+    if has_tangent {
+        f32_stride += 4; // Tangent: xyz + handedness
     }
     if has_skinning {
         f32_stride += 5;
@@ -318,6 +381,16 @@ pub fn pack_vertex_data(data: &[f32], format: u8) -> Vec<u8> {
             let normal = pack_normal_octahedral(data[offset], data[offset + 1], data[offset + 2]);
             packed.extend_from_slice(&normal.to_le_bytes());
             offset += 3;
+        }
+
+        // Tangent: f32x4 (xyz + handedness) → octahedral u32 with sign bit
+        if has_tangent {
+            let tangent = pack_tangent(
+                [data[offset], data[offset + 1], data[offset + 2]],
+                data[offset + 3],
+            );
+            packed.extend_from_slice(&tangent.to_le_bytes());
+            offset += 4;
         }
 
         // Skinning: bone indices + weights
@@ -392,6 +465,7 @@ mod tests {
         assert_eq!(vertex_stride(0), 12); // POS only
         assert_eq!(vertex_stride(FORMAT_UV), 20); // POS + UV
         assert_eq!(vertex_stride(FORMAT_UV | FORMAT_NORMAL), 32); // POS + UV + NORMAL
+        assert_eq!(vertex_stride(FORMAT_UV | FORMAT_NORMAL | FORMAT_TANGENT), 48); // POS + UV + NORMAL + TANGENT
     }
 
     #[test]
@@ -399,5 +473,43 @@ mod tests {
         assert_eq!(vertex_stride_packed(0), 8); // POS only
         assert_eq!(vertex_stride_packed(FORMAT_UV), 12); // POS + UV
         assert_eq!(vertex_stride_packed(FORMAT_UV | FORMAT_NORMAL), 16); // POS + UV + NORMAL
+        assert_eq!(vertex_stride_packed(FORMAT_UV | FORMAT_NORMAL | FORMAT_TANGENT), 20); // POS + UV + NORMAL + TANGENT
+    }
+
+    #[test]
+    fn test_tangent_roundtrip() {
+        let test_cases = [
+            ([1.0, 0.0, 0.0], 1.0),   // +X, positive handedness
+            ([-1.0, 0.0, 0.0], -1.0), // -X, negative handedness
+            ([0.0, 1.0, 0.0], 1.0),   // +Y, positive handedness
+            ([0.0, 0.0, 1.0], -1.0),  // +Z, negative handedness
+            ([0.577, 0.577, 0.577], 1.0), // Diagonal, positive handedness
+        ];
+
+        for (tangent, handedness) in test_cases {
+            let packed = pack_tangent(tangent, handedness);
+            let (decoded_dir, decoded_sign) = unpack_tangent(packed);
+
+            let expected = glam::Vec3::new(tangent[0], tangent[1], tangent[2]).normalize();
+            let error = (decoded_dir - expected).length();
+
+            assert!(error < 0.02, "Tangent roundtrip failed for {:?}: error = {}", tangent, error);
+            assert_eq!(decoded_sign.signum(), handedness.signum(), "Handedness sign mismatch for {:?}", tangent);
+        }
+    }
+
+    #[test]
+    fn test_tangent_handedness_preserved() {
+        // Ensure handedness sign is correctly preserved even for various tangent directions
+        let tangent = [0.707, 0.707, 0.0];
+
+        let packed_positive = pack_tangent(tangent, 1.0);
+        let packed_negative = pack_tangent(tangent, -1.0);
+
+        let (_, sign_pos) = unpack_tangent(packed_positive);
+        let (_, sign_neg) = unpack_tangent(packed_negative);
+
+        assert_eq!(sign_pos, 1.0, "Positive handedness should be preserved");
+        assert_eq!(sign_neg, -1.0, "Negative handedness should be preserved");
     }
 }

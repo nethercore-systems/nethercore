@@ -16,6 +16,7 @@ const FORMAT_UV: u8 = 1;
 const FORMAT_COLOR: u8 = 2;
 const FORMAT_NORMAL: u8 = 4;
 const FORMAT_SKINNED: u8 = 8;
+const FORMAT_TANGENT: u8 = 16;
 
 // Shader template files (read at build time)
 const COMMON: &str = include_str!("shaders/common.wgsl");
@@ -31,6 +32,7 @@ const VIN_COLOR: &str = "@location(2) color: vec3<f32>,";
 const VIN_NORMAL: &str = "@location(3) normal_packed: u32,";
 const VIN_SKINNED: &str =
     "@location(4) bone_indices: vec4<u32>,\n    @location(5) bone_weights: vec4<f32>,";
+const VIN_TANGENT: &str = "@location(6) tangent_packed: u32,";
 
 const VOUT_WORLD_NORMAL: &str = "@location(1) world_normal: vec3<f32>,";
 const VOUT_VIEW_NORMAL: &str = "@location(2) view_normal: vec3<f32>,";
@@ -38,6 +40,11 @@ const VOUT_VIEW_POS: &str = "@location(4) view_position: vec3<f32>,";
 const VOUT_CAMERA_POS: &str = "@location(5) @interpolate(flat) camera_position: vec3<f32>,";
 const VOUT_UV: &str = "@location(10) uv: vec2<f32>,";
 const VOUT_COLOR: &str = "@location(11) color: vec3<f32>,";
+// Tangent vertex outputs: world-space tangent (location 6) + bitangent sign (location 7)
+const VOUT_TANGENT: &str = "@location(6) world_tangent: vec3<f32>,\n    @location(7) @interpolate(flat) bitangent_sign: f32,";
+
+// Mode 1: Additional view-space tangent output for matcap normal mapping (location 8)
+const VOUT_VIEW_TANGENT: &str = "@location(8) view_tangent: vec3<f32>,";
 
 const VS_UV: &str = "out.uv = in.uv;";
 const VS_COLOR: &str = "out.color = in.color;";
@@ -46,7 +53,20 @@ const VS_VIEW_NORMAL: &str = "let view_rot = mat3x3<f32>(view_matrix[0].xyz, vie
 const VS_VIEW_POS: &str = "out.view_position = (view_matrix * model_pos).xyz;";
 const VS_CAMERA_POS: &str = "out.camera_position = extract_camera_position(view_matrix);";
 
-const VS_SKINNED: &str = r#"// GPU skinning: compute skinned position and normal
+// Mode 1 with tangent: compute view-space tangent for matcap normal mapping
+const VS_VIEW_TANGENT: &str = "out.view_tangent = normalize(view_rot * out.world_tangent);";
+const VS_VIEW_TANGENT_SKINNED: &str = "out.view_tangent = normalize(view_rot * final_tangent);";
+
+// Tangent vertex shader code: unpack and transform to world space
+const VS_TANGENT: &str = r#"let tangent_data = unpack_tangent(in.tangent_packed);
+    let world_tangent_raw = (model_matrix * vec4<f32>(tangent_data.xyz, 0.0)).xyz;
+    out.world_tangent = normalize(world_tangent_raw);
+    out.bitangent_sign = tangent_data.w;"#;
+
+// Tangent vertex shader code for skinned meshes (use skinned tangent instead)
+const VS_TANGENT_SKINNED: &str = "out.world_tangent = normalize(final_tangent);\n    out.bitangent_sign = final_tangent_sign;";
+
+const VS_SKINNED: &str = r#"// GPU skinning: compute skinned position, normal, and tangent
     // Animation System v2 (Unified Buffer): keyframe_base and inverse_bind_base
     // point directly into unified_animation buffer (offsets pre-computed on CPU)
     // - Skinning mode (FLAG_SKINNING_MODE): 0 = raw, 1 = apply inverse bind
@@ -58,6 +78,8 @@ const VS_SKINNED: &str = r#"// GPU skinning: compute skinned position and normal
     var skinned_pos = vec3<f32>(0.0, 0.0, 0.0);
     var skinned_normal = vec3<f32>(0.0, 0.0, 0.0);
     //VS_SKINNED_UNPACK_NORMAL
+    var skinned_tangent = vec3<f32>(0.0, 0.0, 0.0);
+    //VS_SKINNED_UNPACK_TANGENT
 
     for (var i = 0u; i < 4u; i++) {
         let bone_idx = in.bone_indices[i];
@@ -75,16 +97,27 @@ const VS_SKINNED: &str = r#"// GPU skinning: compute skinned position and normal
 
             skinned_pos += (bone_matrix * vec4<f32>(in.position, 1.0)).xyz * weight;
             //VS_SKINNED_NORMAL
+            //VS_SKINNED_TANGENT
         }
     }
 
     let final_position = skinned_pos;
-    //VS_SKINNED_FINAL_NORMAL"#;
+    //VS_SKINNED_FINAL_NORMAL
+    //VS_SKINNED_FINAL_TANGENT"#;
 
 const VS_SKINNED_UNPACK_NORMAL: &str = "let input_normal = unpack_octahedral(in.normal_packed);";
 const VS_SKINNED_NORMAL: &str =
     "skinned_normal += (bone_matrix * vec4<f32>(input_normal, 0.0)).xyz * weight;";
 const VS_SKINNED_FINAL_NORMAL: &str = "let final_normal = normalize(skinned_normal);";
+
+// Tangent skinning placeholders
+const VS_SKINNED_UNPACK_TANGENT: &str = r#"let input_tangent_data = unpack_tangent(in.tangent_packed);
+    let input_tangent = input_tangent_data.xyz;
+    let input_tangent_sign = input_tangent_data.w;"#;
+const VS_SKINNED_TANGENT: &str =
+    "skinned_tangent += (bone_matrix * vec4<f32>(input_tangent, 0.0)).xyz * weight;";
+const VS_SKINNED_FINAL_TANGENT: &str = r#"let final_tangent = normalize(skinned_tangent);
+    let final_tangent_sign = input_tangent_sign;"#;
 
 const VS_POSITION_SKINNED: &str = "let world_pos = vec4<f32>(final_position, 1.0);";
 const VS_POSITION_UNSKINNED: &str = "let world_pos = vec4<f32>(in.position, 1.0);";
@@ -97,8 +130,16 @@ const FS_UV: &str = r#"if !has_flag(shading.flags, FLAG_USE_UNIFORM_COLOR) {
         color *= tex_sample.rgb;
         base_alpha = tex_sample.a;
     }"#;
-// Mode 0 Lambert: ambient from environment gradient + save albedo for lighting
-const FS_AMBIENT: &str = r#"let ambient = color * sample_environment_ambient(shading.environment_index, in.world_normal);
+// Mode 0 Lambert: ambient from environment gradient + save albedo for lighting (no tangent)
+const FS_AMBIENT: &str = r#"let shading_normal = in.world_normal;
+    let ambient = color * sample_environment_ambient(shading.environment_index, shading_normal);
+    let albedo = color;"#;
+
+// Mode 0 Lambert: ambient with tangent/normal map support
+const FS_AMBIENT_TANGENT: &str = r#"// Build TBN matrix and sample normal map
+    let tbn = build_tbn(in.world_tangent, in.world_normal, in.bitangent_sign);
+    let shading_normal = sample_normal_map(slot3, in.uv, tbn, shading.flags);
+    let ambient = color * sample_environment_ambient(shading.environment_index, shading_normal);
     let albedo = color;"#;
 
 // Mode 0 Lambert: 4 dynamic lights only (no sun direct lighting)
@@ -109,7 +150,7 @@ const FS_NORMAL: &str = r#"var final_color = ambient;
         let light_data = unpack_light(shading.lights[i]);
         if (light_data.enabled) {
             let light = compute_light(light_data, in.world_position);
-            final_color += lambert_diffuse(in.world_normal, light.direction, albedo, light.color);
+            final_color += lambert_diffuse(shading_normal, light.direction, albedo, light.color);
         }
     }
 
@@ -123,6 +164,28 @@ const FS_ALBEDO_UV: &str = r#"if !has_flag(shading.flags, FLAG_USE_UNIFORM_COLOR
         albedo *= albedo_sample.rgb;
         base_alpha = albedo_sample.a;
     }"#;
+
+// Mode 2/3: Shading normal computation (no tangent)
+const FS_SHADING_NORMAL: &str = "let shading_normal = in.world_normal;";
+
+// Mode 2/3: Shading normal with tangent/normal map support
+const FS_SHADING_NORMAL_TANGENT: &str = r#"// Build TBN matrix and sample normal map
+    let tbn = build_tbn(in.world_tangent, in.world_normal, in.bitangent_sign);
+    let shading_normal = sample_normal_map(slot3, in.uv, tbn, shading.flags);"#;
+
+// Mode 1 Matcap: Shading normal (both world and view space) - no tangent
+const FS_MATCAP_SHADING_NORMAL: &str = r#"let shading_world_normal = normalize(in.world_normal);
+    let shading_view_normal = normalize(in.view_normal);"#;
+
+// Mode 1 Matcap: Shading normal with tangent/normal map support
+// When tangent data present, slot3 is used for normal map (not 4th matcap)
+// Uses both world-space and view-space TBN for world and view normals
+const FS_MATCAP_SHADING_NORMAL_TANGENT: &str = r#"// Build world-space TBN and sample normal map
+    let world_tbn = build_tbn(in.world_tangent, in.world_normal, in.bitangent_sign);
+    let shading_world_normal = sample_normal_map(slot3, in.uv, world_tbn, shading.flags);
+    // Build view-space TBN for matcap UV calculation (view_tangent passed from VS)
+    let view_tbn = build_tbn(in.view_tangent, in.view_normal, in.bitangent_sign);
+    let shading_view_normal = sample_normal_map(slot3, in.uv, view_tbn, shading.flags);"#;
 
 // Mode 2/3: MRE/material texture sampling with override flag support
 // Shared between Mode 2 (MRE = metallic/roughness/emissive) and Mode 3 (SDE = spec_damping/shininess/emissive)
@@ -152,19 +215,26 @@ fn generate_shader(mode: u8, format: u8) -> Result<String, String> {
         _ => "", // Modes 2-3 use BLINNPHONG_COMMON
     };
 
-    // Check if this format is valid for the mode
+    // Extract format flags
+    let has_uv = format & FORMAT_UV != 0;
+    let has_color = format & FORMAT_COLOR != 0;
     let has_normal = format & FORMAT_NORMAL != 0;
+    let has_skinned = format & FORMAT_SKINNED != 0;
+    let has_tangent = format & FORMAT_TANGENT != 0;
+
+    // Validate format constraints
     if mode > 0 && !has_normal {
         return Err(format!(
             "Render mode {} requires NORMAL flag, but format {} doesn't have it",
             mode, format
         ));
     }
-
-    // Extract format flags
-    let has_uv = format & FORMAT_UV != 0;
-    let has_color = format & FORMAT_COLOR != 0;
-    let has_skinned = format & FORMAT_SKINNED != 0;
+    if has_tangent && !has_normal {
+        return Err(format!(
+            "TANGENT flag requires NORMAL flag, but format {} doesn't have it",
+            format
+        ));
+    }
 
     // Build shader by combining common code + mode-specific template
     let mut shader = String::new();
@@ -183,6 +253,7 @@ fn generate_shader(mode: u8, format: u8) -> Result<String, String> {
     shader = shader.replace("//VIN_COLOR", if has_color { VIN_COLOR } else { "" });
     shader = shader.replace("//VIN_NORMAL", if has_normal { VIN_NORMAL } else { "" });
     shader = shader.replace("//VIN_SKINNED", if has_skinned { VIN_SKINNED } else { "" });
+    shader = shader.replace("//VIN_TANGENT", if has_tangent { VIN_TANGENT } else { "" });
 
     // Replace vertex output placeholders
     shader = shader.replace("//VOUT_UV", if has_uv { VOUT_UV } else { "" });
@@ -207,6 +278,15 @@ fn generate_shader(mode: u8, format: u8) -> Result<String, String> {
         "//VOUT_CAMERA_POS",
         if mode >= 2 { VOUT_CAMERA_POS } else { "" },
     );
+    shader = shader.replace(
+        "//VOUT_TANGENT",
+        if has_tangent { VOUT_TANGENT } else { "" },
+    );
+    // Mode 1 with tangent needs view-space tangent for matcap normal mapping
+    shader = shader.replace(
+        "//VOUT_VIEW_TANGENT",
+        if mode == 1 && has_tangent { VOUT_VIEW_TANGENT } else { "" },
+    );
 
     // Replace vertex shader code placeholders
     shader = shader.replace("//VS_UV", if has_uv { VS_UV } else { "" });
@@ -224,6 +304,24 @@ fn generate_shader(mode: u8, format: u8) -> Result<String, String> {
     } else {
         shader = shader.replace("//VS_WORLD_NORMAL", "");
         shader = shader.replace("//VS_VIEW_NORMAL", "");
+    }
+
+    // Tangent handling depends on skinning
+    if has_tangent && !has_skinned {
+        shader = shader.replace("//VS_TANGENT", VS_TANGENT);
+    } else if has_tangent && has_skinned {
+        shader = shader.replace("//VS_TANGENT", VS_TANGENT_SKINNED);
+    } else {
+        shader = shader.replace("//VS_TANGENT", "");
+    }
+
+    // Mode 1 with tangent needs view-space tangent for matcap normal mapping
+    if mode == 1 && has_tangent && !has_skinned {
+        shader = shader.replace("//VS_VIEW_TANGENT", VS_VIEW_TANGENT);
+    } else if mode == 1 && has_tangent && has_skinned {
+        shader = shader.replace("//VS_VIEW_TANGENT", VS_VIEW_TANGENT_SKINNED);
+    } else {
+        shader = shader.replace("//VS_VIEW_TANGENT", "");
     }
 
     // View position (mode 1 only, for perspective-correct matcap)
@@ -263,6 +361,31 @@ fn generate_shader(mode: u8, format: u8) -> Result<String, String> {
                 ""
             },
         );
+        // Tangent skinning placeholders
+        skinned_code = skinned_code.replace(
+            "//VS_SKINNED_UNPACK_TANGENT",
+            if has_tangent {
+                VS_SKINNED_UNPACK_TANGENT
+            } else {
+                ""
+            },
+        );
+        skinned_code = skinned_code.replace(
+            "//VS_SKINNED_TANGENT",
+            if has_tangent {
+                VS_SKINNED_TANGENT
+            } else {
+                ""
+            },
+        );
+        skinned_code = skinned_code.replace(
+            "//VS_SKINNED_FINAL_TANGENT",
+            if has_tangent {
+                VS_SKINNED_FINAL_TANGENT
+            } else {
+                ""
+            },
+        );
         shader = shader.replace("//VS_SKINNED", &skinned_code);
         shader = shader.replace("//VS_POSITION", VS_POSITION_SKINNED);
     } else {
@@ -275,18 +398,40 @@ fn generate_shader(mode: u8, format: u8) -> Result<String, String> {
         0 => {
             shader = shader.replace("//FS_COLOR", if has_color { FS_COLOR } else { "" });
             shader = shader.replace("//FS_UV", if has_uv { FS_UV } else { "" });
-            shader = shader.replace("//FS_AMBIENT", if has_normal { FS_AMBIENT } else { "" });
+            // Tangent normal mapping requires both tangent data and UVs
+            let ambient = if has_tangent && has_uv {
+                FS_AMBIENT_TANGENT
+            } else if has_normal {
+                FS_AMBIENT
+            } else {
+                ""
+            };
+            shader = shader.replace("//FS_AMBIENT", ambient);
             shader = shader.replace("//FS_NORMAL", if has_normal { FS_NORMAL } else { "" });
         }
         1 => {
             shader = shader.replace("//FS_COLOR", if has_color { FS_COLOR } else { "" });
             shader = shader.replace("//FS_UV", if has_uv { FS_UV } else { "" });
             shader = shader.replace("//FS_AMBIENT", "");
+            // Matcap shading normal: use TBN+normal map if tangent data and UVs are present
+            let matcap_normal = if has_tangent && has_uv {
+                FS_MATCAP_SHADING_NORMAL_TANGENT
+            } else {
+                FS_MATCAP_SHADING_NORMAL
+            };
+            shader = shader.replace("//FS_MATCAP_SHADING_NORMAL", matcap_normal);
         }
         2 => {
             shader = shader.replace("//FS_COLOR", if has_color { FS_ALBEDO_COLOR } else { "" });
             shader = shader.replace("//FS_UV", if has_uv { FS_ALBEDO_UV } else { "" });
             shader = shader.replace("//FS_AMBIENT", "");
+            // Shading normal: use TBN+normal map if tangent data and UVs are present
+            let shading_normal = if has_tangent && has_uv {
+                FS_SHADING_NORMAL_TANGENT
+            } else {
+                FS_SHADING_NORMAL
+            };
+            shader = shader.replace("//FS_SHADING_NORMAL", shading_normal);
             shader = shader.replace(
                 "//FS_MODE2_3_DIFFUSE_FACTOR",
                 "let diffuse_factor = 1.0 - value0;",
@@ -317,6 +462,13 @@ fn generate_shader(mode: u8, format: u8) -> Result<String, String> {
             shader = shader.replace("//FS_COLOR", if has_color { FS_ALBEDO_COLOR } else { "" });
             shader = shader.replace("//FS_UV", if has_uv { FS_ALBEDO_UV } else { "" });
             shader = shader.replace("//FS_AMBIENT", "");
+            // Shading normal: use TBN+normal map if tangent data and UVs are present
+            let shading_normal = if has_tangent && has_uv {
+                FS_SHADING_NORMAL_TANGENT
+            } else {
+                FS_SHADING_NORMAL
+            };
+            shader = shader.replace("//FS_SHADING_NORMAL", shading_normal);
             shader = shader.replace("//FS_MODE2_3_DIFFUSE_FACTOR", "let diffuse_factor = 1.0;");
             shader = shader.replace(
                 "//FS_MODE2_3_SHININESS",
@@ -406,10 +558,25 @@ fn validate_shader_generic(source: &str, name: &str) -> Result<(), String> {
 }
 
 /// Get valid formats for a render mode
+/// Mode 0: all 32 formats (0-31)
+/// Modes 1-3: 16 formats each (must have NORMAL, optionally TANGENT)
 fn valid_formats_for_mode(mode: u8) -> Vec<u8> {
+    // Tangent requires normal: filter out formats with TANGENT but without NORMAL
+    let tangent_valid = |f: &u8| {
+        let has_tangent = (*f & FORMAT_TANGENT) != 0;
+        let has_normal = (*f & FORMAT_NORMAL) != 0;
+        !has_tangent || has_normal // tangent requires normal
+    };
+
     match mode {
-        0 => (0..16).collect(),
-        1..=3 => (0..16).filter(|&f| f & FORMAT_NORMAL != 0).collect(),
+        // Mode 0: all combinations except invalid tangent-without-normal
+        // Valid: 0-15 (no tangent), 20-23 (tangent+normal), 28-31 (tangent+normal+skinned)
+        0 => (0..32).filter(tangent_valid).collect(),
+        // Modes 1-3: require NORMAL, plus tangent validation
+        1..=3 => (0..32)
+            .filter(|&f| f & FORMAT_NORMAL != 0)
+            .filter(tangent_valid)
+            .collect(),
         _ => vec![],
     }
 }
@@ -506,18 +673,19 @@ fn main() {
 
     let mut generated_code = String::new();
     generated_code.push_str("// Auto-generated by build.rs - DO NOT EDIT\n");
-    generated_code.push_str("// Contains all 40 pregenerated shader permutations\n\n");
+    generated_code.push_str("// Contains all 72 pregenerated shader permutations (with tangent support)\n\n");
 
-    // Generate array of 40 shader sources
+    // Generate array of 72 shader sources
+    // Mode 0: 24 formats (0-15, 20-23, 28-31), Modes 1-3: 16 formats each = 24 + 16*3 = 72
     generated_code
         .push_str("/// Pregenerated shader sources indexed by shader_index(mode, format)\n");
-    generated_code.push_str("pub const PREGENERATED_SHADERS: [&str; 40] = [\n");
+    generated_code.push_str("pub const PREGENERATED_SHADERS: [&str; 72] = [\n");
 
     let mut shader_count = 0;
     let mut errors: Vec<String> = Vec::new();
 
-    // Mode 0: all 16 formats
-    for format in 0u8..16 {
+    // Mode 0: valid formats (0-15, 20-23, 28-31) - tangent requires normal
+    for format in valid_formats_for_mode(0) {
         match generate_shader(0, format) {
             Ok(source) => {
                 if let Err(e) = validate_shader(&source, 0, format) {
@@ -531,7 +699,7 @@ fn main() {
         }
     }
 
-    // Modes 1-3: only formats with NORMAL
+    // Modes 1-3: only formats with NORMAL (4-7, 12-15, 20-23, 28-31)
     for mode in 1u8..=3 {
         for format in valid_formats_for_mode(mode) {
             match generate_shader(mode, format) {
@@ -557,24 +725,63 @@ fn main() {
 pub fn get_pregenerated_shader(mode: u8, format: u8) -> Option<&'static str> {
     const FORMAT_NORMAL: u8 = 4;
     const FORMAT_SKINNED: u8 = 8;
+    const FORMAT_TANGENT: u8 = 16;
 
     // Validate mode/format combination
     if mode > 3 {
         return None;
     }
+    if format >= 32 {
+        return None; // Invalid format
+    }
     if mode > 0 && format & FORMAT_NORMAL == 0 {
         return None; // Modes 1-3 require NORMAL
     }
+    if format & FORMAT_TANGENT != 0 && format & FORMAT_NORMAL == 0 {
+        return None; // TANGENT requires NORMAL
+    }
 
-    // Index calculation for modes 1-3:
-    // Valid formats have NORMAL bit set: 4,5,6,7,12,13,14,15
-    // Map format to 0-7 offset: (UV + COLOR*2) + SKINNED*4
-    // UV = format & 1, COLOR = (format >> 1) & 1, SKINNED = (format >> 3) & 1
+    // Index calculation:
+    // Mode 0: 24 formats (0-15, 20-23, 28-31)
+    //   - 0-15: indices 0-15
+    //   - 20-23: indices 16-19
+    //   - 28-31: indices 20-23
+    // Modes 1-3: 16 formats each (4-7, 12-15, 20-23, 28-31)
+    //   - Map format to 0-15 offset: (UV + COLOR*2) + SKINNED*4 + TANGENT*8
     let index = match mode {
-        0 => format as usize,
-        1 => 16 + (format & 0b0011) as usize + if format & FORMAT_SKINNED != 0 { 4 } else { 0 },
-        2 => 24 + (format & 0b0011) as usize + if format & FORMAT_SKINNED != 0 { 4 } else { 0 },
-        3 => 32 + (format & 0b0011) as usize + if format & FORMAT_SKINNED != 0 { 4 } else { 0 },
+        0 => {
+            // Mode 0: direct index for 0-15, offset for tangent variants
+            if format < 16 {
+                format as usize
+            } else if format >= 20 && format <= 23 {
+                16 + (format - 20) as usize // tangent+normal (no skinned)
+            } else if format >= 28 && format <= 31 {
+                20 + (format - 28) as usize // tangent+normal+skinned
+            } else {
+                return None; // Invalid format for mode 0
+            }
+        }
+        1 => {
+            let base = 24usize; // After mode 0's 24 shaders
+            let offset = (format & 0b0011) as usize
+                + if format & FORMAT_SKINNED != 0 { 4 } else { 0 }
+                + if format & FORMAT_TANGENT != 0 { 8 } else { 0 };
+            base + offset
+        }
+        2 => {
+            let base = 24 + 16; // After mode 0 and mode 1
+            let offset = (format & 0b0011) as usize
+                + if format & FORMAT_SKINNED != 0 { 4 } else { 0 }
+                + if format & FORMAT_TANGENT != 0 { 8 } else { 0 };
+            base + offset
+        }
+        3 => {
+            let base = 24 + 16 + 16; // After mode 0, 1, and 2
+            let offset = (format & 0b0011) as usize
+                + if format & FORMAT_SKINNED != 0 { 4 } else { 0 }
+                + if format & FORMAT_TANGENT != 0 { 8 } else { 0 };
+            base + offset
+        }
         _ => return None,
     };
 
@@ -614,9 +821,12 @@ pub fn get_pregenerated_shader(mode: u8, format: u8) -> Option<&'static str> {
         );
     }
 
+    // Expected: 24 (mode 0) + 16*3 (modes 1-3) = 72 shaders
+    // Mode 0: formats 0-15 + 20-23 + 28-31 (tangent requires normal)
+    // Modes 1-3: formats 4-7, 12-15, 20-23, 28-31 (all require normal)
     assert_eq!(
-        shader_count, 40,
-        "Expected 40 shaders, got {}",
+        shader_count, 72,
+        "Expected 72 shaders, got {}",
         shader_count
     );
 

@@ -1,8 +1,9 @@
 //! Texture converter (PNG/JPG -> .ncztex)
 //!
-//! Supports two output formats:
+//! Supports three output formats:
 //! - RGBA8 (Mode 0): Uncompressed, pixel-perfect, 32 bpp
-//! - BC7 (Modes 1-3): Compressed, 8 bpp, 4× size reduction
+//! - BC7 (Modes 1-3): Compressed RGBA, 8 bpp, 4× size reduction
+//! - BC5 (Normal maps): Compressed RG, 8 bpp, for tangent-space normals
 
 use anyhow::{Context, Result};
 use image::GenericImageView;
@@ -37,6 +38,10 @@ pub fn convert_image_with_format(input: &Path, output: &Path, format: TextureFor
             let compressed = compress_bc7(pixels, width, height)?;
             (compressed, TextureFormat::Bc7)
         }
+        TextureFormat::Bc5 => {
+            let compressed = compress_bc5(pixels, width, height)?;
+            (compressed, TextureFormat::Bc5)
+        }
     };
 
     // Write output
@@ -52,13 +57,14 @@ pub fn convert_image_with_format(input: &Path, output: &Path, format: TextureFor
         &output_data,
     )?;
 
-    let compression_info = if output_format.is_bc7() {
+    let compression_info = if output_format.is_compressed() {
         let original_size = (width * height * 4) as usize;
         let compressed_size = output_data.len();
         let ratio = original_size as f32 / compressed_size as f32;
+        let format_name = if output_format.is_bc7() { "BC7" } else { "BC5" };
         format!(
-            " (BC7: {} -> {} bytes, {:.1}× compression)",
-            original_size, compressed_size, ratio
+            " ({}: {} -> {} bytes, {:.1}× compression)",
+            format_name, original_size, compressed_size, ratio
         )
     } else {
         String::new()
@@ -88,6 +94,28 @@ pub fn convert_image_with_format(input: &Path, output: &Path, format: TextureFor
 /// # Returns
 /// BC7 compressed block data
 pub fn compress_bc7(pixels: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
+    compress_bc7_internal(pixels, width, height)
+}
+
+/// Compress RG pixels to BC5 format for normal maps
+///
+/// Uses intel_tex_2 (ISPC-based) for BC5 compression.
+/// BC5 compresses 4×4 pixel blocks into 16 bytes each, storing 2 channels (RG).
+/// Ideal for tangent-space normal maps where Z can be reconstructed.
+///
+/// # Arguments
+/// * `pixels` - RGBA8 pixel data (width × height × 4 bytes) - only RG channels used
+/// * `width` - Image width in pixels
+/// * `height` - Image height in pixels
+///
+/// # Returns
+/// BC5 compressed block data
+pub fn compress_bc5(pixels: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
+    compress_bc5_internal(pixels, width, height)
+}
+
+/// Internal BC7 compression implementation
+fn compress_bc7_internal(pixels: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
     use intel_tex_2::bc7;
 
     let w = width as usize;
@@ -141,6 +169,58 @@ pub fn compress_bc7(pixels: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
     Ok(output)
 }
 
+/// Internal BC5 compression implementation for normal maps
+///
+/// BC5 stores only RG channels, so we extract those from RGBA input.
+fn compress_bc5_internal(pixels: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
+    use intel_tex_2::bc5;
+
+    let w = width as usize;
+    let h = height as usize;
+
+    // Calculate block dimensions (round up to 4×4 blocks)
+    let blocks_x = w.div_ceil(4);
+    let blocks_y = h.div_ceil(4);
+    let output_size = blocks_x * blocks_y * 16;
+
+    let mut output = vec![0u8; output_size];
+
+    // Create padded buffer if dimensions aren't multiples of 4
+    let padded_width = blocks_x * 4;
+    let padded_height = blocks_y * 4;
+
+    // Extract RG channels and pad
+    let mut rg_data: Vec<u8> = vec![0u8; padded_width * padded_height * 2];
+
+    for y in 0..padded_height {
+        for x in 0..padded_width {
+            // Clamp to original dimensions (edge extension)
+            let src_x = x.min(w - 1);
+            let src_y = y.min(h - 1);
+
+            let src_idx = (src_y * w + src_x) * 4;
+            let dst_idx = (y * padded_width + x) * 2;
+
+            // Copy only R and G channels
+            rg_data[dst_idx] = pixels[src_idx];     // R
+            rg_data[dst_idx + 1] = pixels[src_idx + 1]; // G
+        }
+    }
+
+    // Create 2-channel surface for intel_tex_2 BC5
+    let surface = intel_tex_2::RgSurface {
+        width: padded_width as u32,
+        height: padded_height as u32,
+        stride: (padded_width * 2) as u32,
+        data: &rg_data,
+    };
+
+    // Compress using intel_tex_2 BC5
+    bc5::compress_blocks_into(&surface, &mut output);
+
+    Ok(output)
+}
+
 /// Process texture for packing with specified format
 ///
 /// This is the main entry point for the pack command to compress textures.
@@ -155,6 +235,7 @@ pub fn process_texture_for_pack(
     let data = match format {
         TextureFormat::Rgba8 => pixels.to_vec(),
         TextureFormat::Bc7 => compress_bc7(pixels, width, height)?,
+        TextureFormat::Bc5 => compress_bc5(pixels, width, height)?,
     };
 
     Ok((width as u16, height as u16, format, data))
@@ -236,6 +317,57 @@ mod tests {
         assert_eq!(w, 16);
         assert_eq!(h, 16);
         assert_eq!(fmt, TextureFormat::Bc7);
+        assert_eq!(data.len(), 4 * 4 * 16); // 4×4 blocks × 16 bytes
+    }
+
+    #[test]
+    fn test_bc5_compression_basic() {
+        // Create a simple 4×4 normal map (RG channels)
+        let width = 4u32;
+        let height = 4u32;
+        // Normal pointing up (+Z): R=128, G=128, B=255 (normalized: 0,0,1)
+        let pixels: Vec<u8> = [128, 128, 255, 255].repeat(16);
+
+        let compressed = compress_bc5(&pixels, width, height).unwrap();
+
+        // BC5 output should be exactly 16 bytes for a 4×4 block
+        assert_eq!(compressed.len(), 16);
+    }
+
+    #[test]
+    fn test_bc5_compression_larger() {
+        // 64×64 image = 16×16 blocks = 256 blocks × 16 bytes = 4096 bytes
+        let width = 64u32;
+        let height = 64u32;
+        let pixels: Vec<u8> = [128, 128, 255, 255].repeat((width * height) as usize);
+
+        let compressed = compress_bc5(&pixels, width, height).unwrap();
+
+        assert_eq!(compressed.len(), 4096);
+    }
+
+    #[test]
+    fn test_bc5_compression_non_aligned() {
+        // 30×30 image should be padded to 32×32 (8×8 blocks)
+        let width = 30u32;
+        let height = 30u32;
+        let pixels: Vec<u8> = [128, 128, 255, 255].repeat((width * height) as usize);
+
+        let compressed = compress_bc5(&pixels, width, height).unwrap();
+
+        // 8×8 blocks × 16 bytes = 1024 bytes
+        assert_eq!(compressed.len(), 8 * 8 * 16);
+    }
+
+    #[test]
+    fn test_process_texture_bc5() {
+        let pixels = vec![128u8; 16 * 16 * 4];
+        let (w, h, fmt, data) =
+            process_texture_for_pack(&pixels, 16, 16, TextureFormat::Bc5).unwrap();
+
+        assert_eq!(w, 16);
+        assert_eq!(h, 16);
+        assert_eq!(fmt, TextureFormat::Bc5);
         assert_eq!(data.len(), 4 * 4 * 16); // 4×4 blocks × 16 bytes
     }
 }
