@@ -514,6 +514,48 @@ fn normalize_quat(q: [f32; 4]) -> [f32; 4] {
     }
 }
 
+/// Metadata for an animation in a glTF file
+///
+/// Used for wildcard animation imports in nether.toml
+#[derive(Debug, Clone)]
+pub struct AnimationInfo {
+    /// Animation name from glTF (used as asset ID)
+    pub name: String,
+    /// Index in the animations array
+    pub index: usize,
+}
+
+/// Get list of all animations in a glTF/GLB file
+///
+/// Returns animation names and indices for wildcard import.
+/// Empty/whitespace-only names are replaced with `animation_{index}`.
+///
+/// # Example
+/// ```ignore
+/// let animations = get_animation_list(Path::new("character.glb"))?;
+/// for anim in animations {
+///     println!("Animation: {} (index {})", anim.name, anim.index);
+/// }
+/// ```
+pub fn get_animation_list(input: &Path) -> Result<Vec<AnimationInfo>> {
+    let (document, _, _) =
+        gltf::import(input).with_context(|| format!("Failed to load glTF: {:?}", input))?;
+
+    Ok(document
+        .animations()
+        .enumerate()
+        .map(|(index, anim)| {
+            let name = anim
+                .name()
+                .filter(|n| !n.trim().is_empty())
+                .map(|n| n.to_string())
+                .unwrap_or_else(|| format!("animation_{}", index));
+
+            AnimationInfo { name, index }
+        })
+        .collect())
+}
+
 /// List available animations in a glTF file
 pub fn list_animations(input: &Path) -> Result<()> {
     let (document, buffers, _images) =

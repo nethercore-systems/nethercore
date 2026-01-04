@@ -21,7 +21,26 @@ use zx_common::{
     INVERSE_BIND_MATRIX_SIZE,
 };
 
-use crate::manifest::{AssetsSection, NetherManifest};
+use crate::manifest::{AssetEntry, AssetsSection, NetherManifest};
+
+/// Expanded keyframe entry (after wildcard resolution)
+struct ExpandedKeyframeEntry {
+    id: String,
+    path: String,
+    animation_name: Option<String>,
+    skin_name: Option<String>,
+}
+
+/// Get required ID from asset entry, or error if missing
+fn require_id<'a>(entry: &'a AssetEntry, asset_type: &str) -> Result<&'a str> {
+    entry.id.as_deref().ok_or_else(|| {
+        anyhow::anyhow!(
+            "{} asset at '{}' is missing required 'id' field",
+            asset_type,
+            entry.path
+        )
+    })
+}
 
 /// Detect tracker format by magic bytes
 fn detect_tracker_format(data: &[u8]) -> Option<TrackerFormat> {
@@ -267,8 +286,9 @@ fn load_assets(
         .textures
         .par_iter()
         .map(|entry| {
+            let id = require_id(entry, "Texture")?;
             let path = project_dir.join(&entry.path);
-            load_texture(&entry.id, &path, texture_format)
+            load_texture(id, &path, texture_format)
         })
         .collect();
     let textures = textures?;
@@ -278,8 +298,9 @@ fn load_assets(
         .meshes
         .par_iter()
         .map(|entry| {
+            let id = require_id(entry, "Mesh")?;
             let path = project_dir.join(&entry.path);
-            load_mesh(&entry.id, &path)
+            load_mesh(id, &path)
         })
         .collect();
     let meshes = meshes?;
@@ -289,8 +310,9 @@ fn load_assets(
         .skeletons
         .par_iter()
         .map(|entry| {
+            let id = require_id(entry, "Skeleton")?;
             let path = project_dir.join(&entry.path);
-            load_skeleton(&entry.id, &path, entry.skin_name.as_deref())
+            load_skeleton(id, &path, entry.skin_name.as_deref())
         })
         .collect();
     let skeletons = skeletons?;
@@ -303,7 +325,83 @@ fn load_assets(
         .chain(assets.animations.iter())
         .collect();
 
-    let keyframes: Result<Vec<_>> = all_keyframe_entries
+    // Expand wildcard animation entries before parallel loading
+    let mut expanded_keyframe_entries: Vec<ExpandedKeyframeEntry> = Vec::new();
+    let mut seen_ids: HashSet<String> = HashSet::new();
+
+    // First pass: collect explicit IDs to detect collisions
+    for entry in all_keyframe_entries.iter() {
+        if let Some(id) = &entry.id {
+            seen_ids.insert(id.clone());
+        }
+    }
+
+    // Second pass: expand wildcards and check for collisions
+    for entry in all_keyframe_entries.iter() {
+        let is_wildcard = entry.id.is_none() && entry.animation_name.is_none();
+
+        if is_wildcard {
+            // Wildcard import - list all animations from GLB
+            let path = project_dir.join(&entry.path);
+            let anim_list = nether_export::get_animation_list(&path)
+                .with_context(|| format!("Failed to list animations in: {}", path.display()))?;
+
+            if anim_list.is_empty() {
+                println!(
+                    "  Warning: No animations found in {}",
+                    path.file_name().unwrap_or_default().to_string_lossy()
+                );
+                continue;
+            }
+
+            let prefix = entry.id_prefix.as_deref().unwrap_or("");
+
+            for anim_info in anim_list {
+                let id = format!("{}{}", prefix, anim_info.name);
+
+                // Check for collision
+                if seen_ids.contains(&id) {
+                    return Err(anyhow::anyhow!(
+                        "Animation ID collision: '{}' from '{}' conflicts with existing ID.\n\
+                         Hint: Use id_prefix to namespace animations from different files.",
+                        id,
+                        entry.path
+                    ));
+                }
+                seen_ids.insert(id.clone());
+
+                expanded_keyframe_entries.push(ExpandedKeyframeEntry {
+                    id,
+                    path: entry.path.clone(),
+                    animation_name: Some(anim_info.name),
+                    skin_name: entry.skin_name.clone(),
+                });
+            }
+
+            println!(
+                "  Expanded {} animations from {}",
+                expanded_keyframe_entries.len(),
+                path.file_name().unwrap_or_default().to_string_lossy()
+            );
+        } else {
+            // Explicit entry - derive ID if needed
+            let id = entry
+                .id
+                .clone()
+                .or_else(|| entry.animation_name.clone())
+                .unwrap_or_else(|| "unnamed".to_string());
+
+            expanded_keyframe_entries.push(ExpandedKeyframeEntry {
+                id,
+                path: entry.path.clone(),
+                animation_name: entry.animation_name.clone(),
+                skin_name: entry.skin_name.clone(),
+            });
+        }
+    }
+
+    // Now process expanded entries in parallel
+    let keyframes: Result<Vec<_>> = expanded_keyframe_entries
         .par_iter()
         .map(|entry| {
             let path = project_dir.join(&entry.path);
@@ -322,8 +420,9 @@ fn load_assets(
         .sounds
         .par_iter()
         .map(|entry| {
+            let id = require_id(entry, "Sound")?;
             let path = project_dir.join(&entry.path);
-            load_sound(&entry.id, &path)
+            load_sound(id, &path)
         })
         .collect();
     let explicit_sounds = sounds?;
@@ -344,6 +443,7 @@ fn load_assets(
     // Extract samples from ALL tracker files (both XM and IT)
     println!("  Extracting samples from tracker files...");
     for entry in &assets.trackers {
+        let tracker_id = require_id(entry, "Tracker")?;
         let path = project_dir.join(&entry.path);
         let tracker_data = std::fs::read(&path)
             .with_context(|| format!("Failed to read tracker: {}", path.display()))?;
@@ -390,7 +490,7 @@ fn load_assets(
 
                             // Sanitize name (use sample_index for IT)
                             let sample_id =
-                                sanitize_name(&sample.name, &entry.id, sample.sample_index);
+                                sanitize_name(&sample.name, tracker_id, sample.sample_index);
 
                             // Check for collision with explicit sounds
                             if let Some(existing) = sound_map.get(&sample_id) {
@@ -399,7 +499,7 @@ fn load_assets(
                                     return Err(anyhow::anyhow!(
                                         "Collision: IT sample '{}' in '{}' conflicts with explicit sound '{}' (different content)",
                                         sample.name,
-                                        entry.id,
+                                        tracker_id,
                                         sample_id
                                     ));
                                 }
@@ -417,7 +517,7 @@ fn load_assets(
                             }
 
                             // Add new sample
-                            println!("    Extracted: {} from {}", sample_id, entry.id);
+                            println!("    Extracted: {} from {}", sample_id, tracker_id);
                             sound_map.insert(
                                 sample_id.clone(),
                                 PackedSound {
@@ -464,7 +564,7 @@ fn load_assets(
             let hash = hash_sample_data(&converted_data);
 
             // Sanitize name
-            let sample_id = sanitize_name(&sample.name, &entry.id, sample.instrument_index);
+            let sample_id = sanitize_name(&sample.name, tracker_id, sample.instrument_index);
 
             // Check for collision with explicit sounds
             if let Some(existing) = sound_map.get(&sample_id) {
@@ -473,7 +573,7 @@ fn load_assets(
                     return Err(anyhow::anyhow!(
                         "Collision: Tracker instrument '{}' in '{}' conflicts with explicit sound '{}' (different content)",
                         sample.name,
-                        entry.id,
+                        tracker_id,
                         sample_id
                     ));
                 }
@@ -492,7 +592,7 @@ fn load_assets(
             }
 
             // Add new sample
-            println!("    Extracted: {} from {}", sample_id, entry.id);
+            println!("    Extracted: {} from {}", sample_id, tracker_id);
             sound_map.insert(
                 sample_id.clone(),
                 PackedSound {
@@ -513,8 +613,9 @@ fn load_assets(
         .par_iter()
         .filter(|entry| entry.patterns.unwrap_or(true)) // Default to true
         .map(|entry| {
+            let id = require_id(entry, "Tracker")?;
             let path = project_dir.join(&entry.path);
-            load_tracker(&entry.id, &path, &available_sound_ids)
+            load_tracker(id, &path, &available_sound_ids)
         })
         .collect();
     let trackers = trackers?;
@@ -527,8 +628,9 @@ fn load_assets(
         .data
         .par_iter()
         .map(|entry| {
+            let id = require_id(entry, "Data")?;
             let path = project_dir.join(&entry.path);
-            load_data(&entry.id, &path)
+            load_data(id, &path)
         })
         .collect();
     let data = data?;
@@ -1300,12 +1402,12 @@ path = "assets/level1.bin"
 "#;
         let manifest = NetherManifest::parse(manifest_toml).unwrap();
         assert_eq!(manifest.assets.textures.len(), 2);
-        assert_eq!(manifest.assets.textures[0].id, "player");
-        assert_eq!(manifest.assets.textures[1].id, "enemy");
+        assert_eq!(manifest.assets.textures[0].id, Some("player".to_string()));
+        assert_eq!(manifest.assets.textures[1].id, Some("enemy".to_string()));
         assert_eq!(manifest.assets.sounds.len(), 1);
-        assert_eq!(manifest.assets.sounds[0].id, "jump");
+        assert_eq!(manifest.assets.sounds[0].id, Some("jump".to_string()));
         assert_eq!(manifest.assets.data.len(), 1);
-        assert_eq!(manifest.assets.data[0].id, "level1");
+        assert_eq!(manifest.assets.data[0].id, Some("level1".to_string()));
     }
 
     #[test]
@@ -1651,8 +1753,69 @@ path = "assets/run.nczxanim"
 "#;
         let manifest = NetherManifest::parse(manifest_toml).unwrap();
         assert_eq!(manifest.assets.keyframes.len(), 2);
-        assert_eq!(manifest.assets.keyframes[0].id, "walk");
-        assert_eq!(manifest.assets.keyframes[1].id, "run");
+        assert_eq!(manifest.assets.keyframes[0].id, Some("walk".to_string()));
+        assert_eq!(manifest.assets.keyframes[1].id, Some("run".to_string()));
+    }
+
+    #[test]
+    fn test_manifest_wildcard_animations() {
+        // Test wildcard animation import syntax (no id, no animation_name)
+        let manifest_toml = r#"
+[game]
+id = "wildcard-test"
+title = "Wildcard Test"
+author = "Author"
+version = "0.1.0"
+
+[[assets.animations]]
+path = "models/player.glb"
+skin_name = "Armature"
+id_prefix = "player_"
+"#;
+        let manifest = NetherManifest::parse(manifest_toml).unwrap();
+        assert_eq!(manifest.assets.animations.len(), 1);
+
+        let entry = &manifest.assets.animations[0];
+        assert!(entry.id.is_none()); // Wildcard: no explicit id
+        assert!(entry.animation_name.is_none()); // Wildcard: no animation_name
+        assert_eq!(entry.skin_name, Some("Armature".to_string()));
+        assert_eq!(entry.id_prefix, Some("player_".to_string()));
+    }
+
+    #[test]
+    fn test_manifest_mixed_animations() {
+        // Test mixing explicit and wildcard animation entries
+        let manifest_toml = r#"
+[game]
+id = "mixed-test"
+title = "Mixed Test"
+author = "Author"
+version = "0.1.0"
+
+[[assets.animations]]
+id = "custom_idle"
+path = "models/player.glb"
+animation_name = "Idle"
+skin_name = "Armature"
+
+[[assets.animations]]
+path = "models/enemy.glb"
+skin_name = "Armature"
+id_prefix = "enemy_"
+"#;
+        let manifest = NetherManifest::parse(manifest_toml).unwrap();
+        assert_eq!(manifest.assets.animations.len(), 2);
+
+        // First entry: explicit
+        let entry1 = &manifest.assets.animations[0];
+        assert_eq!(entry1.id, Some("custom_idle".to_string()));
+        assert_eq!(entry1.animation_name, Some("Idle".to_string()));
+
+        // Second entry: wildcard
+        let entry2 = &manifest.assets.animations[1];
+        assert!(entry2.id.is_none());
+        assert!(entry2.animation_name.is_none());
+        assert_eq!(entry2.id_prefix, Some("enemy_".to_string()));
     }
 
     // =========================================================================

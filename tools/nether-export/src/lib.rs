@@ -29,4 +29,6 @@ pub use mesh::{convert_gltf_to_memory, convert_obj_to_memory, ConvertedMesh};
 pub use skeleton::{convert_gltf_skeleton_to_memory, ConvertedSkeleton};
 
 // Re-export animation conversion types
-pub use animation::{convert_gltf_animation_to_memory, ConvertedAnimation};
+pub use animation::{
+    convert_gltf_animation_to_memory, get_animation_list, AnimationInfo, ConvertedAnimation,
+};

@@ -2,6 +2,35 @@
 
 GPU-optimized keyframe animation system for skeletal animation.
 
+## Asset Configuration
+
+Configure animations in `nether.toml`:
+
+### Explicit Import (Single Animation)
+
+```toml
+[[assets.animations]]
+id = "walk"
+path = "models/character.glb"
+animation_name = "WalkCycle"
+skin_name = "Armature"
+```
+
+### Bulk Import (All Animations from GLB)
+
+Import all animations from a single GLB file with one entry:
+
+```toml
+[[assets.animations]]
+path = "models/character.glb"
+skin_name = "Armature"
+id_prefix = "char_"  # Optional: creates char_Walk, char_Run, etc.
+```
+
+When both `id` and `animation_name` are omitted, ALL animations from the GLB are imported using their original Blender names as asset IDs. Use `id_prefix` to prevent collisions when importing from multiple GLB files.
+
+---
+
 ## Loading Keyframes
 
 ### keyframes_load

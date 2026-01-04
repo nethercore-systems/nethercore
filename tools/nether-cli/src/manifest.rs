@@ -114,11 +114,19 @@ pub struct AssetsSection {
 /// Single asset entry
 #[derive(Debug, Deserialize)]
 pub struct AssetEntry {
-    pub id: String,
+    /// Asset ID. Required for most assets, but optional for wildcard animation imports.
+    ///
+    /// For animations: if both `id` and `animation_name` are omitted, all animations
+    /// from the file are imported using their original names (with optional `id_prefix`).
+    #[serde(default)]
+    pub id: Option<String>,
+
+    /// Path to the asset file (relative to nether.toml)
     pub path: String,
 
     /// Animation name to extract from GLB file (for animations/keyframes).
-    /// If not specified, uses the first animation in the file.
+    /// If not specified with an explicit `id`, uses the first animation.
+    /// If both `id` and `animation_name` are omitted, imports ALL animations.
     #[serde(default)]
     pub animation_name: Option<String>,
 
@@ -126,6 +134,12 @@ pub struct AssetEntry {
     /// If not specified, uses the first skin in the file.
     #[serde(default)]
     pub skin_name: Option<String>,
+
+    /// ID prefix for wildcard animation imports.
+    /// Applied to each extracted animation: `{prefix}{animation_name}`
+    /// Use this to prevent collisions when importing from multiple GLB files.
+    #[serde(default)]
+    pub id_prefix: Option<String>,
 
     /// For tracker assets: whether to include patterns (default: true).
     /// Set to false to use XM file only as a sample library without
@@ -326,9 +340,9 @@ path = "assets/level.nczxmesh"
         .unwrap();
 
         assert_eq!(manifest.assets.textures.len(), 1);
-        assert_eq!(manifest.assets.textures[0].id, "player");
+        assert_eq!(manifest.assets.textures[0].id, Some("player".to_string()));
         assert_eq!(manifest.assets.meshes.len(), 1);
-        assert_eq!(manifest.assets.meshes[0].id, "level");
+        assert_eq!(manifest.assets.meshes[0].id, Some("level".to_string()));
     }
 
     #[test]
