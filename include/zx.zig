@@ -91,12 +91,6 @@ pub extern "C" fn load(slot: u32, data_ptr: [*]u8, max_len: u32) u32;
 /// 0 on success, 1 if invalid slot.
 pub extern "C" fn delete(slot: u32) u32;
 
-/// Set the tick rate. Must be called during `init()`.
-/// 
-/// # Arguments
-/// * `rate` — Tick rate index: 0=24fps, 1=30fps, 2=60fps (default), 3=120fps
-pub extern "C" fn set_tick_rate(rate: u32) void;
-
 /// Set the clear/background color. Must be called during `init()`.
 /// 
 /// # Arguments
@@ -1487,13 +1481,6 @@ pub const Button = struct {
     pub const select: u32 = 13;
 };
 
-pub const Render = struct {
-    pub const lambert: u32 = 0;
-    pub const matcap: u32 = 1;
-    pub const pbr: u32 = 2;
-    pub const hybrid: u32 = 3;
-};
-
 pub const Cull = struct {
     pub const none: u32 = 0;
     pub const back: u32 = 1;
@@ -1525,13 +1512,6 @@ pub const Billboard = struct {
     pub const cylindrical_y: u32 = 2;
     pub const cylindrical_x: u32 = 3;
     pub const cylindrical_z: u32 = 4;
-};
-
-pub const TickRate = struct {
-    pub const fps_24: u32 = 0;
-    pub const fps_30: u32 = 1;
-    pub const fps_60: u32 = 2;
-    pub const fps_120: u32 = 3;
 };
 
 pub const Screen = struct {

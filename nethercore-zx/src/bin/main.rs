@@ -95,6 +95,10 @@ struct Args {
     #[arg(long)]
     join: Option<String>,
 
+    /// Session config file from library lobby (NCHS pre-negotiated session)
+    #[arg(long, value_name = "FILE")]
+    session: Option<PathBuf>,
+
     // === Preview Mode ===
     /// Run in preview mode to inspect ROM assets
     #[arg(long)]
@@ -134,8 +138,10 @@ fn main() -> Result<()> {
     }
 
     // Determine connection mode from arguments
-    // Priority: join > host > p2p > sync_test > local
-    let connection_mode = if let Some(ref address) = args.join {
+    // Priority: session > join > host > p2p > sync_test > local
+    let connection_mode = if let Some(session_file) = args.session {
+        ConnectionMode::Session { session_file }
+    } else if let Some(ref address) = args.join {
         ConnectionMode::Join {
             address: address.clone(),
         }

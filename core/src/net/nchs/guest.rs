@@ -474,7 +474,7 @@ mod tests {
 
     #[allow(dead_code)]
     fn test_netplay() -> NetplayMetadata {
-        NetplayMetadata::multiplayer(ConsoleType::ZX, TickRate::Fixed60, 4, 0x12345678)
+        NetplayMetadata::new(ConsoleType::ZX, TickRate::Fixed60, 4, 0x12345678)
     }
 
     #[allow(dead_code)]

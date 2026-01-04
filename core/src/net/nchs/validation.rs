@@ -15,7 +15,6 @@ pub fn validate_join_request(request: &JoinRequest, local: &NetplayMetadata) -> 
         console_type: request.console_type,
         tick_rate: request.tick_rate,
         max_players: request.max_players,
-        netplay_enabled: true, // Implied by sending a join request
         rom_hash: request.rom_hash,
     };
 
@@ -29,13 +28,13 @@ pub fn validate_join_request(request: &JoinRequest, local: &NetplayMetadata) -> 
 /// Convert a NetplayMismatch to a JoinReject
 fn mismatch_to_reject(mismatch: NetplayMismatch) -> JoinReject {
     let (reason, message) = match mismatch {
-        NetplayMismatch::NetplayDisabled => (
+        NetplayMismatch::SinglePlayerOnly { is_local } => (
             JoinRejectReason::Other,
-            Some("Netplay is disabled for this game".to_string()),
-        ),
-        NetplayMismatch::PeerNetplayDisabled => (
-            JoinRejectReason::Other,
-            Some("Peer's game has netplay disabled".to_string()),
+            Some(if is_local {
+                "This game is single-player only".to_string()
+            } else {
+                "Peer's game is single-player only".to_string()
+            }),
         ),
         NetplayMismatch::ConsoleTypeMismatch { local, peer } => (
             JoinRejectReason::ConsoleTypeMismatch,
@@ -91,7 +90,7 @@ mod tests {
 
     #[test]
     fn test_valid_request() {
-        let local = NetplayMetadata::multiplayer(ConsoleType::ZX, TickRate::Fixed60, 4, 0xDEADBEEF);
+        let local = NetplayMetadata::new(ConsoleType::ZX, TickRate::Fixed60, 4, 0xDEADBEEF);
         let request = make_request(ConsoleType::ZX, TickRate::Fixed60, 0xDEADBEEF);
 
         let result = validate_join_request(&request, &local);
@@ -100,7 +99,7 @@ mod tests {
 
     #[test]
     fn test_console_mismatch() {
-        let local = NetplayMetadata::multiplayer(ConsoleType::ZX, TickRate::Fixed60, 4, 0xDEADBEEF);
+        let local = NetplayMetadata::new(ConsoleType::ZX, TickRate::Fixed60, 4, 0xDEADBEEF);
         let request = make_request(ConsoleType::Chroma, TickRate::Fixed60, 0xDEADBEEF);
 
         let result = validate_join_request(&request, &local);
@@ -110,7 +109,7 @@ mod tests {
 
     #[test]
     fn test_rom_hash_mismatch() {
-        let local = NetplayMetadata::multiplayer(ConsoleType::ZX, TickRate::Fixed60, 4, 0xDEADBEEF);
+        let local = NetplayMetadata::new(ConsoleType::ZX, TickRate::Fixed60, 4, 0xDEADBEEF);
         let request = make_request(ConsoleType::ZX, TickRate::Fixed60, 0x12345678);
 
         let result = validate_join_request(&request, &local);
@@ -120,7 +119,7 @@ mod tests {
 
     #[test]
     fn test_tick_rate_mismatch() {
-        let local = NetplayMetadata::multiplayer(ConsoleType::ZX, TickRate::Fixed60, 4, 0xDEADBEEF);
+        let local = NetplayMetadata::new(ConsoleType::ZX, TickRate::Fixed60, 4, 0xDEADBEEF);
         let request = make_request(ConsoleType::ZX, TickRate::Fixed120, 0xDEADBEEF);
 
         let result = validate_join_request(&request, &local);
@@ -130,9 +129,9 @@ mod tests {
 
     #[test]
     fn test_is_compatible() {
-        let local = NetplayMetadata::multiplayer(ConsoleType::ZX, TickRate::Fixed60, 4, 0xDEADBEEF);
-        let peer_ok = NetplayMetadata::multiplayer(ConsoleType::ZX, TickRate::Fixed60, 4, 0xDEADBEEF);
-        let peer_bad = NetplayMetadata::multiplayer(ConsoleType::Chroma, TickRate::Fixed60, 4, 0xDEADBEEF);
+        let local = NetplayMetadata::new(ConsoleType::ZX, TickRate::Fixed60, 4, 0xDEADBEEF);
+        let peer_ok = NetplayMetadata::new(ConsoleType::ZX, TickRate::Fixed60, 4, 0xDEADBEEF);
+        let peer_bad = NetplayMetadata::new(ConsoleType::Chroma, TickRate::Fixed60, 4, 0xDEADBEEF);
 
         assert!(is_netplay_compatible(&local, &peer_ok));
         assert!(!is_netplay_compatible(&local, &peer_bad));

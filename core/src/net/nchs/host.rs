@@ -72,6 +72,8 @@ pub struct HostStateMachine {
     random_seed: Option<u64>,
     /// Session start sent time
     start_time: Option<Instant>,
+    /// Public address for sharing with peers (real IP, not 0.0.0.0)
+    public_addr: String,
 }
 
 /// Events emitted by the host state machine
@@ -113,7 +115,15 @@ impl HostStateMachine {
         let socket = NchsSocket::bind(&format!("0.0.0.0:{}", port))
             .map_err(|e| NchsError::BindFailed(e.to_string()))?;
 
-        log::info!("NCHS Host listening on port {}", port);
+        // Determine real IP address for sharing with peers
+        // Prefer non-loopback address, fall back to localhost
+        let real_ip = NchsSocket::get_local_ips()
+            .into_iter()
+            .find(|ip| ip != "127.0.0.1")
+            .unwrap_or_else(|| "127.0.0.1".to_string());
+        let public_addr = format!("{}:{}", real_ip, socket.port());
+
+        log::info!("NCHS Host listening on port {}, public address: {}", socket.port(), public_addr);
 
         Ok(Self {
             state: HostState::Listening,
@@ -126,6 +136,7 @@ impl HostStateMachine {
             network_config,
             random_seed: None,
             start_time: None,
+            public_addr,
         })
     }
 
@@ -149,7 +160,7 @@ impl HostStateMachine {
             active: true,
             info: Some(self.host_info.clone()),
             ready: true, // Host is always ready
-            addr: Some(self.socket.local_addr_string()),
+            addr: Some(self.public_addr.clone()),
         });
 
         // Add other players
@@ -197,6 +208,25 @@ impl HostStateMachine {
 
     /// Poll for events
     pub fn poll(&mut self) -> HostEvent {
+        // Host in Starting state should immediately transition to Ready.
+        // Unlike guests who need to punch each other, the host doesn't
+        // participate in hole punching - it just waits for GGRS connections.
+        if self.state == HostState::Starting {
+            self.state = HostState::Ready;
+            if let Some(session_start) = self.session_start() {
+                return HostEvent::Ready(session_start);
+            }
+        }
+
+        // Only check for timeouts during Listening/Lobby states
+        // After SessionStart, guests send GGRS packets, not NCHS pings
+        if self.state == HostState::Listening || self.state == HostState::Lobby {
+            let timed_out = self.check_timeouts(Duration::from_secs(5));
+            if let Some(&handle) = timed_out.first() {
+                return HostEvent::PlayerLeft { handle };
+            }
+        }
+
         // Receive messages
         while let Some((from, msg)) = self.socket.poll() {
             if let Some(event) = self.handle_message(from, msg) {
@@ -411,7 +441,7 @@ impl HostStateMachine {
             handle: 0,
             active: true,
             info: self.host_info.clone(),
-            addr: self.socket.local_addr_string(),
+            addr: self.public_addr.clone(),
             ggrs_port: self.socket.port() + 1, // GGRS uses port + 1
         });
 
@@ -437,6 +467,7 @@ impl HostStateMachine {
         }
 
         let session_start = SessionStart {
+            local_player_handle: 0, // Will be set per-process by library when serializing
             random_seed,
             start_frame: 0,
             players,
@@ -508,6 +539,7 @@ impl HostStateMachine {
     /// Get session start info (only valid after start())
     pub fn session_start(&self) -> Option<SessionStart> {
         self.random_seed.map(|seed| SessionStart {
+            local_player_handle: 0, // Will be set per-process by library when serializing
             random_seed: seed,
             start_frame: 0,
             players: self.build_player_connection_info(),
@@ -527,7 +559,7 @@ impl HostStateMachine {
             handle: 0,
             active: true,
             info: self.host_info.clone(),
-            addr: self.socket.local_addr_string(),
+            addr: self.public_addr.clone(),
             ggrs_port: self.socket.port() + 1,
         });
 
@@ -562,7 +594,7 @@ mod tests {
     use nethercore_shared::console::{ConsoleType, TickRate};
 
     fn test_netplay() -> NetplayMetadata {
-        NetplayMetadata::multiplayer(ConsoleType::ZX, TickRate::Fixed60, 4, 0x12345678)
+        NetplayMetadata::new(ConsoleType::ZX, TickRate::Fixed60, 4, 0x12345678)
     }
 
     fn test_player_info(name: &str) -> PlayerInfo {
@@ -633,5 +665,46 @@ mod tests {
         .unwrap();
 
         assert!(host.is_full());
+    }
+
+    #[test]
+    fn test_host_public_addr_not_zero() {
+        let host = HostStateMachine::new(
+            0,
+            test_netplay(),
+            test_player_info("Host"),
+            NetworkConfig::default(),
+        )
+        .unwrap();
+
+        // Public address should not start with 0.0.0.0
+        assert!(
+            !host.public_addr.starts_with("0.0.0.0"),
+            "public_addr should not be 0.0.0.0, got: {}",
+            host.public_addr
+        );
+    }
+
+    #[test]
+    fn test_host_lobby_state_has_real_ip() {
+        let host = HostStateMachine::new(
+            0,
+            test_netplay(),
+            test_player_info("Host"),
+            NetworkConfig::default(),
+        )
+        .unwrap();
+
+        let lobby = host.lobby_state();
+        let host_slot = &lobby.players[0];
+
+        // Host slot should have a real IP address, not 0.0.0.0
+        assert!(host_slot.addr.is_some());
+        let addr = host_slot.addr.as_ref().unwrap();
+        assert!(
+            !addr.starts_with("0.0.0.0"),
+            "Host address in lobby should not be 0.0.0.0, got: {}",
+            addr
+        );
     }
 }

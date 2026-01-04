@@ -7,6 +7,9 @@
 //! - `Host`: Host a P2P session, wait for peers to connect
 //! - `Join`: Join an existing P2P session
 //! - `P2P`: Direct P2P connection with explicit ports (for local testing)
+//! - `Session`: Pre-established session from library lobby (NCHS protocol)
+
+use std::path::PathBuf;
 
 /// Connection mode for multiplayer sessions
 ///
@@ -58,6 +61,15 @@ pub enum ConnectionMode {
         /// Which player this instance controls (0 or 1)
         local_player: usize,
     },
+
+    /// Pre-established session from library lobby
+    ///
+    /// The session config was negotiated via NCHS protocol and serialized
+    /// to a file by the library. Contains peer addresses and shared random seed.
+    Session {
+        /// Path to the session config file (bitcode-encoded SessionStart)
+        session_file: PathBuf,
+    },
 }
 
 impl ConnectionMode {
@@ -101,13 +113,20 @@ impl ConnectionMode {
     pub fn is_networked(&self) -> bool {
         matches!(
             self,
-            Self::Host { .. } | Self::Join { .. } | Self::P2P { .. }
+            Self::Host { .. } | Self::Join { .. } | Self::P2P { .. } | Self::Session { .. }
         )
     }
 
     /// Check if this mode uses rollback
     pub fn uses_rollback(&self) -> bool {
         !matches!(self, Self::Local)
+    }
+
+    /// Create a session connection mode from a session file path
+    pub fn session(session_file: impl Into<PathBuf>) -> Self {
+        Self::Session {
+            session_file: session_file.into(),
+        }
     }
 }
 

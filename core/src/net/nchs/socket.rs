@@ -6,7 +6,7 @@
 
 use std::collections::VecDeque;
 use std::io;
-use std::net::{SocketAddr, UdpSocket};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::time::{Duration, Instant};
 
 use super::messages::{NchsDecodeError, NchsMessage};
@@ -309,6 +309,43 @@ impl NchsSocket {
         LocalSocket::bind(&format!("0.0.0.0:{}", ggrs_port))
     }
 
+    /// Get local IP addresses that can be shared with peers
+    ///
+    /// Returns a list of non-loopback IPv4 addresses that can be used
+    /// for peer-to-peer connections. Falls back to localhost if no
+    /// external interface is found.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let ips = NchsSocket::get_local_ips();
+    /// for ip in ips {
+    ///     println!("Share this address: {}:{}", ip, port);
+    /// }
+    /// ```
+    pub fn get_local_ips() -> Vec<String> {
+        let mut ips = Vec::new();
+
+        // Try to get local IP by connecting to a public address
+        // This doesn't actually send data, just determines the route
+        if let Ok(socket) = UdpSocket::bind("0.0.0.0:0") {
+            if socket.connect("8.8.8.8:80").is_ok() {
+                if let Ok(addr) = socket.local_addr() {
+                    if let IpAddr::V4(ipv4) = addr.ip() {
+                        if !ipv4.is_loopback() {
+                            ips.push(ipv4.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        // Also include localhost for local testing
+        ips.push(Ipv4Addr::LOCALHOST.to_string());
+
+        ips
+    }
+
     /// Get the underlying socket reference (for advanced use)
     pub fn socket(&self) -> &UdpSocket {
         &self.socket
@@ -523,5 +560,25 @@ mod tests {
 
         // Both sockets should be on different ports
         assert_ne!(nchs_socket.port(), ggrs_socket.local_addr().port());
+    }
+
+    #[test]
+    fn test_get_local_ips_not_empty() {
+        let ips = NchsSocket::get_local_ips();
+        assert!(!ips.is_empty(), "get_local_ips should return at least one IP");
+        // Should always include localhost as fallback
+        assert!(
+            ips.contains(&"127.0.0.1".to_string()),
+            "get_local_ips should include localhost"
+        );
+    }
+
+    #[test]
+    fn test_get_local_ips_no_zero_address() {
+        let ips = NchsSocket::get_local_ips();
+        assert!(
+            !ips.iter().any(|ip| ip == "0.0.0.0"),
+            "get_local_ips should not return 0.0.0.0"
+        );
     }
 }

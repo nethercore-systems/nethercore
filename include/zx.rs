@@ -16,7 +16,6 @@
 //! #[no_mangle]
 //! pub extern "C" fn init() {
 //!     set_clear_color(0x1a1a2eFF);
-//!     render_mode(2); // PBR mode
 //! }
 //!
 //! #[no_mangle]
@@ -150,12 +149,6 @@ extern "C" {
     // =========================================================================
     // Configuration Functions (init-only)
     // =========================================================================
-
-    /// Set the tick rate. Must be called during `init()`.
-    ///
-    /// # Arguments
-    /// * `rate` — Tick rate index: 0=24fps, 1=30fps, 2=60fps (default), 3=120fps
-    pub fn set_tick_rate(rate: u32);
 
     /// Set the clear/background color. Must be called during `init()`.
     ///
@@ -1740,14 +1733,6 @@ pub mod button {
     pub const SELECT: u32 = 13;
 }
 
-/// Render modes for `render_mode()`
-pub mod render {
-    pub const LAMBERT: u32 = 0;
-    pub const MATCAP: u32 = 1;
-    pub const PBR: u32 = 2;
-    pub const HYBRID: u32 = 3;
-}
-
 /// Cull modes for `cull_mode()`
 pub mod cull {
     pub const NONE: u32 = 0;
@@ -1786,14 +1771,6 @@ pub mod billboard {
     pub const CYLINDRICAL_Y: u32 = 2;
     pub const CYLINDRICAL_X: u32 = 3;
     pub const CYLINDRICAL_Z: u32 = 4;
-}
-
-/// Tick rate indices for `set_tick_rate()`
-pub mod tick_rate {
-    pub const FPS_24: u32 = 0;
-    pub const FPS_30: u32 = 1;
-    pub const FPS_60: u32 = 2;
-    pub const FPS_120: u32 = 3;
 }
 
 /// Screen dimensions (fixed 540p resolution)

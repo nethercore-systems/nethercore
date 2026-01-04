@@ -622,6 +622,200 @@ where
                     .load_game_with_session(rom.console, &rom.code, session)
                     .context("Failed to load game with P2P session")?;
             }
+            ConnectionMode::Session { session_file } => {
+                // Session mode - pre-negotiated session from library lobby (NCHS protocol)
+                use crate::net::nchs::SessionStart;
+                use std::collections::HashMap;
+                use std::net::SocketAddr;
+                use std::time::{Duration, Instant};
+
+                let bytes = std::fs::read(&session_file)
+                    .context("Failed to read session file")?;
+                let session_start: SessionStart = bitcode::decode(&bytes)
+                    .map_err(|e| anyhow::anyhow!("Failed to decode session: {}", e))?;
+
+                tracing::info!(
+                    "Session mode: loading pre-negotiated session (local_player={}, player_count={}, seed={})",
+                    session_start.local_player_handle,
+                    session_start.player_count,
+                    session_start.random_seed
+                );
+
+                let local_handle = session_start.local_player_handle as usize;
+                let is_host = session_start.local_player_handle == 0;
+
+                // Get our own ggrs_port
+                let own_ggrs_port = session_start
+                    .players
+                    .iter()
+                    .find(|p| p.handle == session_start.local_player_handle)
+                    .map(|p| p.ggrs_port)
+                    .unwrap_or(0);
+
+                tracing::info!(
+                    "Session mode: binding to ggrs_port {} (handle {}, is_host={})",
+                    own_ggrs_port,
+                    session_start.local_player_handle,
+                    is_host
+                );
+
+                // Bind to our GGRS port
+                let socket = LocalSocket::bind(&format!("0.0.0.0:{}", own_ggrs_port))
+                    .context("Failed to bind GGRS socket")?;
+
+                // Handshake magic bytes to identify our packets
+                const HANDSHAKE_HELLO: &[u8] = b"NCHS_HELLO";
+                const HANDSHAKE_READY: &[u8] = b"NCHS_READY";
+                const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
+
+                // Perform handshake to ensure all peers are ready before creating GGRS session
+                // This prevents the race condition where one side starts sending GGRS packets
+                // before the other side has bound to its port.
+                let peer_addresses: HashMap<u8, SocketAddr> = if is_host {
+                    // HOST: Wait for all guests to send HELLO, then send READY to each
+                    let expected_guests: Vec<u8> = session_start
+                        .players
+                        .iter()
+                        .filter(|p| p.active && p.handle != 0)
+                        .map(|p| p.handle)
+                        .collect();
+
+                    tracing::info!("Session mode: host waiting for {} guest(s) to connect", expected_guests.len());
+
+                    let mut received_from: HashMap<u8, SocketAddr> = HashMap::new();
+                    let start = Instant::now();
+
+                    while received_from.len() < expected_guests.len() {
+                        if start.elapsed() > HANDSHAKE_TIMEOUT {
+                            anyhow::bail!("Timeout waiting for guests to connect");
+                        }
+
+                        // Try to receive HELLO from guests
+                        let mut buf = [0u8; 64];
+                        match socket.socket().recv_from(&mut buf) {
+                            Ok((len, from)) => {
+                                if len >= HANDSHAKE_HELLO.len() && &buf[..HANDSHAKE_HELLO.len()] == HANDSHAKE_HELLO {
+                                    // Extract handle from after HELLO
+                                    if len > HANDSHAKE_HELLO.len() {
+                                        let handle = buf[HANDSHAKE_HELLO.len()];
+                                        if expected_guests.contains(&handle) && !received_from.contains_key(&handle) {
+                                            tracing::info!("Session mode: received HELLO from guest {} at {}", handle, from);
+                                            received_from.insert(handle, from);
+
+                                            // Send READY back immediately
+                                            let mut ready_msg = HANDSHAKE_READY.to_vec();
+                                            ready_msg.push(session_start.local_player_handle);
+                                            let _ = socket.socket().send_to(&ready_msg, from);
+                                        }
+                                    }
+                                }
+                            }
+                            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                                std::thread::sleep(Duration::from_millis(10));
+                            }
+                            Err(_) => {
+                                std::thread::sleep(Duration::from_millis(10));
+                            }
+                        }
+                    }
+
+                    tracing::info!("Session mode: all {} guest(s) connected", received_from.len());
+                    received_from
+                } else {
+                    // GUEST: Send HELLO to host, wait for READY
+                    let host_player = session_start.players.iter().find(|p| p.handle == 0)
+                        .ok_or_else(|| anyhow::anyhow!("Session has no host player"))?;
+
+                    let host_addr: SocketAddr = format!(
+                        "{}:{}",
+                        host_player.addr.split(':').next().unwrap_or("127.0.0.1"),
+                        host_player.ggrs_port
+                    ).parse().context("Invalid host address")?;
+
+                    tracing::info!("Session mode: guest sending HELLO to host at {}", host_addr);
+
+                    let start = Instant::now();
+                    let mut received_ready = false;
+
+                    while !received_ready {
+                        if start.elapsed() > HANDSHAKE_TIMEOUT {
+                            anyhow::bail!("Timeout waiting for host READY");
+                        }
+
+                        // Send HELLO
+                        let mut hello_msg = HANDSHAKE_HELLO.to_vec();
+                        hello_msg.push(session_start.local_player_handle);
+                        let _ = socket.socket().send_to(&hello_msg, host_addr);
+
+                        // Wait a bit for READY
+                        std::thread::sleep(Duration::from_millis(50));
+
+                        // Check for READY
+                        let mut buf = [0u8; 64];
+                        match socket.socket().recv_from(&mut buf) {
+                            Ok((len, _from)) => {
+                                if len >= HANDSHAKE_READY.len() && &buf[..HANDSHAKE_READY.len()] == HANDSHAKE_READY {
+                                    tracing::info!("Session mode: received READY from host");
+                                    received_ready = true;
+                                }
+                            }
+                            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
+                            Err(_) => {}
+                        }
+                    }
+
+                    // Return host address
+                    let mut addrs = HashMap::new();
+                    addrs.insert(0, host_addr);
+                    addrs
+                };
+
+                // Now build the player list using actual discovered addresses for guests (host only)
+                // Guests use pre-specified host address
+                let players: Vec<(usize, PlayerType<String>)> = session_start
+                    .players
+                    .iter()
+                    .filter(|p| p.active)
+                    .map(|p| {
+                        let handle = p.handle as usize;
+                        if handle == local_handle {
+                            (handle, PlayerType::Local)
+                        } else if let Some(actual_addr) = peer_addresses.get(&p.handle) {
+                            // Use actual discovered address (from handshake)
+                            (handle, PlayerType::Remote(actual_addr.to_string()))
+                        } else {
+                            // Fallback to pre-specified address
+                            let ggrs_addr = format!(
+                                "{}:{}",
+                                p.addr.split(':').next().unwrap_or("127.0.0.1"),
+                                p.ggrs_port
+                            );
+                            (handle, PlayerType::Remote(ggrs_addr))
+                        }
+                    })
+                    .collect();
+
+                tracing::info!("Session mode: players (after handshake) = {:?}", players);
+
+                let session_config = SessionConfig::online(session_start.player_count as usize)
+                    .with_input_delay(session_start.network_config.input_delay as usize);
+
+                let session =
+                    RollbackSession::new_p2p(session_config, socket, players, specs.ram_limit)
+                        .context("Failed to create session from NCHS config")?;
+
+                tracing::info!(
+                    "Session mode: session created, local_players = {:?}",
+                    session.local_players()
+                );
+
+                runner
+                    .load_game_with_session(rom.console, &rom.code, session)
+                    .context("Failed to load game with NCHS session")?;
+
+                // Clean up the session file after reading
+                let _ = std::fs::remove_file(&session_file);
+            }
         }
 
         if let Some(session) = runner.session_mut()

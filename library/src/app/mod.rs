@@ -6,15 +6,19 @@
 //! - Does NOT run games in-process
 
 mod init;
+pub mod lobby;
 
 pub use init::AppError;
+pub use lobby::{LobbyPhase, LobbySession};
 
 use eframe::egui;
 
 use crate::registry::{ConnectionMode, PlayerOptions};
-use crate::ui::{LibraryUi, MultiplayerDialog, UiAction};
+use crate::ui::{LibraryUi, LobbyUi, MultiplayerDialog, UiAction};
 use nethercore_core::app::config::Config;
 use nethercore_core::library::{LocalGame, RomLoaderRegistry};
+use nethercore_core::net::nchs::{NchsConfig, NchsSession, NetworkConfig, PlayerInfo};
+use zx_common::ZXRom;
 
 /// Library application state
 pub struct App {
@@ -26,6 +30,8 @@ pub struct App {
     settings_ui: crate::ui::SettingsUi,
     /// Multiplayer dialog state
     multiplayer_dialog: Option<MultiplayerDialog>,
+    /// Active lobby session (replaces multiplayer_dialog during lobby phase)
+    lobby: Option<LobbySession>,
     /// Cached local games list
     local_games: Vec<LocalGame>,
     /// ROM loader registry
@@ -55,6 +61,7 @@ impl App {
             config,
             library_ui: LibraryUi::new(),
             multiplayer_dialog: None,
+            lobby: None,
             local_games,
             rom_loader_registry,
             last_error: None,
@@ -288,6 +295,196 @@ impl App {
                 tracing::info!("Cancelling multiplayer dialog");
                 self.multiplayer_dialog = None;
             }
+            UiAction::StartHostLobby {
+                game_id,
+                port,
+                max_players,
+            } => {
+                tracing::info!(
+                    "Starting host lobby for {} on port {} with max {} players",
+                    game_id,
+                    port,
+                    max_players
+                );
+
+                if let Some(game) = self.local_games.iter().find(|g| g.id == game_id) {
+                    match self.create_host_session(game.clone(), port, max_players) {
+                        Ok(session) => {
+                            self.lobby = Some(session);
+                            self.multiplayer_dialog = None;
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to create host session: {}", e);
+                            self.last_error = Some(format!("Failed to host: {}", e));
+                        }
+                    }
+                } else {
+                    self.last_error = Some(format!("Game not found: {}", game_id));
+                }
+            }
+            UiAction::StartJoinLobby { game_id, host_addr } => {
+                tracing::info!("Starting join lobby for {} at {}", game_id, host_addr);
+
+                if let Some(game) = self.local_games.iter().find(|g| g.id == game_id) {
+                    match self.create_guest_session(game.clone(), &host_addr) {
+                        Ok(session) => {
+                            self.lobby = Some(session);
+                            self.multiplayer_dialog = None;
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to create guest session: {}", e);
+                            self.last_error = Some(format!("Failed to join: {}", e));
+                        }
+                    }
+                } else {
+                    self.last_error = Some(format!("Game not found: {}", game_id));
+                }
+            }
+            UiAction::ToggleReady => {
+                if let Some(ref mut lobby) = self.lobby {
+                    let new_ready = !lobby.local_ready;
+                    tracing::info!("Toggling ready state to {}", new_ready);
+                    if let Err(e) = lobby.set_ready(new_ready) {
+                        self.last_error = Some(format!("Failed to set ready: {}", e));
+                    }
+                }
+            }
+            UiAction::StartGame => {
+                if let Some(ref mut lobby) = self.lobby {
+                    tracing::info!("Host starting game");
+                    if let Err(e) = lobby.start() {
+                        self.last_error = Some(format!("Failed to start game: {}", e));
+                    }
+                }
+            }
+            UiAction::LeaveLobby => {
+                tracing::info!("Leaving lobby");
+                self.lobby = None;
+            }
+            UiAction::CopyAddress(addr) => {
+                tracing::info!("Copying address to clipboard: {}", addr);
+                ctx.copy_text(addr);
+            }
+        }
+    }
+
+    /// Create a host session for the given game
+    fn create_host_session(
+        &self,
+        game: LocalGame,
+        port: u16,
+        max_players: u8,
+    ) -> anyhow::Result<LobbySession> {
+        // Load ROM to get netplay metadata
+        let rom_bytes = std::fs::read(&game.rom_path)?;
+        let rom = ZXRom::from_bytes(&rom_bytes)?;
+        let mut netplay = rom.metadata.netplay;
+
+        // Override max_players with UI selection (capped at ROM max)
+        netplay.max_players = max_players.min(netplay.max_players);
+
+        // Create NCHS config
+        let config = NchsConfig {
+            netplay,
+            player_info: PlayerInfo {
+                name: "Host".to_string(),
+                color: [100, 149, 237], // Cornflower blue
+                avatar_id: 0,
+            },
+            network_config: NetworkConfig::default(),
+            save_config: None,
+        };
+
+        // Create host session
+        let session = NchsSession::host(port, config)?;
+
+        Ok(LobbySession::new_host(session, game))
+    }
+
+    /// Create a guest session to join the given host
+    fn create_guest_session(
+        &self,
+        game: LocalGame,
+        host_addr: &str,
+    ) -> anyhow::Result<LobbySession> {
+        // Load ROM to get netplay metadata
+        let rom_bytes = std::fs::read(&game.rom_path)?;
+        let rom = ZXRom::from_bytes(&rom_bytes)?;
+        let netplay = rom.metadata.netplay;
+
+        // Create NCHS config
+        let config = NchsConfig {
+            netplay,
+            player_info: PlayerInfo {
+                name: "Guest".to_string(),
+                color: [255, 165, 0], // Orange
+                avatar_id: 0,
+            },
+            network_config: NetworkConfig::default(),
+            save_config: None,
+        };
+
+        // Create guest session
+        let session = NchsSession::join(host_addr, config)?;
+
+        Ok(LobbySession::new_guest(session, game))
+    }
+
+    /// Spawn the player process when lobby is ready
+    fn spawn_player_for_lobby(&mut self) {
+        if let Some(lobby) = self.lobby.take() {
+            if lobby.phase != LobbyPhase::Ready {
+                tracing::warn!("Attempted to spawn player but lobby not ready");
+                self.lobby = Some(lobby);
+                return;
+            }
+
+            // Get session config and local player handle
+            let mut session_config = match lobby.session.session_config() {
+                Some(config) => config.clone(),
+                None => {
+                    tracing::error!("Lobby ready but no session config available");
+                    self.last_error = Some("Session config not available".to_string());
+                    return;
+                }
+            };
+
+            // Set the local player handle for this process
+            let local_handle = lobby.session.local_handle().unwrap_or(0);
+            session_config.local_player_handle = local_handle;
+
+            // Serialize session config to temp file
+            let session_file =
+                std::env::temp_dir().join(format!("nchs-session-{}.bin", std::process::id()));
+
+            let encoded = bitcode::encode(&session_config);
+            if let Err(e) = std::fs::write(&session_file, &encoded) {
+                tracing::error!("Failed to write session file: {}", e);
+                self.last_error = Some(format!("Failed to write session: {}", e));
+                return;
+            }
+
+            // Create player options with session file
+            let options = PlayerOptions {
+                connection: Some(ConnectionMode::Session {
+                    file: session_file.clone(),
+                }),
+                ..Default::default()
+            };
+
+            // Launch player
+            match crate::registry::launch_game_by_id_with_options(&lobby.game, &options) {
+                Ok(()) => {
+                    tracing::info!("Player process spawned with session for: {}", lobby.game.id);
+                    self.last_error = None;
+                }
+                Err(e) => {
+                    tracing::error!("Failed to launch game: {}", e);
+                    self.last_error = Some(format!("Failed to launch: {}", e));
+                    // Clean up session file
+                    let _ = std::fs::remove_file(&session_file);
+                }
+            }
         }
     }
 }
@@ -304,6 +501,17 @@ impl eframe::App for App {
 
         let mut ui_action = None;
 
+        // Poll lobby session if active
+        if let Some(ref mut lobby) = self.lobby {
+            ctx.request_repaint(); // Keep polling
+            lobby.poll();
+
+            // Check if lobby is ready to spawn player
+            if lobby.phase == LobbyPhase::Ready {
+                // Will spawn player after UI rendering
+            }
+        }
+
         // Show error panel if there's an error
         if let Some(ref error) = self.last_error {
             egui::TopBottomPanel::top("error_panel").show(ctx, |ui| {
@@ -316,8 +524,12 @@ impl eframe::App for App {
             });
         }
 
-        // Show settings or library
-        if self.library_ui.show_settings {
+        // Show lobby UI if active, otherwise show library/settings
+        if let Some(ref mut lobby) = self.lobby {
+            if let Some(action) = LobbyUi::show(lobby, ctx) {
+                ui_action = Some(action);
+            }
+        } else if self.library_ui.show_settings {
             if let Some(action) = self.settings_ui.show(ctx) {
                 ui_action = Some(action);
             }
@@ -325,8 +537,9 @@ impl eframe::App for App {
             ui_action = Some(action);
         }
 
-        // Show multiplayer dialog if open
-        if let Some(ref mut dialog) = self.multiplayer_dialog
+        // Show multiplayer dialog if open (only when not in lobby)
+        if self.lobby.is_none()
+            && let Some(ref mut dialog) = self.multiplayer_dialog
             && let Some(action) = dialog.show(ctx)
         {
             ui_action = Some(action);
@@ -335,6 +548,15 @@ impl eframe::App for App {
         // Handle UI action
         if let Some(action) = ui_action {
             self.handle_ui_action(action, ctx);
+        }
+
+        // Spawn player when lobby is ready (after UI rendering)
+        if self
+            .lobby
+            .as_ref()
+            .is_some_and(|l| l.phase == LobbyPhase::Ready)
+        {
+            self.spawn_player_for_lobby();
         }
     }
 }

@@ -192,6 +192,14 @@ impl LocalSocket {
         self.peer_addr.is_some()
     }
 
+    /// Get a reference to the underlying UDP socket
+    ///
+    /// This is useful for performing custom operations like handshakes
+    /// before the GGRS session takes over.
+    pub fn socket(&self) -> &UdpSocket {
+        &self.socket
+    }
+
     /// Wait for a peer to connect (blocking with timeout)
     ///
     /// Blocks until a packet is received from any peer, then sets that

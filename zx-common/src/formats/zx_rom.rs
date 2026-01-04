@@ -36,20 +36,20 @@ use super::zx_data_pack::ZXDataPack;
 /// # Memory Layout
 ///
 /// ```text
-/// ┌─────────────────────────────────────────────────────────────┐
-/// │                   .nczx ROM File (≤12MB)                    │
+/// ┌─────────────────────────────────────────────────────────────━E
+/// ━E                  .nczx ROM File (≤12MB)                    ━E
 /// ├─────────────────────────────────────────────────────────────┤
-/// │  NCZX Header (4 bytes)                                      │
-/// │  ├── Magic: "NCZX"                                          │
+/// ━E NCZX Header (4 bytes)                                      ━E
+/// ━E ├── Magic: "NCZX"                                          ━E
 /// ├─────────────────────────────────────────────────────────────┤
-/// │  ZXRom (bitcode serialized)                                  │
-/// │  ├── version: u32                                           │
-/// │  ├── metadata: ZMetadata                                    │
-/// │  ├── code: Vec<u8>         ← WASM bytecode (≤4MB)          │
-/// │  ├── data_pack: Option<ZXDataPack>  ← Bundled assets        │
-/// │  ├── thumbnail: Option<Vec<u8>>                            │
-/// │  └── screenshots: Vec<Vec<u8>>                             │
-/// └─────────────────────────────────────────────────────────────┘
+/// ━E ZXRom (bitcode serialized)                                  ━E
+/// ━E ├── version: u32                                           ━E
+/// ━E ├── metadata: ZMetadata                                    ━E
+/// ━E ├── code: Vec<u8>         ↁEWASM bytecode (≤4MB)          ━E
+/// ━E ├── data_pack: Option<ZXDataPack>  ↁEBundled assets        ━E
+/// ━E ├── thumbnail: Option<Vec<u8>>                            ━E
+/// ━E └── screenshots: Vec<Vec<u8>>                             ━E
+/// └─────────────────────────────────────────────────────────────━E
 /// ```
 #[derive(Debug, Clone, Encode, Decode)]
 pub struct ZXRom {
@@ -246,7 +246,7 @@ mod tests {
                 render_mode: Some(2),
                 default_resolution: Some("640x480".to_string()),
                 target_fps: Some(60),
-                netplay: NetplayMetadata::multiplayer(
+                netplay: NetplayMetadata::new(
                     nethercore_shared::ConsoleType::ZX,
                     nethercore_shared::TickRate::Fixed60,
                     4,

@@ -227,12 +227,14 @@ pub(crate) fn create_quad_pipeline(
     let quad_format = FORMAT_UV | FORMAT_COLOR;
     let vertex_info = VertexFormatInfo::for_format(quad_format);
 
-    // Both screen-space and billboard quads use PassConfig depth settings.
-    // This allows stencil operations to work with 2D primitives (depth_write=false in stencil_write).
-    // Screen-space quads are still "on top" because they render at depth 0 (near plane).
-    // The `is_screen_space` parameter is kept for potential future use but doesn't affect depth.
-    let _ = is_screen_space; // Suppress unused warning
-    let (depth_write_enabled, depth_compare) = (pass_config.depth_write, pass_config.depth_compare);
+    // Screen-space quads use Always depth compare to allow later quads to overwrite earlier ones
+    // (painter's algorithm). Depth writes remain enabled for early-z optimization against 3D.
+    // Billboard quads use PassConfig settings since they're 3D-positioned and need proper depth testing.
+    let (depth_write_enabled, depth_compare) = if is_screen_space {
+        (true, wgpu::CompareFunction::Always)
+    } else {
+        (pass_config.depth_write, pass_config.depth_compare)
+    };
 
     // Create render pipeline
     let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {

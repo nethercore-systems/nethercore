@@ -205,10 +205,10 @@ impl MultiplayerDialog {
         // Start button
         if ui.button("Start Hosting").clicked() {
             if let Ok(port) = self.port.parse::<u16>() {
-                *action = Some(UiAction::HostGame {
+                *action = Some(UiAction::StartHostLobby {
                     game_id: self.game_id.clone(),
                     port,
-                    players: self.players,
+                    max_players: self.players as u8,
                 });
             } else {
                 self.error = Some("Invalid port number".to_string());
@@ -254,14 +254,18 @@ impl MultiplayerDialog {
             if self.host_ip.is_empty() {
                 self.error = Some("Please enter an IP address".to_string());
             } else if self.host_ip.contains(':') {
-                // User likely pasted IP:port format - extract and auto-fill
+                // User pasted IP:port format - parse and connect directly
                 if let Some((ip, port_str)) = self.host_ip.split_once(':') {
-                    if let Ok(port) = port_str.parse::<u16>() {
-                        let ip_clone = ip.to_string();
-                        self.host_ip = ip_clone.clone();
-                        self.port = port.to_string();
-                        self.error =
-                            Some("Extracted port from IP - click Connect again".to_string());
+                    if let Ok(_port) = port_str.parse::<u16>() {
+                        if Self::is_valid_ip(ip) {
+                            // Connect directly with the parsed address
+                            *action = Some(UiAction::StartJoinLobby {
+                                game_id: self.game_id.clone(),
+                                host_addr: self.host_ip.clone(),
+                            });
+                        } else {
+                            self.error = Some("Invalid IP address format".to_string());
+                        }
                     } else {
                         self.error = Some("Invalid port in IP:port format".to_string());
                     }
@@ -271,10 +275,10 @@ impl MultiplayerDialog {
             } else if !Self::is_valid_ip(&self.host_ip) {
                 self.error = Some("Invalid IP address format".to_string());
             } else if let Ok(port) = self.port.parse::<u16>() {
-                *action = Some(UiAction::JoinGame {
+                let host_addr = format!("{}:{}", self.host_ip, port);
+                *action = Some(UiAction::StartJoinLobby {
                     game_id: self.game_id.clone(),
-                    host_ip: self.host_ip.clone(),
-                    port,
+                    host_addr,
                 });
             } else {
                 self.error = Some("Invalid port number".to_string());

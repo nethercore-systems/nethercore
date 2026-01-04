@@ -122,22 +122,13 @@ pub fn execute(args: PackArgs) -> Result<()> {
     let data_pack = load_assets(project_dir, &manifest.assets, texture_format)?;
 
     // Build netplay metadata
-    let netplay = if manifest.netplay.enabled {
-        NetplayMetadata::multiplayer(
-            ConsoleType::ZX,
-            manifest.tick_rate(),
-            manifest.game.max_players,
-            rom_hash,
-        )
+    // If netplay disabled in manifest, force max_players=1 (single-player only)
+    let max_players = if manifest.netplay.enabled {
+        manifest.game.max_players
     } else {
-        NetplayMetadata {
-            console_type: ConsoleType::ZX,
-            tick_rate: manifest.tick_rate(),
-            max_players: manifest.game.max_players,
-            netplay_enabled: false,
-            rom_hash,
-        }
+        1
     };
+    let netplay = NetplayMetadata::new(ConsoleType::ZX, manifest.tick_rate(), max_players, rom_hash);
 
     // Print netplay info
     if manifest.netplay.enabled {

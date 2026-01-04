@@ -147,7 +147,10 @@ mod tests {
                 render_mode: Some(2),
                 default_resolution: Some("640x480".to_string()),
                 target_fps: Some(60),
-                netplay: NetplayMetadata::single_player(ConsoleType::ZX),
+                netplay: NetplayMetadata {
+                    max_players: 1,
+                    ..Default::default()
+                },
             },
             code: b"\0asm\x01\x00\x00\x00test code".to_vec(),
             data_pack: None,

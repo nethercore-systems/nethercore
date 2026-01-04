@@ -63,12 +63,22 @@ fn default_max_players() -> u8 {
 }
 
 /// Netplay configuration section
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct NetplaySection {
     /// Whether this game supports online netplay.
-    /// Default: false
-    #[serde(default)]
+    /// Default: true (multiplayer is Nethercore's core feature)
+    #[serde(default = "default_netplay_enabled")]
     pub enabled: bool,
+}
+
+impl Default for NetplaySection {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
+}
+
+fn default_netplay_enabled() -> bool {
+    true
 }
 
 /// Build configuration section
@@ -430,7 +440,7 @@ version = "1.0.0"
 
         assert_eq!(manifest.game.tick_rate, 60);
         assert_eq!(manifest.game.max_players, 4); // Multiplayer is Nethercore's core feature
-        assert!(!manifest.netplay.enabled);
+        assert!(manifest.netplay.enabled); // Netplay enabled by default
         assert!(manifest.validate().is_ok());
     }
 

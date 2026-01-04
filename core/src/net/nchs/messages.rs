@@ -188,6 +188,11 @@ pub struct PlayerSlot {
 /// Contains all determinism-critical configuration.
 #[derive(Debug, Clone, PartialEq, Encode, Decode)]
 pub struct SessionStart {
+    // === Local player info (set by library when serializing for player process) ===
+    /// Which player handle this process controls (0-3)
+    /// Set by library when creating session file, not sent over network.
+    pub local_player_handle: u8,
+
     // === Determinism-critical fields ===
     /// Random seed for deterministic RNG (all players use same seed)
     pub random_seed: u64,
@@ -454,6 +459,7 @@ mod tests {
     #[test]
     fn test_session_start_roundtrip() {
         let msg = NchsMessage::SessionStart(SessionStart {
+            local_player_handle: 0,
             random_seed: 0x123456789ABCDEF0,
             start_frame: 0,
             players: vec![

@@ -28,13 +28,9 @@ pub struct NetplayMetadata {
 
     /// Maximum players supported (1-4)
     ///
-    /// Used by NCHS to validate lobby capacity.
+    /// Games with max_players >= 2 support netplay.
+    /// Games with max_players == 1 are single-player only.
     pub max_players: u8,
-
-    /// Whether this game supports online netplay
-    ///
-    /// If false, NCHS will reject connection attempts.
-    pub netplay_enabled: bool,
 
     /// xxHash3 of the WASM bytecode section
     ///
@@ -48,27 +44,21 @@ impl Default for NetplayMetadata {
         Self {
             console_type: ConsoleType::ZX,
             tick_rate: TickRate::Fixed60,
-            max_players: 1,
-            netplay_enabled: false,
+            max_players: 4,
             rom_hash: 0,
         }
     }
 }
 
 impl NetplayMetadata {
-    /// Create netplay metadata for a single-player game (netplay disabled).
-    pub const fn single_player(console_type: ConsoleType) -> Self {
-        Self {
-            console_type,
-            tick_rate: TickRate::Fixed60,
-            max_players: 1,
-            netplay_enabled: false,
-            rom_hash: 0,
-        }
+    /// Check if this game supports netplay (max_players >= 2).
+    #[inline]
+    pub const fn supports_netplay(&self) -> bool {
+        self.max_players >= 2
     }
 
     /// Create netplay metadata for a multiplayer game.
-    pub const fn multiplayer(
+    pub const fn new(
         console_type: ConsoleType,
         tick_rate: TickRate,
         max_players: u8,
@@ -78,7 +68,6 @@ impl NetplayMetadata {
             console_type,
             tick_rate,
             max_players,
-            netplay_enabled: true,
             rom_hash,
         }
     }
@@ -87,11 +76,11 @@ impl NetplayMetadata {
     ///
     /// Returns `Ok(())` if compatible, or an error describing the mismatch.
     pub fn validate_compatibility(&self, peer: &NetplayMetadata) -> Result<(), NetplayMismatch> {
-        if !self.netplay_enabled {
-            return Err(NetplayMismatch::NetplayDisabled);
+        if !self.supports_netplay() {
+            return Err(NetplayMismatch::SinglePlayerOnly { is_local: true });
         }
-        if !peer.netplay_enabled {
-            return Err(NetplayMismatch::PeerNetplayDisabled);
+        if !peer.supports_netplay() {
+            return Err(NetplayMismatch::SinglePlayerOnly { is_local: false });
         }
         if self.console_type != peer.console_type {
             return Err(NetplayMismatch::ConsoleTypeMismatch {
@@ -118,10 +107,8 @@ impl NetplayMetadata {
 /// Reasons why two games are incompatible for netplay.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NetplayMismatch {
-    /// Local game has netplay disabled.
-    NetplayDisabled,
-    /// Peer's game has netplay disabled.
-    PeerNetplayDisabled,
+    /// Game is single-player only (max_players == 1).
+    SinglePlayerOnly { is_local: bool },
     /// Console types don't match.
     ConsoleTypeMismatch {
         local: ConsoleType,
@@ -136,8 +123,12 @@ pub enum NetplayMismatch {
 impl std::fmt::Display for NetplayMismatch {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::NetplayDisabled => write!(f, "Netplay is disabled for this game"),
-            Self::PeerNetplayDisabled => write!(f, "Peer's game has netplay disabled"),
+            Self::SinglePlayerOnly { is_local: true } => {
+                write!(f, "This game is single-player only")
+            }
+            Self::SinglePlayerOnly { is_local: false } => {
+                write!(f, "Peer's game is single-player only")
+            }
             Self::ConsoleTypeMismatch { local, peer } => {
                 write!(
                     f,
@@ -172,40 +163,32 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_single_player_defaults() {
-        let meta = NetplayMetadata::single_player(ConsoleType::ZX);
-        assert_eq!(meta.console_type, ConsoleType::ZX);
-        assert_eq!(meta.tick_rate, TickRate::Fixed60);
-        assert_eq!(meta.max_players, 1);
-        assert!(!meta.netplay_enabled);
-        assert_eq!(meta.rom_hash, 0);
+    fn test_default_supports_netplay() {
+        let meta = NetplayMetadata::default();
+        assert_eq!(meta.max_players, 4);
+        assert!(meta.supports_netplay());
     }
 
     #[test]
-    fn test_multiplayer_creation() {
-        let meta = NetplayMetadata::multiplayer(ConsoleType::ZX, TickRate::Fixed120, 4, 0xDEADBEEF);
-        assert_eq!(meta.console_type, ConsoleType::ZX);
-        assert_eq!(meta.tick_rate, TickRate::Fixed120);
-        assert_eq!(meta.max_players, 4);
-        assert!(meta.netplay_enabled);
-        assert_eq!(meta.rom_hash, 0xDEADBEEF);
+    fn test_single_player_no_netplay() {
+        let meta = NetplayMetadata {
+            max_players: 1,
+            ..Default::default()
+        };
+        assert!(!meta.supports_netplay());
     }
 
     #[test]
     fn test_compatibility_matching() {
-        let meta1 =
-            NetplayMetadata::multiplayer(ConsoleType::ZX, TickRate::Fixed60, 4, 0x12345678);
-        let meta2 =
-            NetplayMetadata::multiplayer(ConsoleType::ZX, TickRate::Fixed60, 4, 0x12345678);
+        let meta1 = NetplayMetadata::new(ConsoleType::ZX, TickRate::Fixed60, 4, 0x12345678);
+        let meta2 = NetplayMetadata::new(ConsoleType::ZX, TickRate::Fixed60, 4, 0x12345678);
         assert!(meta1.validate_compatibility(&meta2).is_ok());
     }
 
     #[test]
     fn test_compatibility_console_mismatch() {
-        let meta1 =
-            NetplayMetadata::multiplayer(ConsoleType::ZX, TickRate::Fixed60, 4, 0x12345678);
-        let meta2 =
-            NetplayMetadata::multiplayer(ConsoleType::Chroma, TickRate::Fixed60, 4, 0x12345678);
+        let meta1 = NetplayMetadata::new(ConsoleType::ZX, TickRate::Fixed60, 4, 0x12345678);
+        let meta2 = NetplayMetadata::new(ConsoleType::Chroma, TickRate::Fixed60, 4, 0x12345678);
         let result = meta1.validate_compatibility(&meta2);
         assert!(matches!(
             result,
@@ -215,20 +198,16 @@ mod tests {
 
     #[test]
     fn test_compatibility_rom_mismatch() {
-        let meta1 =
-            NetplayMetadata::multiplayer(ConsoleType::ZX, TickRate::Fixed60, 4, 0x12345678);
-        let meta2 =
-            NetplayMetadata::multiplayer(ConsoleType::ZX, TickRate::Fixed60, 4, 0xDEADBEEF);
+        let meta1 = NetplayMetadata::new(ConsoleType::ZX, TickRate::Fixed60, 4, 0x12345678);
+        let meta2 = NetplayMetadata::new(ConsoleType::ZX, TickRate::Fixed60, 4, 0xDEADBEEF);
         let result = meta1.validate_compatibility(&meta2);
         assert!(matches!(result, Err(NetplayMismatch::RomHashMismatch { .. })));
     }
 
     #[test]
     fn test_compatibility_tick_rate_mismatch() {
-        let meta1 =
-            NetplayMetadata::multiplayer(ConsoleType::ZX, TickRate::Fixed60, 4, 0x12345678);
-        let meta2 =
-            NetplayMetadata::multiplayer(ConsoleType::ZX, TickRate::Fixed120, 4, 0x12345678);
+        let meta1 = NetplayMetadata::new(ConsoleType::ZX, TickRate::Fixed60, 4, 0x12345678);
+        let meta2 = NetplayMetadata::new(ConsoleType::ZX, TickRate::Fixed120, 4, 0x12345678);
         let result = meta1.validate_compatibility(&meta2);
         assert!(matches!(
             result,
@@ -237,11 +216,16 @@ mod tests {
     }
 
     #[test]
-    fn test_compatibility_netplay_disabled() {
-        let meta1 = NetplayMetadata::single_player(ConsoleType::ZX);
-        let meta2 =
-            NetplayMetadata::multiplayer(ConsoleType::ZX, TickRate::Fixed60, 4, 0x12345678);
+    fn test_compatibility_single_player() {
+        let meta1 = NetplayMetadata {
+            max_players: 1,
+            ..Default::default()
+        };
+        let meta2 = NetplayMetadata::new(ConsoleType::ZX, TickRate::Fixed60, 4, 0x12345678);
         let result = meta1.validate_compatibility(&meta2);
-        assert!(matches!(result, Err(NetplayMismatch::NetplayDisabled)));
+        assert!(matches!(
+            result,
+            Err(NetplayMismatch::SinglePlayerOnly { is_local: true })
+        ));
     }
 }

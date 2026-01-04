@@ -418,7 +418,7 @@ mod tests {
     use std::time::Duration;
 
     fn test_netplay() -> NetplayMetadata {
-        NetplayMetadata::multiplayer(ConsoleType::ZX, TickRate::Fixed60, 4, 0x12345678)
+        NetplayMetadata::new(ConsoleType::ZX, TickRate::Fixed60, 4, 0x12345678)
     }
 
     fn test_player_info(name: &str) -> PlayerInfo {
@@ -610,7 +610,7 @@ mod tests {
     fn test_rom_hash_mismatch_rejected() {
         // Host with one hash
         let host_config = NchsConfig {
-            netplay: NetplayMetadata::multiplayer(ConsoleType::ZX, TickRate::Fixed60, 4, 0xAAAAAAAA),
+            netplay: NetplayMetadata::new(ConsoleType::ZX, TickRate::Fixed60, 4, 0xAAAAAAAA),
             player_info: test_player_info("Host"),
             network_config: NetworkConfig::default(),
             save_config: None,
@@ -620,7 +620,7 @@ mod tests {
 
         // Guest with different hash
         let guest_config = NchsConfig {
-            netplay: NetplayMetadata::multiplayer(ConsoleType::ZX, TickRate::Fixed60, 4, 0xBBBBBBBB),
+            netplay: NetplayMetadata::new(ConsoleType::ZX, TickRate::Fixed60, 4, 0xBBBBBBBB),
             player_info: test_player_info("Guest"),
             network_config: NetworkConfig::default(),
             save_config: None,
@@ -651,7 +651,7 @@ mod tests {
     fn test_console_type_mismatch_rejected() {
         // Host with ZX
         let host_config = NchsConfig {
-            netplay: NetplayMetadata::multiplayer(ConsoleType::ZX, TickRate::Fixed60, 4, 0x12345678),
+            netplay: NetplayMetadata::new(ConsoleType::ZX, TickRate::Fixed60, 4, 0x12345678),
             player_info: test_player_info("Host"),
             network_config: NetworkConfig::default(),
             save_config: None,
@@ -661,7 +661,7 @@ mod tests {
 
         // Guest with Chroma
         let guest_config = NchsConfig {
-            netplay: NetplayMetadata::multiplayer(ConsoleType::Chroma, TickRate::Fixed60, 4, 0x12345678),
+            netplay: NetplayMetadata::new(ConsoleType::Chroma, TickRate::Fixed60, 4, 0x12345678),
             player_info: test_player_info("Guest"),
             network_config: NetworkConfig::default(),
             save_config: None,
@@ -692,7 +692,7 @@ mod tests {
     fn test_tick_rate_mismatch_rejected() {
         // Host with 60Hz
         let host_config = NchsConfig {
-            netplay: NetplayMetadata::multiplayer(ConsoleType::ZX, TickRate::Fixed60, 4, 0x12345678),
+            netplay: NetplayMetadata::new(ConsoleType::ZX, TickRate::Fixed60, 4, 0x12345678),
             player_info: test_player_info("Host"),
             network_config: NetworkConfig::default(),
             save_config: None,
@@ -702,7 +702,7 @@ mod tests {
 
         // Guest with 120Hz
         let guest_config = NchsConfig {
-            netplay: NetplayMetadata::multiplayer(ConsoleType::ZX, TickRate::Fixed120, 4, 0x12345678),
+            netplay: NetplayMetadata::new(ConsoleType::ZX, TickRate::Fixed120, 4, 0x12345678),
             player_info: test_player_info("Guest"),
             network_config: NetworkConfig::default(),
             save_config: None,
@@ -733,7 +733,7 @@ mod tests {
     fn test_lobby_full_rejected() {
         // Host with max 2 players
         let host_config = NchsConfig {
-            netplay: NetplayMetadata::multiplayer(ConsoleType::ZX, TickRate::Fixed60, 2, 0x12345678),
+            netplay: NetplayMetadata::new(ConsoleType::ZX, TickRate::Fixed60, 2, 0x12345678),
             player_info: test_player_info("Host"),
             network_config: NetworkConfig::default(),
             save_config: None,
@@ -743,7 +743,7 @@ mod tests {
 
         // First guest joins successfully
         let guest1_config = NchsConfig {
-            netplay: NetplayMetadata::multiplayer(ConsoleType::ZX, TickRate::Fixed60, 2, 0x12345678),
+            netplay: NetplayMetadata::new(ConsoleType::ZX, TickRate::Fixed60, 2, 0x12345678),
             player_info: test_player_info("Guest1"),
             network_config: NetworkConfig::default(),
             save_config: None,
@@ -767,7 +767,7 @@ mod tests {
 
         // Second guest should be rejected (lobby full: host + guest1 = 2)
         let guest2_config = NchsConfig {
-            netplay: NetplayMetadata::multiplayer(ConsoleType::ZX, TickRate::Fixed60, 2, 0x12345678),
+            netplay: NetplayMetadata::new(ConsoleType::ZX, TickRate::Fixed60, 2, 0x12345678),
             player_info: test_player_info("Guest2"),
             network_config: NetworkConfig::default(),
             save_config: None,
@@ -852,5 +852,157 @@ mod tests {
 
         assert!(rejected, "Guest2 should be rejected because game is in progress");
         assert_eq!(reject_reason, Some(JoinRejectReason::GameInProgress));
+    }
+
+    #[test]
+    fn test_session_start_has_real_ip() {
+        // Create host
+        let host_config = test_config("Host");
+        let mut host = NchsSession::host(0, host_config).unwrap();
+        let port = host.port();
+
+        // Create guest
+        let guest_config = test_config("Guest");
+        let mut guest = NchsSession::join(&format!("127.0.0.1:{}", port), guest_config).unwrap();
+
+        // Wait for guest to join
+        for _ in 0..100 {
+            host.poll();
+            match guest.poll() {
+                NchsEvent::LobbyUpdated(_) | NchsEvent::PlayerJoined { .. } => break,
+                _ => {}
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        // Guest sets ready
+        guest.set_ready(true).unwrap();
+
+        // Wait for host to see guest ready
+        for _ in 0..100 {
+            if host.all_ready() && host.player_count() > 1 {
+                break;
+            }
+            host.poll();
+            guest.poll();
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        // Host starts the session
+        let session_start = host.start().expect("Host should be able to start");
+
+        // Verify host's address in SessionStart is not 0.0.0.0
+        let host_player = &session_start.players[0];
+        assert!(host_player.active, "Host should be active");
+        assert!(
+            !host_player.addr.starts_with("0.0.0.0"),
+            "Host address in SessionStart should not be 0.0.0.0, got: {}",
+            host_player.addr
+        );
+        // Should be localhost for local test
+        assert!(
+            host_player.addr.starts_with("127.0.0.1") || !host_player.addr.is_empty(),
+            "Host address should be a valid IP, got: {}",
+            host_player.addr
+        );
+    }
+
+    #[test]
+    fn test_lobby_state_has_real_host_ip() {
+        // Create host
+        let host_config = test_config("Host");
+        let host = NchsSession::host(0, host_config).unwrap();
+
+        // Get lobby state
+        let lobby = host.lobby().expect("Host should have lobby state");
+
+        // Verify host's address is not 0.0.0.0
+        let host_slot = &lobby.players[0];
+        assert!(host_slot.active, "Host slot should be active");
+        let addr = host_slot.addr.as_ref().expect("Host should have an address");
+        assert!(
+            !addr.starts_with("0.0.0.0"),
+            "Host address in lobby should not be 0.0.0.0, got: {}",
+            addr
+        );
+    }
+
+    #[test]
+    fn test_host_emits_ready_after_start() {
+        // This test verifies that the host emits NchsEvent::Ready after start() is called.
+        // Bug: Previously, the host never emitted Ready, causing the library to never
+        // spawn the player process for the host.
+
+        // Create host
+        let host_config = test_config("Host");
+        let mut host = NchsSession::host(0, host_config).unwrap();
+        let port = host.port();
+
+        // Create guest
+        let guest_config = test_config("Guest");
+        let mut guest = NchsSession::join(&format!("127.0.0.1:{}", port), guest_config).unwrap();
+
+        // Wait for guest to join
+        for _ in 0..100 {
+            host.poll();
+            match guest.poll() {
+                NchsEvent::LobbyUpdated(_) | NchsEvent::PlayerJoined { .. } => break,
+                _ => {}
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        // Guest sets ready
+        guest.set_ready(true).unwrap();
+
+        // Wait for host to see guest ready
+        for _ in 0..100 {
+            if host.all_ready() && host.player_count() > 1 {
+                break;
+            }
+            host.poll();
+            guest.poll();
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        assert!(host.all_ready(), "All players should be ready before start");
+        assert!(host.player_count() >= 2, "Should have at least 2 players");
+
+        // Host starts the session
+        let _session_start = host.start().expect("Host should be able to start");
+
+        // CRITICAL: Host should emit Ready event on the next poll
+        // This is the bug - previously the host never emitted Ready
+        let mut host_ready = false;
+        for _ in 0..10 {
+            match host.poll() {
+                NchsEvent::Ready(ss) => {
+                    // Verify the session start info is correct
+                    assert!(ss.random_seed != 0, "Should have random seed");
+                    assert_eq!(ss.player_count, 2, "Should have 2 players");
+                    host_ready = true;
+                    break;
+                }
+                NchsEvent::Pending => {
+                    // Give it a few more tries
+                }
+                other => {
+                    panic!("Unexpected event from host after start: {:?}", other);
+                }
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        assert!(
+            host_ready,
+            "Host should emit NchsEvent::Ready after start() - this is required for the library to spawn the player process"
+        );
+
+        // Also verify state is Ready
+        assert_eq!(
+            host.state(),
+            NchsState::Ready,
+            "Host state should be Ready after emitting Ready event"
+        );
     }
 }

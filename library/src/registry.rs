@@ -46,6 +46,8 @@ pub enum ConnectionMode {
     Host { port: u16 },
     /// Join an existing game
     Join { host_ip: String, port: u16 },
+    /// Pre-established session from library lobby (session config in file)
+    Session { file: PathBuf },
 }
 
 /// Options to pass to the player process
@@ -461,6 +463,10 @@ fn build_player_command(
             ConnectionMode::Join { host_ip, port } => {
                 cmd.arg("--join");
                 cmd.arg(format!("{}:{}", host_ip, port));
+            }
+            ConnectionMode::Session { file } => {
+                cmd.arg("--session");
+                cmd.arg(file);
             }
         }
     }

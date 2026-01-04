@@ -104,12 +104,6 @@ NCZX_IMPORT uint32_t load(uint32_t slot, uint8_t* data_ptr, uint32_t max_len);
 /** 0 on success, 1 if invalid slot. */
 NCZX_IMPORT uint32_t delete(uint32_t slot);
 
-/** Set the tick rate. Must be called during `init()`. */
-/**  */
-/** # Arguments */
-/** * `rate` — Tick rate index: 0=24fps, 1=30fps, 2=60fps (default), 3=120fps */
-NCZX_IMPORT void set_tick_rate(uint32_t rate);
-
 /** Set the clear/background color. Must be called during `init()`. */
 /**  */
 /** # Arguments */
@@ -1499,12 +1493,6 @@ NCZX_IMPORT float debug_get_time_scale(void);
 #define NCZX_BUTTON_START 12
 #define NCZX_BUTTON_SELECT 13
 
-// render constants
-#define NCZX_RENDER_LAMBERT 0
-#define NCZX_RENDER_MATCAP 1
-#define NCZX_RENDER_PBR 2
-#define NCZX_RENDER_HYBRID 3
-
 // cull constants
 #define NCZX_CULL_NONE 0
 #define NCZX_CULL_BACK 1
@@ -1534,12 +1522,6 @@ NCZX_IMPORT float debug_get_time_scale(void);
 #define NCZX_BILLBOARD_CYLINDRICAL_Y 2
 #define NCZX_BILLBOARD_CYLINDRICAL_X 3
 #define NCZX_BILLBOARD_CYLINDRICAL_Z 4
-
-// tick_rate constants
-#define NCZX_TICK_RATE_FPS_24 0
-#define NCZX_TICK_RATE_FPS_30 1
-#define NCZX_TICK_RATE_FPS_60 2
-#define NCZX_TICK_RATE_FPS_120 3
 
 // screen constants
 #define NCZX_SCREEN_WIDTH 960

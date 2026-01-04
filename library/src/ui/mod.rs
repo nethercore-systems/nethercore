@@ -4,9 +4,11 @@
 //! The UI displays locally cached games and allows users to play,
 //! delete, or browse for more games online.
 
+mod lobby;
 mod multiplayer_dialog;
 mod settings;
 
+pub use lobby::LobbyUi;
 pub use multiplayer_dialog::MultiplayerDialog;
 pub use settings::SettingsUi;
 
@@ -188,4 +190,20 @@ pub enum UiAction {
     },
     /// Cancel multiplayer dialog
     CancelMultiplayer,
+    /// Start hosting a lobby (creates NchsSession, transitions to lobby screen)
+    StartHostLobby {
+        game_id: String,
+        port: u16,
+        max_players: u8,
+    },
+    /// Start joining a lobby (creates NchsSession, transitions to connecting screen)
+    StartJoinLobby { game_id: String, host_addr: String },
+    /// Toggle local ready state (guest only)
+    ToggleReady,
+    /// Host clicks Start Game
+    StartGame,
+    /// Leave/cancel lobby (host or guest)
+    LeaveLobby,
+    /// Copy address to clipboard
+    CopyAddress(String),
 }

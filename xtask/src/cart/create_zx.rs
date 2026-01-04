@@ -4,7 +4,6 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use clap::Args;
-use nethercore_shared::console::ConsoleType;
 use nethercore_shared::netplay::NetplayMetadata;
 use nethercore_shared::ZX_ROM_FORMAT;
 use zx_common::{ZXMetadata, ZXRom};
@@ -154,7 +153,10 @@ pub fn execute(args: CreateZxArgs) -> Result<()> {
         render_mode: args.render_mode,
         default_resolution: args.default_resolution.clone(),
         target_fps: args.target_fps,
-        netplay: NetplayMetadata::single_player(ConsoleType::ZX),
+        netplay: NetplayMetadata {
+            max_players: 1, // Single-player
+            ..Default::default()
+        },
     };
 
     // 6. Create ROM

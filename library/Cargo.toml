@@ -59,5 +59,8 @@ chrono.workspace = true
 # Serialization for update checking
 serde = { workspace = true, features = ["derive"] }
 
+# Binary encoding for session config serialization
+bitcode.workspace = true
+
 [target.'cfg(target_os = "windows")'.dependencies]
 winreg = "0.52"
