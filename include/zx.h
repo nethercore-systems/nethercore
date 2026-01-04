@@ -528,17 +528,22 @@ NCZX_IMPORT void draw_triangles_indexed(const float* data_ptr, uint32_t vertex_c
 
 /** Draw a billboard (camera-facing quad) with full texture. */
 /**  */
+/** Uses the color set by `set_color()`. */
+/**  */
 /** # Arguments */
 /** * `w`, `h` — Billboard size in world units */
 /** * `mode` — 1=spherical, 2=cylindrical Y, 3=cylindrical X, 4=cylindrical Z */
-/** * `color` — Color tint (0xRRGGBBAA) */
-NCZX_IMPORT void draw_billboard(float w, float h, uint32_t mode, uint32_t color);
+NCZX_IMPORT void draw_billboard(float w, float h, uint32_t mode);
 
 /** Draw a billboard with a UV region from the texture. */
 /**  */
+/** Uses the color set by `set_color()`. */
+/**  */
 /** # Arguments */
+/** * `w`, `h` — Billboard size in world units */
 /** * `src_x`, `src_y`, `src_w`, `src_h` — UV region (0.0-1.0) */
-NCZX_IMPORT void draw_billboard_region(float w, float h, float src_x, float src_y, float src_w, float src_h, uint32_t mode, uint32_t color);
+/** * `mode` — 1=spherical, 2=cylindrical Y, 3=cylindrical X, 4=cylindrical Z */
+NCZX_IMPORT void draw_billboard_region(float w, float h, float src_x, float src_y, float src_w, float src_h, uint32_t mode);
 
 /** Draw a sprite with the bound texture. */
 /**  */

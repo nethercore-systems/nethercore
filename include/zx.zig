@@ -515,17 +515,22 @@ pub extern "C" fn draw_triangles_indexed(data_ptr: [*]const f32, vertex_count: u
 
 /// Draw a billboard (camera-facing quad) with full texture.
 /// 
+/// Uses the color set by `set_color()`.
+/// 
 /// # Arguments
 /// * `w`, `h` — Billboard size in world units
 /// * `mode` — 1=spherical, 2=cylindrical Y, 3=cylindrical X, 4=cylindrical Z
-/// * `color` — Color tint (0xRRGGBBAA)
-pub extern "C" fn draw_billboard(w: f32, h: f32, mode: u32, color: u32) void;
+pub extern "C" fn draw_billboard(w: f32, h: f32, mode: u32) void;
 
 /// Draw a billboard with a UV region from the texture.
 /// 
+/// Uses the color set by `set_color()`.
+/// 
 /// # Arguments
+/// * `w`, `h` — Billboard size in world units
 /// * `src_x`, `src_y`, `src_w`, `src_h` — UV region (0.0-1.0)
-pub extern "C" fn draw_billboard_region(w: f32, h: f32, src_x: f32, src_y: f32, src_w: f32, src_h: f32, mode: u32, color: u32) void;
+/// * `mode` — 1=spherical, 2=cylindrical Y, 3=cylindrical X, 4=cylindrical Z
+pub extern "C" fn draw_billboard_region(w: f32, h: f32, src_x: f32, src_y: f32, src_w: f32, src_h: f32, mode: u32) void;
 
 /// Draw a sprite with the bound texture.
 /// 
