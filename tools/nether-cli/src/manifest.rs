@@ -49,7 +49,7 @@ pub struct GameSection {
     pub tick_rate: u32,
 
     /// Maximum players supported (1-4).
-    /// Default: 1 (single player)
+    /// Default: 4 (multiplayer is Nethercore's core feature)
     #[serde(default = "default_max_players")]
     pub max_players: u8,
 }
@@ -429,7 +429,7 @@ version = "1.0.0"
         .unwrap();
 
         assert_eq!(manifest.game.tick_rate, 60);
-        assert_eq!(manifest.game.max_players, 1);
+        assert_eq!(manifest.game.max_players, 4); // Multiplayer is Nethercore's core feature
         assert!(!manifest.netplay.enabled);
         assert!(manifest.validate().is_ok());
     }

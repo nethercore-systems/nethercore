@@ -972,7 +972,6 @@ fn draw_circle_outline(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::state::ZXFFIState;
 
     /// Test that draw functions use the current color from set_color()

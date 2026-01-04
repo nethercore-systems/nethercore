@@ -257,7 +257,7 @@ mod tests {
         let result = resolve_game_id("", &games);
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert_eq!(err.message, "Empty game ID");
+        assert_eq!(err.message, "Empty Game ID");
     }
 
     #[test]

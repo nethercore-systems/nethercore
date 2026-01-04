@@ -204,7 +204,8 @@ mod tests {
     use crate::replay::types::InputSequence;
     use crate::replay::StructuredInput;
 
-    // Simple test input layout
+    // Simple test input layout (for future tests)
+    #[allow(dead_code)]
     struct TestLayout;
 
     impl InputLayout for TestLayout {

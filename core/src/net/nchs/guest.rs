@@ -468,12 +468,16 @@ impl GuestStateMachine {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[allow(dead_code)]
     use nethercore_shared::console::{ConsoleType, TickRate};
 
+    #[allow(dead_code)]
     fn test_netplay() -> NetplayMetadata {
         NetplayMetadata::multiplayer(ConsoleType::ZX, TickRate::Fixed60, 4, 0x12345678)
     }
 
+    #[allow(dead_code)]
     fn test_player_info(name: &str) -> PlayerInfo {
         PlayerInfo {
             name: name.to_string(),
