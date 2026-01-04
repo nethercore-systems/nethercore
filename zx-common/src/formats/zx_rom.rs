@@ -22,8 +22,9 @@
 
 use bitcode::{Decode, Encode};
 
-use nethercore_shared::ZX_ROM_FORMAT;
 use nethercore_shared::local::LocalGameManifest;
+use nethercore_shared::netplay::NetplayMetadata;
+use nethercore_shared::ZX_ROM_FORMAT;
 
 use super::zx_data_pack::ZXDataPack;
 
@@ -124,6 +125,12 @@ pub struct ZMetadata {
 
     /// Target FPS
     pub target_fps: Option<u32>,
+
+    /// Netplay metadata for NCHS (Nethercore Handshake) protocol.
+    ///
+    /// Contains console type, tick rate, max players, netplay enabled flag,
+    /// and ROM hash for multiplayer validation.
+    pub netplay: NetplayMetadata,
 }
 
 impl ZXRom {
@@ -239,6 +246,12 @@ mod tests {
                 render_mode: Some(2),
                 default_resolution: Some("640x480".to_string()),
                 target_fps: Some(60),
+                netplay: NetplayMetadata::multiplayer(
+                    nethercore_shared::ConsoleType::ZX,
+                    nethercore_shared::TickRate::Fixed60,
+                    4,
+                    0x123456789ABCDEF0,
+                ),
             },
             code: b"\0asm\x01\x00\x00\x00".to_vec(), // Valid WASM header
             data_pack: None,                         // No bundled assets for simple test

@@ -51,6 +51,7 @@ xxhash-rust = { workspace = true }
 
 # Serialization for network messages
 bincode = { workspace = true }
+bitcode = { workspace = true }  # For NCHS protocol messages
 
 # Application framework dependencies (Step 1)
 gilrs = { workspace = true, optional = true }  # Gamepad input (optional, requires libudev on Linux)

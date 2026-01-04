@@ -306,6 +306,73 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>
         })
     }
 
+    /// Create a P2P session from NCHS session configuration
+    ///
+    /// This is the preferred way to create a session after NCHS handshake completes.
+    /// The `SessionStart` contains all determinism-critical configuration from the host.
+    ///
+    /// # Arguments
+    ///
+    /// * `session_start` - SessionStart received from NCHS handshake
+    /// * `local_handle` - Our local player handle (0-3)
+    /// * `socket` - Network socket for GGRS communication
+    /// * `max_state_size` - Maximum state size for rollback (usually console's RAM limit)
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let session = RollbackSession::from_nchs_session(
+    ///     &nchs_session.session_config().unwrap(),
+    ///     nchs_session.local_handle().unwrap(),
+    ///     nchs_socket,
+    ///     console.specs().ram_limit,
+    /// )?;
+    /// ```
+    pub fn from_nchs_session<Sock>(
+        session_start: &crate::net::nchs::SessionStart,
+        local_handle: u8,
+        socket: Sock,
+        max_state_size: usize,
+    ) -> Result<Self, GgrsError>
+    where
+        Sock: NonBlockingSocket<String> + 'static,
+    {
+        // Build session config from NCHS
+        let nchs_config = &session_start.network_config;
+        let config = SessionConfig {
+            num_players: session_start.player_count as usize,
+            max_prediction_frames: nchs_config.max_rollback as usize,
+            input_delay: nchs_config.input_delay as usize,
+            fps: 60, // TODO: Get from tick_rate if available
+            disconnect_timeout: nchs_config.disconnect_timeout_ms as u64,
+            disconnect_notify_start: nchs_config.disconnect_timeout_ms as u64 / 2,
+        };
+
+        // Build player types from NCHS player list
+        let mut players = Vec::new();
+        for player in &session_start.players {
+            if !player.active {
+                continue;
+            }
+
+            let player_type = if player.handle == local_handle {
+                PlayerType::Local
+            } else {
+                // Use the GGRS port for remote players
+                let addr = format!(
+                    "{}:{}",
+                    player.addr.split(':').next().unwrap_or("127.0.0.1"),
+                    player.ggrs_port
+                );
+                PlayerType::Remote(addr)
+            };
+
+            players.push((player.handle as usize, player_type));
+        }
+
+        Self::new_p2p(config, socket, players, max_state_size)
+    }
+
     /// Get the session type
     pub fn session_type(&self) -> SessionType {
         self.session_type

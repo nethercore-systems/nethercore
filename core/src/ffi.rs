@@ -39,6 +39,8 @@ pub fn register_common_ffi<
     // Session functions
     linker.func_wrap("env", "player_count", player_count)?;
     linker.func_wrap("env", "local_player_mask", local_player_mask)?;
+    linker.func_wrap("env", "player_handle", player_handle)?;
+    linker.func_wrap("env", "is_connected", is_connected)?;
 
     // Debug inspection functions
     // These are always registered; release builds won't import them
@@ -249,6 +251,34 @@ fn local_player_mask<I: ConsoleInput, S, R: ConsoleRollbackState>(
     caller: Caller<'_, WasmGameContext<I, S, R>>,
 ) -> u32 {
     caller.data().game.local_player_mask
+}
+
+/// Get local player handle for netplay (0-3)
+///
+/// Returns 0xFF if not connected (single player or pre-handshake).
+/// This is only valid after NCHS handshake completes and before post_connect() is called.
+fn player_handle<I: ConsoleInput, S, R: ConsoleRollbackState>(
+    caller: Caller<'_, WasmGameContext<I, S, R>>,
+) -> u32 {
+    caller
+        .data()
+        .game
+        .local_player_handle
+        .map(|h| h as u32)
+        .unwrap_or(0xFF)
+}
+
+/// Check if connected to a netplay session
+///
+/// Returns 1 if connected (NCHS handshake complete), 0 otherwise.
+fn is_connected<I: ConsoleInput, S, R: ConsoleRollbackState>(
+    caller: Caller<'_, WasmGameContext<I, S, R>>,
+) -> u32 {
+    if caller.data().game.local_player_handle.is_some() {
+        1
+    } else {
+        0
+    }
 }
 
 #[cfg(test)]

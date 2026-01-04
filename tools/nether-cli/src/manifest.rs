@@ -3,6 +3,7 @@
 //! Shared manifest structures used by compile, pack, and build commands.
 
 use anyhow::{Context, Result};
+use nethercore_shared::console::TickRate;
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
@@ -14,6 +15,8 @@ pub struct NetherManifest {
     pub build: BuildSection,
     #[serde(default)]
     pub assets: AssetsSection,
+    #[serde(default)]
+    pub netplay: NetplaySection,
 }
 
 /// Game metadata section
@@ -29,15 +32,43 @@ pub struct GameSection {
     pub tags: Vec<String>,
 
     /// Enable BC7 texture compression (4:1 ratio).
-    /// Recommended for Matcap/PBR/Hybrid render modes.
+    /// Recommended for Matcap/BP render modes.
     /// Default: false (uncompressed RGBA8)
     #[serde(default)]
     pub compress_textures: bool,
 
-    /// Render mode: 0=Lambert, 1=Matcap, 2=PBR, 3=Hybrid
+    /// Render mode: 0=Lambert, 1=Matcap, 2=MRBP, 3=SSBP
     /// Default: 0 (Lambert)
     #[serde(default)]
     pub render_mode: u8,
+
+    /// Tick rate in Hz for netplay (30, 60, or 120).
+    /// Must be consistent for rollback netcode.
+    /// Default: 60
+    #[serde(default = "default_tick_rate")]
+    pub tick_rate: u32,
+
+    /// Maximum players supported (1-4).
+    /// Default: 1 (single player)
+    #[serde(default = "default_max_players")]
+    pub max_players: u8,
+}
+
+fn default_tick_rate() -> u32 {
+    60
+}
+
+fn default_max_players() -> u8 {
+    4
+}
+
+/// Netplay configuration section
+#[derive(Debug, Default, Deserialize)]
+pub struct NetplaySection {
+    /// Whether this game supports online netplay.
+    /// Default: false
+    #[serde(default)]
+    pub enabled: bool,
 }
 
 /// Build configuration section
@@ -180,7 +211,36 @@ impl NetherManifest {
                 self.game.render_mode
             );
         }
+
+        // Validate tick_rate
+        if TickRate::from_hz(self.game.tick_rate).is_none() {
+            anyhow::bail!(
+                "Invalid tick_rate {} in nether.toml (must be 30, 60, or 120)",
+                self.game.tick_rate
+            );
+        }
+
+        // Validate max_players
+        if self.game.max_players < 1 || self.game.max_players > 4 {
+            anyhow::bail!(
+                "Invalid max_players {} in nether.toml (must be 1-4)",
+                self.game.max_players
+            );
+        }
+
+        // Warn if netplay enabled but max_players is 1
+        if self.netplay.enabled && self.game.max_players == 1 {
+            eprintln!(
+                "Warning: netplay.enabled=true but max_players=1. Consider setting max_players >= 2 for multiplayer."
+            );
+        }
+
         Ok(())
+    }
+
+    /// Get the validated TickRate enum
+    pub fn tick_rate(&self) -> TickRate {
+        TickRate::from_hz(self.game.tick_rate).unwrap_or_default()
     }
 }
 
@@ -348,6 +408,101 @@ title = "Test"
 author = "Author"
 version = "1.0.0"
 render_mode = 5
+"#,
+        )
+        .unwrap();
+
+        assert!(manifest.validate().is_err());
+    }
+
+    #[test]
+    fn test_netplay_fields_default() {
+        let manifest = NetherManifest::parse(
+            r#"
+[game]
+id = "test"
+title = "Test"
+author = "Author"
+version = "1.0.0"
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(manifest.game.tick_rate, 60);
+        assert_eq!(manifest.game.max_players, 1);
+        assert!(!manifest.netplay.enabled);
+        assert!(manifest.validate().is_ok());
+    }
+
+    #[test]
+    fn test_netplay_fields_explicit() {
+        let manifest = NetherManifest::parse(
+            r#"
+[game]
+id = "fighter"
+title = "Fighter"
+author = "Author"
+version = "1.0.0"
+tick_rate = 120
+max_players = 4
+
+[netplay]
+enabled = true
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(manifest.game.tick_rate, 120);
+        assert_eq!(manifest.game.max_players, 4);
+        assert!(manifest.netplay.enabled);
+        assert!(manifest.validate().is_ok());
+        assert_eq!(manifest.tick_rate(), TickRate::Fixed120);
+    }
+
+    #[test]
+    fn test_tick_rate_invalid() {
+        let manifest = NetherManifest::parse(
+            r#"
+[game]
+id = "test"
+title = "Test"
+author = "Author"
+version = "1.0.0"
+tick_rate = 45
+"#,
+        )
+        .unwrap();
+
+        assert!(manifest.validate().is_err());
+    }
+
+    #[test]
+    fn test_max_players_invalid_zero() {
+        let manifest = NetherManifest::parse(
+            r#"
+[game]
+id = "test"
+title = "Test"
+author = "Author"
+version = "1.0.0"
+max_players = 0
+"#,
+        )
+        .unwrap();
+
+        assert!(manifest.validate().is_err());
+    }
+
+    #[test]
+    fn test_max_players_invalid_five() {
+        let manifest = NetherManifest::parse(
+            r#"
+[game]
+id = "test"
+title = "Test"
+author = "Author"
+version = "1.0.0"
+max_players = 5
 "#,
         )
         .unwrap();

@@ -1,5 +1,100 @@
 //! Console specifications for Nethercore fantasy consoles.
 
+use bitcode::{Decode, Encode};
+
+/// Console type identifier for ROM format and NCHS validation.
+///
+/// Used to ensure players are running the same console type during netplay.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Encode, Decode)]
+#[repr(u8)]
+pub enum ConsoleType {
+    /// Nethercore ZX (PS1/N64-era 3D)
+    #[default]
+    ZX = 0x01,
+    /// Nethercore Chroma (SNES/Genesis-era 2D)
+    Chroma = 0x02,
+    // Future consoles...
+}
+
+impl ConsoleType {
+    /// Get the string identifier for this console type.
+    ///
+    /// Matches the `console_type` field in game manifests and specs.
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::ZX => "zx",
+            Self::Chroma => "chroma",
+        }
+    }
+
+    /// Parse a console type from its string identifier.
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "zx" => Some(Self::ZX),
+            "chroma" => Some(Self::Chroma),
+            _ => None,
+        }
+    }
+
+    /// Get all known console types.
+    pub const fn all() -> &'static [Self] {
+        &[Self::ZX, Self::Chroma]
+    }
+}
+
+/// Fixed tick rates supported for netplay.
+///
+/// Tick rate determines how many game updates occur per second.
+/// This MUST be declared in nether.toml and cannot be changed at runtime
+/// (required for deterministic rollback netcode).
+///
+/// Note: The console may support additional tick rates for local play (e.g., 24Hz),
+/// but only these standard rates are supported for online multiplayer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Encode, Decode)]
+#[repr(u8)]
+pub enum TickRate {
+    /// 30 updates per second - strategy games, turn-based
+    Fixed30 = 30,
+    /// 60 updates per second - action games (default)
+    #[default]
+    Fixed60 = 60,
+    /// 120 updates per second - fighting games, precision required
+    Fixed120 = 120,
+}
+
+impl TickRate {
+    /// Get the tick rate as Hz value.
+    #[inline]
+    pub const fn as_hz(self) -> u32 {
+        self as u32
+    }
+
+    /// Get the tick duration in microseconds.
+    #[inline]
+    pub const fn tick_duration_us(self) -> u32 {
+        1_000_000 / (self as u32)
+    }
+
+    /// Try to convert from Hz value.
+    ///
+    /// Returns `None` for unsupported tick rates.
+    pub const fn from_hz(hz: u32) -> Option<Self> {
+        match hz {
+            30 => Some(Self::Fixed30),
+            60 => Some(Self::Fixed60),
+            120 => Some(Self::Fixed120),
+            _ => None,
+        }
+    }
+
+    /// Check if this tick rate is supported for netplay.
+    #[inline]
+    pub const fn is_netplay_compatible(&self) -> bool {
+        // All TickRate variants are netplay-compatible by design
+        true
+    }
+}
+
 /// Specifications for a fantasy console.
 ///
 /// Defines the hardware limits and capabilities of a fantasy console

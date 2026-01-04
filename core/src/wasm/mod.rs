@@ -115,6 +115,9 @@ pub struct GameInstance<I: ConsoleInput, S: Send + Default + 'static, R: Console
     update_fn: Option<TypedFunc<(), ()>>,
     render_fn: Option<TypedFunc<(), ()>>,
     on_debug_change_fn: Option<TypedFunc<(), ()>>,
+    /// Optional post_connect function for two-phase initialization.
+    /// Called after NCHS handshake completes, before game loop starts.
+    post_connect_fn: Option<TypedFunc<(), ()>>,
 }
 
 impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState> GameInstance<I, S, R> {
@@ -169,6 +172,9 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState> Game
         let on_debug_change_fn = instance
             .get_typed_func::<(), ()>(&mut store, "on_debug_change")
             .ok();
+        let post_connect_fn = instance
+            .get_typed_func::<(), ()>(&mut store, "post_connect")
+            .ok();
 
         Ok(Self {
             store,
@@ -177,6 +183,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState> Game
             update_fn,
             render_fn,
             on_debug_change_fn,
+            post_connect_fn,
         })
     }
 
@@ -193,6 +200,34 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState> Game
         }
         self.store.data_mut().game.in_init = false;
         Ok(())
+    }
+
+    /// Call the game's post_connect function (two-phase initialization)
+    ///
+    /// This is called after NCHS handshake completes, when the game knows its
+    /// player handle and can access player_handle()/is_connected() FFI functions.
+    ///
+    /// # Initialization Flow
+    ///
+    /// 1. `init()` - Basic setup (NO player_handle access)
+    /// 2. NCHS handshake completes
+    /// 3. `apply_session_config()` - Sets player_handle and random seed
+    /// 4. `post_connect()` - Player-aware setup (CAN access player_handle)
+    /// 5. Game loop begins
+    pub fn post_connect(&mut self) -> Result<()> {
+        if let Some(post_connect) = &self.post_connect_fn {
+            post_connect.call(&mut self.store, ()).map_err(|e| {
+                let error_msg = format!("WASM post_connect() failed: {:#}", e);
+                eprintln!("{}", error_msg);
+                anyhow::anyhow!(error_msg)
+            })?;
+        }
+        Ok(())
+    }
+
+    /// Check if the game exports a post_connect function
+    pub fn has_post_connect(&self) -> bool {
+        self.post_connect_fn.is_some()
     }
 
     /// Call the game's update function

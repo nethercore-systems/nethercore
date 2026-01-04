@@ -9,9 +9,11 @@ use clap::Args;
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use xxhash_rust::xxh3::xxh3_64;
 
 use nethercore_shared::math::BoneMatrix3x4;
-use nethercore_shared::ZX_ROM_FORMAT;
+use nethercore_shared::netplay::NetplayMetadata;
+use nethercore_shared::{ConsoleType, ZX_ROM_FORMAT};
 use zx_common::{
     vertex_stride_packed, NetherZXAnimationHeader, NetherZXMeshHeader, NetherZXSkeletonHeader,
     PackedData, PackedKeyframes, PackedMesh, PackedSkeleton, PackedSound, PackedTexture,
@@ -80,6 +82,10 @@ pub fn execute(args: PackArgs) -> Result<()> {
         .with_context(|| format!("Failed to read WASM file: {}", wasm_path.display()))?;
     println!("  WASM: {} ({} bytes)", wasm_path.display(), code.len());
 
+    // Compute ROM hash for NCHS validation
+    let rom_hash = xxh3_64(&code);
+    println!("  ROM hash: {:016x}", rom_hash);
+
     // Get render mode from manifest
     let render_mode = manifest.game.render_mode;
     let mode_name = match render_mode {
@@ -115,6 +121,34 @@ pub fn execute(args: PackArgs) -> Result<()> {
     // Load assets into data pack
     let data_pack = load_assets(project_dir, &manifest.assets, texture_format)?;
 
+    // Build netplay metadata
+    let netplay = if manifest.netplay.enabled {
+        NetplayMetadata::multiplayer(
+            ConsoleType::ZX,
+            manifest.tick_rate(),
+            manifest.game.max_players,
+            rom_hash,
+        )
+    } else {
+        NetplayMetadata {
+            console_type: ConsoleType::ZX,
+            tick_rate: manifest.tick_rate(),
+            max_players: manifest.game.max_players,
+            netplay_enabled: false,
+            rom_hash,
+        }
+    };
+
+    // Print netplay info
+    if manifest.netplay.enabled {
+        println!(
+            "  Netplay: enabled ({}Hz, {} players)",
+            manifest.game.tick_rate, manifest.game.max_players
+        );
+    } else {
+        println!("  Netplay: disabled");
+    }
+
     // Create metadata
     let metadata = ZMetadata {
         id: manifest.game.id.clone(),
@@ -130,6 +164,7 @@ pub fn execute(args: PackArgs) -> Result<()> {
         render_mode: Some(render_mode as u32),
         default_resolution: None,
         target_fps: None,
+        netplay,
     };
 
     // Create ROM

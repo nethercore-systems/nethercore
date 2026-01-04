@@ -73,6 +73,12 @@ pub struct GameState<I: ConsoleInput> {
     /// Bitmask of local players (bit N = player N is local)
     pub local_player_mask: u32,
 
+    /// Local player handle for netplay (0-3), or None if not connected
+    ///
+    /// Set after NCHS handshake completes, before post_connect() is called.
+    /// Games can query this via player_handle() FFI.
+    pub local_player_handle: Option<u8>,
+
     /// Whether we're currently in init phase
     pub in_init: bool,
 
@@ -194,6 +200,7 @@ impl<I: ConsoleInput> GameState<I> {
             delta_time: 0.0,
             player_count: 1,
             local_player_mask: 1,
+            local_player_handle: None,
             in_init: true,
             rng_state: 0,
             input_prev: [I::default(); MAX_PLAYERS],
