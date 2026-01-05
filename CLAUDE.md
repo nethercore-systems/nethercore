@@ -492,10 +492,21 @@ Add to your global Claude settings (`~/.claude/settings.json`) or project settin
 
 ### Key Commands
 
+**Project Setup (Token-Efficient):**
+- `/init-procgen-infrastructure all` - Copy all procgen parsers (saves 95% tokens)
+- `/init-tracker-music` - Copy XM/IT music writers (saves 85% tokens)
+
+**Traditional Setup:**
 - `/new-game [language] [name]` - Scaffold a new ZX game project
 - `/design-game` - Interactive GDD builder wizard
+- `/setup-project` - Full GDD + creative direction wizard
+
+**Asset Generation:**
 - `/generate-asset [type] [description]` - Quick asset generation
 - `/publish-game` - Full publishing workflow
+
+**Performance Note:**
+Prefer `/init-procgen-infrastructure` and `/init-tracker-music` for new projects - they use native file copying instead of tokenized Read/Write operations, completing 10-20x faster with 85-95% fewer tokens.
 
 ### Example Queries
 
