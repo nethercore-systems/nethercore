@@ -14,6 +14,7 @@
 use anyhow::Result;
 use nethercore_core::library::{DataDirProvider, LocalGame, get_local_games, resolve_game_id};
 use nethercore_library::registry::{ConnectionMode, ConsoleRegistry, PlayerOptions};
+use nethercore_shared::ROM_FORMATS;
 use nethercore_library::update::check_and_prompt_for_update;
 use std::env;
 use std::path::PathBuf;
@@ -147,13 +148,25 @@ fn parse_query_param<T: std::str::FromStr>(query: &str, key: &str) -> Option<T> 
     None
 }
 
+fn is_supported_rom_extension(ext: &str) -> bool {
+    ROM_FORMATS.iter().any(|format| format.extension == ext)
+}
+
+fn rom_extension_list() -> String {
+    ROM_FORMATS
+        .iter()
+        .map(|format| format!(".{}", format.extension))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 /// Check if a string looks like a file path to a ROM file
 fn is_rom_path(arg: &str) -> Option<PathBuf> {
     let path = PathBuf::from(arg);
 
     // Check if it has a ROM extension
     let ext = path.extension().and_then(|e| e.to_str());
-    let is_rom_ext = matches!(ext, Some("nczx") | Some("wasm"));
+    let is_rom_ext = ext.map(is_supported_rom_extension).unwrap_or(false) || ext == Some("wasm");
 
     // If it has a ROM extension and the file exists, treat it as a path
     if is_rom_ext && path.exists() {
@@ -270,7 +283,10 @@ fn main() -> Result<()> {
 
         if games.is_empty() {
             eprintln!("No games installed. Download games from the library UI.");
-            eprintln!("Tip: You can also pass a .nczx file path directly.");
+            let extensions = rom_extension_list();
+            if !extensions.is_empty() {
+                eprintln!("Tip: You can also pass a {} file path directly.", extensions);
+            }
             std::process::exit(1);
         }
 

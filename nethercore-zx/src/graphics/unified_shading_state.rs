@@ -591,7 +591,7 @@ pub struct PackedUnifiedShadingState {
     /// 0 = no skeleton bound (raw bone mode)
     pub inverse_bind_base: u32,
 
-    /// Padding for struct alignment (previously animation_flags, now unused)
+    /// Padding for struct alignment (animation_flags slot unused)
     pub _pad: u32,
 
     /// Index into environment_states buffer for sky/environment rendering

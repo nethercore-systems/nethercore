@@ -114,7 +114,6 @@ impl RomLoader for ZXRomLoader {
 mod tests {
     use super::*;
     use crate::ZXMetadata;
-    use nethercore_shared::console::ConsoleType;
     use nethercore_shared::netplay::NetplayMetadata;
     use std::path::PathBuf;
     use tempfile::TempDir;

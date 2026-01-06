@@ -13,10 +13,11 @@ use winit::window::Window;
 
 use super::ZXGraphics;
 use super::vertex::{FORMAT_COLOR, FORMAT_UV, vertex_stride_packed};
+use crate::console::RESOLUTION;
 
 /// Offscreen render target for fixed internal resolution
 ///
-/// Game content renders at a fixed resolution (e.g., 960×540) to this target,
+/// Game content renders at a fixed resolution (e.g., ZX native resolution) to this target,
 /// then gets scaled/blitted to the window surface (which can be any size).
 ///
 /// # Architecture Note
@@ -212,8 +213,10 @@ impl ZXGraphics {
         // Create texture manager (handles fallback textures)
         let texture_manager = super::texture_manager::TextureManager::new(&device, &queue)?;
 
-        // Create offscreen render target at default resolution (960×540)
-        let render_target = Self::create_render_target(&device, 960, 540, surface_format);
+        // Create offscreen render target at default resolution
+        let (target_width, target_height) = RESOLUTION;
+        let render_target =
+            Self::create_render_target(&device, target_width, target_height, surface_format);
 
         // Create blit pipeline for scaling render target to window
         let (blit_pipeline, blit_bind_group, _blit_sampler) =

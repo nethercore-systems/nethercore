@@ -2,7 +2,6 @@
 //!
 //! Minimal core game state - console-agnostic.
 
-use nethercore_shared::NETHERCORE_ZX_RAM_LIMIT;
 use wasmtime::{AsContext, Memory, ResourceLimiter};
 
 use crate::console::{ConsoleInput, ConsoleRollbackState};
@@ -42,6 +41,9 @@ pub const MAX_SAVE_SLOTS: usize = 8;
 
 /// Maximum save data size per slot (64KB)
 pub const MAX_SAVE_SIZE: usize = 64 * 1024;
+
+/// Default RAM limit used as a fallback for tests and tooling.
+pub const DEFAULT_RAM_LIMIT: usize = 4 * 1024 * 1024;
 
 /// Minimal core game state (console-agnostic)
 ///
@@ -126,14 +128,14 @@ impl<I: ConsoleInput, S: Default, R: ConsoleRollbackState> Default for WasmGameC
             game: GameState::new(),
             ffi: S::default(),
             rollback: R::default(),
-            ram_limit: NETHERCORE_ZX_RAM_LIMIT, // Default to 4MB (Nethercore ZX)
+            ram_limit: DEFAULT_RAM_LIMIT, // Fallback default (use ConsoleSpecs in production)
             debug_registry: DebugRegistry::new(),
         }
     }
 }
 
 impl<I: ConsoleInput, S: Default, R: ConsoleRollbackState> WasmGameContext<I, S, R> {
-    /// Create new state with default RAM limit (4MB)
+    /// Create new state with the fallback RAM limit (4MB)
     pub fn new() -> Self {
         Self::default()
     }

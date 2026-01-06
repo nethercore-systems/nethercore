@@ -30,6 +30,7 @@ use hashbrown::HashMap;
 use anyhow::{Context, Result};
 
 use nethercore_core::console::Graphics;
+use crate::console::RESOLUTION;
 
 // Re-export packing utilities from zx-common (for FFI and backwards compat)
 pub use zx_common::{
@@ -123,12 +124,12 @@ pub struct Viewport {
 }
 
 impl Viewport {
-    /// Full-screen viewport (960×540, the ZX native resolution)
+    /// Full-screen viewport (ZX native resolution)
     pub const FULLSCREEN: Viewport = Viewport {
         x: 0,
         y: 0,
-        width: 960,
-        height: 540,
+        width: RESOLUTION.0,
+        height: RESOLUTION.1,
     };
 
     /// Calculate aspect ratio (width / height)
@@ -373,7 +374,7 @@ impl ZXGraphics {
 
     // Note: Render state methods (set_depth_test, set_cull_mode, set_blend_mode,
     // set_texture_filter, render_state(), current_sampler()) have been removed.
-    // Render state is now captured per-command from ZXFFIState in draw.rs.
+    // Render state is captured per-command from ZXFFIState in draw.rs.
     // Texture filter is stored in PackedUnifiedShadingState.flags (bit 1) for
     // per-draw shader selection via sample_filtered() helper.
 

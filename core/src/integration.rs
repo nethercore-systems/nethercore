@@ -5,7 +5,6 @@
 
 #[cfg(test)]
 mod tests {
-    use nethercore_shared::NETHERCORE_ZX_RAM_LIMIT;
     use wasmtime::Linker;
 
     use crate::{
@@ -25,8 +24,20 @@ mod tests {
         (engine, linker)
     }
 
+    fn test_ram_limit() -> usize {
+        TestConsole::specs().ram_limit
+    }
+
+    fn new_test_game_instance(
+        engine: &WasmEngine,
+        module: &wasmtime::Module,
+        linker: &Linker<WasmGameContext<TestInput, (), ()>>,
+    ) -> GameInstance<TestInput, ()> {
+        GameInstance::with_ram_limit(engine, module, linker, test_ram_limit()).unwrap()
+    }
+
     // ============================================================================
-    // PART 1: Full Game Lifecycle Tests (init → update → render)
+    // PART 1: Full Game Lifecycle Tests (init ↁEupdate ↁErender)
     // ============================================================================
 
     /// Test that a game with all lifecycle exports can be created and run
@@ -87,7 +98,7 @@ mod tests {
 
         let wasm = wat::parse_str(wat).unwrap();
         let module = engine.load_module(&wasm).unwrap();
-        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
+        let mut game = new_test_game_instance(&engine, &module, &linker);
 
         // Verify initial state
         let get_counter = game.store().data().game.memory.unwrap();
@@ -143,7 +154,7 @@ mod tests {
 
         let wasm = wat::parse_str(wat).unwrap();
         let module = engine.load_module(&wasm).unwrap();
-        let game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
+        let game = new_test_game_instance(&engine, &module, &linker);
 
         runtime.load_game(game);
         runtime.init_game().unwrap();
@@ -169,7 +180,7 @@ mod tests {
 
         let wasm = wat::parse_str(wat).unwrap();
         let module = engine.load_module(&wasm).unwrap();
-        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
+        let mut game = new_test_game_instance(&engine, &module, &linker);
 
         // All lifecycle calls should succeed (no-op for missing exports)
         game.init().unwrap();
@@ -213,7 +224,7 @@ mod tests {
 
         let wasm = wat::parse_str(wat).unwrap();
         let module = engine.load_module(&wasm).unwrap();
-        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
+        let mut game = new_test_game_instance(&engine, &module, &linker);
 
         game.init().unwrap();
 
@@ -227,7 +238,7 @@ mod tests {
     }
 
     // ============================================================================
-    // PART 2: Rollback Simulation Tests (save → modify → load → verify)
+    // PART 2: Rollback Simulation Tests (save ↁEmodify ↁEload ↁEverify)
     // ============================================================================
 
     /// Test basic save and load state functionality
@@ -263,7 +274,7 @@ mod tests {
 
         let wasm = wat::parse_str(wat).unwrap();
         let module = engine.load_module(&wasm).unwrap();
-        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
+        let mut game = new_test_game_instance(&engine, &module, &linker);
 
         game.init().unwrap();
 
@@ -329,7 +340,7 @@ mod tests {
 
         let wasm = wat::parse_str(wat).unwrap();
         let module = engine.load_module(&wasm).unwrap();
-        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
+        let mut game = new_test_game_instance(&engine, &module, &linker);
         let mut state_manager = RollbackStateManager::with_defaults();
 
         game.init().unwrap();
@@ -388,7 +399,7 @@ mod tests {
 
         let wasm = wat::parse_str(wat).unwrap();
         let module = engine.load_module(&wasm).unwrap();
-        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
+        let mut game = new_test_game_instance(&engine, &module, &linker);
         let mut state_manager = RollbackStateManager::with_defaults();
 
         game.init().unwrap();
@@ -433,7 +444,7 @@ mod tests {
 
         let wasm = wat::parse_str(wat).unwrap();
         let module = engine.load_module(&wasm).unwrap();
-        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
+        let mut game = new_test_game_instance(&engine, &module, &linker);
         let mut state_manager = RollbackStateManager::with_defaults();
 
         game.init().unwrap();
@@ -480,9 +491,9 @@ mod tests {
 
         let wasm = wat::parse_str(wat).unwrap();
         let module = engine.load_module(&wasm).unwrap();
-        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
+        let mut game = new_test_game_instance(&engine, &module, &linker);
 
-        let mut session = RollbackSession::<TestInput, ()>::new_local(2, NETHERCORE_ZX_RAM_LIMIT);
+        let mut session = RollbackSession::<TestInput, ()>::new_local(2, test_ram_limit());
 
         game.init().unwrap();
 
@@ -519,7 +530,7 @@ mod tests {
 
         let wasm = wat::parse_str(wat).unwrap();
         let module = engine.load_module(&wasm).unwrap();
-        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
+        let mut game = new_test_game_instance(&engine, &module, &linker);
 
         game.init().unwrap();
 
@@ -569,7 +580,7 @@ mod tests {
 
         let wasm = wat::parse_str(wat).unwrap();
         let module = engine.load_module(&wasm).unwrap();
-        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
+        let mut game = new_test_game_instance(&engine, &module, &linker);
 
         game.init().unwrap();
         game.state_mut().player_count = 4;
@@ -622,7 +633,7 @@ mod tests {
 
         let wasm = wat::parse_str(wat).unwrap();
         let module = engine.load_module(&wasm).unwrap();
-        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
+        let mut game = new_test_game_instance(&engine, &module, &linker);
 
         // Set up 4 players, players 0 and 2 are local
         game.state_mut().player_count = 4;
@@ -638,7 +649,7 @@ mod tests {
     /// Test RollbackSession input handling
     #[test]
     fn test_rollback_session_input() {
-        let mut session = RollbackSession::<TestInput, ()>::new_local(2, NETHERCORE_ZX_RAM_LIMIT);
+        let mut session = RollbackSession::<TestInput, ()>::new_local(2, test_ram_limit());
 
         // Add input for local players
         let input0 = TestInput {
@@ -675,8 +686,8 @@ mod tests {
 
         let mapped = console.map_input(&raw);
         assert_eq!(mapped.buttons, 1); // A pressed
-        assert_eq!(mapped.x, 63); // 0.5 * 127 ≈ 63
-        assert_eq!(mapped.y, -31); // -0.25 * 127 ≈ -31
+        assert_eq!(mapped.x, 63); // 0.5 * 127 ≁E63
+        assert_eq!(mapped.y, -31); // -0.25 * 127 ≁E-31
     }
 
     // ============================================================================
@@ -794,7 +805,7 @@ mod tests {
 
         let wasm = wat::parse_str(wat).unwrap();
         let module = engine.load_module(&wasm).unwrap();
-        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
+        let mut game = new_test_game_instance(&engine, &module, &linker);
         let mut state_manager = RollbackStateManager::with_defaults();
 
         // Phase 1: Init
@@ -855,13 +866,13 @@ mod tests {
 
         let wasm = wat::parse_str(wat).unwrap();
         let module = engine.load_module(&wasm).unwrap();
-        let game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
+        let game = new_test_game_instance(&engine, &module, &linker);
 
         runtime.load_game(game);
         runtime.init_game().unwrap();
 
         // Set up 4-player local session
-        let session = RollbackSession::<TestInput, ()>::new_local(4, NETHERCORE_ZX_RAM_LIMIT);
+        let session = RollbackSession::<TestInput, ()>::new_local(4, test_ram_limit());
         runtime.set_session(session);
 
         // Verify session is set

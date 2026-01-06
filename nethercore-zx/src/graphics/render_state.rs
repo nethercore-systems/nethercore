@@ -330,7 +330,7 @@ mod tests {
     }
 
     // Note: test_render_state_texture_filter_switching removed - texture_filter
-    // is now in PackedUnifiedShadingState.flags (bit 1), not RenderState
+    // is stored in PackedUnifiedShadingState.flags (bit 1), not RenderState
 
     #[test]
     fn test_render_state_equality() {

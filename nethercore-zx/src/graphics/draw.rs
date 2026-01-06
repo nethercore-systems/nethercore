@@ -23,17 +23,17 @@ impl ZXGraphics {
         // Note: render mode is set once after init() in App::flush_post_init_resources()
         // No need to set it every frame
 
-        // Note: texture_filter sync removed - filter is now per-draw via
+        // Note: texture_filter sync removed - filter is per-draw via
         // PackedUnifiedShadingState.flags (bit 1) and sample_filtered() shader helper
 
         // 1. Swap the FFI-populated render pass into our command buffer
         // This efficiently transfers all immediate geometry (triangles, meshes)
-        // without copying vectors. The old command buffer (now in z_state.render_pass)
+        // without copying vectors. The old command buffer (stored in z_state.render_pass)
         // will be cleared when z_state.clear_frame() is called.
         std::mem::swap(&mut self.command_buffer, &mut z_state.render_pass);
 
         // NOTE: Texture handle remapping was removed here.
-        // Mesh/IndexedMesh commands now capture FFI texture handles at command creation time
+        // Mesh/IndexedMesh commands capture FFI texture handles at command creation time
         // (stored in `textures: [u32; 4]`), which are resolved to TextureHandle at render
         // time in frame.rs via texture_map. This fixes the bug where deferred remapping
         // used stale bound_textures state at frame end.

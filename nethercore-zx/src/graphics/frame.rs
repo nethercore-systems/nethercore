@@ -329,7 +329,7 @@ impl ZXGraphics {
             );
         }
 
-        // NOTE: Inverse bind matrices are now uploaded once during init via upload_static_inverse_bind()
+        // NOTE: Inverse bind matrices are uploaded once during init via upload_static_inverse_bind()
         // They live in unified_animation[0..inverse_bind_end]
 
         // Take texture cache out temporarily to avoid nested mutable borrows during render pass.
@@ -345,7 +345,7 @@ impl ZXGraphics {
         // This saves ~0.1ms/frame on typical hardware by avoiding descriptor set churn.
         let frame_bind_group = if let Some(first_cmd) = self.command_buffer.commands().first() {
             // Extract fields from first command variant
-            // Note: depth_test is now per-pass via PassConfig, but we use defaults for bind group layout
+            // Note: depth_test is per-pass via PassConfig, but we use defaults for bind group layout
             let (format, cull_mode, pass_id) = match first_cmd {
                 VRPCommand::Mesh {
                     format, cull_mode, pass_id, ..
@@ -990,7 +990,7 @@ impl ZXGraphics {
         // Move texture cache back into self (preserving allocations for next frame)
         self.texture_bind_groups = texture_bind_groups;
 
-        // NOTE: Blit is now handled separately via blit_to_window()
+        // NOTE: Blit is handled separately via blit_to_window()
         // This allows us to re-blit the last rendered frame on high refresh rate monitors
         // without re-rendering the game content
     }

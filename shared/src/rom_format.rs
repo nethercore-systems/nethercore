@@ -18,7 +18,7 @@
 //! assert_eq!(ZX_ROM_FORMAT.mesh_ext, "nczxmesh");
 //! ```
 
-use crate::console::nethercore_zx_specs;
+use crate::console::{ConsoleType, nethercore_zx_specs};
 
 /// ROM format specification for a fantasy console.
 ///
@@ -103,6 +103,37 @@ pub const ZX_ROM_FORMAT: RomFormat = RomFormat::new(
     "nczxanim",
 );
 
+/// All known ROM formats.
+///
+/// This is the single source of truth for ROM format lookups.
+pub const ROM_FORMATS: &[&RomFormat] = &[&ZX_ROM_FORMAT];
+
+/// Get the ROM format for a console type enum.
+pub fn get_rom_format_by_console(console_type: ConsoleType) -> Option<&'static RomFormat> {
+    ROM_FORMATS
+        .iter()
+        .find(|format| ConsoleType::from_str(format.console_type) == Some(console_type))
+        .copied()
+}
+
+/// Get the ROM format for a console type string.
+pub fn get_rom_format_by_console_type(console_type: &str) -> Option<&'static RomFormat> {
+    ConsoleType::from_str(console_type).and_then(get_rom_format_by_console)
+}
+
+/// Get the ROM format for a file extension (without the dot).
+pub fn get_rom_format_by_extension(ext: &str) -> Option<&'static RomFormat> {
+    ROM_FORMATS
+        .iter()
+        .find(|format| format.extension == ext)
+        .copied()
+}
+
+/// Get the console type for a ROM file extension (without the dot).
+pub fn get_console_type_by_extension(ext: &str) -> Option<ConsoleType> {
+    get_rom_format_by_extension(ext).and_then(|format| ConsoleType::from_str(format.console_type))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -135,5 +166,23 @@ mod tests {
         assert_eq!(ZX_ROM_FORMAT.sound_ext, "nczxsnd");
         assert_eq!(ZX_ROM_FORMAT.skeleton_ext, "nczxskel");
         assert_eq!(ZX_ROM_FORMAT.animation_ext, "nczxanim");
+    }
+
+    #[test]
+    fn test_rom_format_lookups() {
+        assert_eq!(
+            get_rom_format_by_extension("nczx").unwrap().magic,
+            ZX_ROM_FORMAT.magic
+        );
+        assert_eq!(
+            get_rom_format_by_console(ConsoleType::ZX).unwrap().extension,
+            "nczx"
+        );
+        assert_eq!(
+            get_rom_format_by_console_type("zx").unwrap().console_type,
+            "zx"
+        );
+        assert_eq!(get_console_type_by_extension("nczx"), Some(ConsoleType::ZX));
+        assert!(get_rom_format_by_extension("unknown").is_none());
     }
 }

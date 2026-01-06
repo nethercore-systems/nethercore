@@ -750,8 +750,9 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>
 mod tests {
     use super::*;
 
+    use crate::console::Console;
     use crate::rollback::ConnectionQuality;
-    use nethercore_shared::NETHERCORE_ZX_RAM_LIMIT;
+    use crate::test_utils::TestConsole;
     // Test input type for unit tests
     #[repr(C)]
     #[derive(
@@ -764,9 +765,13 @@ mod tests {
     }
     impl ConsoleInput for TestInput {}
 
+    fn test_ram_limit() -> usize {
+        TestConsole::specs().ram_limit
+    }
+
     #[test]
     fn test_rollback_session_local() {
-        let session = RollbackSession::<TestInput, ()>::new_local(2, NETHERCORE_ZX_RAM_LIMIT);
+        let session = RollbackSession::<TestInput, ()>::new_local(2, test_ram_limit());
         assert_eq!(session.session_type(), SessionType::Local);
         assert_eq!(session.config().num_players, 2);
         assert_eq!(session.current_frame(), 0);
@@ -777,14 +782,14 @@ mod tests {
     fn test_rollback_session_sync_test() {
         let config = SessionConfig::sync_test();
         let session =
-            RollbackSession::<TestInput, ()>::new_sync_test(config, NETHERCORE_ZX_RAM_LIMIT)
+            RollbackSession::<TestInput, ()>::new_sync_test(config, test_ram_limit())
                 .unwrap();
         assert_eq!(session.session_type(), SessionType::SyncTest);
     }
 
     #[test]
     fn test_local_session_advance() {
-        let mut session = RollbackSession::<TestInput, ()>::new_local(2, NETHERCORE_ZX_RAM_LIMIT);
+        let mut session = RollbackSession::<TestInput, ()>::new_local(2, test_ram_limit());
         assert_eq!(session.current_frame(), 0);
 
         let requests = session.advance_frame().unwrap();
@@ -901,26 +906,26 @@ mod tests {
 
     #[test]
     fn test_local_session_has_no_network_stats() {
-        let session = RollbackSession::<TestInput, ()>::new_local(2, NETHERCORE_ZX_RAM_LIMIT);
+        let session = RollbackSession::<TestInput, ()>::new_local(2, test_ram_limit());
         assert!(session.all_player_stats().is_empty());
         assert!(session.player_stats(0).is_none());
     }
 
     #[test]
     fn test_local_session_no_desync() {
-        let session = RollbackSession::<TestInput, ()>::new_local(2, NETHERCORE_ZX_RAM_LIMIT);
+        let session = RollbackSession::<TestInput, ()>::new_local(2, test_ram_limit());
         assert!(!session.has_desync());
     }
 
     #[test]
     fn test_local_session_total_rollback_frames() {
-        let session = RollbackSession::<TestInput, ()>::new_local(2, NETHERCORE_ZX_RAM_LIMIT);
+        let session = RollbackSession::<TestInput, ()>::new_local(2, test_ram_limit());
         assert_eq!(session.total_rollback_frames(), 0);
     }
 
     #[test]
     fn test_local_session_handle_events_empty() {
-        let mut session = RollbackSession::<TestInput, ()>::new_local(2, NETHERCORE_ZX_RAM_LIMIT);
+        let mut session = RollbackSession::<TestInput, ()>::new_local(2, test_ram_limit());
         let events = session.handle_events();
         // Local sessions don't produce events
         assert!(events.is_empty());
@@ -958,7 +963,7 @@ mod tests {
 
     #[test]
     fn test_rollback_session_local_has_player_config() {
-        let session = RollbackSession::<TestInput, ()>::new_local(2, NETHERCORE_ZX_RAM_LIMIT);
+        let session = RollbackSession::<TestInput, ()>::new_local(2, test_ram_limit());
         let player_config = session.player_config();
         assert_eq!(player_config.num_players(), 2);
         assert_eq!(player_config.local_player_count(), 2);
@@ -972,7 +977,7 @@ mod tests {
         let player_config = PlayerSessionConfig::new(4, 0b0011); // Only players 0, 1 local
         let session = RollbackSession::<TestInput, ()>::new_local_with_config(
             player_config,
-            NETHERCORE_ZX_RAM_LIMIT,
+            test_ram_limit(),
         );
 
         assert_eq!(session.player_config().num_players(), 4);
@@ -984,7 +989,7 @@ mod tests {
     fn test_rollback_session_sync_test_has_player_config() {
         let config = SessionConfig::sync_test();
         let session =
-            RollbackSession::<TestInput, ()>::new_sync_test(config, NETHERCORE_ZX_RAM_LIMIT)
+            RollbackSession::<TestInput, ()>::new_sync_test(config, test_ram_limit())
                 .unwrap();
         let player_config = session.player_config();
         assert_eq!(player_config.num_players(), 1);

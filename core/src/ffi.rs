@@ -163,7 +163,7 @@ fn load<I: ConsoleInput, S, R: ConsoleRollbackState>(
     // This avoids cloning the save data by allowing us to access both in one operation.
     let (mem_data, store) = memory.data_and_store_mut(&mut caller);
 
-    // Get save data reference (now we have access to store)
+    // Get save data reference from the store
     let data = match &store.game.save_data[slot] {
         Some(d) => d,
         None => return 0,

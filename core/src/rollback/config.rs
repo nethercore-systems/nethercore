@@ -5,8 +5,6 @@
 use std::marker::PhantomData;
 
 use ggrs::Config;
-use nethercore_shared::NETHERCORE_ZX_RAM_LIMIT;
-
 use crate::console::ConsoleInput;
 
 use super::state::GameStateSnapshot;
@@ -23,9 +21,8 @@ pub const DEFAULT_INPUT_DELAY: usize = 0;
 /// Default input delay for online play (balance between responsiveness and rollbacks)
 pub const DEFAULT_ONLINE_INPUT_DELAY: usize = 2;
 
-/// Default maximum state buffer size (4MB - matches Nethercore ZX RAM limit)
+/// Default maximum state buffer size (4MB fallback).
 ///
-/// This is the default fallback value matching Nethercore ZX's RAM limit.
 /// Consoles should use their specific RAM limit from `ConsoleSpecs::ram_limit`
 /// when creating rollback sessions.
 ///
@@ -41,7 +38,7 @@ pub const DEFAULT_ONLINE_INPUT_DELAY: usize = 2;
 /// let max_state_size = console.specs().ram_limit;
 /// let state_manager = RollbackStateManager::new(max_state_size);
 /// ```
-pub const MAX_STATE_SIZE: usize = NETHERCORE_ZX_RAM_LIMIT;
+pub const MAX_STATE_SIZE: usize = 4 * 1024 * 1024;
 
 /// GGRS configuration for Nethercore
 ///

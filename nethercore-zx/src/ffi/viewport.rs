@@ -84,7 +84,7 @@ fn viewport(mut caller: Caller<'_, ZXGameContext>, x: u32, y: u32, width: u32, h
     };
 }
 
-/// Reset viewport to fullscreen (960×540).
+/// Reset viewport to fullscreen (ZX native resolution).
 ///
 /// Call this at the end of split-screen rendering to restore full-screen
 /// coordinates for HUD elements or between frames.
@@ -100,8 +100,9 @@ mod tests {
         let vp = crate::graphics::Viewport::FULLSCREEN;
         assert_eq!(vp.x, 0);
         assert_eq!(vp.y, 0);
-        assert_eq!(vp.width, 960);
-        assert_eq!(vp.height, 540);
+        let (width, height) = crate::console::RESOLUTION;
+        assert_eq!(vp.width, width);
+        assert_eq!(vp.height, height);
     }
 
     #[test]

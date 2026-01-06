@@ -294,7 +294,7 @@ impl RollbackStateManager {
 
     /// Create a rollback state manager with default settings
     ///
-    /// Uses [`MAX_STATE_SIZE`](super::config::MAX_STATE_SIZE) (16MB) as the default.
+    /// Uses [`MAX_STATE_SIZE`](super::config::MAX_STATE_SIZE) as the fallback.
     /// **Prefer using `new(console.specs().ram_limit)` to respect console limits.**
     pub fn with_defaults() -> Self {
         Self::new(MAX_STATE_SIZE)

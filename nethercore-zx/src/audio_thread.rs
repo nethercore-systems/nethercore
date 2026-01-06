@@ -2264,21 +2264,6 @@ mod tests {
     }
 
     #[test]
-    fn test_sfx_start_has_zero_crossing() {
-        // New SFX starting at position=0 shouldn't pop because:
-        // 1. Sound data typically starts at or near zero
-        // 2. Any competent sound effect has a zero-crossing at the start
-
-        // Verify assumption: position 0 means we start from the beginning
-        // which should be at or near silence
-        let new_sfx_position = 0u32;
-        assert_eq!(new_sfx_position, 0, "New SFX starts at position 0");
-
-        // Most audio formats start at 0 or very close to it
-        // This is a documentation test - actual verification would need sound data
-    }
-
-    #[test]
     fn test_rollback_crossfade_smooths_any_discontinuity() {
         // The key insight: rollback can cause ANY arbitrary state change
         // Crossfade must handle all cases
@@ -2332,49 +2317,6 @@ mod tests {
                 max_disc
             );
         }
-    }
-
-    #[test]
-    fn test_pop_threshold_documentation() {
-        // Document what constitutes a "pop" for reference
-
-        // Human hearing is most sensitive to sudden transients
-        // A "pop" is generally:
-        // - A sample-to-sample jump > 0.3 at high amplitude
-        // - A sample-to-sample jump > 0.1 is noticeable
-        // - A sample-to-sample jump < 0.05 is typically inaudible
-
-        let pop_threshold = 0.3f32;
-        let noticeable_threshold = 0.1f32;
-        let inaudible_threshold = 0.05f32;
-
-        // Our crossfade aims for < inaudible_threshold
-        let crossfade_samples = 44;
-        let max_swing = 2.0f32; // From +1 to -1
-        let step_per_sample = max_swing / crossfade_samples as f32;
-
-        assert!(
-            step_per_sample < inaudible_threshold,
-            "Crossfade step {} should be < inaudible threshold {}",
-            step_per_sample,
-            inaudible_threshold
-        );
-
-        // Even in worst case, our crossfade keeps us below noticeable
-        assert!(
-            step_per_sample < noticeable_threshold,
-            "Crossfade step {} should be < noticeable threshold {}",
-            step_per_sample,
-            noticeable_threshold
-        );
-
-        // And definitely below pop threshold
-        assert!(
-            step_per_sample < pop_threshold,
-            "Crossfade step {} should be < pop threshold {}",
-            step_per_sample,
-            pop_threshold
-        );
     }
 
     #[test]

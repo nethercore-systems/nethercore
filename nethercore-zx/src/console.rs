@@ -149,7 +149,7 @@ impl ZInput {
 
 impl ConsoleInput for ZInput {}
 
-// ZXGraphics is now implemented in graphics.rs
+// ZXGraphics is implemented in graphics.rs.
 
 /// Re-export ZXAudio from audio module
 pub use crate::audio::ZXAudio;

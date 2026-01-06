@@ -357,12 +357,15 @@ impl<C: Console> Runtime<C> {
 mod tests {
     use super::*;
 
-    use nethercore_shared::NETHERCORE_ZX_RAM_LIMIT;
     use wasmtime::Linker;
 
     use crate::console::{Console, RawInput};
     use crate::test_utils::{TestAudio, TestConsole, TestInput};
     use crate::wasm::{GameInstance, WasmEngine};
+
+    fn test_ram_limit() -> usize {
+        TestConsole::specs().ram_limit
+    }
 
     // ============================================================================
     // RuntimeConfig Tests
@@ -428,7 +431,13 @@ mod tests {
         .unwrap();
         let module = engine.load_module(&wasm).unwrap();
         let linker = Linker::new(engine.engine());
-        let game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
+        let game = GameInstance::<TestInput, ()>::with_ram_limit(
+            &engine,
+            &module,
+            &linker,
+            test_ram_limit(),
+        )
+        .unwrap();
 
         runtime.load_game(game);
         assert!(runtime.game().is_some());
@@ -451,7 +460,13 @@ mod tests {
         .unwrap();
         let module = engine.load_module(&wasm).unwrap();
         let linker = Linker::new(engine.engine());
-        let game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
+        let game = GameInstance::<TestInput, ()>::with_ram_limit(
+            &engine,
+            &module,
+            &linker,
+            test_ram_limit(),
+        )
+        .unwrap();
 
         runtime.load_game(game);
         let result = runtime.init_game();
@@ -479,7 +494,7 @@ mod tests {
 
         let session = crate::rollback::RollbackSession::<TestInput, ()>::new_local(
             2,
-            NETHERCORE_ZX_RAM_LIMIT,
+            test_ram_limit(),
         );
         runtime.set_session(session);
 
@@ -494,7 +509,7 @@ mod tests {
 
         let session = crate::rollback::RollbackSession::<TestInput, ()>::new_local(
             2,
-            NETHERCORE_ZX_RAM_LIMIT,
+            test_ram_limit(),
         );
         runtime.set_session(session);
 
@@ -566,7 +581,13 @@ mod tests {
         .unwrap();
         let module = engine.load_module(&wasm).unwrap();
         let linker = Linker::new(engine.engine());
-        let game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
+        let game = GameInstance::<TestInput, ()>::with_ram_limit(
+            &engine,
+            &module,
+            &linker,
+            test_ram_limit(),
+        )
+        .unwrap();
 
         runtime.load_game(game);
         let result = runtime.render();
@@ -601,7 +622,7 @@ mod tests {
 
         let session = crate::rollback::RollbackSession::<TestInput, ()>::new_local(
             2,
-            NETHERCORE_ZX_RAM_LIMIT,
+            test_ram_limit(),
         );
         runtime.set_session(session);
 
@@ -637,7 +658,7 @@ mod tests {
 
         let session = crate::rollback::RollbackSession::<TestInput, ()>::new_local(
             2,
-            NETHERCORE_ZX_RAM_LIMIT,
+            test_ram_limit(),
         );
         runtime.set_session(session);
 
@@ -666,7 +687,7 @@ mod tests {
 
         let session = crate::rollback::RollbackSession::<TestInput, ()>::new_local(
             2,
-            NETHERCORE_ZX_RAM_LIMIT,
+            test_ram_limit(),
         );
         runtime.set_session(session);
 

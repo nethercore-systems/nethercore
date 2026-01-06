@@ -88,7 +88,7 @@ pub(crate) struct PipelineEntry {
     pub bind_group_layout_textures: wgpu::BindGroupLayout,
 }
 
-// Note: Stencil state and color write mask are now obtained from PassConfig methods:
+// Note: Stencil state and color write mask are obtained from PassConfig methods:
 // - PassConfig::to_wgpu_stencil_state()
 // - PassConfig::color_write_mask()
 // - PassConfig depth_compare and depth_write fields

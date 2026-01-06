@@ -16,7 +16,7 @@
 pub mod state;
 
 use anyhow::{Context, Result};
-use nethercore_shared::NETHERCORE_ZX_RAM_LIMIT;
+use state::DEFAULT_RAM_LIMIT;
 use wasmtime::{Engine, ExternType, Instance, Linker, Module, Store, TypedFunc, Val};
 
 use crate::console::{ConsoleInput, ConsoleRollbackState};
@@ -121,14 +121,14 @@ pub struct GameInstance<I: ConsoleInput, S: Send + Default + 'static, R: Console
 }
 
 impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState> GameInstance<I, S, R> {
-    /// Create a new game instance from a module with default RAM limit (4MB)
+    /// Create a new game instance from a module with the fallback RAM limit (4MB)
     pub fn new(
         engine: &WasmEngine,
         module: &Module,
         linker: &Linker<WasmGameContext<I, S, R>>,
     ) -> Result<Self> {
-        // Default to 4MB (Nethercore ZX RAM limit)
-        Self::with_ram_limit(engine, module, linker, NETHERCORE_ZX_RAM_LIMIT)
+        // Fallback for tests and tooling; prefer using ConsoleSpecs::ram_limit.
+        Self::with_ram_limit(engine, module, linker, DEFAULT_RAM_LIMIT)
     }
 
     /// Create a new game instance from a module with specified RAM limit

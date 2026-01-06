@@ -7,20 +7,18 @@
 //!
 //! The library spawns separate player processes for each console type:
 //!
-//! 1. `ConsoleType` enum represents all compile-time known console types
-//! 2. `RomLoaderRegistry` manages ROM loaders for all console types
+//! 1. `ConsoleType` (from nethercore_shared) represents known console identifiers
+//! 2. `RomLoaderRegistry` manages ROM loaders for supported console types
 //! 3. `launch_player()` spawns the appropriate player binary
 //! 4. Each console has its own player binary (e.g., `nethercore-zx`)
 //!
 //! # Adding a New Console
 //!
 //! 1. Create player binary for the console (e.g., `nethercore-chroma`)
-//! 2. Add variant to `ConsoleType` enum (e.g., `Chroma`)
-//! 3. Update `as_str()` to return the manifest identifier (e.g., `"chroma"`)
-//! 4. Update `from_str()` to parse the identifier
-//! 5. Update `all()` to include the new variant
-//! 6. Update `player_binary_name()` to return the binary name
-//! 7. Register the console's RomLoader in `create_rom_loader_registry()`
+//! 2. Add a `ConsoleType` variant in nethercore_shared (e.g., `Chroma`)
+//! 3. Add a ROM format entry in nethercore_shared::rom_format
+//! 4. Update `player_binary_name()` to return the binary name
+//! 5. Register the console's RomLoader in `create_rom_loader_registry()`
 //!
 //! # Benefits
 //!
@@ -35,7 +33,13 @@ use std::process::Command;
 use anyhow::{Context, Result};
 
 use nethercore_core::library::{LocalGame, RomLoaderRegistry};
-use nethercore_shared::ZX_ROM_FORMAT;
+use nethercore_shared::{
+    ConsoleType,
+    ROM_FORMATS,
+    get_console_type_by_extension,
+    get_rom_format_by_console,
+    get_rom_format_by_console_type,
+};
 
 use zx_common::ZXRomLoader;
 
@@ -65,6 +69,54 @@ pub struct PlayerOptions {
     pub preview: bool,
     /// Initial asset to focus in preview mode
     pub preview_asset: Option<String>,
+}
+
+// =============================================================================
+// Console Type Helpers
+// =============================================================================
+
+fn supported_rom_extensions() -> Vec<&'static str> {
+    ROM_FORMATS.iter().map(|format| format.extension).collect()
+}
+
+fn supported_extension_list() -> String {
+    supported_rom_extensions()
+        .iter()
+        .map(|ext| format!(".{}", ext))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn supported_console_types() -> Vec<ConsoleType> {
+    ROM_FORMATS
+        .iter()
+        .filter_map(|format| ConsoleType::from_str(format.console_type))
+        .collect()
+}
+
+fn console_type_from_str(console_type: &str) -> Option<ConsoleType> {
+    get_rom_format_by_console_type(console_type)
+        .and_then(|format| ConsoleType::from_str(format.console_type))
+}
+
+fn console_type_from_extension(ext: &str) -> Option<ConsoleType> {
+    if ext == "wasm" {
+        let consoles = supported_console_types();
+        return if consoles.len() == 1 {
+            consoles.first().copied()
+        } else {
+            None
+        };
+    }
+
+    get_console_type_by_extension(ext)
+}
+
+fn player_binary_name(console_type: ConsoleType) -> &'static str {
+    match console_type {
+        ConsoleType::ZX => "nethercore-zx",
+        ConsoleType::Chroma => "nethercore-chroma",
+    }
 }
 
 // =============================================================================
@@ -126,11 +178,11 @@ impl PlayerLauncher {
 
     /// Create a launcher for a local game.
     pub fn with_game(game: &LocalGame) -> Result<Self> {
-        let _console_type = ConsoleType::parse(&game.console_type).ok_or_else(|| {
+        let _console_type = console_type_from_str(&game.console_type).ok_or_else(|| {
             anyhow::anyhow!(
                 "Unknown console type: '{}'. Supported consoles: {}",
                 game.console_type,
-                ConsoleType::all()
+                supported_console_types()
                     .iter()
                     .map(|c| c.as_str())
                     .collect::<Vec<_>>()
@@ -150,12 +202,12 @@ impl PlayerLauncher {
         let console_type = path
             .extension()
             .and_then(|e| e.to_str())
-            .and_then(ConsoleType::from_extension)
+            .and_then(console_type_from_extension)
             .ok_or_else(|| {
                 anyhow::anyhow!(
-                    "Unknown ROM file type: {}. Supported extensions: .{}",
+                    "Unknown ROM file type: {}. Supported extensions: {}",
                     path.display(),
-                    ZX_ROM_FORMAT.extension
+                    supported_extension_list()
                 )
             })?;
 
@@ -224,7 +276,7 @@ impl PlayerLauncher {
         match &self.target {
             LaunchTarget::Rom { path, console_type } => Ok((path.as_path(), *console_type)),
             LaunchTarget::Game(game) => {
-                let console_type = ConsoleType::parse(&game.console_type).ok_or_else(|| {
+                let console_type = console_type_from_str(&game.console_type).ok_or_else(|| {
                     anyhow::anyhow!("Unknown console type: '{}'", game.console_type)
                 })?;
                 Ok((game.rom_path.as_path(), console_type))
@@ -283,84 +335,7 @@ impl PlayerLauncher {
     }
 }
 
-/// Enum representing all available console types.
-///
-/// Uses static dispatch for zero-cost abstraction.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ConsoleType {
-    /// Nethercore ZX (PS1/N64 aesthetic)
-    ZX,
-    // Future: Chroma, Y, X, etc.
-}
-
-impl ConsoleType {
-    /// Get the string identifier for this console type.
-    ///
-    /// This matches the `console_type` field in game manifests.
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            ConsoleType::ZX => ZX_ROM_FORMAT.console_type,
-        }
-    }
-
-    /// Parse a console type from a string.
-    ///
-    /// Returns `None` if the string doesn't match any known console type.
-    pub fn parse(s: &str) -> Option<Self> {
-        if s == ZX_ROM_FORMAT.console_type {
-            return Some(ConsoleType::ZX);
-        }
-        // Future: if s == CHROMA_ROM_FORMAT.console_type { return Some(ConsoleType::Chroma); }
-        None
-    }
-
-    /// Get the ROM file extension for this console type.
-    ///
-    /// This is used when creating ROM files to determine the file extension.
-    ///
-    /// # Returns
-    ///
-    /// - `"nczx"` for Nethercore ZX
-    /// - Future: `"ncc"` for Nethercore Chroma, etc.
-    #[allow(dead_code)]
-    pub fn rom_extension(&self) -> &'static str {
-        match self {
-            ConsoleType::ZX => ZX_ROM_FORMAT.extension,
-        }
-    }
-
-    /// Parse console type from ROM file extension.
-    ///
-    /// This allows detecting the console type from a ROM file's extension
-    /// without needing to read the file contents.
-    ///
-    /// # Returns
-    ///
-    /// - `Some(ConsoleType::ZX)` for `.nczx` files
-    /// - `None` for unknown extensions
-    pub fn from_extension(ext: &str) -> Option<Self> {
-        if ext == ZX_ROM_FORMAT.extension {
-            return Some(ConsoleType::ZX);
-        }
-        // Future: if ext == CHROMA_ROM_FORMAT.extension { return Some(ConsoleType::Chroma); }
-        None
-    }
-
-    /// Get all available console types.
-    pub fn all() -> &'static [ConsoleType] {
-        &[ConsoleType::ZX]
-    }
-
-    /// Get the player binary name for this console type.
-    ///
-    /// This is the name of the executable that plays games for this console.
-    pub fn player_binary_name(&self) -> &'static str {
-        match self {
-            ConsoleType::ZX => "nethercore-zx",
-            // Future: ConsoleType::Chroma => "nethercore-chroma",
-        }
-    }
-}
+/// Console type identifiers come from nethercore_shared.
 
 // =============================================================================
 // Player Launching
@@ -375,7 +350,7 @@ impl ConsoleType {
 /// Returns the full path to the player binary, or just the binary name
 /// if it should be found in PATH.
 pub fn find_player_binary(console_type: ConsoleType) -> PathBuf {
-    let binary_name = console_type.player_binary_name();
+    let binary_name = player_binary_name(console_type);
     let exe_name = if cfg!(windows) {
         format!("{}.exe", binary_name)
     } else {
@@ -557,11 +532,11 @@ pub fn launch_game_by_id(game: &LocalGame) -> Result<()> {
 ///
 /// Used by the library UI for multiplayer games.
 pub fn launch_game_by_id_with_options(game: &LocalGame, options: &PlayerOptions) -> Result<()> {
-    let console_type = ConsoleType::parse(&game.console_type).ok_or_else(|| {
+    let console_type = console_type_from_str(&game.console_type).ok_or_else(|| {
         anyhow::anyhow!(
             "Unknown console type: '{}'. Supported consoles: {}",
             game.console_type,
-            ConsoleType::all()
+            supported_console_types()
                 .iter()
                 .map(|c| c.as_str())
                 .collect::<Vec<_>>()
@@ -581,11 +556,11 @@ pub fn run_game_by_id(game: &LocalGame) -> Result<()> {
 
 /// Run a game by ID with options and wait for it to finish.
 pub fn run_game_by_id_with_options(game: &LocalGame, options: &PlayerOptions) -> Result<()> {
-    let console_type = ConsoleType::parse(&game.console_type).ok_or_else(|| {
+    let console_type = console_type_from_str(&game.console_type).ok_or_else(|| {
         anyhow::anyhow!(
             "Unknown console type: '{}'. Supported consoles: {}",
             game.console_type,
-            ConsoleType::all()
+            supported_console_types()
                 .iter()
                 .map(|c| c.as_str())
                 .collect::<Vec<_>>()
@@ -604,12 +579,12 @@ pub fn launch_game_from_path(path: &Path) -> Result<()> {
     let console_type = path
         .extension()
         .and_then(|e| e.to_str())
-        .and_then(ConsoleType::from_extension)
+        .and_then(console_type_from_extension)
         .ok_or_else(|| {
             anyhow::anyhow!(
-                "Unknown ROM file type: {}. Supported extensions: .{}",
+                "Unknown ROM file type: {}. Supported extensions: {}",
                 path.display(),
-                ZX_ROM_FORMAT.extension
+                supported_extension_list()
             )
         })?;
 
@@ -629,12 +604,12 @@ pub fn run_game_from_path_with_options(path: &Path, options: &PlayerOptions) -> 
     let console_type = path
         .extension()
         .and_then(|e| e.to_str())
-        .and_then(ConsoleType::from_extension)
+        .and_then(console_type_from_extension)
         .ok_or_else(|| {
             anyhow::anyhow!(
-                "Unknown ROM file type: {}. Supported extensions: .{}",
+                "Unknown ROM file type: {}. Supported extensions: {}",
                 path.display(),
-                ZX_ROM_FORMAT.extension
+                supported_extension_list()
             )
         })?;
 
@@ -716,20 +691,23 @@ impl ConsoleRegistry {
     /// This runs the library UI in the current process.
     /// Games are launched as separate player processes.
     pub fn launch_library(&self) -> Result<()> {
-        // Library is now console-agnostic - it shows all games and spawns appropriate players
+        // Library is console-agnostic - it shows all games and spawns appropriate players
         crate::app::run().map_err(|e| anyhow::anyhow!("Library error: {}", e))
     }
 
     /// Get all available console type strings.
     #[allow(dead_code)]
     pub fn available_consoles(&self) -> Vec<&'static str> {
-        ConsoleType::all().iter().map(|ct| ct.as_str()).collect()
+        supported_console_types()
+            .iter()
+            .map(|ct| ct.as_str())
+            .collect()
     }
 
     /// Check if a console type is supported.
     #[allow(dead_code)]
     pub fn supports(&self, console_type: &str) -> bool {
-        ConsoleType::parse(console_type).is_some()
+        console_type_from_str(console_type).is_some()
     }
 }
 
@@ -749,21 +727,21 @@ mod tests {
     }
 
     #[test]
-    fn test_console_type_parse_valid() {
-        assert_eq!(ConsoleType::parse("zx"), Some(ConsoleType::ZX));
+    fn test_console_type_from_str_supported() {
+        assert_eq!(console_type_from_str("zx"), Some(ConsoleType::ZX));
     }
 
     #[test]
-    fn test_console_type_parse_invalid() {
-        assert_eq!(ConsoleType::parse("invalid"), None);
-        assert_eq!(ConsoleType::parse(""), None);
-        assert_eq!(ConsoleType::parse("ZX"), None); // Case-sensitive
-        assert_eq!(ConsoleType::parse("chroma"), None); // Not yet implemented
+    fn test_console_type_from_str_invalid() {
+        assert_eq!(console_type_from_str("invalid"), None);
+        assert_eq!(console_type_from_str(""), None);
+        assert_eq!(console_type_from_str("ZX"), None); // Case-sensitive
+        assert_eq!(console_type_from_str("chroma"), None); // No ROM format yet
     }
 
     #[test]
-    fn test_console_type_all() {
-        let all = ConsoleType::all();
+    fn test_supported_console_types() {
+        let all = supported_console_types();
         assert_eq!(all.len(), 1);
         assert!(all.contains(&ConsoleType::ZX));
     }
@@ -785,7 +763,7 @@ mod tests {
     fn test_registry_supports_invalid() {
         let registry = ConsoleRegistry::new();
         assert!(!registry.supports("invalid"));
-        assert!(!registry.supports("chroma")); // Not yet implemented
+        assert!(!registry.supports("chroma")); // No ROM format yet
         assert!(!registry.supports(""));
         assert!(!registry.supports("ZX")); // Case-sensitive
     }
@@ -805,27 +783,27 @@ mod tests {
 
     #[test]
     fn test_console_type_player_binary_name() {
-        assert_eq!(ConsoleType::ZX.player_binary_name(), "nethercore-zx");
-    }
-
-    #[test]
-    fn test_console_type_rom_extension() {
-        assert_eq!(ConsoleType::ZX.rom_extension(), ZX_ROM_FORMAT.extension);
+        assert_eq!(player_binary_name(ConsoleType::ZX), "nethercore-zx");
     }
 
     #[test]
     fn test_console_type_from_extension_valid() {
         assert_eq!(
-            ConsoleType::from_extension(ZX_ROM_FORMAT.extension),
+            console_type_from_extension("nczx"),
             Some(ConsoleType::ZX)
         );
     }
 
     #[test]
+    fn test_console_type_from_extension_wasm_single_console() {
+        assert_eq!(console_type_from_extension("wasm"), Some(ConsoleType::ZX));
+    }
+
+    #[test]
     fn test_console_type_from_extension_invalid() {
-        assert_eq!(ConsoleType::from_extension("invalid"), None);
-        assert_eq!(ConsoleType::from_extension(""), None);
-        assert_eq!(ConsoleType::from_extension("NCZX"), None); // Case-sensitive
-        assert_eq!(ConsoleType::from_extension("ncc"), None); // Chroma not yet implemented
+        assert_eq!(console_type_from_extension("invalid"), None);
+        assert_eq!(console_type_from_extension(""), None);
+        assert_eq!(console_type_from_extension("NCZX"), None); // Case-sensitive
+        assert_eq!(console_type_from_extension("ncc"), None); // No ROM format yet
     }
 }

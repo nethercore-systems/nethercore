@@ -140,9 +140,10 @@ impl<C: Console, A: ConsoleApp<C>> ApplicationHandler for AppEventHandler<C, A> 
         if let Some(app) = &mut self.app {
             // Create window (don't set control flow here - about_to_wait will do it)
             // Note: minimum size is set by the app in on_window_created() based on game resolution
+            let (width, height) = C::specs().resolution;
             let window_attributes = Window::default_attributes()
-                .with_title("Nethercore")
-                .with_inner_size(winit::dpi::PhysicalSize::new(960u32, 540u32));
+                .with_title(C::specs().name)
+                .with_inner_size(winit::dpi::PhysicalSize::new(width, height));
 
             match event_loop.create_window(window_attributes) {
                 Ok(window) => {
