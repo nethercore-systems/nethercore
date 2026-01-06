@@ -62,6 +62,8 @@ pub mod error_codes {
     pub const VALIDATION_ERROR: &str = "VALIDATION_ERROR";
     /// Resource already exists (e.g., duplicate username).
     pub const CONFLICT: &str = "CONFLICT";
+    /// Too many requests in a short period of time.
+    pub const RATE_LIMIT_EXCEEDED: &str = "RATE_LIMIT_EXCEEDED";
     /// Storage/upload operation failed.
     pub const UPLOAD_FAILED: &str = "UPLOAD_FAILED";
     /// Database query or connection error.

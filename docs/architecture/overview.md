@@ -453,8 +453,9 @@ When reviewing code:
 ## Related Documentation
 
 - [FFI Reference](./ffi.md) - Public WebAssembly host function API
-- [Rendering Architecture](./rendering-architecture.md) - Graphics system deep dive
-- [Nethercore ZX API](./nethercore-zx.md) - ZX console-specific features
+- [NCHS Protocol](./nchs.md) - Pre-GGRS handshake and session negotiation
+- [ZX Rendering Architecture](./zx/rendering.md) - Graphics system deep dive
+- [ROM Format](./rom-format.md) - ROM/cart format specification
 
 ## Questions?
 
