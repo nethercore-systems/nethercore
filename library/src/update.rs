@@ -37,6 +37,7 @@ pub struct UpdateInfo {
     pub local_version: String,
     pub remote_version: String,
     pub download_size: i64,
+    pub rom_filename: String,
 }
 
 /// Result of checking for an update
@@ -114,12 +115,20 @@ async fn check_for_update_async(game: &LocalGame) -> UpdateCheckResult {
     // Note: This doesn't handle semantic versioning properly, but it's sufficient
     // for our use case where versions are sequential
     if remote_version != game.version && !game.version.is_empty() {
+        let rom_filename = game
+            .rom_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("rom.wasm")
+            .to_string();
+
         UpdateCheckResult::UpdateAvailable(UpdateInfo {
             game_id: game.id.clone(),
             game_title: game.title.clone(),
             local_version: game.version.clone(),
             remote_version,
             download_size: version_info.rom_size,
+            rom_filename,
         })
     } else {
         UpdateCheckResult::UpToDate
@@ -196,7 +205,7 @@ async fn download_update_async(update: &UpdateInfo, data_dir: &Path) -> Result<(
 
     // 3. Write the ROM file to the game directory
     let game_dir = data_dir.join("games").join(&update.game_id);
-    let rom_path = game_dir.join("rom.nczx"); // TODO: Support other console types
+    let rom_path = game_dir.join(&update.rom_filename);
 
     std::fs::write(&rom_path, &rom_bytes).context("Failed to write ROM file")?;
 

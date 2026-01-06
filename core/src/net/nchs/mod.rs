@@ -480,7 +480,7 @@ mod tests {
             // Poll host
             match host.poll() {
                 NchsEvent::PlayerJoined { handle, .. } => {
-                    log::info!("Host: Player {} joined", handle);
+                    tracing::info!("Host: Player {} joined", handle);
                 }
                 _ => {}
             }
@@ -488,12 +488,12 @@ mod tests {
             // Poll guest
             match guest.poll() {
                 NchsEvent::LobbyUpdated(lobby) => {
-                    log::info!("Guest: Lobby updated, {} players", lobby.players.len());
+                    tracing::info!("Guest: Lobby updated, {} players", lobby.players.len());
                     guest_accepted = true;
                     break;
                 }
                 NchsEvent::PlayerJoined { handle, .. } => {
-                    log::info!("Guest: Accepted as player {}", handle);
+                    tracing::info!("Guest: Accepted as player {}", handle);
                     guest_accepted = true;
                     break;
                 }

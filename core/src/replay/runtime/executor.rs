@@ -8,6 +8,7 @@ use crate::replay::script::{
 };
 use crate::replay::types::{AssertionResult, DebugValueData, Snapshot};
 use hashbrown::HashMap;
+use std::collections::BTreeMap;
 
 /// Script executor state
 pub struct ScriptExecutor {
@@ -138,11 +139,14 @@ impl ScriptExecutor {
         // Compute delta
         let delta = compute_delta(&pre_values, &post_values);
 
+        let pre_ordered = map_to_btree(pre_values);
+        let post_ordered = map_to_btree(post_values.clone());
+
         self.snapshots.push(Snapshot {
             frame: self.current_frame,
             input: input_string,
-            pre: pre_values,
-            post: post_values.clone(),
+            pre: pre_ordered,
+            post: post_ordered,
             delta,
         });
 
@@ -278,8 +282,8 @@ impl ScriptExecutor {
 fn compute_delta(
     pre: &HashMap<String, DebugValueData>,
     post: &HashMap<String, DebugValueData>,
-) -> Option<HashMap<String, String>> {
-    let mut delta = HashMap::new();
+) -> Option<BTreeMap<String, String>> {
+    let mut delta = BTreeMap::new();
 
     for (name, post_value) in post {
         if let Some(pre_value) = pre.get(name) {
@@ -297,7 +301,7 @@ fn compute_delta(
                     Some(format!("{:.2}", b - a))
                 }
                 (DebugValueData::Bool(a), DebugValueData::Bool(b)) if a != b => {
-                    Some(format!("{} → {}", a, b))
+                    Some(format!("{} -> {}", a, b))
                 }
                 _ => None,
             };
@@ -313,6 +317,12 @@ fn compute_delta(
     } else {
         Some(delta)
     }
+}
+
+fn map_to_btree(
+    values: HashMap<String, DebugValueData>,
+) -> BTreeMap<String, DebugValueData> {
+    values.into_iter().collect()
 }
 
 /// Format the expected value for error messages
@@ -771,7 +781,7 @@ mod tests {
         assert!(delta.contains_key("$x"));
         assert!(!delta.contains_key("$y")); // No change
         assert!(delta.contains_key("$grounded"));
-        assert!(delta.get("$grounded").unwrap().contains("→"));
+        assert_eq!(delta.get("$grounded").unwrap(), "true -> false");
     }
 
     #[test]

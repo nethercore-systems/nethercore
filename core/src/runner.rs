@@ -236,7 +236,7 @@ impl<C: Console> ConsoleRunner<C> {
         // Create runtime (takes ownership of console)
         let mut runtime = Runtime::new(console);
         runtime.load_game(game);
-        runtime.set_tick_rate(self.specs.tick_rates[self.specs.default_tick_rate]);
+        runtime.set_tick_rate(session.config().fps as u32);
 
         // Create and set audio backend for the runtime
         let audio = runtime.console().create_audio()?;

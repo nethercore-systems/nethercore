@@ -3,7 +3,7 @@
 //! Converts binary replays back to TOML script format.
 
 use super::compiler::InputLayout;
-use super::parser::{FrameEntry, InputValue, ReplayScript};
+use super::ast::{FrameEntry, InputValue, ReplayScript};
 use crate::replay::types::Replay;
 
 /// Decompile a binary replay to a script
@@ -124,7 +124,7 @@ fn console_name(id: u8) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::replay::script::parser::StructuredInput;
+    use crate::replay::script::StructuredInput;
     use crate::replay::types::{InputSequence, ReplayFlags, ReplayHeader};
 
     /// Mock input layout for testing

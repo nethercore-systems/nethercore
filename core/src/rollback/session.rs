@@ -343,7 +343,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>
             num_players: session_start.player_count as usize,
             max_prediction_frames: nchs_config.max_rollback as usize,
             input_delay: nchs_config.input_delay as usize,
-            fps: 60, // TODO: Get from tick_rate if available
+            fps: session_start.tick_rate.as_hz() as usize,
             disconnect_timeout: nchs_config.disconnect_timeout_ms as u64,
             disconnect_notify_start: nchs_config.disconnect_timeout_ms as u64 / 2,
         };
@@ -552,18 +552,18 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>
                     total,
                     count,
                 } => {
-                    log::debug!("Synchronizing: {}/{}", count, total);
+                    tracing::debug!("Synchronizing: {}/{}", count, total);
                 }
                 GgrsEvent::Synchronized { addr: _ } => {
                     // Find the player handle for this address
                     // For now, we emit a generic synchronized event
-                    log::info!("Peer synchronized");
+                    tracing::info!("Peer synchronized");
                     // We don't have a direct mapping from address to player handle
                     // in the current design, so we use a placeholder
                     session_events.push(SessionEvent::Synchronized { player_handle: 0 });
                 }
                 GgrsEvent::Disconnected { addr: _ } => {
-                    log::warn!("Peer disconnected");
+                    tracing::warn!("Peer disconnected");
                     // Mark all remote players as disconnected (conservative approach)
                     for (i, stats) in self.network_stats.iter_mut().enumerate() {
                         if !self.local_players.contains(&i) {
@@ -579,14 +579,14 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>
                 } => {
                     // disconnect_timeout is u128 (milliseconds)
                     let timeout_ms = disconnect_timeout as u64;
-                    log::warn!("Network interrupted, disconnect in {}ms", timeout_ms);
+                    tracing::warn!("Network interrupted, disconnect in {}ms", timeout_ms);
                     session_events.push(SessionEvent::NetworkInterrupted {
                         player_handle: 0,
                         disconnect_timeout_ms: timeout_ms,
                     });
                 }
                 GgrsEvent::NetworkResumed { addr: _ } => {
-                    log::info!("Network resumed");
+                    tracing::info!("Network resumed");
                     // Mark remote players as connected again
                     for (i, stats) in self.network_stats.iter_mut().enumerate() {
                         if !self.local_players.contains(&i) {
@@ -597,7 +597,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>
                     session_events.push(SessionEvent::NetworkResumed { player_handle: 0 });
                 }
                 GgrsEvent::WaitRecommendation { skip_frames } => {
-                    log::debug!("Wait recommendation: skip {} frames", skip_frames);
+                    tracing::debug!("Wait recommendation: skip {} frames", skip_frames);
                     session_events.push(SessionEvent::TimeSync {
                         frames_to_skip: skip_frames as usize,
                     });
@@ -608,7 +608,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>
                     remote_checksum,
                     addr: _,
                 } => {
-                    log::error!(
+                    tracing::error!(
                         "DESYNC at frame {}: local={:#x}, remote={:#x}",
                         frame,
                         local_checksum,
@@ -632,7 +632,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>
         if frames_ahead >= FRAME_ADVANTAGE_WARNING_THRESHOLD
             && self.last_frame_advantage < FRAME_ADVANTAGE_WARNING_THRESHOLD
         {
-            log::debug!("Frame advantage warning: {} frames ahead", frames_ahead);
+            tracing::debug!("Frame advantage warning: {} frames ahead", frames_ahead);
             session_events.push(SessionEvent::FrameAdvantageWarning { frames_ahead });
         }
         self.last_frame_advantage = frames_ahead;

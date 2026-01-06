@@ -47,6 +47,8 @@ pub struct ScreenCapture {
     /// GIF settings
     gif_fps: u32,
     gif_max_seconds: u32,
+    /// Source FPS used for frame skipping
+    source_fps: u32,
     /// Game name for filename prefixes
     game_name: String,
     /// Console type for screenshot signing (e.g., "zx", "chroma")
@@ -66,6 +68,8 @@ struct GifRecorder {
     frame_skip_counter: u32,
     /// Target FPS for recording
     target_fps: u32,
+    /// Source FPS for frame skipping
+    source_fps: u32,
     /// Game name for filename prefix
     game_name: String,
 }
@@ -96,6 +100,7 @@ impl ScreenCapture {
             save_receiver: None,
             gif_fps,
             gif_max_seconds,
+            source_fps: 60,
             game_name,
             console_type,
         }
@@ -109,6 +114,11 @@ impl ScreenCapture {
     /// Update the console type (e.g., after loading a new game).
     pub fn set_console_type(&mut self, console_type: String) {
         self.console_type = console_type;
+    }
+
+    /// Update the source FPS used for GIF frame skipping.
+    pub fn set_source_fps(&mut self, fps: u32) {
+        self.source_fps = fps.max(1);
     }
 
     /// Request a screenshot to be taken on the next frame.
@@ -130,11 +140,13 @@ impl ScreenCapture {
 
     /// Start GIF recording.
     fn start_recording(&mut self, width: u32, height: u32) {
+        let target_fps = self.gif_fps.max(1);
+        let source_fps = self.source_fps.max(1);
         tracing::info!(
             "GIF recording started ({}x{}, {}fps)",
             width,
             height,
-            self.gif_fps
+            target_fps
         );
         self.gif_recorder = Some(GifRecorder {
             frames: Vec::new(),
@@ -142,7 +154,8 @@ impl ScreenCapture {
             height,
             start_time: std::time::Instant::now(),
             frame_skip_counter: 0,
-            target_fps: self.gif_fps,
+            target_fps,
+            source_fps,
             game_name: self.game_name.clone(),
         });
     }
@@ -183,7 +196,6 @@ impl ScreenCapture {
         }
         if let Some(ref recorder) = self.gif_recorder {
             // Check if we need to capture a frame based on target FPS
-            // Assuming game runs at 60fps, we capture every (60/target_fps) frames
             return recorder.frame_skip_counter == 0;
         }
         false
@@ -213,7 +225,7 @@ impl ScreenCapture {
 
         // Handle GIF recording
         if let Some(ref mut recorder) = self.gif_recorder {
-            // Frame skip logic for target FPS (assuming 60fps game)
+            // Frame skip logic for target FPS based on source FPS
             if recorder.frame_skip_counter == 0 {
                 recorder.frames.push(pixels);
 
@@ -226,8 +238,8 @@ impl ScreenCapture {
                 }
             }
 
-            // Update frame skip counter (60fps game -> 30fps GIF = skip every other frame)
-            let skip_interval = 60 / recorder.target_fps;
+            // Update frame skip counter (e.g., 60fps source -> 30fps GIF = skip every other frame)
+            let skip_interval = (recorder.source_fps / recorder.target_fps).max(1);
             recorder.frame_skip_counter = (recorder.frame_skip_counter + 1) % skip_interval;
         }
     }
@@ -478,7 +490,7 @@ fn save_gif(recorder: GifRecorder) -> Result<PathBuf> {
         .context("Failed to set GIF repeat")?;
 
     // Calculate frame delay (in centiseconds, 100ths of a second)
-    // For 30fps: 1000ms / 30 = 33.33ms per frame = 3.33 centiseconds ≈ 3
+    // For 30fps: 1000ms / 30 = 33.33ms per frame = 3.33 centiseconds ≁E3
     let frame_delay = (100 / recorder.target_fps) as u16;
 
     for frame_pixels in recorder.frames {

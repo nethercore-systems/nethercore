@@ -116,7 +116,7 @@ impl NchsSocket {
             .local_addr()
             .map_err(|e| NchsSocketError::Bind(format!("Failed to get local addr: {}", e)))?;
 
-        log::debug!("NchsSocket bound to {}", local_addr);
+        tracing::debug!(port = local_addr.port(), "NchsSocket bound");
 
         Ok(Self {
             socket,
@@ -170,7 +170,7 @@ impl NchsSocket {
             .send_to(&bytes, target)
             .map_err(|e| NchsSocketError::Send(e.to_string()))?;
 
-        log::trace!("Sent {:?} to {}", msg, target);
+        tracing::trace!(?msg, "Sent NCHS message");
         Ok(())
     }
 
@@ -211,11 +211,11 @@ impl NchsSocket {
 
                     match NchsMessage::from_bytes(data) {
                         Ok(msg) => {
-                            log::trace!("Received {:?} from {}", msg, from);
+                            tracing::trace!(?msg, "Received NCHS message");
                             self.recv_queue.push_back((from, msg));
                         }
                         Err(e) => {
-                            log::warn!("Failed to decode message from {}: {}", from, e);
+                            tracing::warn!(error = %e, "Failed to decode NCHS message");
                         }
                     }
                 }
@@ -224,7 +224,7 @@ impl NchsSocket {
                     break;
                 }
                 Err(e) => {
-                    log::warn!("Receive error: {}", e);
+                    tracing::warn!(error = %e, "Receive error");
                     break;
                 }
             }

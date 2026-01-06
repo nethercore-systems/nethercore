@@ -108,7 +108,7 @@ impl GuestStateMachine {
         let socket = NchsSocket::bind_any()
             .map_err(|e| NchsError::BindFailed(e.to_string()))?;
 
-        log::info!("NCHS Guest connecting to {} from port {}", host, socket.port());
+        tracing::info!(port = socket.port(), "NCHS Guest connecting");
 
         let mut guest = Self {
             state: GuestState::Idle,
@@ -177,7 +177,7 @@ impl GuestStateMachine {
         self.state = GuestState::Joining;
         self.join_sent_at = Some(Instant::now());
 
-        log::debug!("Sent JoinRequest to {}", self.host_addr);
+        tracing::debug!("Sent JoinRequest");
 
         Ok(())
     }
@@ -195,7 +195,7 @@ impl GuestStateMachine {
             .send_to(self.host_addr, &msg)
             .map_err(|e| NchsError::NetworkError(e.to_string()))?;
 
-        log::debug!("Set ready: {}", ready);
+        tracing::debug!(ready, "Set ready");
 
         Ok(())
     }
@@ -261,7 +261,7 @@ impl GuestStateMachine {
         match msg {
             NchsMessage::JoinAccept(accept) => {
                 if from != self.host_addr {
-                    log::warn!("JoinAccept from non-host: {}", from);
+                    tracing::warn!("JoinAccept from non-host");
                     return None;
                 }
                 self.handle_accept(accept)
@@ -294,7 +294,7 @@ impl GuestStateMachine {
                 None
             }
             _ => {
-                log::warn!("Unexpected message from {}: {:?}", from, msg);
+                tracing::warn!(?msg, "Unexpected message from peer");
                 None
             }
         }
@@ -310,7 +310,7 @@ impl GuestStateMachine {
         self.lobby = Some(accept.lobby);
         self.state = GuestState::Lobby;
 
-        log::info!("Joined lobby as player {}", accept.player_handle);
+        tracing::info!("Joined lobby as player {}", accept.player_handle);
 
         Some(GuestEvent::Accepted {
             handle: accept.player_handle,
@@ -320,11 +320,11 @@ impl GuestStateMachine {
     /// Handle SessionStart
     fn handle_session_start(&mut self, start: SessionStart) -> Option<GuestEvent> {
         if self.state != GuestState::Lobby {
-            log::warn!("SessionStart received in wrong state: {:?}", self.state);
+            tracing::warn!("SessionStart received in wrong state: {:?}", self.state);
             return None;
         }
 
-        log::info!(
+        tracing::info!(
             "Session starting: {} players, seed {:016x}",
             start.player_count,
             start.random_seed
@@ -370,7 +370,7 @@ impl GuestStateMachine {
             let msg = NchsMessage::PunchHello(hello);
 
             for (handle, addr) in &self.peers_to_punch {
-                log::debug!("Sending PunchHello to player {} at {}", handle, addr);
+                tracing::debug!(player = *handle, "Sending PunchHello");
                 let _ = self.socket.send_to(*addr, &msg);
             }
         }
@@ -387,7 +387,7 @@ impl GuestStateMachine {
             // Retry every PUNCH_RETRY_INTERVAL
             if elapsed.as_millis() % PUNCH_RETRY_INTERVAL.as_millis() < 50 {
                 if retry_count > 0 {
-                    log::debug!("Punch retry #{}", retry_count);
+                    tracing::debug!("Punch retry #{}", retry_count);
                     self.send_punch_hellos();
                 }
             }
@@ -407,11 +407,11 @@ impl GuestStateMachine {
             .any(|(h, _)| *h == hello.sender_handle);
 
         if !is_expected {
-            log::warn!("Unexpected PunchHello from {} (handle {})", from, hello.sender_handle);
+            tracing::warn!(player = hello.sender_handle, "Unexpected PunchHello");
             return None;
         }
 
-        log::debug!("Received PunchHello from player {} at {}", hello.sender_handle, from);
+        tracing::debug!(player = hello.sender_handle, "Received PunchHello");
 
         // Send PunchAck
         if let Some(our_handle) = self.player_handle {
@@ -429,18 +429,18 @@ impl GuestStateMachine {
     }
 
     /// Handle PunchAck from a peer
-    fn handle_punch_ack(&mut self, from: SocketAddr, ack: PunchAck) -> Option<GuestEvent> {
+    fn handle_punch_ack(&mut self, _from: SocketAddr, ack: PunchAck) -> Option<GuestEvent> {
         if self.state != GuestState::Punching {
             return None;
         }
 
         // Validate nonce
         if ack.nonce != self.punch_nonce {
-            log::warn!("Invalid PunchAck nonce from {}", from);
+            tracing::warn!("Invalid PunchAck nonce");
             return None;
         }
 
-        log::debug!("Received PunchAck from player {} at {}", ack.sender_handle, from);
+        tracing::debug!(player = ack.sender_handle, "Received PunchAck");
 
         // Mark as punched
         self.punched_peers.insert(ack.sender_handle);

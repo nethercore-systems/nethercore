@@ -4,6 +4,7 @@
 
 mod compile;
 mod decompile;
+mod layout;
 mod run;
 mod validate;
 

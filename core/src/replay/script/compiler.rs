@@ -2,10 +2,11 @@
 //!
 //! Converts parsed TOML scripts into executable form.
 
-use super::parser::{
+use super::ast::{
     ActionParamValue, AssertCondition, AssertValue, CompareOp, InputValue, ReplayScript,
     StructuredInput,
 };
+use super::validation::validate_script;
 use crate::replay::types::*;
 use hashbrown::HashMap;
 
@@ -116,6 +117,8 @@ impl<'a> Compiler<'a> {
 
     /// Compile a parsed script into executable form
     pub fn compile(&self, script: &ReplayScript) -> Result<CompiledScript, CompileError> {
+        validate_script(script).map_err(CompileError::Validation)?;
+
         // Build frame map for sparse-to-dense conversion
         let max_frame = script.max_frame();
         let mut frame_inputs: HashMap<u64, Vec<Option<InputValue>>> = HashMap::new();
@@ -217,6 +220,8 @@ impl<'a> Compiler<'a> {
 /// Compilation errors
 #[derive(Debug)]
 pub enum CompileError {
+    /// Script validation failed
+    Validation(super::validation::ValidationError),
     /// Invalid assertion syntax
     InvalidAssertion(String),
     /// Unknown button name
@@ -228,6 +233,7 @@ pub enum CompileError {
 impl std::fmt::Display for CompileError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            CompileError::Validation(e) => write!(f, "Validation error: {}", e),
             CompileError::InvalidAssertion(e) => write!(f, "Invalid assertion: {}", e),
             CompileError::UnknownButton(b) => write!(f, "Unknown button: {}", b),
             CompileError::ConsoleMismatch { expected, got } => {
@@ -242,7 +248,7 @@ impl std::error::Error for CompileError {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::super::parser::FrameEntry;
+    use super::super::ast::FrameEntry;
 
     /// Mock input layout for testing
     struct MockLayout;
@@ -395,7 +401,7 @@ mod tests {
 
     #[test]
     fn test_compile_with_actions() {
-        use super::super::parser::ActionParamValue;
+        use super::ActionParamValue;
 
         let mut params = HashMap::new();
         params.insert("level".to_string(), ActionParamValue::Int(2));

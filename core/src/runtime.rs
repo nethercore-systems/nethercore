@@ -241,7 +241,7 @@ impl<C: Console> Runtime<C> {
                 // Check CPU budget
                 let tick_time = tick_start.elapsed();
                 if tick_time > self.config.cpu_budget {
-                    log::warn!(
+                    tracing::warn!(
                         "Tick took {:?}, exceeds budget of {:?}",
                         tick_time,
                         self.config.cpu_budget
@@ -274,7 +274,7 @@ impl<C: Console> Runtime<C> {
                 // Check CPU budget
                 let tick_time = tick_start.elapsed();
                 if tick_time > self.config.cpu_budget {
-                    log::warn!(
+                    tracing::warn!(
                         "Tick took {:?}, exceeds budget of {:?}",
                         tick_time,
                         self.config.cpu_budget

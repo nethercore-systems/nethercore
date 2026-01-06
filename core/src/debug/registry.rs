@@ -79,7 +79,7 @@ impl DebugRegistry {
     /// Begin a new group for organizing values
     pub fn group_begin(&mut self, name: &str) {
         if self.finalized {
-            log::warn!("debug_group_begin called after init - ignored");
+            tracing::warn!("debug_group_begin called after init - ignored");
             return;
         }
         self.group_stack.push(name.to_string());
@@ -88,11 +88,11 @@ impl DebugRegistry {
     /// End the current group
     pub fn group_end(&mut self) {
         if self.finalized {
-            log::warn!("debug_group_end called after init - ignored");
+            tracing::warn!("debug_group_end called after init - ignored");
             return;
         }
         if self.group_stack.pop().is_none() {
-            log::warn!("debug_group_end called without matching begin");
+            tracing::warn!("debug_group_end called without matching begin");
         }
     }
 
@@ -121,12 +121,12 @@ impl DebugRegistry {
     /// Call `action_param_*` methods to add parameters, then `action_end` to finish.
     pub fn action_begin(&mut self, name: &str, func_name: &str) {
         if self.finalized {
-            log::warn!("debug_action_begin called after init - ignored");
+            tracing::warn!("debug_action_begin called after init - ignored");
             return;
         }
 
         if self.pending_action.is_some() {
-            log::warn!("debug_action_begin called while another action is pending - ignored");
+            tracing::warn!("debug_action_begin called while another action is pending - ignored");
             return;
         }
 
@@ -148,7 +148,7 @@ impl DebugRegistry {
     /// Add an i32 parameter to the pending action
     pub fn action_param_i32(&mut self, name: &str, default_value: i32) {
         if self.finalized {
-            log::warn!("debug_action_param_i32 called after init - ignored");
+            tracing::warn!("debug_action_param_i32 called after init - ignored");
             return;
         }
 
@@ -159,14 +159,14 @@ impl DebugRegistry {
                 default_value: ActionParamValue::I32(default_value),
             });
         } else {
-            log::warn!("debug_action_param_i32 called without action_begin - ignored");
+            tracing::warn!("debug_action_param_i32 called without action_begin - ignored");
         }
     }
 
     /// Add an f32 parameter to the pending action
     pub fn action_param_f32(&mut self, name: &str, default_value: f32) {
         if self.finalized {
-            log::warn!("debug_action_param_f32 called after init - ignored");
+            tracing::warn!("debug_action_param_f32 called after init - ignored");
             return;
         }
 
@@ -177,14 +177,14 @@ impl DebugRegistry {
                 default_value: ActionParamValue::F32(default_value),
             });
         } else {
-            log::warn!("debug_action_param_f32 called without action_begin - ignored");
+            tracing::warn!("debug_action_param_f32 called without action_begin - ignored");
         }
     }
 
     /// Finish building the pending action and register it
     pub fn action_end(&mut self) {
         if self.finalized {
-            log::warn!("debug_action_end called after init - ignored");
+            tracing::warn!("debug_action_end called after init - ignored");
             return;
         }
 
@@ -196,7 +196,7 @@ impl DebugRegistry {
                 params: pending.params,
             });
         } else {
-            log::warn!("debug_action_end called without action_begin - ignored");
+            tracing::warn!("debug_action_end called without action_begin - ignored");
         }
     }
 
@@ -205,7 +205,7 @@ impl DebugRegistry {
     /// Convenience method equivalent to `action_begin` + `action_end`.
     pub fn register_action(&mut self, name: &str, func_name: &str) {
         if self.finalized {
-            log::warn!("debug_register_action called after init - ignored");
+            tracing::warn!("debug_register_action called after init - ignored");
             return;
         }
 
@@ -234,7 +234,7 @@ impl DebugRegistry {
         read_only: bool,
     ) {
         if self.finalized {
-            log::warn!("debug registration called after init - ignored");
+            tracing::warn!("debug registration called after init - ignored");
             return;
         }
 
@@ -260,7 +260,7 @@ impl DebugRegistry {
     /// This auto-closes any unclosed groups/actions and prevents further registration.
     pub fn finalize_registration(&mut self) {
         if !self.group_stack.is_empty() {
-            log::warn!(
+            tracing::warn!(
                 "debug: {} unclosed groups at end of init, auto-closing",
                 self.group_stack.len()
             );
@@ -268,7 +268,7 @@ impl DebugRegistry {
         }
 
         if self.pending_action.is_some() {
-            log::warn!("debug: unclosed action at end of init, discarding");
+            tracing::warn!("debug: unclosed action at end of init, discarding");
             self.pending_action = None;
         }
 
@@ -276,7 +276,7 @@ impl DebugRegistry {
 
         let total = self.values.len() + self.actions.len();
         if total > 0 {
-            log::info!(
+            tracing::info!(
                 "Debug inspection: registered {} values, {} actions",
                 self.values.len(),
                 self.actions.len()
@@ -316,7 +316,7 @@ impl DebugRegistry {
 
         // Bounds check
         if ptr + size > data.len() {
-            log::warn!(
+            tracing::warn!(
                 "debug: out of bounds read for {} at ptr {}",
                 value.name,
                 ptr
@@ -432,7 +432,7 @@ impl DebugRegistry {
 
         // Bounds check
         if ptr + size > data.len() {
-            log::warn!(
+            tracing::warn!(
                 "debug: out of bounds write for {} at ptr {}",
                 value.name,
                 ptr

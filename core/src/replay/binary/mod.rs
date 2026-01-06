@@ -6,22 +6,22 @@
 //! # File Structure
 //!
 //! ```text
-//! ┌────────────────────────────────────────────────┐
-//! │ Header (24 bytes)                               │
-//! │ ├─ console_id: u8                              │
-//! │ ├─ player_count: u8                            │
-//! │ ├─ input_size: u8                              │
-//! │ ├─ flags: u8                                   │
-//! │ ├─ reserved: [u8; 4]                           │
-//! │ ├─ seed: u64                                   │
-//! │ └─ frame_count: u64                            │
+//! ┌────────────────────────────────────────────────━E
+//! ━EHeader (24 bytes)                               ━E
+//! ━E├─ console_id: u8                              ━E
+//! ━E├─ player_count: u8                            ━E
+//! ━E├─ input_size: u8                              ━E
+//! ━E├─ flags: u8                                   ━E
+//! ━E├─ reserved: [u8; 4]                           ━E
+//! ━E├─ seed: u64                                   ━E
+//! ━E└─ frame_count: u64                            ━E
 //! ├────────────────────────────────────────────────┤
-//! │ Input Stream (delta-compressed if flagged)     │
+//! ━EInput Stream (delta-compressed if flagged)     ━E
 //! ├────────────────────────────────────────────────┤
-//! │ Checkpoints (if flagged)                       │
+//! ━ECheckpoints (if flagged)                       ━E
 //! ├────────────────────────────────────────────────┤
-//! │ Assertions (if flagged, JSON)                  │
-//! └────────────────────────────────────────────────┘
+//! ━EAssertions (if flagged, JSON)                  ━E
+//! └────────────────────────────────────────────────━E
 //! ```
 
 mod reader;

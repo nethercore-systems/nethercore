@@ -25,16 +25,20 @@
 //! - **Hex bytes**: `[0x80, 0x80, 0x00, 0x00]`
 //! - **Structured**: `{ buttons = ["a"], lstick = [1.0, 0.0], rt = 0.8 }`
 
+mod ast;
 mod compiler;
 mod decompiler;
 mod parser;
+mod validation;
 
 pub use compiler::{
     CompiledAction, CompiledAssertion, CompiledAssertValue, CompiledScript, CompileError, Compiler,
     InputLayout,
 };
 pub use decompiler::decompile;
-pub use parser::{
-    ActionParamValue, AssertCondition, AssertValue, CompareOp, FrameEntry, InputValue, ParseError,
-    ReplayScript, StructuredInput,
+pub use ast::{
+    ActionParamValue, AssertCondition, AssertValue, CompareOp, FrameEntry, InputValue, ReplayScript,
+    StructuredInput,
 };
+pub use parser::ParseError;
+pub use validation::{validate_script, ValidationError};

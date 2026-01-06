@@ -8,7 +8,10 @@ use wasmtime::{Caller, Linker};
 
 use crate::console::{ConsoleInput, ConsoleRollbackState};
 use crate::debug::ffi::register_debug_ffi;
-use crate::wasm::{MAX_SAVE_SIZE, MAX_SAVE_SLOTS, WasmGameContext};
+use crate::wasm::{
+    MAX_SAVE_SIZE, MAX_SAVE_SLOTS, WasmGameContext, read_bytes_from_memory,
+    write_bytes_to_memory,
+};
 
 /// Register common FFI functions with the linker
 pub fn register_common_ffi<
@@ -77,13 +80,10 @@ fn log_message<I: ConsoleInput, S, R: ConsoleRollbackState>(
     len: u32,
 ) {
     if let Some(memory) = caller.data().game.memory {
-        let data = memory.data(&caller);
-        let ptr = ptr as usize;
-        let len = len as usize;
-        if ptr + len <= data.len()
-            && let Ok(msg) = std::str::from_utf8(&data[ptr..ptr + len])
+        if let Ok(bytes) = read_bytes_from_memory(memory, &caller, ptr, len)
+            && let Ok(msg) = std::str::from_utf8(&bytes)
         {
-            log::info!("[GAME] {}", msg);
+            tracing::info!("[GAME] {}", msg);
         }
     }
 }
@@ -118,16 +118,13 @@ fn save<I: ConsoleInput, S, R: ConsoleRollbackState>(
     }
 
     // Read data from WASM memory
-    let data = if let Some(memory) = caller.data().game.memory {
-        let mem_data = memory.data(&caller);
-        let ptr = data_ptr as usize;
-        if ptr + data_len <= mem_data.len() {
-            mem_data[ptr..ptr + data_len].to_vec()
-        } else {
-            return 2; // Invalid memory access
-        }
-    } else {
-        return 2;
+    let memory = match caller.data().game.memory {
+        Some(memory) => memory,
+        None => return 2,
+    };
+    let data = match read_bytes_from_memory(memory, &caller, data_ptr, data_len as u32) {
+        Ok(data) => data,
+        Err(_) => return 2, // Invalid memory access
     };
 
     // Store the data
@@ -146,38 +143,29 @@ fn load<I: ConsoleInput, S, R: ConsoleRollbackState>(
 ) -> u32 {
     let slot = slot as usize;
     let max_len = max_len as usize;
-    let ptr = data_ptr as usize;
 
     // Validate slot
     if slot >= MAX_SAVE_SLOTS {
         return 0;
     }
 
-    // Get memory first, then access save data through split borrow
     let memory = match caller.data().game.memory {
         Some(m) => m,
         None => return 0,
     };
 
-    // Use data_and_store_mut to get both memory data and store access simultaneously.
-    // This avoids cloning the save data by allowing us to access both in one operation.
-    let (mem_data, store) = memory.data_and_store_mut(&mut caller);
-
-    // Get save data reference from the store
-    let data = match &store.game.save_data[slot] {
-        Some(d) => d,
-        None => return 0,
+    let (buffer, copy_len) = {
+        let data = match caller.data().game.save_data[slot].as_ref() {
+            Some(data) => data,
+            None => return 0,
+        };
+        let copy_len = data.len().min(max_len);
+        (data[..copy_len].to_vec(), copy_len)
     };
 
-    // Calculate actual length to copy
-    let copy_len = data.len().min(max_len);
-
-    // Validate memory bounds and copy
-    if ptr + copy_len <= mem_data.len() {
-        mem_data[ptr..ptr + copy_len].copy_from_slice(&data[..copy_len]);
-        copy_len as u32
-    } else {
-        0
+    match write_bytes_to_memory(memory, &mut caller, data_ptr, &buffer) {
+        Ok(()) => copy_len as u32,
+        Err(_) => 0,
     }
 }
 

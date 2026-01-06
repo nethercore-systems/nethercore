@@ -8,7 +8,7 @@ use hashbrown::HashMap;
 use std::path::Path;
 use std::time::Instant;
 
-use crate::replay::script::{CompiledScript, Compiler};
+use crate::replay::script::{CompiledAction, CompiledScript, Compiler};
 use crate::replay::types::DebugValueData;
 use crate::replay::InputLayout;
 
@@ -32,6 +32,38 @@ impl Default for HeadlessConfig {
             timeout_secs: 300,
             script_path: None,
         }
+    }
+}
+
+/// Backend interface for headless replay execution.
+pub trait HeadlessBackend {
+    /// Apply inputs for the current frame.
+    fn apply_inputs(&mut self, inputs: Option<&Vec<Vec<u8>>>) -> Result<()>;
+    /// Advance the game state by one update.
+    fn update(&mut self) -> Result<()>;
+    /// Read debug variable values from the game.
+    fn read_debug_values(&mut self) -> Result<HashMap<String, DebugValueData>>;
+    /// Execute debug actions for the current frame.
+    fn execute_actions(&mut self, _actions: &[&CompiledAction]) -> Result<()> {
+        Ok(())
+    }
+}
+
+struct ManualBackend {
+    values: HashMap<String, DebugValueData>,
+}
+
+impl HeadlessBackend for ManualBackend {
+    fn apply_inputs(&mut self, _inputs: Option<&Vec<Vec<u8>>>) -> Result<()> {
+        Ok(())
+    }
+
+    fn update(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    fn read_debug_values(&mut self) -> Result<HashMap<String, DebugValueData>> {
+        Ok(self.values.clone())
     }
 }
 
@@ -98,20 +130,21 @@ impl HeadlessRunner {
 
     /// Execute the replay script
     ///
-    /// This is a simplified execution that doesn't actually run a game.
-    /// For full execution, this would need to:
-    /// 1. Load the game WASM
-    /// 2. Create a minimal console context
-    /// 3. Call update() with inputs
-    /// 4. Read debug variables from the game
-    ///
-    /// Currently, this executes the script structure and captures snapshots
-    /// of the debug variables that have been manually set.
     pub fn execute(&mut self) -> Result<ExecutionReport> {
+        let mut backend = ManualBackend {
+            values: self.debug_variables.clone(),
+        };
+        self.execute_with_backend(&mut backend)
+    }
+
+    /// Execute the replay script with a concrete backend.
+    pub fn execute_with_backend<B: HeadlessBackend>(
+        &mut self,
+        backend: &mut B,
+    ) -> Result<ExecutionReport> {
         self.start_time = Some(Instant::now());
 
         while !self.executor.is_complete() {
-            // Check timeout
             if let Some(start) = self.start_time {
                 if start.elapsed().as_secs() > self.config.timeout_secs {
                     self.executor.stop_with_error("Execution timeout exceeded".to_string());
@@ -119,57 +152,59 @@ impl HeadlessRunner {
                 }
             }
 
-            // Get inputs for current frame
-            let _inputs = self.executor.current_inputs();
-
-            // TODO: Apply inputs to game and call update()
-            // For now, we just simulate frame advancement
-
-            // Capture snapshot if needed
-            if self.executor.needs_snapshot() {
-                let pre_values = self.debug_variables.clone();
-
-                // TODO: Call game update() here
-                // For now, we just keep the same values
-
-                let post_values = self.debug_variables.clone();
-
-                let input_string = format!("frame_{}", self.executor.current_frame());
-                self.executor
-                    .capture_post_snapshot(pre_values, post_values, input_string);
+            let actions = self.executor.current_actions();
+            if !actions.is_empty() {
+                backend.execute_actions(actions.as_slice())?;
             }
 
-            // Evaluate assertions
-            let current_frame = self.executor.current_frame();
-            let assertion_count = self.executor.current_assertions().len();
+            let inputs = self.executor.current_inputs();
+            backend.apply_inputs(inputs)?;
 
-            // Process each assertion
-            for _ in 0..assertion_count {
-                // TODO: Evaluate against actual game state
-                // For now, we just mark them as passed (placeholder)
-                self.executor.record_assertion_result(
-                    current_frame,
-                    "placeholder".to_string(),
-                    true, // passed
-                    None, // actual
-                    None, // expected
+            let take_snapshot = self.executor.needs_snapshot();
+            let has_assertions = !self.executor.current_assertions().is_empty();
+            let needs_values = take_snapshot || has_assertions;
+
+            let pre_values = if take_snapshot {
+                backend.read_debug_values()?
+            } else {
+                HashMap::new()
+            };
+
+            backend.update()?;
+
+            let post_values = if needs_values {
+                backend.read_debug_values()?
+            } else {
+                HashMap::new()
+            };
+
+            if take_snapshot {
+                let input_string = format_input_frame(inputs);
+                self.executor.capture_post_snapshot(
+                    pre_values,
+                    post_values.clone(),
+                    input_string,
                 );
             }
 
-            // Check fail-fast
-            if self.config.fail_fast && assertion_count > 0 {
-                // In real implementation, check if any assertion failed
-                // For now, we continue since we marked all as passed
+            let assertions = {
+                let assertions = self.executor.current_assertions();
+                assertions.into_iter().cloned().collect::<Vec<_>>()
+            };
+            for assertion in assertions {
+                self.executor
+                    .evaluate_assertion(&assertion, &post_values, self.config.fail_fast);
             }
 
-            // Advance frame
+            if self.executor.is_complete() {
+                break;
+            }
+
             self.executor.advance_frame();
         }
 
-        // Generate report
         let mut report = self.executor.generate_report();
 
-        // Add metadata
         if let Some(script_path) = &self.config.script_path {
             report.script = Some(script_path.clone());
         }
@@ -195,6 +230,21 @@ impl HeadlessRunner {
     /// Get mutable executor (for testing)
     pub fn executor_mut(&mut self) -> &mut ScriptExecutor {
         &mut self.executor
+    }
+}
+
+fn format_input_frame(inputs: Option<&Vec<Vec<u8>>>) -> String {
+    match inputs {
+        None => "no_input".to_string(),
+        Some(players) if players.is_empty() => "no_input".to_string(),
+        Some(players) => {
+            let mut parts = Vec::new();
+            for (index, bytes) in players.iter().enumerate() {
+                let hex = bytes.iter().map(|b| format!("{:02x}", b)).collect::<String>();
+                parts.push(format!("p{}:{}", index, hex));
+            }
+            parts.join(" ")
+        }
     }
 }
 

@@ -2,29 +2,29 @@
 //!
 //! A dual-format replay system for recording, playback, and AI-assisted debugging:
 //!
-//! - **Binary format (`.ncrp`)** — Compact storage for recorded gameplay
-//! - **Script format (`.ncrs`)** — Human-readable TOML for testing and debugging
+//! - **Binary format (`.ncrp`)**  ECompact storage for recorded gameplay
+//! - **Script format (`.ncrs`)**  EHuman-readable TOML for testing and debugging
 //!
 //! # Architecture
 //!
 //! ```text
-//! ┌─────────────────────────────────────────────────────────────┐
-//! │                    Recording Mode                           │
-//! │  gameplay → Recorder → .ncrp (binary)                      │
-//! └─────────────────────────────────────────────────────────────┘
+//! ┌─────────────────────────────────────────────────────────────━E
+//! ━E                   Recording Mode                           ━E
+//! ━E gameplay ↁERecorder ↁE.ncrp (binary)                      ━E
+//! └─────────────────────────────────────────────────────────────━E
 //!
-//! ┌─────────────────────────────────────────────────────────────┐
-//! │                    Playback Mode                            │
-//! │  .ncrp → Player → re-executes gameplay                     │
-//! └─────────────────────────────────────────────────────────────┘
+//! ┌─────────────────────────────────────────────────────────────━E
+//! ━E                   Playback Mode                            ━E
+//! ━E .ncrp ↁEPlayer ↁEre-executes gameplay                     ━E
+//! └─────────────────────────────────────────────────────────────━E
 //!
-//! ┌─────────────────────────────────────────────────────────────┐
-//! │                    Script Execution                         │
-//! │  .ncrs (TOML) → Compiler → Executor → report.json          │
-//! │                              ↓                              │
-//! │                    snap: capture debug vars                │
-//! │                    assert: evaluate conditions             │
-//! └─────────────────────────────────────────────────────────────┘
+//! ┌─────────────────────────────────────────────────────────────━E
+//! ━E                   Script Execution                         ━E
+//! ━E .ncrs (TOML) ↁECompiler ↁEExecutor ↁEreport.json          ━E
+//! ━E                             ↁE                             ━E
+//! ━E                   snap: capture debug vars                ━E
+//! ━E                   assert: evaluate conditions             ━E
+//! └─────────────────────────────────────────────────────────────━E
 //! ```
 //!
 //! # Usage
@@ -128,6 +128,7 @@ pub use script::{
 
 // Re-export runtime
 pub use runtime::{
-    DebugVariableInfo, ExecutionReport, HeadlessConfig, HeadlessRunner, Player, PlayerConfig,
-    Recorder, RecorderConfig, ReportSummary, ScriptExecutor, SeekResult, StepResult, StopReason,
+    DebugVariableInfo, ExecutionReport, HeadlessBackend, HeadlessConfig, HeadlessRunner, Player,
+    PlayerConfig, Recorder, RecorderConfig, ReportSummary, ScriptExecutor, SeekResult, StepResult,
+    StopReason,
 };

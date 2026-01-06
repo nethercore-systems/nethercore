@@ -58,7 +58,7 @@ impl HostRollbackState {
 pub type ConsoleDataVec = SmallVec<[u8; 512]>;
 
 /// Inline storage size for input state (avoids heap allocation)
-/// 128 bytes covers ZInput (8 bytes) × 4 players × 2 (prev+curr) = 64 bytes with room to spare
+/// 128 bytes covers ZInput (8 bytes) ÁE4 players ÁE2 (prev+curr) = 64 bytes with room to spare
 pub type InputDataVec = SmallVec<[u8; 128]>;
 
 /// Number of pre-allocated state buffers in the pool
@@ -234,7 +234,7 @@ impl StatePool {
     /// If pool is empty, allocates a new buffer (should be rare in steady state).
     pub fn acquire(&mut self) -> Vec<u8> {
         self.buffers.pop().unwrap_or_else(|| {
-            log::warn!("StatePool exhausted, allocating new buffer");
+            tracing::warn!("StatePool exhausted, allocating new buffer");
             Vec::with_capacity(self.buffer_size)
         })
     }
@@ -388,7 +388,7 @@ impl RollbackStateManager {
         }
 
         // Restore input state if present
-        // Input data layout: [input_prev × MAX_PLAYERS][input_curr × MAX_PLAYERS]
+        // Input data layout: [input_prev ÁEMAX_PLAYERS][input_curr ÁEMAX_PLAYERS]
         let input_size = std::mem::size_of::<I>();
         let expected_input_len = input_size * MAX_PLAYERS * 2;
         if snapshot.input_data.len() == expected_input_len {

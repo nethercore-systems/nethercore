@@ -4,6 +4,7 @@
 //! script (.ncrs) replay formats.
 
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 /// Complete replay data (in-memory representation)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -281,12 +282,12 @@ pub struct Snapshot {
     /// Input applied this frame
     pub input: String,
     /// Variables before update()
-    pub pre: hashbrown::HashMap<String, DebugValueData>,
+    pub pre: BTreeMap<String, DebugValueData>,
     /// Variables after update()
-    pub post: hashbrown::HashMap<String, DebugValueData>,
+    pub post: BTreeMap<String, DebugValueData>,
     /// Computed delta (only changed values)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub delta: Option<hashbrown::HashMap<String, String>>,
+    pub delta: Option<BTreeMap<String, String>>,
 }
 
 /// Assertion result from execution

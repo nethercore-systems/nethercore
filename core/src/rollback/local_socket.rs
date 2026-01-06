@@ -119,7 +119,7 @@ impl LocalSocket {
             .local_addr()
             .map_err(|e| LocalSocketError::Bind(format!("Failed to get local addr: {}", e)))?;
 
-        log::info!("LocalSocket bound to {}", local_addr);
+        tracing::info!(port = local_addr.port(), "LocalSocket bound");
 
         Ok(Self {
             socket,
@@ -162,7 +162,7 @@ impl LocalSocket {
             .parse()
             .map_err(|e| LocalSocketError::Connect(format!("Invalid peer '{}': {}", peer, e)))?;
 
-        log::info!("LocalSocket connecting to {}", peer_addr);
+        tracing::info!(port = peer_addr.port(), "LocalSocket connecting");
         self.peer_addr = Some(peer_addr);
         Ok(())
     }
@@ -230,7 +230,7 @@ impl LocalSocket {
             let mut buf = [0u8; 128];
             match self.socket.recv_from(&mut buf) {
                 Ok((_len, from)) => {
-                    log::info!("Peer connected from {}", from);
+                    tracing::info!("Peer connected");
                     self.peer_addr = Some(from);
 
                     // Restore non-blocking mode
@@ -244,7 +244,7 @@ impl LocalSocket {
                     // Timeout or WouldBlock is expected, keep waiting
                     if e.kind() != io::ErrorKind::WouldBlock && e.kind() != io::ErrorKind::TimedOut
                     {
-                        log::warn!("Unexpected error while waiting for peer: {}", e);
+                        tracing::warn!(error = %e, "Unexpected error while waiting for peer");
                     }
                 }
             }
@@ -270,7 +270,7 @@ impl LocalSocket {
         let mut buf = [0u8; 128];
         match self.socket.recv_from(&mut buf) {
             Ok((_len, from)) => {
-                log::info!("Peer connected from {}", from);
+                tracing::info!("Peer connected");
                 self.peer_addr = Some(from);
                 Some(from.to_string())
             }
@@ -318,7 +318,7 @@ impl NonBlockingSocket<String> for LocalSocket {
         let target: SocketAddr = match addr.parse() {
             Ok(a) => a,
             Err(e) => {
-                log::warn!("Invalid send address '{}': {}", addr, e);
+                tracing::warn!(error = %e, "Invalid send address");
                 return;
             }
         };
@@ -327,7 +327,7 @@ impl NonBlockingSocket<String> for LocalSocket {
         let data = match bincode::serialize(msg) {
             Ok(d) => d,
             Err(e) => {
-                log::warn!("Failed to serialize message: {}", e);
+                tracing::warn!(error = %e, "Failed to serialize message");
                 return;
             }
         };
@@ -336,7 +336,7 @@ impl NonBlockingSocket<String> for LocalSocket {
         if let Err(e) = self.socket.send_to(&data, target) {
             // WouldBlock is expected for non-blocking sockets when buffer is full
             if e.kind() != io::ErrorKind::WouldBlock {
-                log::warn!("Failed to send to {}: {}", target, e);
+                tracing::warn!(error = %e, "Failed to send message");
             }
         }
     }
@@ -354,7 +354,7 @@ impl NonBlockingSocket<String> for LocalSocket {
                             messages.push((from.to_string(), msg));
                         }
                         Err(e) => {
-                            log::warn!("Failed to deserialize message from {}: {}", from, e);
+                            tracing::warn!(error = %e, "Failed to deserialize message");
                         }
                     }
                 }
@@ -364,7 +364,7 @@ impl NonBlockingSocket<String> for LocalSocket {
                         break;
                     }
                     // Other errors are unexpected
-                    log::warn!("Receive error: {}", e);
+                    tracing::warn!(error = %e, "Receive error");
                     break;
                 }
             }

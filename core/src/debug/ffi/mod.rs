@@ -8,8 +8,8 @@
 //! - Registration function
 //! - HasDebugRegistry trait
 //!
-//! ❌ DO NOT add FFI function implementations here
-//! ✅ DO add them to domain-specific submodules (register.rs, watch.rs, control.rs)
+//! ❁EDO NOT add FFI function implementations here
+//! ✁EDO add them to domain-specific submodules (register.rs, watch.rs, control.rs)
 
 mod actions;
 mod control;

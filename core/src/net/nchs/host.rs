@@ -123,7 +123,7 @@ impl HostStateMachine {
             .unwrap_or_else(|| "127.0.0.1".to_string());
         let public_addr = format!("{}:{}", real_ip, socket.port());
 
-        log::info!("NCHS Host listening on port {}, public address: {}", socket.port(), public_addr);
+        tracing::info!(port = socket.port(), "NCHS Host listening");
 
         Ok(Self {
             state: HostState::Listening,
@@ -258,7 +258,7 @@ impl HostStateMachine {
                 None
             }
             _ => {
-                log::warn!("Unexpected message from {}: {:?}", from, msg);
+                tracing::warn!(?msg, "Unexpected message from peer");
                 None
             }
         }
@@ -312,7 +312,7 @@ impl HostStateMachine {
         self.players.insert(handle, player);
         self.addr_to_handle.insert(from, handle);
 
-        log::info!("Player {} joined from {}", handle, from);
+        tracing::info!(player = handle, "Player joined");
 
         // Send accept
         let accept = JoinAccept {
@@ -388,7 +388,7 @@ impl HostStateMachine {
             player.ready = ready;
             player.last_seen = Instant::now();
 
-            log::info!("Player {} ready: {}", handle, ready);
+            tracing::info!(player = handle, ready, "Player ready");
 
             // Broadcast lobby update
             self.broadcast_lobby_update();
@@ -470,6 +470,7 @@ impl HostStateMachine {
             local_player_handle: 0, // Will be set per-process by library when serializing
             random_seed,
             start_frame: 0,
+            tick_rate: self.netplay.tick_rate,
             players,
             player_count: self.player_count(),
             network_config: self.network_config.clone(),
@@ -486,8 +487,11 @@ impl HostStateMachine {
         self.state = HostState::Starting;
         self.start_time = Some(Instant::now());
 
-        log::info!("Session started with {} players, seed: {:016x}",
-            self.player_count(), random_seed);
+        tracing::info!(
+            "Session started with {} players, seed: {:016x}",
+            self.player_count(),
+            random_seed
+        );
 
         Ok(session_start)
     }
@@ -524,7 +528,7 @@ impl HostStateMachine {
             .collect();
 
         for handle in &timed_out {
-            log::warn!("Player {} timed out", handle);
+            tracing::warn!(player = handle, "Player timed out");
             self.remove_player(*handle);
         }
 
@@ -542,6 +546,7 @@ impl HostStateMachine {
             local_player_handle: 0, // Will be set per-process by library when serializing
             random_seed: seed,
             start_frame: 0,
+            tick_rate: self.netplay.tick_rate,
             players: self.build_player_connection_info(),
             player_count: self.player_count(),
             network_config: self.network_config.clone(),

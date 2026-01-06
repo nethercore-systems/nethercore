@@ -553,7 +553,7 @@ mod tests {
         let manifest = serde_json::json!({
             "id": "unicode-game",
             "title": "日本語ゲーム",
-            "author": "开发者",
+            "author": "开发老E",
             "version": "1.0.0",
             "downloaded_at": "2024-01-01T00:00:00Z"
         });
@@ -568,7 +568,7 @@ mod tests {
         let games = get_games_from_dir(temp_dir.path(), None);
         assert_eq!(games.len(), 1);
         assert_eq!(games[0].title, "日本語ゲーム");
-        assert_eq!(games[0].author, "开发者");
+        assert_eq!(games[0].author, "开发老E");
     }
 
     #[test]

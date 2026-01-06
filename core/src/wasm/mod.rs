@@ -25,8 +25,9 @@ use crate::debug::types::ActionParamValue;
 // Re-export public types from state module
 #[allow(deprecated)]
 pub use state::{
-    GameState, GameStateWithConsole, MAX_PLAYERS, MAX_SAVE_SIZE, MAX_SAVE_SLOTS, WasmGameContext,
-    read_string_from_memory,
+    GameState, GameStateWithConsole, MAX_PLAYERS, MAX_SAVE_SIZE, MAX_SAVE_SLOTS,
+    MemoryAccessError, WasmGameContext, read_bytes_from_memory, read_string_from_memory,
+    write_bytes_to_memory,
 };
 
 /// Shared WASM engine (one per application)
@@ -84,7 +85,7 @@ impl WasmEngine {
 
                 // Warn if module declares no maximum (will be limited by host)
                 if mem_type.maximum().is_none() {
-                    log::debug!(
+                    tracing::debug!(
                         "Module memory '{}' has no maximum declared; \
                          host will limit to {} bytes",
                         export.name(),

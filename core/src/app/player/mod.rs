@@ -233,6 +233,9 @@ where
                 let config = super::config::load();
                 audio.set_master_volume(config.audio.master_volume);
             }
+            if let Some(session) = runner.session() {
+                self.capture.set_source_fps(session.runtime.tick_rate());
+            }
         }
 
         self.next_tick = Instant::now();
@@ -797,8 +800,9 @@ where
 
                 tracing::info!("Session mode: players (after handshake) = {:?}", players);
 
-                let session_config = SessionConfig::online(session_start.player_count as usize)
+                let mut session_config = SessionConfig::online(session_start.player_count as usize)
                     .with_input_delay(session_start.network_config.input_delay as usize);
+                session_config.fps = session_start.tick_rate.as_hz() as usize;
 
                 let session =
                     RollbackSession::new_p2p(session_config, socket, players, specs.ram_limit)
@@ -823,6 +827,9 @@ where
         {
             let config = super::config::load();
             audio.set_master_volume(config.audio.master_volume);
+        }
+        if let Some(session) = runner.session() {
+            self.capture.set_source_fps(session.runtime.tick_rate());
         }
 
         let egui_state = egui_winit::State::new(

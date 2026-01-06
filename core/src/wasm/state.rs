@@ -2,7 +2,7 @@
 //!
 //! Minimal core game state - console-agnostic.
 
-use wasmtime::{AsContext, Memory, ResourceLimiter};
+use wasmtime::{AsContext, AsContextMut, Memory, ResourceLimiter};
 
 use crate::console::{ConsoleInput, ConsoleRollbackState};
 
@@ -18,16 +18,56 @@ pub fn read_string_from_memory<T: 'static>(
     len: u32,
 ) -> Option<String> {
     let data = memory.data(&ctx);
-    let start = ptr as usize;
-    let end = start + len as usize;
+    let range = checked_range(ptr, len as usize, data.len())?;
 
-    if end > data.len() {
-        return None;
-    }
-
-    std::str::from_utf8(&data[start..end])
+    std::str::from_utf8(&data[range])
         .ok()
         .map(String::from)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MemoryAccessError {
+    OutOfBounds,
+}
+
+/// Read a byte slice from WASM memory with bounds checks.
+pub fn read_bytes_from_memory<T: 'static>(
+    memory: Memory,
+    ctx: impl AsContext<Data = T>,
+    ptr: u32,
+    len: u32,
+) -> Result<Vec<u8>, MemoryAccessError> {
+    let data = memory.data(&ctx);
+    let range = checked_range(ptr, len as usize, data.len())
+        .ok_or(MemoryAccessError::OutOfBounds)?;
+    Ok(data[range].to_vec())
+}
+
+/// Write a byte slice into WASM memory with bounds checks.
+pub fn write_bytes_to_memory<T: 'static>(
+    memory: Memory,
+    mut ctx: impl AsContextMut<Data = T>,
+    ptr: u32,
+    bytes: &[u8],
+) -> Result<(), MemoryAccessError> {
+    let data = memory.data_mut(&mut ctx);
+    let range = checked_range(ptr, bytes.len(), data.len())
+        .ok_or(MemoryAccessError::OutOfBounds)?;
+    data[range].copy_from_slice(bytes);
+    Ok(())
+}
+
+fn checked_range(
+    ptr: u32,
+    len: usize,
+    data_len: usize,
+) -> Option<std::ops::Range<usize>> {
+    let start = ptr as usize;
+    let end = start.checked_add(len)?;
+    if end > data_len {
+        return None;
+    }
+    Some(start..end)
 }
 
 use crate::debug::ffi::HasDebugRegistry;
@@ -91,7 +131,7 @@ pub struct GameState<I: ConsoleInput> {
     pub input_prev: [I; MAX_PLAYERS],
     pub input_curr: [I; MAX_PLAYERS],
 
-    /// Save data slots (8 slots × 64KB max each)
+    /// Save data slots (8 slots ÁE64KB max each)
     pub save_data: [Option<Vec<u8>>; MAX_SAVE_SLOTS],
 
     /// Quit requested by game

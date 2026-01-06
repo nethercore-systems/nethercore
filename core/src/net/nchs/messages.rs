@@ -198,6 +198,8 @@ pub struct SessionStart {
     pub random_seed: u64,
     /// Starting frame number (usually 0)
     pub start_frame: u32,
+    /// Tick rate for the session (must match host)
+    pub tick_rate: TickRate,
 
     // === Network topology ===
     /// All player connection info (for peer mesh)
@@ -462,6 +464,7 @@ mod tests {
             local_player_handle: 0,
             random_seed: 0x123456789ABCDEF0,
             start_frame: 0,
+            tick_rate: TickRate::Fixed60,
             players: vec![
                 PlayerConnectionInfo {
                     handle: 0,
