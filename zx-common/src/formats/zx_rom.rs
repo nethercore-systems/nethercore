@@ -5,8 +5,8 @@
 //!
 //! # Memory Model
 //!
-//! Nethercore ZX uses a **12MB ROM + 4MB RAM** memory model:
-//! - ROM (Cartridge): 12 MB total (WASM code + assets via data pack)
+//! Nethercore ZX uses a **16MB ROM + 4MB RAM** memory model:
+//! - ROM (Cartridge): 16 MB total (WASM code + assets via data pack)
 //! - RAM: 4 MB WASM linear memory (code + heap + stack)
 //! - VRAM: 4 MB GPU textures and mesh buffers
 //!
@@ -37,7 +37,7 @@ use super::zx_data_pack::ZXDataPack;
 ///
 /// ```text
 /// ┌─────────────────────────────────────────────────────────────━E
-/// ━E                  .nczx ROM File (≤12MB)                    ━E
+/// ━E                  .nczx ROM File (≤16MB)                    ━E
 /// ├─────────────────────────────────────────────────────────────┤
 /// ━E NCZX Header (4 bytes)                                      ━E
 /// ━E ├── Magic: "NCZX"                                          ━E

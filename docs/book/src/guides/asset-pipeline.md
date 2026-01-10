@@ -531,11 +531,11 @@ Nethercore enforces these limits:
 
 | Resource | Limit |
 |----------|-------|
-| ROM size | 12 MB |
+| ROM size | 16 MB |
 | VRAM | 4 MB |
 | Bones per skeleton | 256 |
 
-All assets are embedded in the WASM binary at compile time. There is no runtime asset loading - this ensures deterministic builds required for rollback netcode.
+All assets are packaged into the ROM at build time. There is no runtime filesystem/network asset loading — this ensures deterministic builds required for rollback netcode.
 
 ---
 

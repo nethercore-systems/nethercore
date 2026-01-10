@@ -592,7 +592,7 @@ nether pack  # Creates .nczx ROM file
 ## Memory Model
 
 ```
-ROM (12MB)          RAM (4MB)           VRAM (4MB)
+ROM (16MB)          RAM (4MB)           VRAM (4MB)
 ┌────────────┐      ┌────────────┐      ┌────────────┐
 │ WASM code  │      │ Game state │      │ Textures   │
 │ (50-200KB) │      │ (handles)  │      │ (from ROM) │

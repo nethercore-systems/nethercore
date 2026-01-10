@@ -130,8 +130,8 @@ pub const NETHERCORE_ZX_RESOLUTION: (u32, u32) = (960, 540);
 /// Nethercore ZX tick rates (updates per second)
 pub const NETHERCORE_ZX_TICK_RATES: &[u32] = &[24, 30, 60, 120];
 
-/// Nethercore ZX ROM limit (12 MB total cartridge: WASM code + assets)
-pub const NETHERCORE_ZX_ROM_LIMIT: usize = 12 * 1024 * 1024;
+/// Nethercore ZX ROM limit (16 MB total cartridge: WASM code + assets)
+pub const NETHERCORE_ZX_ROM_LIMIT: usize = 16 * 1024 * 1024;
 
 /// Nethercore ZX RAM limit (4 MB WASM linear memory)
 pub const NETHERCORE_ZX_RAM_LIMIT: usize = 4 * 1024 * 1024;
@@ -146,12 +146,12 @@ pub const NETHERCORE_ZX_VRAM_LIMIT: usize = 4 * 1024 * 1024;
 ///
 /// # Memory Model
 ///
-/// Nethercore ZX uses a **12MB ROM + 4MB RAM** memory model with datapack-based
+/// Nethercore ZX uses a **16MB ROM + 4MB RAM** memory model with datapack-based
 /// asset loading. This separates immutable data from game state, enabling
 /// efficient rollback (only 4MB snapshotted) while providing generous content
-/// headroom (12MB total ROM).
+/// headroom (16MB total ROM).
 ///
-/// - **ROM (Cartridge):** 12 MB total (WASM code + assets via datapack)
+/// - **ROM (Cartridge):** 16 MB total (WASM code + assets via datapack)
 /// - **RAM:** 4 MB WASM linear memory (code + heap + stack)
 /// - **VRAM:** 4 MB GPU textures and mesh buffers
 /// - **Rollback:** Only 4 MB RAM snapshotted (~0.25ms with xxHash3)
@@ -167,7 +167,7 @@ pub const fn nethercore_zx_specs() -> &'static ConsoleSpecs {
         default_tick_rate: 2,                 // 60 fps
         ram_limit: NETHERCORE_ZX_RAM_LIMIT,   // 4MB linear memory
         vram_limit: NETHERCORE_ZX_VRAM_LIMIT, // 4MB GPU
-        rom_limit: NETHERCORE_ZX_ROM_LIMIT,   // 12MB cartridge
+        rom_limit: NETHERCORE_ZX_ROM_LIMIT,   // 16MB cartridge
         cpu_budget_us: 4000,                  // 4ms per tick at 60fps
     }
 }

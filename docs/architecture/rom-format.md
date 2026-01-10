@@ -30,7 +30,7 @@ Nethercore uses console-specific binary ROM formats for game distribution. Each 
 ### File Structure
 
 ```
-game.nczx (binary file, max 12MB)
+game.nczx (binary file, max 16MB)
 ├── Magic bytes: "NCZX" (4 bytes)
 └── ZXRom (bitcode-encoded):
     ├── version: u32
@@ -311,7 +311,7 @@ Used for level data, configuration, dialogue, or any custom binary format.
 
 | Resource | Limit |
 |----------|-------|
-| ROM (total) | 12 MB |
+| ROM (total) | 16 MB |
 | WASM code | 4 MB |
 | RAM (linear memory) | 4 MB |
 | VRAM (GPU resources) | 4 MB |

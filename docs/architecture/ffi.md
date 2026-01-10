@@ -95,7 +95,7 @@ Nethercore uses a **split ROM + RAM memory model** for efficient rollback:
 
 | Console | ROM (Cartridge) | RAM (Linear Memory) | VRAM |
 |---------|-----------------|---------------------|------|
-| **Nethercore ZX** | 12 MB | 4 MB | 4 MB |
+| **Nethercore ZX** | 16 MB | 4 MB | 4 MB |
 | **Nethercore Chroma** | 4 MB | 2 MB | 1 MB |
 
 **ROM (Cartridge):** Contains WASM code + bundled assets (via data pack). Not snapshotted.
