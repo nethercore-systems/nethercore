@@ -1,6 +1,6 @@
 # Nethercore Examples
 
-**40 working examples** organized into 8 categories to help you learn game development with Nethercore.
+**46 working examples** organized into 8 categories to help you learn game development with Nethercore.
 
 ## 📁 Organization
 
@@ -10,8 +10,8 @@ examples/
 ├── 2-graphics/          →  6 examples   (Rendering, meshes, materials)
 ├── 3-inspectors/        → 13 examples   (Debug inspector, render modes, environments)
 ├── 4-animation/         →  6 examples   (Skeletal animation, IK)
-├── 5-audio/             →  2 examples   (Sound effects, music)
-├── 6-assets/            →  4 examples   (ROM loading, data packs)
+├── 5-audio/             →  5 examples   (Sound effects, tracker music)
+├── 6-assets/            →  7 examples   (ROM loading, data packs, GLTF/GLB pipeline)
 ├── 7-games/             →  2 examples   (Complete games)
 ├── 8-advanced/          →  3 examples   (Stencils, viewports, mirrors)
 └── examples-common/     →  Support library
@@ -140,18 +140,21 @@ GPU skeletal animation and inverse kinematics.
 
 ---
 
-### 5. Audio (2 examples)
+### 5. Audio (5 examples)
 
 Sound effects and music playback.
 
 | Example | Description | Difficulty | Key Features |
 |---------|-------------|------------|--------------|
 | **audio-demo** | Sound effects, panning, channels, looping | 🟢 Beginner | `play_sound()`, channels, panning |
-| **tracker-demo** | XM tracker music playback with controls | 🟡 Intermediate | Tracker music, interactive controls |
+| **tracker-demo-xm** | XM tracker music playback (three songs) | 🟡 Intermediate | XM modules, embedded sample extraction |
+| **tracker-demo-split** | XM tracker music with split sample workflow | 🟡 Intermediate | Split samples (WAV), explicit `[[assets.sounds]]` |
+| **tracker-demo-it** | IT tracker music playback (three songs) | 🟡 Intermediate | IT modules, embedded sample extraction |
+| **tracker-demo-it-split** | IT tracker demo with separate sample assets | 🟡 Intermediate | Split assets, explicit `[[assets.sounds]]` |
 
 ---
 
-### 6. Asset Loading (4 examples)
+### 6. Asset Loading (7 examples)
 
 ROM-based asset workflows and data packs.
 
@@ -161,6 +164,9 @@ ROM-based asset workflows and data packs.
 | **font-demo** | Custom font loading with `rom_font()` | 🟢 Beginner | Bitmap fonts, text rendering |
 | **level-loader** | Level data loading with `rom_data()` | 🟡 Intermediate | Binary data, custom formats |
 | **asset-test** | Pre-converted asset testing (.nczxmesh, .nczxtex) | 🟡 Intermediate | Asset pipeline validation |
+| **gltf-test** | Tests GLTF import (mesh, skeleton, animation) | 🟡 Intermediate | GLTF pipeline, conversion validation |
+| **glb-inline** | Raw GLB references with multiple animations | 🟡 Intermediate | Direct `.glb` in `nether.toml`, animation selectors |
+| **glb-rigid** | Rigid transform animation imported from GLB | 🟡 Intermediate | `keyframe_read()`, multi-mesh transforms |
 
 ---
 
@@ -198,10 +204,7 @@ Stencil buffers, viewports, and advanced techniques.
 
 ## 📊 Statistics
 
-- **Total Examples:** 41 working examples
-- **Beginner-Friendly:** 10 examples (🟢)
-- **Intermediate:** 23 examples (🟡)
-- **Advanced:** 12 examples (🔴)
+- **Total Examples:** 46
 - **Languages:** Rust, C, Zig
 - **Complete Games:** 2
 

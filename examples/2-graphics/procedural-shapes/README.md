@@ -1,15 +1,14 @@
 # Procedural Shapes Example
 
-Demonstrates all procedural mesh generation functions with optional texture mapping.
+Demonstrates procedural mesh generation with optional UV textures and normal mapping.
 
 ## Features
 
 - **7 procedural shapes** in plain mode (cube, sphere, cylinder, cone, plane, torus, capsule)
-- **6 procedural shapes** in textured mode (cone has no UV variant)
-- **B button toggle** to switch between plain and UV-mapped rendering
-- **Interactive shape cycling** with A button
-- **Manual and automatic rotation** for visual inspection
-- **UV debug texture** with checker pattern (textured mode only)
+- **6 procedural shapes** in textured mode (UV debug texture)
+- **4 procedural shapes** in normal-mapped mode (tangent-enabled variants)
+- **Material mode cycling** (plain → textured → normal mapped)
+- **Interactive shape cycling** with A button + manual/auto rotation
 
 ## Shapes
 
@@ -30,12 +29,19 @@ Demonstrates all procedural mesh generation functions with optional texture mapp
 5. **Torus** — UV wrapped mapping
 6. **Capsule** — UV hybrid mapping
 
-Note: Cone is only available in plain mode as there is no `cone_uv()` FFI function.
+Note: The cone is generated via `cylinder(radius_bottom, 0.0, height, segments)`. This example omits the UV cone variant.
+
+### Normal Mapped Mode (4 shapes)
+1. **Cube** — Tangent-enabled mesh + procedural normal map
+2. **Sphere** — Tangent-enabled mesh + procedural normal map
+3. **Plane** — Tangent-enabled mesh + procedural normal map
+4. **Torus** — Tangent-enabled mesh + procedural normal map
 
 ## Controls
 
 - **A button**: Cycle through shapes
-- **B button**: Toggle texture mode (plain/textured)
+- **B button**: Cycle material mode (plain/textured/normal mapped)
+- **X button**: Cycle normal map type (waves/bricks/ripples)
 - **Left stick**: Rotate shape manually
 - **Auto-rotates**: When stick is idle
 
@@ -67,14 +73,20 @@ This helps visualize how UVs are mapped onto each procedural shape.
 - `torus_uv(major_radius, minor_radius, major_segments, minor_segments)` → mesh handle
 - `capsule_uv(radius, height, segments, rings)` → mesh handle
 
+### Tangent-Enabled Mesh Generation (Normal Mapping)
+- `cube_tangent(size_x, size_y, size_z)` → mesh handle
+- `sphere_tangent(radius, segments, rings)` → mesh handle
+- `plane_tangent(size_x, size_z, subdivisions_x, subdivisions_z)` → mesh handle
+- `torus_tangent(major_radius, minor_radius, major_segments, minor_segments)` → mesh handle
+
 ## Building
 
 ```bash
-# From project root
+# From the nethercore repo root
 cargo run -- procedural-shapes
 
-# Or build directly
-cd examples/procedural-shapes
+# Or build the WASM directly
+cd examples/2-graphics/procedural-shapes
 cargo build --target wasm32-unknown-unknown --release
 ```
 
@@ -84,8 +96,8 @@ This example demonstrates:
 
 1. **Procedural mesh generation** — Creating geometry at runtime without asset files
 2. **UV mapping** — Understanding how 2D texture coordinates wrap onto 3D shapes
-3. **Dual rendering paths** — Toggling between textured and untextured modes
-4. **Input handling** — Button press edge detection for mode switching
-5. **State management** — Maintaining separate mesh arrays for each mode
+3. **Tangent data** — Preparing meshes for normal-mapped rendering
+4. **Procedural textures** — UV debug + albedo + normal maps
+5. **Input handling** — Button edge detection for mode switching
 
 Use this example as a reference for incorporating procedural shapes into your own games!

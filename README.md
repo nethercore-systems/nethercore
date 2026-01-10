@@ -154,7 +154,7 @@ The examples will appear in the Nethercore ZX game library. Use the refresh butt
 - **Case-insensitive**: `CUBE`, `Cube`, and `cube` all work
 - **Error messages**: Invalid games show suggestions and available games list
 
-The `/examples` directory contains 42 example games covering graphics, animation, audio, and more.
+The `/examples` directory contains 46 example games covering graphics, animation, audio, and more.
 
 See [examples/README.md](./examples/README.md) for the complete list with descriptions.
 

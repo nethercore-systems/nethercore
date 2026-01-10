@@ -41,5 +41,4 @@ When changing shared types, keep platform building.
 
 ## AI Plugins
 
-See `../nethercore-ai-plugins/` (excluded from workspace doc cleanup).
-
+See `../nethercore-ai-plugins/` (legacy plugin packs for Claude Code/Codex workflows).
