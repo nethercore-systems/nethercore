@@ -987,8 +987,12 @@ fn torus_tangent(
         return 0;
     }
 
-    let mesh_data: MeshDataTangent =
-        procedural::generate_torus_tangent(major_radius, minor_radius, major_segments, minor_segments);
+    let mesh_data: MeshDataTangent = procedural::generate_torus_tangent(
+        major_radius,
+        minor_radius,
+        major_segments,
+        minor_segments,
+    );
 
     let vertex_count = mesh_data.vertices.len() / 20;
     let index_count = mesh_data.indices.len();
@@ -1006,7 +1010,13 @@ fn torus_tangent(
 
     info!(
         "torus_tangent: created mesh {} (major={}, minor={}, {}×{} segments, {} verts, {} indices, PACKED with tangents)",
-        handle, major_radius, minor_radius, major_segments, minor_segments, vertex_count, index_count
+        handle,
+        major_radius,
+        minor_radius,
+        major_segments,
+        minor_segments,
+        vertex_count,
+        index_count
     );
     handle
 }

@@ -7,6 +7,7 @@
 use std::path::Path;
 
 use anyhow::Result;
+use nethercore_shared::{MAX_ROM_BYTES, read_file_with_limit};
 
 use super::{DataDirProvider, LocalGame};
 
@@ -173,7 +174,7 @@ pub fn install_rom(
     }
 
     // Fall back to reading bytes and checking magic
-    let bytes = std::fs::read(rom_path)?;
+    let bytes = read_file_with_limit(rom_path, MAX_ROM_BYTES)?;
     if let Some(loader) = registry.find_loader(&bytes) {
         return loader.install(rom_path, data_dir_provider);
     }

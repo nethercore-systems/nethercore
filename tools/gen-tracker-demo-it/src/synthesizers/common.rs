@@ -69,4 +69,3 @@ pub fn exp_decay(t: f32, decay_rate: f32) -> f32 {
 pub fn exp_attack(t: f32, attack_rate: f32) -> f32 {
     1.0 - (-attack_rate * t).exp()
 }
-

@@ -21,6 +21,9 @@ use std::f32::consts::TAU;
 use std::fs;
 use std::path::PathBuf;
 
+/// Mesh data: (positions, normals, colors, indices, material_name)
+type MeshData = (Vec<[f32; 3]>, Vec<[f32; 3]>, Vec<[f32; 4]>, Vec<u16>, String);
+
 /// Number of nodes for the rigid hierarchy (Base, Arm, Claw)
 const NODE_COUNT: usize = 3;
 /// Frame count for animation
@@ -137,13 +140,7 @@ fn generate_mesh_glb(mesh_type: MeshType) -> Vec<u8> {
 }
 
 /// Create base mesh: flat hexagonal platform (origin at center)
-fn create_base_mesh() -> (
-    Vec<[f32; 3]>,
-    Vec<[f32; 3]>,
-    Vec<[f32; 4]>,
-    Vec<u16>,
-    String,
-) {
+fn create_base_mesh() -> MeshData {
     let mut positions = Vec::new();
     let mut normals = Vec::new();
     let mut colors = Vec::new();
@@ -237,13 +234,7 @@ fn create_base_mesh() -> (
 }
 
 /// Create arm mesh: elongated box (origin at pivot point)
-fn create_arm_mesh() -> (
-    Vec<[f32; 3]>,
-    Vec<[f32; 3]>,
-    Vec<[f32; 4]>,
-    Vec<u16>,
-    String,
-) {
+fn create_arm_mesh() -> MeshData {
     let mut positions = Vec::new();
     let mut normals = Vec::new();
     let mut colors = Vec::new();
@@ -336,13 +327,7 @@ fn create_arm_mesh() -> (
 }
 
 /// Create claw mesh: two prongs that can open/close (origin at pivot)
-fn create_claw_mesh() -> (
-    Vec<[f32; 3]>,
-    Vec<[f32; 3]>,
-    Vec<[f32; 4]>,
-    Vec<u16>,
-    String,
-) {
+fn create_claw_mesh() -> MeshData {
     let mut positions = Vec::new();
     let mut normals = Vec::new();
     let mut colors = Vec::new();

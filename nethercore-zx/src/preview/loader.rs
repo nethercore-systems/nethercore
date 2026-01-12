@@ -5,6 +5,7 @@
 use std::path::Path;
 
 use anyhow::{Context, Result};
+use nethercore_shared::{MAX_ROM_BYTES, read_file_with_limit};
 use zx_common::{ZXDataPack, ZXRom};
 
 use super::viewers::ZXAssetViewer;
@@ -42,7 +43,7 @@ impl ZXPreviewLoader {
     /// - The ROM fails validation
     pub fn load_for_preview(path: &Path) -> Result<PreviewData<ZXDataPack>> {
         // Read the ROM file
-        let rom_bytes = std::fs::read(path)
+        let rom_bytes = read_file_with_limit(path, MAX_ROM_BYTES)
             .with_context(|| format!("Failed to read ROM file: {}", path.display()))?;
 
         // Parse the ROM
@@ -91,7 +92,7 @@ impl ZXPreviewLoader {
     /// This is useful for listing ROMs in a directory without
     /// loading all their assets into memory.
     pub fn peek_metadata(path: &Path) -> Result<PreviewMetadata> {
-        let rom_bytes = std::fs::read(path)
+        let rom_bytes = read_file_with_limit(path, MAX_ROM_BYTES)
             .with_context(|| format!("Failed to read ROM file: {}", path.display()))?;
 
         let rom = ZXRom::from_bytes(&rom_bytes)

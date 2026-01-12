@@ -22,15 +22,15 @@ mod pipeline;
 mod quad_instance;
 mod render_state;
 mod texture_manager;
-mod unified_shading_state;
+pub(crate) mod unified_shading_state;
 mod vertex;
 
 use hashbrown::HashMap;
 
 use anyhow::{Context, Result};
 
-use nethercore_core::console::Graphics;
 use crate::console::RESOLUTION;
+use nethercore_core::console::Graphics;
 
 // Re-export packing utilities from zx-common (for FFI and backwards compat)
 pub use zx_common::{
@@ -55,8 +55,8 @@ pub use unified_shading_state::{
     FLAG_DITHER_OFFSET_X_SHIFT,
     FLAG_DITHER_OFFSET_Y_MASK,
     FLAG_DITHER_OFFSET_Y_SHIFT,
-    FLAG_SKIP_NORMAL_MAP,
     FLAG_SKINNING_MODE,
+    FLAG_SKIP_NORMAL_MAP,
     FLAG_TEXTURE_FILTER_LINEAR,
     FLAG_UNIFORM_ALPHA_MASK,
     FLAG_UNIFORM_ALPHA_SHIFT,

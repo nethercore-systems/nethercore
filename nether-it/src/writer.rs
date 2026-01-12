@@ -105,7 +105,8 @@ impl ItWriter {
     pub fn add_sample_header_only(&mut self, sample: ItSample) -> u8 {
         let mut sample = sample;
         sample.length = 0; // Force zero length
-        sample.flags = ItSampleFlags::from_bits(sample.flags.bits() & !ItSampleFlags::HAS_DATA.bits()); // Clear HAS_DATA flag
+        sample.flags =
+            ItSampleFlags::from_bits(sample.flags.bits() & !ItSampleFlags::HAS_DATA.bits()); // Clear HAS_DATA flag
 
         self.module.samples.push(sample);
         self.sample_data.push(Vec::new()); // Empty audio data

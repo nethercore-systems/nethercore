@@ -101,16 +101,16 @@ impl NchsSocket {
     ///
     /// * `addr` - Address to bind to (e.g., "0.0.0.0:7770" or "127.0.0.1:0")
     pub fn bind(addr: &str) -> Result<Self, NchsSocketError> {
-        let socket_addr: SocketAddr = addr
-            .parse()
-            .map_err(|e| NchsSocketError::AddressParse(format!("Invalid address '{}': {}", addr, e)))?;
+        let socket_addr: SocketAddr = addr.parse().map_err(|e| {
+            NchsSocketError::AddressParse(format!("Invalid address '{}': {}", addr, e))
+        })?;
 
-        let socket = UdpSocket::bind(socket_addr)
-            .map_err(|e| NchsSocketError::Bind(e.to_string()))?;
+        let socket =
+            UdpSocket::bind(socket_addr).map_err(|e| NchsSocketError::Bind(e.to_string()))?;
 
-        socket
-            .set_nonblocking(true)
-            .map_err(|e| NchsSocketError::SocketOption(format!("Failed to set non-blocking: {}", e)))?;
+        socket.set_nonblocking(true).map_err(|e| {
+            NchsSocketError::SocketOption(format!("Failed to set non-blocking: {}", e))
+        })?;
 
         let local_addr = socket
             .local_addr()
@@ -155,9 +155,9 @@ impl NchsSocket {
     ///
     /// The message is serialized with NCHS framing before sending.
     pub fn send(&self, addr: &str, msg: &NchsMessage) -> Result<(), NchsSocketError> {
-        let target: SocketAddr = addr
-            .parse()
-            .map_err(|e| NchsSocketError::AddressParse(format!("Invalid address '{}': {}", addr, e)))?;
+        let target: SocketAddr = addr.parse().map_err(|e| {
+            NchsSocketError::AddressParse(format!("Invalid address '{}': {}", addr, e))
+        })?;
 
         self.send_to(target, msg)
     }
@@ -263,7 +263,11 @@ impl NchsSocket {
     /// Wait for a specific message type (blocking with timeout)
     ///
     /// Other messages received during the wait are queued.
-    pub fn wait_for<F>(&mut self, timeout: Duration, predicate: F) -> Option<(SocketAddr, NchsMessage)>
+    pub fn wait_for<F>(
+        &mut self,
+        timeout: Duration,
+        predicate: F,
+    ) -> Option<(SocketAddr, NchsMessage)>
     where
         F: Fn(&NchsMessage) -> bool,
     {
@@ -293,7 +297,10 @@ impl NchsSocket {
     /// Note: This creates a new LocalSocket bound to a different port.
     /// The NCHS socket continues to exist for the protocol,
     /// while GGRS uses a separate port for game traffic.
-    pub fn into_local_socket(self, ggrs_port: u16) -> Result<LocalSocket, crate::rollback::LocalSocketError> {
+    pub fn into_local_socket(
+        self,
+        ggrs_port: u16,
+    ) -> Result<LocalSocket, crate::rollback::LocalSocketError> {
         // Drop the NCHS socket (releases the port)
         drop(self.socket);
 
@@ -305,7 +312,10 @@ impl NchsSocket {
     ///
     /// This creates a new LocalSocket on a different port while keeping
     /// the NCHS socket operational for late-join or session management.
-    pub fn create_ggrs_socket(&self, ggrs_port: u16) -> Result<LocalSocket, crate::rollback::LocalSocketError> {
+    pub fn create_ggrs_socket(
+        &self,
+        ggrs_port: u16,
+    ) -> Result<LocalSocket, crate::rollback::LocalSocketError> {
         LocalSocket::bind(&format!("0.0.0.0:{}", ggrs_port))
     }
 
@@ -328,17 +338,13 @@ impl NchsSocket {
 
         // Try to get local IP by connecting to a public address
         // This doesn't actually send data, just determines the route
-        if let Ok(socket) = UdpSocket::bind("0.0.0.0:0") {
-            if socket.connect("8.8.8.8:80").is_ok() {
-                if let Ok(addr) = socket.local_addr() {
-                    if let IpAddr::V4(ipv4) = addr.ip() {
-                        if !ipv4.is_loopback() {
+        if let Ok(socket) = UdpSocket::bind("0.0.0.0:0")
+            && socket.connect("8.8.8.8:80").is_ok()
+                && let Ok(addr) = socket.local_addr()
+                    && let IpAddr::V4(ipv4) = addr.ip()
+                        && !ipv4.is_loopback() {
                             ips.push(ipv4.to_string());
                         }
-                    }
-                }
-            }
-        }
 
         // Also include localhost for local testing
         ips.push(Ipv4Addr::LOCALHOST.to_string());
@@ -374,7 +380,7 @@ impl std::fmt::Debug for NchsSocket {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::net::nchs::messages::{PlayerInfo, JoinRequest};
+    use crate::net::nchs::messages::{JoinRequest, PlayerInfo};
     use nethercore_shared::console::{ConsoleType, TickRate};
 
     #[test]
@@ -565,7 +571,10 @@ mod tests {
     #[test]
     fn test_get_local_ips_not_empty() {
         let ips = NchsSocket::get_local_ips();
-        assert!(!ips.is_empty(), "get_local_ips should return at least one IP");
+        assert!(
+            !ips.is_empty(),
+            "get_local_ips should return at least one IP"
+        );
         // Should always include localhost as fallback
         assert!(
             ips.contains(&"127.0.0.1".to_string()),

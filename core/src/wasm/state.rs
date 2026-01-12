@@ -20,9 +20,7 @@ pub fn read_string_from_memory<T: 'static>(
     let data = memory.data(&ctx);
     let range = checked_range(ptr, len as usize, data.len())?;
 
-    std::str::from_utf8(&data[range])
-        .ok()
-        .map(String::from)
+    std::str::from_utf8(&data[range]).ok().map(String::from)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,8 +36,8 @@ pub fn read_bytes_from_memory<T: 'static>(
     len: u32,
 ) -> Result<Vec<u8>, MemoryAccessError> {
     let data = memory.data(&ctx);
-    let range = checked_range(ptr, len as usize, data.len())
-        .ok_or(MemoryAccessError::OutOfBounds)?;
+    let range =
+        checked_range(ptr, len as usize, data.len()).ok_or(MemoryAccessError::OutOfBounds)?;
     Ok(data[range].to_vec())
 }
 
@@ -51,17 +49,13 @@ pub fn write_bytes_to_memory<T: 'static>(
     bytes: &[u8],
 ) -> Result<(), MemoryAccessError> {
     let data = memory.data_mut(&mut ctx);
-    let range = checked_range(ptr, bytes.len(), data.len())
-        .ok_or(MemoryAccessError::OutOfBounds)?;
+    let range =
+        checked_range(ptr, bytes.len(), data.len()).ok_or(MemoryAccessError::OutOfBounds)?;
     data[range].copy_from_slice(bytes);
     Ok(())
 }
 
-fn checked_range(
-    ptr: u32,
-    len: usize,
-    data_len: usize,
-) -> Option<std::ops::Range<usize>> {
+fn checked_range(ptr: u32, len: usize, data_len: usize) -> Option<std::ops::Range<usize>> {
     let start = ptr as usize;
     let end = start.checked_add(len)?;
     if end > data_len {

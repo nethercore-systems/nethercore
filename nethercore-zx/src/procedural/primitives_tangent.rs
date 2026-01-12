@@ -9,6 +9,9 @@ use tracing::warn;
 
 use super::types::MeshBuilderTangent;
 
+/// Face data: (normal, tangent, handedness, 4 vertex positions, 4 UVs)
+type FaceData = (Vec3, Vec3, f32, [(f32, f32, f32); 4], [(f32, f32); 4]);
+
 /// Generate a UV sphere mesh with tangent data for normal mapping
 ///
 /// # Arguments
@@ -210,7 +213,7 @@ pub fn generate_cube_tangent<M: MeshBuilderTangent + Default>(
 
     // Face data: (normal, tangent, handedness, 4 vertex positions, 4 UVs)
     // For each face, tangent follows U direction, bitangent = normal × tangent * handedness follows V
-    let faces: [(Vec3, Vec3, f32, [(f32, f32, f32); 4], [(f32, f32); 4]); 6] = [
+    let faces: [FaceData; 6] = [
         // Front (+Z): normal=+Z, tangent=+X, bitangent=+Y
         (
             Vec3::Z,
@@ -292,13 +295,13 @@ pub fn generate_cube_tangent<M: MeshBuilderTangent + Default>(
     ];
 
     for (normal, tangent, handedness, positions, uvs) in &faces {
-        let base_idx = (mesh.add_vertex_tangent(
+        let base_idx = mesh.add_vertex_tangent(
             Vec3::new(positions[0].0, positions[0].1, positions[0].2),
             uvs[0],
             *normal,
             *tangent,
             *handedness,
-        )) as u16;
+        );
 
         mesh.add_vertex_tangent(
             Vec3::new(positions[1].0, positions[1].1, positions[1].2),
@@ -382,7 +385,8 @@ pub fn generate_torus_tangent<M: MeshBuilderTangent + Default>(
             let v = minor as f32 / minor_segments as f32;
 
             // Normal points outward from tube center
-            let tube_normal = Vec3::new(theta.cos() * phi.cos(), phi.sin(), theta.sin() * phi.cos());
+            let tube_normal =
+                Vec3::new(theta.cos() * phi.cos(), phi.sin(), theta.sin() * phi.cos());
 
             let position = tube_center + tube_normal * minor_radius;
             let normal = tube_normal.normalize();

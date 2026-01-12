@@ -7,7 +7,9 @@
 //! - ROM files in the games directory (detected via RomLoaderRegistry)
 //! - Subdirectories with `manifest.json` and `rom.wasm` (development, backward compatibility)
 
-use nethercore_shared::{LocalGameManifest, ZX_ROM_FORMAT};
+use nethercore_shared::{
+    LocalGameManifest, MAX_ROM_BYTES, ZX_ROM_FORMAT, is_safe_game_id, read_file_with_limit,
+};
 use std::path::{Path, PathBuf};
 
 use super::DataDirProvider;
@@ -89,7 +91,7 @@ fn get_games_from_dir(games_dir: &Path, registry: Option<&RomLoaderRegistry>) ->
                 && let Some(loader) = registry.find_by_extension(ext)
             {
                 // Load ROM metadata using the appropriate loader
-                let rom_bytes = std::fs::read(&path).ok()?;
+                let rom_bytes = read_file_with_limit(&path, MAX_ROM_BYTES).ok()?;
                 let metadata = loader.load_metadata(&rom_bytes).ok()?;
 
                 return Some(LocalGame {
@@ -152,6 +154,9 @@ fn get_games_from_dir(games_dir: &Path, registry: Option<&RomLoaderRegistry>) ->
 /// Returns `true` if the game's ROM file exists at the expected path.
 #[allow(dead_code)] // Public API for download flow
 pub fn is_cached(provider: &dyn DataDirProvider, game_id: &str) -> bool {
+    if !is_safe_game_id(game_id) {
+        return false;
+    }
     provider
         .data_dir()
         .map(|dir| dir.join("games").join(game_id).join("rom.wasm").exists())
@@ -170,6 +175,12 @@ fn is_cached_in_dir(games_dir: &Path, game_id: &str) -> bool {
 /// Removes the entire game directory including manifest and ROM.
 /// Returns `Ok(())` even if the game doesn't exist.
 pub fn delete_game(provider: &dyn DataDirProvider, game_id: &str) -> std::io::Result<()> {
+    if !is_safe_game_id(game_id) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("Invalid game id: '{}'", game_id),
+        ));
+    }
     if let Some(dir) = provider.data_dir() {
         let game_dir = dir.join("games").join(game_id);
         if game_dir.exists() {
@@ -183,6 +194,12 @@ pub fn delete_game(provider: &dyn DataDirProvider, game_id: &str) -> std::io::Re
 /// Extracted for testability.
 #[cfg(test)]
 fn delete_game_in_dir(games_dir: &Path, game_id: &str) -> std::io::Result<()> {
+    if !is_safe_game_id(game_id) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("Invalid game id: '{}'", game_id),
+        ));
+    }
     let game_dir = games_dir.join(game_id);
     if game_dir.exists() {
         std::fs::remove_dir_all(game_dir)?;
@@ -610,5 +627,12 @@ mod tests {
         assert_eq!(games.len(), 1);
         assert_eq!(games[0].id, long_id);
         assert!(is_cached_in_dir(temp_dir.path(), &long_id));
+    }
+
+    #[test]
+    fn test_delete_rejects_invalid_id() {
+        let temp_dir = TempDir::new().unwrap();
+        let result = delete_game_in_dir(temp_dir.path(), "../evil");
+        assert!(result.is_err());
     }
 }

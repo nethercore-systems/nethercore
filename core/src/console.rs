@@ -153,10 +153,10 @@ pub trait Console: Send + 'static {
     ///
     /// Use `()` for consoles without audio generation.
     type AudioGenerator: AudioGenerator<
-        RollbackState = Self::RollbackState,
-        State = Self::State,
-        Audio = Self::Audio,
-    >;
+            RollbackState = Self::RollbackState,
+            State = Self::State,
+            Audio = Self::Audio,
+        >;
 
     /// Get console specifications
     fn specs() -> &'static ConsoleSpecs;

@@ -53,8 +53,8 @@ impl AssertCondition {
         let value_str = value_str.trim();
 
         // Parse value
-        let value = if value_str.starts_with("$prev_") {
-            AssertValue::PrevValue(value_str[6..].to_string())
+        let value = if let Some(prev_var) = value_str.strip_prefix("$prev_") {
+            AssertValue::PrevValue(prev_var.to_string())
         } else if value_str.starts_with('$') {
             AssertValue::Variable(value_str.to_string())
         } else if value_str == "true" {
@@ -62,9 +62,9 @@ impl AssertCondition {
         } else if value_str == "false" {
             AssertValue::Number(0.0)
         } else {
-            let num: f64 = value_str
-                .parse()
-                .map_err(|_| ParseError::InvalidAssertion(format!("Invalid number: {}", value_str)))?;
+            let num: f64 = value_str.parse().map_err(|_| {
+                ParseError::InvalidAssertion(format!("Invalid number: {}", value_str))
+            })?;
             AssertValue::Number(num)
         };
 
@@ -376,7 +376,10 @@ action_params = { level = 5, speed = 1.5, name = "test_run", enabled = true }
         let params = script.frames[0].action_params.as_ref().unwrap();
 
         // Test Int parameter
-        assert!(matches!(params.get("level"), Some(ActionParamValue::Int(5))));
+        assert!(matches!(
+            params.get("level"),
+            Some(ActionParamValue::Int(5))
+        ));
 
         // Test Float parameter
         match params.get("speed") {
@@ -391,7 +394,10 @@ action_params = { level = 5, speed = 1.5, name = "test_run", enabled = true }
         ));
 
         // Test Bool parameter
-        assert!(matches!(params.get("enabled"), Some(ActionParamValue::Bool(true))));
+        assert!(matches!(
+            params.get("enabled"),
+            Some(ActionParamValue::Bool(true))
+        ));
     }
 
     #[test]
@@ -430,7 +436,10 @@ snap = true
             .collect();
         assert_eq!(frame0_actions.len(), 2);
         assert_eq!(frame0_actions[0].action, Some("Set Difficulty".to_string()));
-        assert_eq!(frame0_actions[1].action, Some("Set Player Count".to_string()));
+        assert_eq!(
+            frame0_actions[1].action,
+            Some("Set Player Count".to_string())
+        );
     }
 
     #[test]
@@ -456,7 +465,10 @@ action = "Reset State"
         let mut params = HashMap::new();
         params.insert("level".to_string(), ActionParamValue::Int(5));
         params.insert("speed".to_string(), ActionParamValue::Float(2.5));
-        params.insert("name".to_string(), ActionParamValue::String("test".to_string()));
+        params.insert(
+            "name".to_string(),
+            ActionParamValue::String("test".to_string()),
+        );
         params.insert("debug".to_string(), ActionParamValue::Bool(true));
 
         let script = ReplayScript {
@@ -481,7 +493,13 @@ action = "Reset State"
 
         assert_eq!(parsed.frames[0].action, Some("Test Action".to_string()));
         let parsed_params = parsed.frames[0].action_params.as_ref().unwrap();
-        assert!(matches!(parsed_params.get("level"), Some(ActionParamValue::Int(5))));
-        assert!(matches!(parsed_params.get("debug"), Some(ActionParamValue::Bool(true))));
+        assert!(matches!(
+            parsed_params.get("level"),
+            Some(ActionParamValue::Int(5))
+        ));
+        assert!(matches!(
+            parsed_params.get("debug"),
+            Some(ActionParamValue::Bool(true))
+        ));
     }
 }

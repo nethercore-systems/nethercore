@@ -14,8 +14,8 @@
 use anyhow::Result;
 use nethercore_core::library::{DataDirProvider, LocalGame, get_local_games, resolve_game_id};
 use nethercore_library::registry::{ConnectionMode, ConsoleRegistry, PlayerOptions};
-use nethercore_shared::ROM_FORMATS;
 use nethercore_library::update::check_and_prompt_for_update;
+use nethercore_shared::ROM_FORMATS;
 use std::env;
 use std::path::PathBuf;
 
@@ -285,7 +285,10 @@ fn main() -> Result<()> {
             eprintln!("No games installed. Download games from the library UI.");
             let extensions = rom_extension_list();
             if !extensions.is_empty() {
-                eprintln!("Tip: You can also pass a {} file path directly.", extensions);
+                eprintln!(
+                    "Tip: You can also pass a {} file path directly.",
+                    extensions
+                );
             }
             std::process::exit(1);
         }

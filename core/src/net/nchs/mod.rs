@@ -65,13 +65,13 @@ pub use validation::{is_netplay_compatible, validate_join_request};
 // Re-export message types
 pub use messages::{
     GuestReady, JoinAccept, JoinReject, JoinRejectReason, JoinRequest, LobbyState, LobbyUpdate,
-    NchsDecodeError, NchsMessage, NetworkConfig, PlayerConnectionInfo, PlayerInfo, PlayerSlot,
-    PunchAck, PunchHello, SaveConfig, SaveMode, SessionStart, NCHS_HEADER_SIZE, NCHS_MAGIC,
-    NCHS_VERSION,
+    NCHS_HEADER_SIZE, NCHS_MAGIC, NCHS_VERSION, NchsDecodeError, NchsMessage, NetworkConfig,
+    PlayerConnectionInfo, PlayerInfo, PlayerSlot, PunchAck, PunchHello, SaveConfig, SaveMode,
+    SessionStart,
 };
 
 // Re-export socket types
-pub use socket::{NchsSocket, NchsSocketError, DEFAULT_NCHS_PORT};
+pub use socket::{DEFAULT_NCHS_PORT, NchsSocket, NchsSocketError};
 
 use nethercore_shared::netplay::NetplayMetadata;
 
@@ -189,7 +189,7 @@ impl NchsSession {
     pub fn host(port: u16, config: NchsConfig) -> Result<Self, NchsError> {
         let host_machine = HostStateMachine::new(
             port,
-            config.netplay.clone(),
+            config.netplay,
             config.player_info.clone(),
             config.network_config.clone(),
         )?;
@@ -207,7 +207,7 @@ impl NchsSession {
     pub fn join(host_addr: &str, config: NchsConfig) -> Result<Self, NchsError> {
         let guest_machine = GuestStateMachine::new(
             host_addr,
-            config.netplay.clone(),
+            config.netplay,
             config.player_info.clone(),
         )?;
 
@@ -258,17 +258,17 @@ impl NchsSession {
                             }
                         }
                     }
-                    GuestEvent::Rejected(reject) => {
-                        NchsEvent::Error(NchsError::Rejected(reject))
-                    }
+                    GuestEvent::Rejected(reject) => NchsEvent::Error(NchsError::Rejected(reject)),
                     GuestEvent::LobbyUpdated(lobby) => NchsEvent::LobbyUpdated(lobby),
                     GuestEvent::SessionStarting(session_start) => {
                         // Still punching, but session is starting
                         self.session_start = Some(session_start.clone());
-                        NchsEvent::LobbyUpdated(guest.lobby().cloned().unwrap_or_else(|| LobbyState {
-                            players: vec![],
-                            max_players: self.config.netplay.max_players,
-                            host_handle: 0,
+                        NchsEvent::LobbyUpdated(guest.lobby().cloned().unwrap_or_else(|| {
+                            LobbyState {
+                                players: vec![],
+                                max_players: self.config.netplay.max_players,
+                                host_handle: 0,
+                            }
                         }))
                     }
                     GuestEvent::Ready => {
@@ -307,9 +307,9 @@ impl NchsSession {
     pub fn set_ready(&mut self, ready: bool) -> Result<(), NchsError> {
         match &mut self.inner {
             SessionInner::Guest(guest) => guest.set_ready(ready),
-            SessionInner::Host(_) => {
-                Err(NchsError::ProtocolError("Only guest can set ready".to_string()))
-            }
+            SessionInner::Host(_) => Err(NchsError::ProtocolError(
+                "Only guest can set ready".to_string(),
+            )),
         }
     }
 
@@ -388,9 +388,10 @@ impl NchsSession {
     pub fn player_count(&self) -> u8 {
         match &self.inner {
             SessionInner::Host(host) => host.player_count(),
-            SessionInner::Guest(guest) => {
-                guest.lobby().map(|l| l.players.iter().filter(|p| p.active).count() as u8).unwrap_or(0)
-            }
+            SessionInner::Guest(guest) => guest
+                .lobby()
+                .map(|l| l.players.iter().filter(|p| p.active).count() as u8)
+                .unwrap_or(0),
         }
     }
 
@@ -545,7 +546,9 @@ mod tests {
         for _ in 0..100 {
             match host.poll() {
                 NchsEvent::LobbyUpdated(lobby) => {
-                    let guests_ready = lobby.players.iter()
+                    let guests_ready = lobby
+                        .players
+                        .iter()
                         .filter(|p| p.active && p.handle != 0)
                         .all(|p| p.ready);
                     if guests_ready {
@@ -570,7 +573,10 @@ mod tests {
         for _ in 0..100 {
             match guest.poll() {
                 NchsEvent::Ready(ss) => {
-                    assert_eq!(ss.random_seed, session_start.random_seed, "Seeds should match");
+                    assert_eq!(
+                        ss.random_seed, session_start.random_seed,
+                        "Seeds should match"
+                    );
                     guest_ready = true;
                     break;
                 }
@@ -684,7 +690,10 @@ mod tests {
             thread::sleep(Duration::from_millis(10));
         }
 
-        assert!(rejected, "Guest should be rejected for console type mismatch");
+        assert!(
+            rejected,
+            "Guest should be rejected for console type mismatch"
+        );
         assert_eq!(reject_reason, Some(JoinRejectReason::ConsoleTypeMismatch));
     }
 
@@ -850,7 +859,10 @@ mod tests {
             thread::sleep(Duration::from_millis(10));
         }
 
-        assert!(rejected, "Guest2 should be rejected because game is in progress");
+        assert!(
+            rejected,
+            "Guest2 should be rejected because game is in progress"
+        );
         assert_eq!(reject_reason, Some(JoinRejectReason::GameInProgress));
     }
 
@@ -919,7 +931,10 @@ mod tests {
         // Verify host's address is not 0.0.0.0
         let host_slot = &lobby.players[0];
         assert!(host_slot.active, "Host slot should be active");
-        let addr = host_slot.addr.as_ref().expect("Host should have an address");
+        let addr = host_slot
+            .addr
+            .as_ref()
+            .expect("Host should have an address");
         assert!(
             !addr.starts_with("0.0.0.0"),
             "Host address in lobby should not be 0.0.0.0, got: {}",

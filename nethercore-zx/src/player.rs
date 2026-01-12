@@ -13,7 +13,7 @@ use anyhow::{Context, Result};
 
 use nethercore_core::Console;
 use nethercore_core::app::{LoadedRom, RomLoader, StandaloneConfig, run_standalone};
-use nethercore_shared::ZX_ROM_FORMAT;
+use nethercore_shared::{MAX_ROM_BYTES, MAX_WASM_BYTES, ZX_ROM_FORMAT, read_file_with_limit};
 use zx_common::{ZXDataPack, ZXRom};
 
 use crate::console::NethercoreZX;
@@ -38,7 +38,8 @@ impl RomLoader for ZXRomLoader {
             .to_string();
 
         if path.extension().and_then(|e| e.to_str()) == Some(ZX_ROM_FORMAT.extension) {
-            let rom_bytes = std::fs::read(path).context("Failed to read Nethercore ZX ROM file")?;
+            let rom_bytes = read_file_with_limit(path, MAX_ROM_BYTES)
+                .context("Failed to read Nethercore ZX ROM file")?;
 
             let rom = ZXRom::from_bytes(&rom_bytes).context("Failed to parse Nethercore ZX ROM")?;
 
@@ -60,7 +61,8 @@ impl RomLoader for ZXRomLoader {
             })
         } else {
             // Raw WASM file - use file stem as name
-            let wasm = std::fs::read(path).context("Failed to read WASM file")?;
+            let wasm =
+                read_file_with_limit(path, MAX_WASM_BYTES).context("Failed to read WASM file")?;
 
             Ok(LoadedRom {
                 code: wasm,

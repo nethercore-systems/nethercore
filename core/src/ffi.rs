@@ -9,8 +9,7 @@ use wasmtime::{Caller, Linker};
 use crate::console::{ConsoleInput, ConsoleRollbackState};
 use crate::debug::ffi::register_debug_ffi;
 use crate::wasm::{
-    MAX_SAVE_SIZE, MAX_SAVE_SLOTS, WasmGameContext, read_bytes_from_memory,
-    write_bytes_to_memory,
+    MAX_SAVE_SIZE, MAX_SAVE_SLOTS, WasmGameContext, read_bytes_from_memory, write_bytes_to_memory,
 };
 
 /// Register common FFI functions with the linker
@@ -79,13 +78,12 @@ fn log_message<I: ConsoleInput, S, R: ConsoleRollbackState>(
     ptr: u32,
     len: u32,
 ) {
-    if let Some(memory) = caller.data().game.memory {
-        if let Ok(bytes) = read_bytes_from_memory(memory, &caller, ptr, len)
+    if let Some(memory) = caller.data().game.memory
+        && let Ok(bytes) = read_bytes_from_memory(memory, &caller, ptr, len)
             && let Ok(msg) = std::str::from_utf8(&bytes)
         {
             tracing::info!("[GAME] {}", msg);
         }
-    }
 }
 
 /// Request to quit to the library

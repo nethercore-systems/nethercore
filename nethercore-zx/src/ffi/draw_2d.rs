@@ -9,6 +9,9 @@ use wasmtime::{Caller, Linker};
 use super::ZXGameContext;
 use crate::state::Font;
 
+/// Custom font data: (texture, atlas_width, atlas_height, char_width, char_height, first_char, char_count, char_widths)
+type CustomFontData = (u32, u32, u32, u8, u8, u32, u32, Option<Vec<u8>>);
+
 /// Default font texture size used when texture dimensions cannot be determined.
 const DEFAULT_FONT_TEXTURE_SIZE: (u32, u32) = (1024, 1024);
 
@@ -269,14 +272,7 @@ fn draw_rect(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, w: f32, h: f
 ///
 /// Supports full UTF-8 encoding. Text is left-aligned with no wrapping.
 /// Uses color from set_color().
-fn draw_text(
-    mut caller: Caller<'_, ZXGameContext>,
-    ptr: u32,
-    len: u32,
-    x: f32,
-    y: f32,
-    size: f32,
-) {
+fn draw_text(mut caller: Caller<'_, ZXGameContext>, ptr: u32, len: u32, x: f32, y: f32, size: f32) {
     // Read UTF-8 string from WASM memory
     let memory = match caller.data().game.memory {
         Some(m) => m,
@@ -345,8 +341,7 @@ fn draw_text(
 
     // Extract font data into local variables to avoid cloning the entire Font struct.
     // Only the char_widths Vec is cloned (if present), all other fields are Copy types.
-    let custom_font_data: Option<(u32, u32, u32, u8, u8, u32, u32, Option<Vec<u8>>)> =
-        if font_handle == 0 {
+    let custom_font_data: Option<CustomFontData> = if font_handle == 0 {
             None
         } else {
             let font_index = (font_handle - 1) as usize;
@@ -986,7 +981,10 @@ mod tests {
         state.bound_textures[0] = u32::MAX;
         let color_before_draw = state.current_shading_state.color_rgba8;
 
-        assert_eq!(color_before_draw, 0xFF0000FF, "Color should be red before draw");
+        assert_eq!(
+            color_before_draw, 0xFF0000FF,
+            "Color should be red before draw"
+        );
     }
 
     /// Test that changing color between draws works correctly
@@ -1024,7 +1022,10 @@ mod tests {
 
         // Verify we have pure green, not a blend
         assert_eq!(state.current_shading_state.color_rgba8, 0x00FF00FF);
-        assert_ne!(green_state, _red_state, "State indices should differ when color changes");
+        assert_ne!(
+            green_state, _red_state,
+            "State indices should differ when color changes"
+        );
     }
 
     /// Test default color is white
@@ -1032,8 +1033,7 @@ mod tests {
     fn test_default_color_is_white() {
         let state = ZXFFIState::new();
         assert_eq!(
-            state.current_shading_state.color_rgba8,
-            0xFFFFFFFF,
+            state.current_shading_state.color_rgba8, 0xFFFFFFFF,
             "Default color should be white"
         );
     }
@@ -1045,17 +1045,26 @@ mod tests {
 
         // Set to red
         state.update_color(0xFF0000FF);
-        assert!(state.shading_state_dirty, "Should be dirty after color change");
+        assert!(
+            state.shading_state_dirty,
+            "Should be dirty after color change"
+        );
 
         // Clear dirty flag (simulate add_shading_state behavior)
         state.shading_state_dirty = false;
 
         // Set to same red again - should not mark dirty
         state.update_color(0xFF0000FF);
-        assert!(!state.shading_state_dirty, "Should not be dirty when color unchanged");
+        assert!(
+            !state.shading_state_dirty,
+            "Should not be dirty when color unchanged"
+        );
 
         // Set to different color - should mark dirty
         state.update_color(0x00FF00FF);
-        assert!(state.shading_state_dirty, "Should be dirty when color changes");
+        assert!(
+            state.shading_state_dirty,
+            "Should be dirty when color changes"
+        );
     }
 }

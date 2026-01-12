@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 use crate::manifest::NetherManifest;
+use nethercore_shared::{read_file_with_limit, MAX_WASM_BYTES};
 
 /// Arguments for the compile command
 #[derive(Args)]
@@ -47,7 +48,7 @@ pub fn execute(args: CompileArgs) -> Result<PathBuf> {
     println!("  Script: {}", script);
 
     // Parse script into command and arguments
-    let parts: Vec<&str> = script.split_whitespace().collect();
+    let parts = split_command_line(&script)?;
     if parts.is_empty() {
         anyhow::bail!("Empty build script");
     }
@@ -77,7 +78,7 @@ pub fn execute(args: CompileArgs) -> Result<PathBuf> {
     let wasm_path = manifest.find_wasm(&project_dir, args.debug)?;
 
     // Validate WASM
-    let wasm_bytes = std::fs::read(&wasm_path)
+    let wasm_bytes = read_file_with_limit(&wasm_path, MAX_WASM_BYTES)
         .with_context(|| format!("Failed to read WASM file: {}", wasm_path.display()))?;
 
     validate_wasm(&wasm_bytes)?;
@@ -108,6 +109,38 @@ fn validate_wasm(bytes: &[u8]) -> Result<()> {
     Ok(())
 }
 
+/// Split a command line into arguments, honoring basic single/double quotes.
+fn split_command_line(input: &str) -> Result<Vec<String>> {
+    let mut args = Vec::new();
+    let mut current = String::new();
+    let mut in_single = false;
+    let mut in_double = false;
+
+    for c in input.chars() {
+        match c {
+            '"' if !in_single => in_double = !in_double,
+            '\'' if !in_double => in_single = !in_single,
+            c if c.is_whitespace() && !in_single && !in_double => {
+                if !current.is_empty() {
+                    args.push(current);
+                    current = String::new();
+                }
+            }
+            _ => current.push(c),
+        }
+    }
+
+    if in_single || in_double {
+        anyhow::bail!("Unclosed quote in build script");
+    }
+
+    if !current.is_empty() {
+        args.push(current);
+    }
+
+    Ok(args)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -136,5 +169,17 @@ mod tests {
         let result = validate_wasm(tiny);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("too small"));
+    }
+
+    #[test]
+    fn test_split_command_line_basic() {
+        let parts = split_command_line("cargo build --release").unwrap();
+        assert_eq!(parts, vec!["cargo", "build", "--release"]);
+    }
+
+    #[test]
+    fn test_split_command_line_quotes() {
+        let parts = split_command_line("zig build \"-Dopt=release-fast\"").unwrap();
+        assert_eq!(parts, vec!["zig", "build", "-Dopt=release-fast"]);
     }
 }

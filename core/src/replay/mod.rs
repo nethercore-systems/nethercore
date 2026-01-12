@@ -111,9 +111,9 @@ pub mod types;
 
 // Re-export core types
 pub use types::{
-    Assertion, AssertExpr, Breakpoint, Checkpoint, DebugValue, DebugValueData,
+    AssertExpr, Assertion, AssertionResult, Breakpoint, Checkpoint, DebugValue, DebugValueData,
     InputSequence, InspectDirective, InspectTiming, LogDirective, Replay, ReplayFlags,
-    ReplayHeader, Snapshot, AssertionResult,
+    ReplayHeader, Snapshot,
 };
 
 // Re-export binary format
@@ -121,8 +121,8 @@ pub use binary::{BinaryReader, BinaryWriter};
 
 // Re-export script format
 pub use script::{
-    ActionParamValue, AssertCondition, AssertValue, CompareOp, CompiledAction, CompiledAssertion,
-    CompiledAssertValue, CompiledScript, CompileError, Compiler, FrameEntry, InputLayout,
+    ActionParamValue, AssertCondition, AssertValue, CompareOp, CompileError, CompiledAction,
+    CompiledAssertValue, CompiledAssertion, CompiledScript, Compiler, FrameEntry, InputLayout,
     InputValue, ParseError, ReplayScript, StructuredInput, decompile,
 };
 

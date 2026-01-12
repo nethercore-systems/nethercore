@@ -640,7 +640,7 @@ fn compress_bc5(pixels: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
             let src_idx = (src_y * w + src_x) * 4;
 
             // Extract R and G channels
-            rg_data.push(pixels[src_idx]);     // R
+            rg_data.push(pixels[src_idx]); // R
             rg_data.push(pixels[src_idx + 1]); // G
         }
     }
@@ -1148,10 +1148,10 @@ fn load_skeleton_native(id: &str, path: &std::path::Path) -> Result<PackedSkelet
 
         // Parse 12 floats from file (column-major: col0, col1, col2, col3)
         let mut cols = [[0.0f32; 3]; 4];
-        for col in 0..4 {
-            for row in 0..3 {
+        for (col, col_data) in cols.iter_mut().enumerate() {
+            for (row, cell) in col_data.iter_mut().enumerate() {
                 let float_offset = (col * 3 + row) * 4;
-                cols[col][row] = f32::from_le_bytes([
+                *cell = f32::from_le_bytes([
                     matrix_bytes[float_offset],
                     matrix_bytes[float_offset + 1],
                     matrix_bytes[float_offset + 2],

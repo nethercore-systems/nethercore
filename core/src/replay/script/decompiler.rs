@@ -2,8 +2,8 @@
 //!
 //! Converts binary replays back to TOML script format.
 
-use super::compiler::InputLayout;
 use super::ast::{FrameEntry, InputValue, ReplayScript};
+use super::compiler::InputLayout;
 use crate::replay::types::Replay;
 
 /// Decompile a binary replay to a script
@@ -13,17 +13,24 @@ pub fn decompile(replay: &Replay, layout: &dyn InputLayout) -> ReplayScript {
     // Convert each frame to a FrameEntry
     for (frame_idx, frame_inputs) in replay.inputs.iter().enumerate() {
         // Get player 1-4 inputs
-        let p1 = frame_inputs.get(0).map(|bytes| bytes_to_input(bytes, layout));
-        let p2 = frame_inputs.get(1).map(|bytes| bytes_to_input(bytes, layout));
-        let p3 = frame_inputs.get(2).map(|bytes| bytes_to_input(bytes, layout));
-        let p4 = frame_inputs.get(3).map(|bytes| bytes_to_input(bytes, layout));
+        let p1 = frame_inputs.first()
+            .map(|bytes| bytes_to_input(bytes, layout));
+        let p2 = frame_inputs
+            .get(1)
+            .map(|bytes| bytes_to_input(bytes, layout));
+        let p3 = frame_inputs
+            .get(2)
+            .map(|bytes| bytes_to_input(bytes, layout));
+        let p4 = frame_inputs
+            .get(3)
+            .map(|bytes| bytes_to_input(bytes, layout));
 
         // Check if this frame has an assertion
         let assert = replay
             .assertions
             .iter()
             .find(|a| a.frame == frame_idx as u64)
-            .map(|a| format_assertion(a));
+            .map(format_assertion);
 
         frames.push(FrameEntry {
             f: frame_idx as u64,
@@ -33,7 +40,7 @@ pub fn decompile(replay: &Replay, layout: &dyn InputLayout) -> ReplayScript {
             p4,
             snap: false, // Binary format doesn't preserve snap flags
             assert,
-            action: None,      // Binary format doesn't preserve actions
+            action: None, // Binary format doesn't preserve actions
             action_params: None,
         });
     }
@@ -94,7 +101,11 @@ fn format_assertion(assertion: &crate::replay::types::Assertion) -> String {
         AssertExpr::MemLt { addr, value } => format!("mem[0x{:x}] < {}", addr, value),
         AssertExpr::MemGe { addr, value } => format!("mem[0x{:x}] >= {}", addr, value),
         AssertExpr::MemLe { addr, value } => format!("mem[0x{:x}] <= {}", addr, value),
-        AssertExpr::MemApprox { addr, value, tolerance } => {
+        AssertExpr::MemApprox {
+            addr,
+            value,
+            tolerance,
+        } => {
             format!("mem[0x{:x}] ~= {} ± {}", addr, value, tolerance)
         }
         AssertExpr::MemIncreased { addr } => format!("mem[0x{:x}] increased", addr),
@@ -105,12 +116,9 @@ fn format_assertion(assertion: &crate::replay::types::Assertion) -> String {
 
 /// Check if all inputs are idle
 fn is_all_idle(inputs: &[&Option<InputValue>]) -> bool {
-    inputs.iter().all(|input| {
-        input
-            .as_ref()
-            .map(|v| v.is_idle())
-            .unwrap_or(true)
-    })
+    inputs
+        .iter()
+        .all(|input| input.as_ref().map(|v| v.is_idle()).unwrap_or(true))
 }
 
 /// Get console name from ID

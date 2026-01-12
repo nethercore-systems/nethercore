@@ -42,16 +42,20 @@ pub fn execute(
     println!();
 
     // Execute the replay
-    let execution_report = runner.execute()
+    let execution_report = runner
+        .execute()
         .with_context(|| "Failed to execute replay")?;
 
     // Print summary
     println!("=== Execution Complete ===");
-    println!("Frames executed: {}/{}", execution_report.frames_executed, execution_report.total_frames);
+    println!(
+        "Frames executed: {}/{}",
+        execution_report.frames_executed, execution_report.total_frames
+    );
     println!("Snapshots captured: {}", execution_report.snapshots.len());
-    println!("Assertions: {} passed, {} failed",
-        execution_report.summary.assertions_passed,
-        execution_report.summary.assertions_failed
+    println!(
+        "Assertions: {} passed, {} failed",
+        execution_report.summary.assertions_passed, execution_report.summary.assertions_failed
     );
     println!("Status: {}", execution_report.summary.status);
 
@@ -61,7 +65,8 @@ pub fn execute(
 
     // Write report if requested
     if let Some(report_path) = report {
-        let json = execution_report.to_json()
+        let json = execution_report
+            .to_json()
             .with_context(|| "Failed to serialize report to JSON")?;
 
         let mut file = File::create(&report_path)

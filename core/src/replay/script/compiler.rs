@@ -247,8 +247,8 @@ impl std::error::Error for CompileError {}
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::ast::FrameEntry;
+    use super::*;
 
     /// Mock input layout for testing
     struct MockLayout;
@@ -273,12 +273,24 @@ mod tests {
         fn decode_input(&self, bytes: &[u8]) -> StructuredInput {
             let byte = bytes.first().copied().unwrap_or(0);
             let mut buttons = Vec::new();
-            if byte & 0x01 != 0 { buttons.push("up".to_string()); }
-            if byte & 0x02 != 0 { buttons.push("down".to_string()); }
-            if byte & 0x04 != 0 { buttons.push("left".to_string()); }
-            if byte & 0x08 != 0 { buttons.push("right".to_string()); }
-            if byte & 0x10 != 0 { buttons.push("a".to_string()); }
-            if byte & 0x20 != 0 { buttons.push("b".to_string()); }
+            if byte & 0x01 != 0 {
+                buttons.push("up".to_string());
+            }
+            if byte & 0x02 != 0 {
+                buttons.push("down".to_string());
+            }
+            if byte & 0x04 != 0 {
+                buttons.push("left".to_string());
+            }
+            if byte & 0x08 != 0 {
+                buttons.push("right".to_string());
+            }
+            if byte & 0x10 != 0 {
+                buttons.push("a".to_string());
+            }
+            if byte & 0x20 != 0 {
+                buttons.push("b".to_string());
+            }
             StructuredInput {
                 buttons,
                 ..Default::default()

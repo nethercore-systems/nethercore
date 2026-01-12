@@ -7,7 +7,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use nethercore_core::library::{DataDirProvider, LocalGame, RomLoader, RomMetadata};
-use nethercore_shared::ZX_ROM_FORMAT;
+use nethercore_shared::{MAX_ROM_BYTES, ZX_ROM_FORMAT, is_safe_game_id, read_file_with_limit};
 
 use crate::ZXRom;
 
@@ -49,13 +49,18 @@ impl RomLoader for ZXRomLoader {
         data_dir_provider: &dyn DataDirProvider,
     ) -> Result<LocalGame> {
         // 1. Load and validate ROM
-        let bytes = std::fs::read(rom_path)
+        let bytes = read_file_with_limit(rom_path, MAX_ROM_BYTES)
             .with_context(|| format!("Failed to read ROM file: {}", rom_path.display()))?;
 
         let rom = ZXRom::from_bytes(&bytes)
             .with_context(|| format!("Failed to load NCZX ROM: {}", rom_path.display()))?;
 
-        // 2. Get game directory
+        // 2. Validate game ID (prevent path traversal / invalid paths)
+        if !is_safe_game_id(&rom.metadata.id) {
+            anyhow::bail!("Invalid game id in ROM metadata: '{}'", rom.metadata.id);
+        }
+
+        // 3. Get game directory
         let games_dir = data_dir_provider
             .data_dir()
             .ok_or_else(|| anyhow::anyhow!("Data directory not available"))?
@@ -63,11 +68,11 @@ impl RomLoader for ZXRomLoader {
 
         let game_dir = games_dir.join(&rom.metadata.id);
 
-        // 3. Create game directory
+        // 4. Create game directory
         std::fs::create_dir_all(&game_dir)
             .with_context(|| format!("Failed to create game directory: {}", game_dir.display()))?;
 
-        // 4. Extract WASM code
+        // 5. Extract WASM code
         std::fs::write(game_dir.join("rom.wasm"), &rom.code).with_context(|| {
             format!(
                 "Failed to write WASM code to: {}",
@@ -75,7 +80,7 @@ impl RomLoader for ZXRomLoader {
             )
         })?;
 
-        // 5. Extract thumbnail ONLY (screenshots stay in ROM to save disk space)
+        // 6. Extract thumbnail ONLY (screenshots stay in ROM to save disk space)
         if let Some(ref thumb) = rom.thumbnail {
             std::fs::write(game_dir.join("thumbnail.png"), thumb).with_context(|| {
                 format!(
@@ -85,7 +90,7 @@ impl RomLoader for ZXRomLoader {
             })?;
         }
 
-        // 6. Write manifest.json for backward compatibility with existing library system
+        // 7. Write manifest.json for backward compatibility with existing library system
         let manifest = rom.to_local_manifest();
         std::fs::write(
             game_dir.join("manifest.json"),
@@ -98,7 +103,7 @@ impl RomLoader for ZXRomLoader {
             )
         })?;
 
-        // 7. Return LocalGame
+        // 8. Return LocalGame
         Ok(LocalGame {
             id: rom.metadata.id.clone(),
             title: rom.metadata.title.clone(),
@@ -229,5 +234,24 @@ mod tests {
         assert!(game_dir.join("rom.wasm").exists());
         assert!(game_dir.join("thumbnail.png").exists());
         assert!(game_dir.join("manifest.json").exists());
+    }
+
+    #[test]
+    fn test_install_rejects_invalid_game_id() {
+        let loader = ZXRomLoader;
+
+        let temp_dir = TempDir::new().unwrap();
+        let provider = TestDataDirProvider {
+            path: temp_dir.path().to_path_buf(),
+        };
+
+        let mut rom = create_test_rom();
+        rom.metadata.id = "../evil".to_string();
+        let rom_bytes = rom.to_bytes().unwrap();
+        let rom_path = temp_dir.path().join("bad-id.nczx");
+        std::fs::write(&rom_path, rom_bytes).unwrap();
+
+        let result = loader.install(&rom_path, &provider);
+        assert!(result.is_err());
     }
 }

@@ -49,12 +49,7 @@ fn pass_config_hash(config: &PassConfig) -> u64 {
 
 impl PipelineKey {
     /// Create a new regular pipeline key from render state and pass config
-    pub fn new(
-        render_mode: u8,
-        format: u8,
-        state: &RenderState,
-        pass_config: &PassConfig,
-    ) -> Self {
+    pub fn new(render_mode: u8, format: u8, state: &RenderState, pass_config: &PassConfig) -> Self {
         Self::Regular {
             render_mode,
             vertex_format: format,
@@ -238,7 +233,11 @@ pub(crate) fn create_quad_pipeline(
 
     // Create render pipeline
     let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some(if is_screen_space { "Screen-Space Quad Pipeline" } else { "Billboard Pipeline" }),
+        label: Some(if is_screen_space {
+            "Screen-Space Quad Pipeline"
+        } else {
+            "Billboard Pipeline"
+        }),
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState {
             module: &shader_module,

@@ -99,9 +99,9 @@ impl<R: Read> BinaryReader<R> {
 
             for _ in 0..frame_count {
                 let mut frame_inputs = Vec::with_capacity(player_count);
-                for player_idx in 0..player_count {
+                for prev_player_input in &mut prev_frame {
                     let mut input = vec![0u8; input_size];
-                    for byte_idx in 0..input_size {
+                    for (byte_idx, input_byte) in input.iter_mut().enumerate() {
                         if offset >= delta_buffer.len() {
                             return Err(io::Error::new(
                                 io::ErrorKind::UnexpectedEof,
@@ -110,8 +110,8 @@ impl<R: Read> BinaryReader<R> {
                         }
                         let delta = delta_buffer[offset];
                         offset += 1;
-                        input[byte_idx] = prev_frame[player_idx][byte_idx] ^ delta;
-                        prev_frame[player_idx][byte_idx] = input[byte_idx];
+                        *input_byte = prev_player_input[byte_idx] ^ delta;
+                        prev_player_input[byte_idx] = *input_byte;
                     }
                     frame_inputs.push(input);
                 }
@@ -165,7 +165,9 @@ mod tests {
 
         // Write
         let mut buffer = Vec::new();
-        BinaryWriter::new(&mut buffer).write_replay(&replay).unwrap();
+        BinaryWriter::new(&mut buffer)
+            .write_replay(&replay)
+            .unwrap();
 
         // Read
         let parsed = BinaryReader::new(buffer.as_slice()).read_replay().unwrap();
@@ -199,7 +201,9 @@ mod tests {
 
         // Write
         let mut buffer = Vec::new();
-        BinaryWriter::new(&mut buffer).write_replay(&replay).unwrap();
+        BinaryWriter::new(&mut buffer)
+            .write_replay(&replay)
+            .unwrap();
 
         // Read
         let parsed = BinaryReader::new(buffer.as_slice()).read_replay().unwrap();
@@ -235,7 +239,9 @@ mod tests {
 
         // Write
         let mut buffer = Vec::new();
-        BinaryWriter::new(&mut buffer).write_replay(&replay).unwrap();
+        BinaryWriter::new(&mut buffer)
+            .write_replay(&replay)
+            .unwrap();
 
         // Should be smaller than uncompressed (100 frames * 2 bytes = 200 bytes)
         // Compressed should be much smaller due to repetition

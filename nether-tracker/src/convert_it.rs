@@ -321,9 +321,7 @@ fn convert_it_extended_effect(param: u8) -> TrackerEffect {
         nether_it::extended_effects::SET_FILTER => TrackerEffect::None, // Obsolete
         nether_it::extended_effects::GLISSANDO => TrackerEffect::SetGlissando(value != 0),
         // S2x - Set finetune: value 0-15 maps to -8..+7 semitones (centered at 8)
-        nether_it::extended_effects::SET_FINETUNE => {
-            TrackerEffect::SetFinetune((value as i8) - 8)
-        },
+        nether_it::extended_effects::SET_FINETUNE => TrackerEffect::SetFinetune((value as i8) - 8),
         nether_it::extended_effects::VIBRATO_WAVEFORM => TrackerEffect::VibratoWaveform(value),
         nether_it::extended_effects::TREMOLO_WAVEFORM => TrackerEffect::TremoloWaveform(value),
         nether_it::extended_effects::PANBRELLO_WAVEFORM => TrackerEffect::PanbrelloWaveform(value),

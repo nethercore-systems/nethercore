@@ -19,6 +19,7 @@
 //! ```
 
 use crate::console::{ConsoleType, nethercore_zx_specs};
+use std::str::FromStr;
 
 /// ROM format specification for a fantasy console.
 ///
@@ -112,13 +113,13 @@ pub const ROM_FORMATS: &[&RomFormat] = &[&ZX_ROM_FORMAT];
 pub fn get_rom_format_by_console(console_type: ConsoleType) -> Option<&'static RomFormat> {
     ROM_FORMATS
         .iter()
-        .find(|format| ConsoleType::from_str(format.console_type) == Some(console_type))
+        .find(|format| ConsoleType::from_str(format.console_type).ok() == Some(console_type))
         .copied()
 }
 
 /// Get the ROM format for a console type string.
 pub fn get_rom_format_by_console_type(console_type: &str) -> Option<&'static RomFormat> {
-    ConsoleType::from_str(console_type).and_then(get_rom_format_by_console)
+    ConsoleType::from_str(console_type).ok().and_then(get_rom_format_by_console)
 }
 
 /// Get the ROM format for a file extension (without the dot).
@@ -131,7 +132,7 @@ pub fn get_rom_format_by_extension(ext: &str) -> Option<&'static RomFormat> {
 
 /// Get the console type for a ROM file extension (without the dot).
 pub fn get_console_type_by_extension(ext: &str) -> Option<ConsoleType> {
-    get_rom_format_by_extension(ext).and_then(|format| ConsoleType::from_str(format.console_type))
+    get_rom_format_by_extension(ext).and_then(|format| ConsoleType::from_str(format.console_type).ok())
 }
 
 #[cfg(test)]
@@ -175,7 +176,9 @@ mod tests {
             ZX_ROM_FORMAT.magic
         );
         assert_eq!(
-            get_rom_format_by_console(ConsoleType::ZX).unwrap().extension,
+            get_rom_format_by_console(ConsoleType::ZX)
+                .unwrap()
+                .extension,
             "nczx"
         );
         assert_eq!(

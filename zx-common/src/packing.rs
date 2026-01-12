@@ -465,7 +465,10 @@ mod tests {
         assert_eq!(vertex_stride(0), 12); // POS only
         assert_eq!(vertex_stride(FORMAT_UV), 20); // POS + UV
         assert_eq!(vertex_stride(FORMAT_UV | FORMAT_NORMAL), 32); // POS + UV + NORMAL
-        assert_eq!(vertex_stride(FORMAT_UV | FORMAT_NORMAL | FORMAT_TANGENT), 48); // POS + UV + NORMAL + TANGENT
+        assert_eq!(
+            vertex_stride(FORMAT_UV | FORMAT_NORMAL | FORMAT_TANGENT),
+            48
+        ); // POS + UV + NORMAL + TANGENT
     }
 
     #[test]
@@ -473,16 +476,19 @@ mod tests {
         assert_eq!(vertex_stride_packed(0), 8); // POS only
         assert_eq!(vertex_stride_packed(FORMAT_UV), 12); // POS + UV
         assert_eq!(vertex_stride_packed(FORMAT_UV | FORMAT_NORMAL), 16); // POS + UV + NORMAL
-        assert_eq!(vertex_stride_packed(FORMAT_UV | FORMAT_NORMAL | FORMAT_TANGENT), 20); // POS + UV + NORMAL + TANGENT
+        assert_eq!(
+            vertex_stride_packed(FORMAT_UV | FORMAT_NORMAL | FORMAT_TANGENT),
+            20
+        ); // POS + UV + NORMAL + TANGENT
     }
 
     #[test]
     fn test_tangent_roundtrip() {
         let test_cases = [
-            ([1.0, 0.0, 0.0], 1.0),   // +X, positive handedness
-            ([-1.0, 0.0, 0.0], -1.0), // -X, negative handedness
-            ([0.0, 1.0, 0.0], 1.0),   // +Y, positive handedness
-            ([0.0, 0.0, 1.0], -1.0),  // +Z, negative handedness
+            ([1.0, 0.0, 0.0], 1.0),       // +X, positive handedness
+            ([-1.0, 0.0, 0.0], -1.0),     // -X, negative handedness
+            ([0.0, 1.0, 0.0], 1.0),       // +Y, positive handedness
+            ([0.0, 0.0, 1.0], -1.0),      // +Z, negative handedness
             ([0.577, 0.577, 0.577], 1.0), // Diagonal, positive handedness
         ];
 
@@ -493,8 +499,18 @@ mod tests {
             let expected = glam::Vec3::new(tangent[0], tangent[1], tangent[2]).normalize();
             let error = (decoded_dir - expected).length();
 
-            assert!(error < 0.02, "Tangent roundtrip failed for {:?}: error = {}", tangent, error);
-            assert_eq!(decoded_sign.signum(), handedness.signum(), "Handedness sign mismatch for {:?}", tangent);
+            assert!(
+                error < 0.02,
+                "Tangent roundtrip failed for {:?}: error = {}",
+                tangent,
+                error
+            );
+            assert_eq!(
+                decoded_sign.signum(),
+                handedness.signum(),
+                "Handedness sign mismatch for {:?}",
+                tangent
+            );
         }
     }
 

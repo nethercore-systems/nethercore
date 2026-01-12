@@ -12,12 +12,12 @@ use std::time::{Duration, Instant};
 
 use nethercore_shared::netplay::NetplayMetadata;
 
+use super::NchsError;
 use super::messages::{
     GuestReady, JoinReject, JoinRequest, LobbyState, NchsMessage, PlayerInfo, PunchAck, PunchHello,
     SessionStart,
 };
 use super::socket::NchsSocket;
-use super::NchsError;
 
 /// Guest state machine states
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -105,8 +105,7 @@ impl GuestStateMachine {
             .map_err(|e| NchsError::NetworkError(format!("Invalid host address: {}", e)))?;
 
         // Bind to any available port
-        let socket = NchsSocket::bind_any()
-            .map_err(|e| NchsError::BindFailed(e.to_string()))?;
+        let socket = NchsSocket::bind_any().map_err(|e| NchsError::BindFailed(e.to_string()))?;
 
         tracing::info!(port = socket.port(), "NCHS Guest connecting");
 
@@ -234,24 +233,20 @@ impl GuestStateMachine {
         const PUNCH_TIMEOUT: Duration = Duration::from_secs(3);
 
         // Check join timeout
-        if self.state == GuestState::Joining {
-            if let Some(sent_at) = self.join_sent_at {
-                if sent_at.elapsed() > JOIN_TIMEOUT {
+        if self.state == GuestState::Joining
+            && let Some(sent_at) = self.join_sent_at
+                && sent_at.elapsed() > JOIN_TIMEOUT {
                     self.state = GuestState::Failed;
                     return Some(GuestEvent::Error(NchsError::Timeout));
                 }
-            }
-        }
 
         // Check punch timeout
-        if self.state == GuestState::Punching {
-            if let Some(started_at) = self.punch_started_at {
-                if started_at.elapsed() > PUNCH_TIMEOUT {
+        if self.state == GuestState::Punching
+            && let Some(started_at) = self.punch_started_at
+                && started_at.elapsed() > PUNCH_TIMEOUT {
                     self.state = GuestState::Failed;
                     return Some(GuestEvent::Error(NchsError::PunchFailed));
                 }
-            }
-        }
 
         None
     }
@@ -290,7 +285,9 @@ impl GuestStateMachine {
             NchsMessage::PunchAck(ack) => self.handle_punch_ack(from, ack),
             NchsMessage::Ping => {
                 // Respond with Pong
-                let _ = self.socket.send_to(from, &NchsMessage::Pong);
+                if let Err(e) = self.socket.send_to(from, &NchsMessage::Pong) {
+                    tracing::warn!(error = %e, "Failed to send Pong to {}", from);
+                }
                 None
             }
             _ => {
@@ -338,8 +335,16 @@ impl GuestStateMachine {
             for player in &start.players {
                 if player.active && player.handle != our_handle && player.handle != 0 {
                     // This is another guest we need to punch
-                    if let Ok(addr) = player.addr.parse::<SocketAddr>() {
-                        self.peers_to_punch.push((player.handle, addr));
+                    match player.addr.parse::<SocketAddr>() {
+                        Ok(addr) => self.peers_to_punch.push((player.handle, addr)),
+                        Err(e) => {
+                            tracing::warn!(
+                                player = player.handle,
+                                address = %player.addr,
+                                error = %e,
+                                "Invalid peer address; skipping punch"
+                            );
+                        }
                     }
                 }
             }
@@ -371,7 +376,9 @@ impl GuestStateMachine {
 
             for (handle, addr) in &self.peers_to_punch {
                 tracing::debug!(player = *handle, "Sending PunchHello");
-                let _ = self.socket.send_to(*addr, &msg);
+                if let Err(e) = self.socket.send_to(*addr, &msg) {
+                    tracing::warn!(error = %e, player = *handle, "Failed to send PunchHello");
+                }
             }
         }
     }
@@ -385,12 +392,11 @@ impl GuestStateMachine {
             let retry_count = (elapsed.as_millis() / PUNCH_RETRY_INTERVAL.as_millis()) as u32;
 
             // Retry every PUNCH_RETRY_INTERVAL
-            if elapsed.as_millis() % PUNCH_RETRY_INTERVAL.as_millis() < 50 {
-                if retry_count > 0 {
+            if elapsed.as_millis() % PUNCH_RETRY_INTERVAL.as_millis() < 50
+                && retry_count > 0 {
                     tracing::debug!("Punch retry #{}", retry_count);
                     self.send_punch_hellos();
                 }
-            }
         }
     }
 
@@ -419,7 +425,9 @@ impl GuestStateMachine {
                 sender_handle: our_handle,
                 nonce: hello.nonce,
             };
-            let _ = self.socket.send_to(from, &NchsMessage::PunchAck(ack));
+            if let Err(e) = self.socket.send_to(from, &NchsMessage::PunchAck(ack)) {
+                tracing::warn!(error = %e, "Failed to send PunchAck to {}", from);
+            }
         }
 
         // Mark as punched (receiving hello means they can send to us)

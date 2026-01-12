@@ -30,14 +30,13 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use std::str::FromStr;
+
 use anyhow::{Context, Result};
 
 use nethercore_core::library::{LocalGame, RomLoaderRegistry};
 use nethercore_shared::{
-    ConsoleType,
-    ROM_FORMATS,
-    get_console_type_by_extension,
-    get_rom_format_by_console,
+    ConsoleType, ROM_FORMATS, get_console_type_by_extension,
     get_rom_format_by_console_type,
 };
 
@@ -90,13 +89,13 @@ fn supported_extension_list() -> String {
 fn supported_console_types() -> Vec<ConsoleType> {
     ROM_FORMATS
         .iter()
-        .filter_map(|format| ConsoleType::from_str(format.console_type))
+        .filter_map(|format| ConsoleType::from_str(format.console_type).ok())
         .collect()
 }
 
 fn console_type_from_str(console_type: &str) -> Option<ConsoleType> {
     get_rom_format_by_console_type(console_type)
-        .and_then(|format| ConsoleType::from_str(format.console_type))
+        .and_then(|format| ConsoleType::from_str(format.console_type).ok())
 }
 
 fn console_type_from_extension(ext: &str) -> Option<ConsoleType> {
@@ -336,11 +335,9 @@ impl PlayerLauncher {
 }
 
 /// Console type identifiers come from nethercore_shared.
-
 // =============================================================================
 // Player Launching
 // =============================================================================
-
 /// Find the player binary for a console type.
 ///
 /// Searches in order:
@@ -788,10 +785,7 @@ mod tests {
 
     #[test]
     fn test_console_type_from_extension_valid() {
-        assert_eq!(
-            console_type_from_extension("nczx"),
-            Some(ConsoleType::ZX)
-        );
+        assert_eq!(console_type_from_extension("nczx"), Some(ConsoleType::ZX));
     }
 
     #[test]

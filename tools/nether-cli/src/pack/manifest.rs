@@ -23,10 +23,7 @@ pub fn load_manifest(manifest_path: &Path) -> Result<ManifestContext> {
     })
 }
 
-pub fn resolve_wasm_path(
-    ctx: &ManifestContext,
-    override_path: Option<PathBuf>,
-) -> Result<PathBuf> {
+pub fn resolve_wasm_path(ctx: &ManifestContext, override_path: Option<PathBuf>) -> Result<PathBuf> {
     if let Some(path) = override_path {
         Ok(path)
     } else {

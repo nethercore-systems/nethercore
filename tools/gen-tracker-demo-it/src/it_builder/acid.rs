@@ -49,9 +49,9 @@ const INST_BASS_303: u8 = 5;
 const INST_PAD: u8 = 6;
 const INST_STAB: u8 = 7;
 const INST_BASS_303_SQUELCH: u8 = 8; // Higher resonance for climax
-const INST_RISER: u8 = 9;             // White noise sweep for builds
-const INST_ATMOSPHERE: u8 = 10;       // Subtle texture layer
-const INST_CRASH: u8 = 11;            // Cymbal crash for transitions
+const INST_RISER: u8 = 9; // White noise sweep for builds
+const INST_ATMOSPHERE: u8 = 10; // Subtle texture layer
+const INST_CRASH: u8 = 11; // Cymbal crash for transitions
 
 // Channels (0-indexed)
 const CH_KICK: u8 = 0;
@@ -216,24 +216,24 @@ pub fn generate_acid_it_stripped() -> (Vec<u8>, Vec<(&'static str, Vec<i16>)>) {
     // Order table: Enhanced acid techno journey (18 entries = 72 bars)
     // ========================================================================
     writer.set_orders(&[
-        pat_intro,                                    // 0: Intro (4 bars)
-        pat_groove_a,                                 // 1: Main groove (4 bars)
-        pat_groove_a,                                 // 2: Establish groove (4 bars)
-        pat_groove_b,                                 // 3: Variation (4 bars)
-        pat_build,                                    // 4: Building tension (4 bars)
-        pat_build_intense,                            // 5: Peak tension with riser (4 bars)
-        pat_drop,                                     // 6: First drop E minor (4 bars)
-        pat_drop_variation,                           // 7: Drop with slides (4 bars)
-        pat_breakdown,                                // 8: Breathing room (4 bars)
-        pat_groove_b,                                 // 9: Return to groove (4 bars)
-        pat_build_intense,                            // 10: Build to climax (4 bars)
-        pat_drop_b,                                   // 11: Drop B minor (4 bars)
-        pat_drop_b_intense,                           // 12: Maximum energy (4 bars)
-        pat_breakdown_deep,                           // 13: Atmospheric (4 bars)
-        pat_groove_a,                                 // 14: Return to familiar (4 bars)
-        pat_build,                                    // 15: Final build (4 bars)
-        pat_drop_variation,                           // 16: Final drop (4 bars)
-        pat_outro,                                    // 17: Wind down (4 bars)
+        pat_intro,          // 0: Intro (4 bars)
+        pat_groove_a,       // 1: Main groove (4 bars)
+        pat_groove_a,       // 2: Establish groove (4 bars)
+        pat_groove_b,       // 3: Variation (4 bars)
+        pat_build,          // 4: Building tension (4 bars)
+        pat_build_intense,  // 5: Peak tension with riser (4 bars)
+        pat_drop,           // 6: First drop E minor (4 bars)
+        pat_drop_variation, // 7: Drop with slides (4 bars)
+        pat_breakdown,      // 8: Breathing room (4 bars)
+        pat_groove_b,       // 9: Return to groove (4 bars)
+        pat_build_intense,  // 10: Build to climax (4 bars)
+        pat_drop_b,         // 11: Drop B minor (4 bars)
+        pat_drop_b_intense, // 12: Maximum energy (4 bars)
+        pat_breakdown_deep, // 13: Atmospheric (4 bars)
+        pat_groove_a,       // 14: Return to familiar (4 bars)
+        pat_build,          // 15: Final build (4 bars)
+        pat_drop_variation, // 16: Final drop (4 bars)
+        pat_outro,          // 17: Wind down (4 bars)
     ]);
 
     // Set song message
@@ -396,24 +396,24 @@ pub fn generate_acid_it_embedded() -> (Vec<u8>, Vec<(&'static str, Vec<i16>)>) {
     // Order table: Enhanced acid techno journey (18 entries = 72 bars)
     // ========================================================================
     writer.set_orders(&[
-        pat_intro,                                    // 0: Intro (4 bars)
-        pat_groove_a,                                 // 1: Main groove (4 bars)
-        pat_groove_a,                                 // 2: Establish groove (4 bars)
-        pat_groove_b,                                 // 3: Variation (4 bars)
-        pat_build,                                    // 4: Building tension (4 bars)
-        pat_build_intense,                            // 5: Peak tension with riser (4 bars)
-        pat_drop,                                     // 6: First drop E minor (4 bars)
-        pat_drop_variation,                           // 7: Drop with slides (4 bars)
-        pat_breakdown,                                // 8: Breathing room (4 bars)
-        pat_groove_b,                                 // 9: Return to groove (4 bars)
-        pat_build_intense,                            // 10: Build to climax (4 bars)
-        pat_drop_b,                                   // 11: Drop B minor (4 bars)
-        pat_drop_b_intense,                           // 12: Maximum energy (4 bars)
-        pat_breakdown_deep,                           // 13: Atmospheric (4 bars)
-        pat_groove_a,                                 // 14: Return to familiar (4 bars)
-        pat_build,                                    // 15: Final build (4 bars)
-        pat_drop_variation,                           // 16: Final drop (4 bars)
-        pat_outro,                                    // 17: Wind down (4 bars)
+        pat_intro,          // 0: Intro (4 bars)
+        pat_groove_a,       // 1: Main groove (4 bars)
+        pat_groove_a,       // 2: Establish groove (4 bars)
+        pat_groove_b,       // 3: Variation (4 bars)
+        pat_build,          // 4: Building tension (4 bars)
+        pat_build_intense,  // 5: Peak tension with riser (4 bars)
+        pat_drop,           // 6: First drop E minor (4 bars)
+        pat_drop_variation, // 7: Drop with slides (4 bars)
+        pat_breakdown,      // 8: Breathing room (4 bars)
+        pat_groove_b,       // 9: Return to groove (4 bars)
+        pat_build_intense,  // 10: Build to climax (4 bars)
+        pat_drop_b,         // 11: Drop B minor (4 bars)
+        pat_drop_b_intense, // 12: Maximum energy (4 bars)
+        pat_breakdown_deep, // 13: Atmospheric (4 bars)
+        pat_groove_a,       // 14: Return to familiar (4 bars)
+        pat_build,          // 15: Final build (4 bars)
+        pat_drop_variation, // 16: Final drop (4 bars)
+        pat_outro,          // 17: Wind down (4 bars)
     ]);
 
     // Set song message
@@ -436,7 +436,12 @@ fn add_kick_4x4(writer: &mut ItWriter, pat: u8, bar: u16) {
     let base = bar * 16;
     // Every beat
     for beat in 0..4 {
-        writer.set_note(pat, base + beat * 4, CH_KICK, ItNote::play_note(C5, INST_KICK, 64));
+        writer.set_note(
+            pat,
+            base + beat * 4,
+            CH_KICK,
+            ItNote::play_note(C5, INST_KICK, 64),
+        );
     }
 }
 
@@ -446,7 +451,12 @@ fn add_claps(writer: &mut ItWriter, pat: u8, bar: u16) {
     // Beat 2 (row 4)
     writer.set_note(pat, base + 4, CH_CLAP, ItNote::play_note(C5, INST_CLAP, 64));
     // Beat 4 (row 12)
-    writer.set_note(pat, base + 12, CH_CLAP, ItNote::play_note(C5, INST_CLAP, 64));
+    writer.set_note(
+        pat,
+        base + 12,
+        CH_CLAP,
+        ItNote::play_note(C5, INST_CLAP, 64),
+    );
 }
 
 /// 16th note hi-hats (every row) with stereo panning
@@ -460,9 +470,19 @@ fn add_hihat_16ths(writer: &mut ItWriter, pat: u8, bar: u16, use_opens: bool) {
 
         // Open hats on off-beats for groove
         if use_opens && (row == 6 || row == 14) {
-            writer.set_note(pat, base + row, CH_HIHAT_OPEN, ItNote::play_note(C5, INST_HH_OPEN, vel + 5).with_effect(0x08, pan));
+            writer.set_note(
+                pat,
+                base + row,
+                CH_HIHAT_OPEN,
+                ItNote::play_note(C5, INST_HH_OPEN, vel + 5).with_effect(0x08, pan),
+            );
         } else {
-            writer.set_note(pat, base + row, CH_HIHAT, ItNote::play_note(C5, INST_HH_CLOSED, vel).with_effect(0x08, pan));
+            writer.set_note(
+                pat,
+                base + row,
+                CH_HIHAT,
+                ItNote::play_note(C5, INST_HH_CLOSED, vel).with_effect(0x08, pan),
+            );
         }
     }
 }
@@ -472,7 +492,12 @@ fn add_hihat_8ths(writer: &mut ItWriter, pat: u8, bar: u16) {
     let base = bar * 16;
     for row in 0..8 {
         let vel = if row % 2 == 0 { 48 } else { 32 };
-        writer.set_note(pat, base + row * 2, CH_HIHAT, ItNote::play_note(C5, INST_HH_CLOSED, vel));
+        writer.set_note(
+            pat,
+            base + row * 2,
+            CH_HIHAT,
+            ItNote::play_note(C5, INST_HH_CLOSED, vel),
+        );
     }
 }
 
@@ -489,25 +514,30 @@ fn add_303_main_pattern(writer: &mut ItWriter, pat: u8, bar: u16) {
     // Accents (vol 64) trigger filter envelope, no accents (vol 40) stay flat
 
     let notes = [
-        (0, E2, 64),   // Accent - filter opens
-        (4, G2, 40),   // No accent
-        (8, A2, 64),   // Accent
-        (10, B2, 40),  // No accent - quick hit
-        (12, E3, 64),  // Accent - octave jump
-        (16, D3, 40),  // No accent
-        (20, B2, 40),  // No accent
-        (24, A2, 64),  // Accent
-        (28, G2, 40),  // No accent
-        (32, E2, 64),  // Accent
-        (36, G2, 40),  // No accent
-        (40, B2, 64),  // Accent
-        (44, D3, 64),  // Accent
-        (48, E3, 64),  // Accent
-        (52, B2, 40),  // No accent
+        (0, E2, 64),  // Accent - filter opens
+        (4, G2, 40),  // No accent
+        (8, A2, 64),  // Accent
+        (10, B2, 40), // No accent - quick hit
+        (12, E3, 64), // Accent - octave jump
+        (16, D3, 40), // No accent
+        (20, B2, 40), // No accent
+        (24, A2, 64), // Accent
+        (28, G2, 40), // No accent
+        (32, E2, 64), // Accent
+        (36, G2, 40), // No accent
+        (40, B2, 64), // Accent
+        (44, D3, 64), // Accent
+        (48, E3, 64), // Accent
+        (52, B2, 40), // No accent
     ];
 
     for (offset, note, vel) in notes {
-        writer.set_note(pat, base + offset, CH_303, ItNote::play_note(note, INST_BASS_303, vel));
+        writer.set_note(
+            pat,
+            base + offset,
+            CH_303,
+            ItNote::play_note(note, INST_BASS_303, vel),
+        );
     }
 }
 
@@ -517,7 +547,12 @@ fn add_303_simple(writer: &mut ItWriter, pat: u8, bar: u16) {
 
     // Just root notes on beats
     writer.set_note(pat, base, CH_303, ItNote::play_note(E2, INST_BASS_303, 50));
-    writer.set_note(pat, base + 8, CH_303, ItNote::play_note(E2, INST_BASS_303, 50));
+    writer.set_note(
+        pat,
+        base + 8,
+        CH_303,
+        ItNote::play_note(E2, INST_BASS_303, 50),
+    );
 }
 
 // ============================================================================
@@ -563,11 +598,21 @@ fn build_build_pattern(writer: &mut ItWriter, pat: u8) {
         // 303 pattern with filter automation - gradually open filter (Zxx: 0x1A effect)
         let base = bar * 16;
         let notes = [
-            (0, E2, 64),   (4, G2, 40),   (8, A2, 64),
-            (10, B2, 40),  (12, E3, 64),  (16, D3, 40),
-            (20, B2, 40),  (24, A2, 64),  (28, G2, 40),
-            (32, E2, 64),  (36, G2, 40),  (40, B2, 64),
-            (44, D3, 64),  (48, E3, 64),  (52, B2, 40),
+            (0, E2, 64),
+            (4, G2, 40),
+            (8, A2, 64),
+            (10, B2, 40),
+            (12, E3, 64),
+            (16, D3, 40),
+            (20, B2, 40),
+            (24, A2, 64),
+            (28, G2, 40),
+            (32, E2, 64),
+            (36, G2, 40),
+            (40, B2, 64),
+            (44, D3, 64),
+            (48, E3, 64),
+            (52, B2, 40),
         ];
 
         // Filter cutoff increases each bar (Z40 → Z50 → Z60 → Z70)
@@ -576,7 +621,8 @@ fn build_build_pattern(writer: &mut ItWriter, pat: u8) {
         for (offset, note, vel) in &notes {
             // Add filter automation to first note of each bar
             let note_obj = if *offset == 0 {
-                ItNote::play_note(*note, INST_BASS_303, *vel).with_effect(0x1A, cutoff) // Zxx filter cutoff
+                ItNote::play_note(*note, INST_BASS_303, *vel).with_effect(0x1A, cutoff)
+            // Zxx filter cutoff
             } else {
                 ItNote::play_note(*note, INST_BASS_303, *vel)
             };
@@ -612,7 +658,7 @@ fn build_drop_pattern(writer: &mut ItWriter, pat: u8) {
         // 303 with MORE accents (more filter action)
         let base = bar * 16;
         let notes = [
-            (0, E2, 64),   // All accents!
+            (0, E2, 64), // All accents!
             (4, G2, 64),
             (8, A2, 64),
             (10, B2, 64),
@@ -630,7 +676,12 @@ fn build_drop_pattern(writer: &mut ItWriter, pat: u8) {
         ];
 
         for (offset, note, vel) in notes {
-            writer.set_note(pat, base + offset, CH_303, ItNote::play_note(note, INST_BASS_303, vel));
+            writer.set_note(
+                pat,
+                base + offset,
+                CH_303,
+                ItNote::play_note(note, INST_BASS_303, vel),
+            );
         }
     }
 
@@ -667,25 +718,30 @@ fn build_groove_b_pattern(writer: &mut ItWriter, pat: u8) {
         // Different 303 sequence - A minor feel (A-C-E-G instead of E-G-A-B)
         let base = bar * 16;
         let notes = [
-            (0, A2, 64),   // Accent
-            (4, E2, 40),   // No accent
-            (8, G2, 64),   // Accent
-            (10, A2, 40),  // No accent
-            (12, E3, 64),  // Accent - octave jump
-            (16, D3, 40),  // No accent
-            (20, A2, 40),  // No accent
-            (24, G2, 64),  // Accent
-            (28, E2, 40),  // No accent
-            (32, A2, 64),  // Accent
-            (36, E2, 40),  // No accent
-            (40, G2, 64),  // Accent
-            (44, D3, 64),  // Accent
-            (48, E3, 64),  // Accent
-            (52, A2, 40),  // No accent
+            (0, A2, 64),  // Accent
+            (4, E2, 40),  // No accent
+            (8, G2, 64),  // Accent
+            (10, A2, 40), // No accent
+            (12, E3, 64), // Accent - octave jump
+            (16, D3, 40), // No accent
+            (20, A2, 40), // No accent
+            (24, G2, 64), // Accent
+            (28, E2, 40), // No accent
+            (32, A2, 64), // Accent
+            (36, E2, 40), // No accent
+            (40, G2, 64), // Accent
+            (44, D3, 64), // Accent
+            (48, E3, 64), // Accent
+            (52, A2, 40), // No accent
         ];
 
         for (offset, note, vel) in notes {
-            writer.set_note(pat, base + offset, CH_303, ItNote::play_note(note, INST_BASS_303, vel));
+            writer.set_note(
+                pat,
+                base + offset,
+                CH_303,
+                ItNote::play_note(note, INST_BASS_303, vel),
+            );
         }
     }
 
@@ -749,7 +805,8 @@ fn build_drop_variation_pattern(writer: &mut ItWriter, pat: u8) {
         for (i, (offset, note, vel)) in notes.iter().enumerate() {
             // Add portamento on selected notes for slides
             let note_obj = if i == 2 || i == 4 || i == 7 || i == 11 {
-                ItNote::play_note(*note, INST_BASS_303, *vel).with_effect(0x07, 0x20) // Gxx portamento
+                ItNote::play_note(*note, INST_BASS_303, *vel).with_effect(0x07, 0x20)
+            // Gxx portamento
             } else {
                 ItNote::play_note(*note, INST_BASS_303, *vel)
             };
@@ -770,7 +827,12 @@ fn build_breakdown_deep_pattern(writer: &mut ItWriter, pat: u8) {
         // Very simple low 303
         let base = bar * 16;
         writer.set_note(pat, base, CH_303, ItNote::play_note(E2, INST_BASS_303, 45));
-        writer.set_note(pat, base + 8, CH_303, ItNote::play_note(G2, INST_BASS_303, 40));
+        writer.set_note(
+            pat,
+            base + 8,
+            CH_303,
+            ItNote::play_note(G2, INST_BASS_303, 40),
+        );
     }
 
     // Atmosphere layer throughout for texture
@@ -809,7 +871,12 @@ fn build_drop_b_pattern(writer: &mut ItWriter, pat: u8) {
         ];
 
         for (offset, note, vel) in notes {
-            writer.set_note(pat, base + offset, CH_303, ItNote::play_note(note, INST_BASS_303, vel));
+            writer.set_note(
+                pat,
+                base + offset,
+                CH_303,
+                ItNote::play_note(note, INST_BASS_303, vel),
+            );
         }
     }
 
@@ -845,7 +912,12 @@ fn build_drop_b_intense_pattern(writer: &mut ItWriter, pat: u8) {
         ];
 
         for (offset, note, vel) in notes {
-            writer.set_note(pat, base + offset, CH_303, ItNote::play_note(note, INST_BASS_303_SQUELCH, vel));
+            writer.set_note(
+                pat,
+                base + offset,
+                CH_303,
+                ItNote::play_note(note, INST_BASS_303_SQUELCH, vel),
+            );
         }
     }
 

@@ -57,7 +57,12 @@ impl GrowableBuffer {
     ///
     /// If the buffer needs to grow, creates a new larger buffer and copies existing data.
     /// Returns true if the buffer was grown, false otherwise.
-    pub fn ensure_capacity(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, additional_bytes: u64) -> bool {
+    pub fn ensure_capacity(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        additional_bytes: u64,
+    ) -> bool {
         let required = self.used + additional_bytes;
         if required <= self.capacity {
             return false;
@@ -298,7 +303,11 @@ impl BufferManager {
         let packed_data = pack_vertex_data(data, format);
 
         // Ensure retained buffer has capacity
-        self.retained_vertex_buffers[format_idx].ensure_capacity(device, queue, packed_data.len() as u64);
+        self.retained_vertex_buffers[format_idx].ensure_capacity(
+            device,
+            queue,
+            packed_data.len() as u64,
+        );
 
         // Write packed data to retained buffer
         let vertex_offset = self.retained_vertex_buffers[format_idx].write(queue, &packed_data);
@@ -366,7 +375,11 @@ impl BufferManager {
         let packed_data = pack_vertex_data(data, format);
 
         // Ensure retained vertex buffer has capacity
-        self.retained_vertex_buffers[format_idx].ensure_capacity(device, queue, packed_data.len() as u64);
+        self.retained_vertex_buffers[format_idx].ensure_capacity(
+            device,
+            queue,
+            packed_data.len() as u64,
+        );
 
         // Ensure retained index buffer has capacity
         // Pad index data to 4-byte alignment for wgpu COPY_BUFFER_ALIGNMENT (only if needed)
@@ -380,8 +393,11 @@ impl BufferManager {
             Cow::Owned(padded)
         };
 
-        self.retained_index_buffers[format_idx]
-            .ensure_capacity(device, queue, index_data_to_write.len() as u64);
+        self.retained_index_buffers[format_idx].ensure_capacity(
+            device,
+            queue,
+            index_data_to_write.len() as u64,
+        );
 
         // Write to retained buffers (packed vertex data + indices)
         let vertex_offset = self.retained_vertex_buffers[format_idx].write(queue, &packed_data);
@@ -517,8 +533,11 @@ impl BufferManager {
             Cow::Owned(padded)
         };
 
-        self.retained_index_buffers[format_idx]
-            .ensure_capacity(device, queue, index_data_to_write.len() as u64);
+        self.retained_index_buffers[format_idx].ensure_capacity(
+            device,
+            queue,
+            index_data_to_write.len() as u64,
+        );
 
         // Write to retained buffers
         let vertex_offset = self.retained_vertex_buffers[format_idx].write(queue, data);

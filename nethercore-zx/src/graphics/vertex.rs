@@ -55,17 +55,17 @@ impl VertexFormatInfo {
             15 => "POS_UV_COLOR_NORMAL_SKINNED",
             // Formats 16-31: Same as 0-15 but with tangent flag (bit 4)
             // Note: Tangent requires normal, so formats 16-19 and 24-27 are invalid
-            16 => "POS_TANGENT", // Invalid: tangent requires normal
-            17 => "POS_UV_TANGENT", // Invalid
-            18 => "POS_COLOR_TANGENT", // Invalid
+            16 => "POS_TANGENT",          // Invalid: tangent requires normal
+            17 => "POS_UV_TANGENT",       // Invalid
+            18 => "POS_COLOR_TANGENT",    // Invalid
             19 => "POS_UV_COLOR_TANGENT", // Invalid
             20 => "POS_NORMAL_TANGENT",
             21 => "POS_UV_NORMAL_TANGENT",
             22 => "POS_COLOR_NORMAL_TANGENT",
             23 => "POS_UV_COLOR_NORMAL_TANGENT",
-            24 => "POS_TANGENT_SKINNED", // Invalid
-            25 => "POS_UV_TANGENT_SKINNED", // Invalid
-            26 => "POS_COLOR_TANGENT_SKINNED", // Invalid
+            24 => "POS_TANGENT_SKINNED",          // Invalid
+            25 => "POS_UV_TANGENT_SKINNED",       // Invalid
+            26 => "POS_COLOR_TANGENT_SKINNED",    // Invalid
             27 => "POS_UV_COLOR_TANGENT_SKINNED", // Invalid
             28 => "POS_NORMAL_TANGENT_SKINNED",
             29 => "POS_UV_NORMAL_TANGENT_SKINNED",
@@ -354,9 +354,17 @@ mod wgpu_attrs {
         // Format 16: POS_TANGENT (INVALID - tangent requires normal)
         &[attr_pos(), attr_tangent(SIZE_POS)],
         // Format 17: POS_UV_TANGENT (INVALID)
-        &[attr_pos(), attr_uv(SIZE_POS), attr_tangent(SIZE_POS + SIZE_UV)],
+        &[
+            attr_pos(),
+            attr_uv(SIZE_POS),
+            attr_tangent(SIZE_POS + SIZE_UV),
+        ],
         // Format 18: POS_COLOR_TANGENT (INVALID)
-        &[attr_pos(), attr_color(SIZE_POS), attr_tangent(SIZE_POS + SIZE_COLOR)],
+        &[
+            attr_pos(),
+            attr_color(SIZE_POS),
+            attr_tangent(SIZE_POS + SIZE_COLOR),
+        ],
         // Format 19: POS_UV_COLOR_TANGENT (INVALID)
         &[
             attr_pos(),
@@ -448,7 +456,9 @@ mod wgpu_attrs {
             attr_normal(SIZE_POS + SIZE_COLOR),
             attr_tangent(SIZE_POS + SIZE_COLOR + SIZE_NORMAL),
             attr_bone_indices(SIZE_POS + SIZE_COLOR + SIZE_NORMAL + SIZE_TANGENT),
-            attr_bone_weights(SIZE_POS + SIZE_COLOR + SIZE_NORMAL + SIZE_TANGENT + SIZE_BONE_INDICES),
+            attr_bone_weights(
+                SIZE_POS + SIZE_COLOR + SIZE_NORMAL + SIZE_TANGENT + SIZE_BONE_INDICES,
+            ),
         ],
         // Format 31: POS_UV_COLOR_NORMAL_TANGENT_SKINNED
         &[
@@ -458,7 +468,9 @@ mod wgpu_attrs {
             attr_normal(SIZE_POS + SIZE_UV + SIZE_COLOR),
             attr_tangent(SIZE_POS + SIZE_UV + SIZE_COLOR + SIZE_NORMAL),
             attr_bone_indices(SIZE_POS + SIZE_UV + SIZE_COLOR + SIZE_NORMAL + SIZE_TANGENT),
-            attr_bone_weights(SIZE_POS + SIZE_UV + SIZE_COLOR + SIZE_NORMAL + SIZE_TANGENT + SIZE_BONE_INDICES),
+            attr_bone_weights(
+                SIZE_POS + SIZE_UV + SIZE_COLOR + SIZE_NORMAL + SIZE_TANGENT + SIZE_BONE_INDICES,
+            ),
         ],
     ];
 }
@@ -582,7 +594,10 @@ mod tests {
         // Format 20: POS_NORMAL_TANGENT = 8 + 4 + 4 = 16
         assert_eq!(vertex_stride_packed(FORMAT_NORMAL | FORMAT_TANGENT), 16);
         // Format 21: POS_UV_NORMAL_TANGENT = 8 + 4 + 4 + 4 = 20
-        assert_eq!(vertex_stride_packed(FORMAT_UV | FORMAT_NORMAL | FORMAT_TANGENT), 20);
+        assert_eq!(
+            vertex_stride_packed(FORMAT_UV | FORMAT_NORMAL | FORMAT_TANGENT),
+            20
+        );
         // Format 31: Full with tangent = 8 + 4 + 4 + 4 + 4 + 8 = 32
         assert_eq!(vertex_stride_packed(FORMAT_ALL_WITH_TANGENT), 32);
     }
@@ -590,8 +605,14 @@ mod tests {
     #[test]
     fn test_tangent_format_names() {
         assert_eq!(VertexFormatInfo::for_format(20).name, "POS_NORMAL_TANGENT");
-        assert_eq!(VertexFormatInfo::for_format(21).name, "POS_UV_NORMAL_TANGENT");
-        assert_eq!(VertexFormatInfo::for_format(31).name, "POS_UV_COLOR_NORMAL_TANGENT_SKINNED");
+        assert_eq!(
+            VertexFormatInfo::for_format(21).name,
+            "POS_UV_NORMAL_TANGENT"
+        );
+        assert_eq!(
+            VertexFormatInfo::for_format(31).name,
+            "POS_UV_COLOR_NORMAL_TANGENT_SKINNED"
+        );
     }
 
     #[test]

@@ -8,6 +8,7 @@ mod types;
 
 use std::cell::RefCell;
 use std::collections::VecDeque;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -41,6 +42,24 @@ pub use error_ui::{
     ErrorAction, WaitingForPeer, parse_key_code, render_error_screen, sanitize_game_id,
 };
 pub use types::{LoadedRom, RomLoader, StandaloneConfig, StandaloneGraphicsSupport};
+
+fn format_ggrs_addr(addr: &str, port: u16) -> String {
+    if let Ok(socket_addr) = addr.parse::<SocketAddr>() {
+        return SocketAddr::new(socket_addr.ip(), port).to_string();
+    }
+
+    // Fallback: split on the last ':' to preserve IPv6 host parts without brackets.
+    let mut parts = addr.rsplitn(2, ':');
+    let _port_part = parts.next();
+    if let Some(host) = parts.next() {
+        if host.contains(':') && !(host.starts_with('[') && host.ends_with(']')) {
+            return format!("[{}]:{}", host, port);
+        }
+        return format!("{}:{}", host, port);
+    }
+
+    format!("{}:{}", addr, port)
+}
 
 /// Generic standalone player application.
 ///
@@ -632,8 +651,21 @@ where
                 use std::net::SocketAddr;
                 use std::time::{Duration, Instant};
 
-                let bytes = std::fs::read(&session_file)
-                    .context("Failed to read session file")?;
+                const MAX_SESSION_FILE_BYTES: u64 = 1024 * 1024; // 1 MiB
+                let session_file_len = std::fs::metadata(session_file)
+                    .with_context(|| {
+                        format!("Failed to stat session file: {}", session_file.display())
+                    })?
+                    .len();
+                anyhow::ensure!(
+                    session_file_len <= MAX_SESSION_FILE_BYTES,
+                    "Session file is too large ({} bytes, max {} bytes): {}",
+                    session_file_len,
+                    MAX_SESSION_FILE_BYTES,
+                    session_file.display()
+                );
+
+                let bytes = std::fs::read(session_file).context("Failed to read session file")?;
                 let session_start: SessionStart = bitcode::decode(&bytes)
                     .map_err(|e| anyhow::anyhow!("Failed to decode session: {}", e))?;
 
@@ -683,7 +715,10 @@ where
                         .map(|p| p.handle)
                         .collect();
 
-                    tracing::info!("Session mode: host waiting for {} guest(s) to connect", expected_guests.len());
+                    tracing::info!(
+                        "Session mode: host waiting for {} guest(s) to connect",
+                        expected_guests.len()
+                    );
 
                     let mut received_from: HashMap<u8, SocketAddr> = HashMap::new();
                     let start = Instant::now();
@@ -697,12 +732,20 @@ where
                         let mut buf = [0u8; 64];
                         match socket.socket().recv_from(&mut buf) {
                             Ok((len, from)) => {
-                                if len >= HANDSHAKE_HELLO.len() && &buf[..HANDSHAKE_HELLO.len()] == HANDSHAKE_HELLO {
+                                if len >= HANDSHAKE_HELLO.len()
+                                    && &buf[..HANDSHAKE_HELLO.len()] == HANDSHAKE_HELLO
+                                {
                                     // Extract handle from after HELLO
                                     if len > HANDSHAKE_HELLO.len() {
                                         let handle = buf[HANDSHAKE_HELLO.len()];
-                                        if expected_guests.contains(&handle) && !received_from.contains_key(&handle) {
-                                            tracing::info!("Session mode: received HELLO from guest {} at {}", handle, from);
+                                        if expected_guests.contains(&handle)
+                                            && !received_from.contains_key(&handle)
+                                        {
+                                            tracing::info!(
+                                                "Session mode: received HELLO from guest {} at {}",
+                                                handle,
+                                                from
+                                            );
                                             received_from.insert(handle, from);
 
                                             // Send READY back immediately
@@ -722,18 +765,26 @@ where
                         }
                     }
 
-                    tracing::info!("Session mode: all {} guest(s) connected", received_from.len());
+                    tracing::info!(
+                        "Session mode: all {} guest(s) connected",
+                        received_from.len()
+                    );
                     received_from
                 } else {
                     // GUEST: Send HELLO to host, wait for READY
-                    let host_player = session_start.players.iter().find(|p| p.handle == 0)
+                    let host_player = session_start
+                        .players
+                        .iter()
+                        .find(|p| p.handle == 0)
                         .ok_or_else(|| anyhow::anyhow!("Session has no host player"))?;
 
                     let host_addr: SocketAddr = format!(
                         "{}:{}",
                         host_player.addr.split(':').next().unwrap_or("127.0.0.1"),
                         host_player.ggrs_port
-                    ).parse().context("Invalid host address")?;
+                    )
+                    .parse()
+                    .context("Invalid host address")?;
 
                     tracing::info!("Session mode: guest sending HELLO to host at {}", host_addr);
 
@@ -757,7 +808,9 @@ where
                         let mut buf = [0u8; 64];
                         match socket.socket().recv_from(&mut buf) {
                             Ok((len, _from)) => {
-                                if len >= HANDSHAKE_READY.len() && &buf[..HANDSHAKE_READY.len()] == HANDSHAKE_READY {
+                                if len >= HANDSHAKE_READY.len()
+                                    && &buf[..HANDSHAKE_READY.len()] == HANDSHAKE_READY
+                                {
                                     tracing::info!("Session mode: received READY from host");
                                     received_ready = true;
                                 }
@@ -788,11 +841,7 @@ where
                             (handle, PlayerType::Remote(actual_addr.to_string()))
                         } else {
                             // Fallback to pre-specified address
-                            let ggrs_addr = format!(
-                                "{}:{}",
-                                p.addr.split(':').next().unwrap_or("127.0.0.1"),
-                                p.ggrs_port
-                            );
+                            let ggrs_addr = format_ggrs_addr(&p.addr, p.ggrs_port);
                             (handle, PlayerType::Remote(ggrs_addr))
                         }
                     })
@@ -818,7 +867,7 @@ where
                     .context("Failed to load game with NCHS session")?;
 
                 // Clean up the session file after reading
-                let _ = std::fs::remove_file(&session_file);
+                let _ = std::fs::remove_file(session_file);
             }
         }
 
@@ -1077,31 +1126,6 @@ where
                 || self.network_overlay_visible
                 || self.waiting_for_peer.is_some()
             {
-                let (registry_opt, mem_base, mem_len, has_debug_callback) = {
-                    if let Some(session) = runner.session() {
-                        if let Some(game) = session.runtime.game() {
-                            let registry = game.store().data().debug_registry.clone();
-                            let memory = game.store().data().game.memory;
-                            let has_callback = game.has_debug_change_callback();
-                            if let Some(mem) = memory {
-                                let mem_data = mem.data(game.store());
-                                (
-                                    Some(registry),
-                                    mem_data.as_ptr() as usize,
-                                    mem_data.len(),
-                                    has_callback,
-                                )
-                            } else {
-                                (Some(registry), 0usize, 0usize, has_callback)
-                            }
-                        } else {
-                            (None, 0usize, 0usize, false)
-                        }
-                    } else {
-                        (None, 0usize, 0usize, false)
-                    }
-                };
-
                 let pending_writes: RefCell<Vec<(RegisteredValue, DebugValue)>> =
                     RefCell::new(Vec::new());
                 let pending_action: RefCell<Option<ActionRequest>> = RefCell::new(None);
@@ -1238,32 +1262,39 @@ where
                         }
 
                         if debug_panel.visible
-                            && let Some(ref registry) = registry_opt {
-                                let registry_for_read = registry.clone();
+                            && let Some(session) = runner.session()
+                                && let Some(game) = session.runtime.game()
+                            {
+                                let registry = game.store().data().debug_registry.clone();
 
                                 let read_value = |reg_val: &RegisteredValue| -> Option<DebugValue> {
-                                    if mem_base == 0 || mem_len == 0 {
-                                        return None;
-                                    }
+                                    let mem = game.store().data().game.memory?;
+                                    let data = mem.data(game.store());
+
                                     let ptr = reg_val.wasm_ptr as usize;
                                     let size = reg_val.value_type.byte_size();
-                                    if ptr + size > mem_len {
+                                    let end = ptr.checked_add(size)?;
+                                    if end > data.len() {
                                         return None;
                                     }
-                                    let bytes = unsafe {
-                                        std::slice::from_raw_parts((mem_base + ptr) as *const u8, size)
-                                    };
-                                    Some(registry_for_read.read_value_from_slice(bytes, reg_val.value_type))
+
+                                    Some(registry.read_value_from_slice(
+                                        &data[ptr..end],
+                                        reg_val.value_type,
+                                    ))
                                 };
 
-                                let write_value = |reg_val: &RegisteredValue, new_val: &DebugValue| -> bool {
-                                    pending_writes.borrow_mut().push((reg_val.clone(), new_val.clone()));
-                                    true
-                                };
+                                let write_value =
+                                    |reg_val: &RegisteredValue, new_val: &DebugValue| -> bool {
+                                        pending_writes
+                                            .borrow_mut()
+                                            .push((reg_val.clone(), new_val.clone()));
+                                        true
+                                    };
 
                                 let (_changed, action) = debug_panel.render(
                                     ctx,
-                                    registry,
+                                    &registry,
                                     frame_controller,
                                     read_value,
                                     write_value,
@@ -1410,6 +1441,7 @@ where
                     && let Some(session) = runner.session_mut()
                     && let Some(game) = session.runtime.game_mut()
                 {
+                    let has_debug_callback = game.has_debug_change_callback();
                     let memory = game.store().data().game.memory;
                     if let Some(mem) = memory {
                         let registry = game.store().data().debug_registry.clone();

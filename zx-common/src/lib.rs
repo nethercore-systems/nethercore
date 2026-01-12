@@ -50,16 +50,16 @@ pub use formats::{
     PackedSound,
     PackedTexture,
     PackedTracker,
-    TrackerFormat,
     PlatformBoneKeyframe,
     // ROM format constants (from nethercore_shared)
     RomFormat,
     SAMPLE_RATE,
     TextureFormat,
-    // ROM types
-    ZXMetadata,
+    TrackerFormat,
     ZX_ROM_FORMAT,
     ZXDataPack,
+    // ROM types
+    ZXMetadata,
     ZXRom,
     // Animation types
     decode_bone_transform,

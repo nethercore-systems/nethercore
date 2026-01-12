@@ -243,7 +243,9 @@ impl ZXGraphics {
                         texture_slots[3].0,
                     ],
                 ),
-                VRPCommand::Sky { viewport, pass_id, .. } => CommandSortKey::sky(*pass_id, *viewport),
+                VRPCommand::Sky {
+                    viewport, pass_id, ..
+                } => CommandSortKey::sky(*pass_id, *viewport),
             });
 
         // =================================================================
@@ -348,10 +350,16 @@ impl ZXGraphics {
             // Note: depth_test is per-pass via PassConfig, but we use defaults for bind group layout
             let (format, cull_mode, pass_id) = match first_cmd {
                 VRPCommand::Mesh {
-                    format, cull_mode, pass_id, ..
+                    format,
+                    cull_mode,
+                    pass_id,
+                    ..
                 } => (*format, *cull_mode, *pass_id),
                 VRPCommand::IndexedMesh {
-                    format, cull_mode, pass_id, ..
+                    format,
+                    cull_mode,
+                    pass_id,
+                    ..
                 } => (*format, *cull_mode, *pass_id),
                 VRPCommand::Quad {
                     cull_mode, pass_id, ..
@@ -363,7 +371,9 @@ impl ZXGraphics {
             };
 
             // Get PassConfig for the first command's pass to determine depth state
-            let pass_config = z_state.pass_configs.get(pass_id as usize)
+            let pass_config = z_state
+                .pass_configs
+                .get(pass_id as usize)
                 .copied()
                 .unwrap_or_default();
 
@@ -569,7 +579,11 @@ impl ZXGraphics {
                 )
             } else if first_pass_config.depth_clear {
                 // Mid-frame depth clear: preserve color, clear depth, preserve stencil
-                (wgpu::LoadOp::Load, wgpu::LoadOp::Clear(1.0), wgpu::LoadOp::Load)
+                (
+                    wgpu::LoadOp::Load,
+                    wgpu::LoadOp::Clear(1.0),
+                    wgpu::LoadOp::Load,
+                )
             } else {
                 // No clear needed: preserve everything
                 (wgpu::LoadOp::Load, wgpu::LoadOp::Load, wgpu::LoadOp::Load)
@@ -683,7 +697,9 @@ impl ZXGraphics {
                         false,
                         *is_screen_space,
                     ),
-                    VRPCommand::Sky { viewport, pass_id, .. } => (
+                    VRPCommand::Sky {
+                        viewport, pass_id, ..
+                    } => (
                         *viewport,
                         *pass_id,
                         self.unit_quad_format, // Sky uses unit quad mesh
@@ -697,7 +713,9 @@ impl ZXGraphics {
                 };
 
                 // Get PassConfig for this command's pass
-                let cmd_pass_config = z_state.pass_configs.get(cmd_pass_id as usize)
+                let cmd_pass_config = z_state
+                    .pass_configs
+                    .get(cmd_pass_id as usize)
                     .copied()
                     .unwrap_or_default();
 

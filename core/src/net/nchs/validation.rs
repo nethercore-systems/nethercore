@@ -104,7 +104,10 @@ mod tests {
 
         let result = validate_join_request(&request, &local);
         assert!(result.is_some());
-        assert_eq!(result.unwrap().reason, JoinRejectReason::ConsoleTypeMismatch);
+        assert_eq!(
+            result.unwrap().reason,
+            JoinRejectReason::ConsoleTypeMismatch
+        );
     }
 
     #[test]

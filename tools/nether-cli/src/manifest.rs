@@ -4,6 +4,7 @@
 
 use anyhow::{Context, Result};
 use nethercore_shared::console::TickRate;
+use nethercore_shared::is_safe_game_id;
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
@@ -229,6 +230,13 @@ impl NetherManifest {
 
     /// Validate manifest fields
     pub fn validate(&self) -> Result<()> {
+        if !is_safe_game_id(&self.game.id) {
+            anyhow::bail!(
+                "Invalid game.id '{}' in nether.toml (must be a safe single path component)",
+                self.game.id
+            );
+        }
+
         if self.game.render_mode > 3 {
             anyhow::bail!(
                 "Invalid render_mode {} in nether.toml (must be 0-3: 0=Lambert, 1=Matcap, 2=PBR, 3=Hybrid)",
@@ -289,6 +297,22 @@ version = "1.0.0"
         assert_eq!(manifest.game.title, "Test Game");
         assert!(manifest.build.script.is_none());
         assert!(manifest.assets.textures.is_empty());
+    }
+
+    #[test]
+    fn test_manifest_invalid_game_id() {
+        let manifest = NetherManifest::parse(
+            r#"
+[game]
+id = "../evil"
+title = "Test Game"
+author = "Test Author"
+version = "1.0.0"
+"#,
+        )
+        .unwrap();
+
+        assert!(manifest.validate().is_err());
     }
 
     #[test]

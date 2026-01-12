@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::{BufReader, Write};
 use std::path::PathBuf;
 
-use nethercore_core::replay::{BinaryReader, decompile};
+use nethercore_core::replay::{decompile, BinaryReader};
 
 use super::layout::ZxInputLayout;
 

@@ -86,7 +86,13 @@ pub(super) struct VertexTangent {
 
 impl VertexTangent {
     /// Create a new tangent vertex
-    pub fn new(position: Vec3, uv: (f32, f32), normal: Vec3, tangent: Vec3, handedness: f32) -> Self {
+    pub fn new(
+        position: Vec3,
+        uv: (f32, f32),
+        normal: Vec3,
+        tangent: Vec3,
+        handedness: f32,
+    ) -> Self {
         Self {
             position,
             uv,
@@ -247,7 +253,8 @@ impl MeshDataTangent {
             [vertex.tangent.x, vertex.tangent.y, vertex.tangent.z],
             vertex.handedness,
         );
-        self.vertices.extend_from_slice(&tangent_packed.to_le_bytes()); // u32 → &[u8; 4]
+        self.vertices
+            .extend_from_slice(&tangent_packed.to_le_bytes()); // u32 → &[u8; 4]
 
         index
     }
@@ -294,7 +301,9 @@ impl MeshBuilderTangent for MeshDataTangent {
         tangent: Vec3,
         handedness: f32,
     ) -> u16 {
-        self.add_vertex_internal(VertexTangent::new(position, uv, normal, tangent, handedness))
+        self.add_vertex_internal(VertexTangent::new(
+            position, uv, normal, tangent, handedness,
+        ))
     }
 }
 

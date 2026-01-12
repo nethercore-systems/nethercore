@@ -165,7 +165,7 @@ impl Player {
 
     /// Set the playback speed
     pub fn set_speed(&mut self, speed: f32) {
-        self.config.speed = speed.max(0.1).min(10.0);
+        self.config.speed = speed.clamp(0.1, 10.0);
     }
 
     /// Get the effective frame duration based on speed

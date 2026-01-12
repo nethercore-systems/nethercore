@@ -59,7 +59,13 @@ pub fn _write_note_vol_fx(
 }
 
 /// Helper to write a note with effect (no explicit volume)
-pub fn write_note_fx(data: &mut Vec<u8>, note: u8, instrument: u8, effect_type: u8, effect_param: u8) {
+pub fn write_note_fx(
+    data: &mut Vec<u8>,
+    note: u8,
+    instrument: u8,
+    effect_type: u8,
+    effect_param: u8,
+) {
     // packed byte: has note + instrument + effect type + effect param
     data.push(0x80 | 0x01 | 0x02 | 0x08 | 0x10);
     data.push(note);

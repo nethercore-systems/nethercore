@@ -31,8 +31,8 @@ pub fn from_xm_module(xm: &nether_xm::XmModule) -> TrackerModule {
         num_channels: xm.num_channels,
         initial_speed: xm.default_speed as u8,
         initial_tempo: xm.default_bpm as u8,
-        global_volume: 64, // XM doesn't have global volume in header
-        mix_volume: 128,   // XM doesn't have mix volume - default to full (IT feature)
+        global_volume: 64,       // XM doesn't have global volume in header
+        mix_volume: 128,         // XM doesn't have mix volume - default to full (IT feature)
         panning_separation: 128, // XM doesn't have panning separation - default to full stereo (IT feature)
         order_table: xm.order_table.clone(),
         patterns,
@@ -624,17 +624,11 @@ mod tests {
     fn test_convert_xm_volume_column_vibrato() {
         // 0xE0 = vibrato depth 0 (speed from memory)
         let vib0 = convert_xm_volume_effect(0xE0);
-        assert_eq!(
-            vib0,
-            Some(TrackerEffect::Vibrato { speed: 0, depth: 0 })
-        );
+        assert_eq!(vib0, Some(TrackerEffect::Vibrato { speed: 0, depth: 0 }));
 
         // 0xE8 = vibrato depth 8
         let vib8 = convert_xm_volume_effect(0xE8);
-        assert_eq!(
-            vib8,
-            Some(TrackerEffect::Vibrato { speed: 0, depth: 8 })
-        );
+        assert_eq!(vib8, Some(TrackerEffect::Vibrato { speed: 0, depth: 8 }));
 
         // 0xEF = vibrato depth 15
         let vib15 = convert_xm_volume_effect(0xEF);

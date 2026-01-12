@@ -22,9 +22,9 @@
 
 use bitcode::{Decode, Encode};
 
+use nethercore_shared::ZX_ROM_FORMAT;
 use nethercore_shared::local::LocalGameManifest;
 use nethercore_shared::netplay::NetplayMetadata;
-use nethercore_shared::ZX_ROM_FORMAT;
 
 use super::zx_data_pack::ZXDataPack;
 

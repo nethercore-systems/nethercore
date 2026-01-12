@@ -55,6 +55,123 @@ pub mod blend_mode {
     pub const SCREEN: u32 = 3; // 1 - (1-base) * (1-overlay)
 }
 
+/// Configuration for packing gradient parameters
+pub struct GradientConfig {
+    pub offset: usize,
+    pub zenith: u32,
+    pub sky_horizon: u32,
+    pub ground_horizon: u32,
+    pub nadir: u32,
+    pub rotation: f32,
+    pub shift: f32,
+}
+
+/// Configuration for packing scatter parameters
+pub struct ScatterConfig {
+    pub offset: usize,
+    pub variant: u32,
+    pub density: u32,
+    pub size: u32,
+    pub glow: u32,
+    pub streak_length: u32,
+    pub color_primary: u32,
+    pub color_secondary: u32,
+    pub parallax_rate: u32,
+    pub parallax_size: u32,
+    pub phase: u32,
+    pub layer_count: u32,
+}
+
+/// Configuration for packing lines parameters
+pub struct LinesConfig {
+    pub offset: usize,
+    pub variant: u32,
+    pub line_type: u32,
+    pub thickness: u32,
+    pub spacing: f32,
+    pub fade_distance: f32,
+    pub color_primary: u32,
+    pub color_accent: u32,
+    pub accent_every: u32,
+    pub phase: u32,
+}
+
+/// Configuration for packing silhouette parameters
+pub struct SilhouetteConfig {
+    pub offset: usize,
+    pub jaggedness: u32,
+    pub layer_count: u32,
+    pub color_near: u32,
+    pub color_far: u32,
+    pub sky_zenith: u32,
+    pub sky_horizon: u32,
+    pub parallax_rate: u32,
+    pub seed: u32,
+}
+
+/// Configuration for packing rectangles parameters
+pub struct RectanglesConfig {
+    pub offset: usize,
+    pub variant: u32,
+    pub density: u32,
+    pub lit_ratio: u32,
+    pub size_min: u32,
+    pub size_max: u32,
+    pub aspect: u32,
+    pub color_primary: u32,
+    pub color_variation: u32,
+    pub parallax_rate: u32,
+    pub phase: u32,
+}
+
+/// Configuration for packing room parameters
+pub struct RoomConfig {
+    pub offset: usize,
+    pub color_ceiling: u32,
+    pub color_floor: u32,
+    pub color_walls: u32,
+    pub panel_size: f32,
+    pub panel_gap: u32,
+    pub light_direction: Vec3,
+    pub light_intensity: u32,
+    pub corner_darken: u32,
+    pub room_scale: f32,
+    pub viewer_x: i32,
+    pub viewer_y: i32,
+    pub viewer_z: i32,
+}
+
+/// Configuration for packing curtains parameters
+pub struct CurtainsConfig {
+    pub offset: usize,
+    pub layer_count: u32,
+    pub density: u32,
+    pub height_min: u32,
+    pub height_max: u32,
+    pub width: u32,
+    pub spacing: u32,
+    pub waviness: u32,
+    pub color_near: u32,
+    pub color_far: u32,
+    pub glow: u32,
+    pub parallax_rate: u32,
+    pub phase: u32,
+}
+
+/// Configuration for packing rings parameters
+pub struct RingsConfig {
+    pub offset: usize,
+    pub ring_count: u32,
+    pub thickness: u32,
+    pub color_a: u32,
+    pub color_b: u32,
+    pub center_color: u32,
+    pub center_falloff: u32,
+    pub spiral_twist: f32,
+    pub axis: Vec3,
+    pub phase: u32,
+}
+
 impl PackedEnvironmentState {
     /// Create header from mode and blend settings
     #[inline]
@@ -100,16 +217,8 @@ impl PackedEnvironmentState {
 
     /// Pack gradient parameters into data[offset..offset+5]
     /// Mode 0: Gradient - 4-color sky/ground gradient
-    pub fn pack_gradient(
-        &mut self,
-        offset: usize,
-        zenith: u32,
-        sky_horizon: u32,
-        ground_horizon: u32,
-        nadir: u32,
-        rotation: f32,
-        shift: f32,
-    ) {
+    pub fn pack_gradient(&mut self, config: GradientConfig) {
+        let GradientConfig { offset, zenith, sky_horizon, ground_horizon, nadir, rotation, shift } = config;
         self.data[offset] = zenith;
         self.data[offset + 1] = sky_horizon;
         self.data[offset + 2] = ground_horizon;
@@ -119,17 +228,20 @@ impl PackedEnvironmentState {
 
     /// Create a default gradient environment (blue sky)
     pub fn default_gradient() -> Self {
-        let mut env = Self::default();
-        env.header = Self::make_header(env_mode::GRADIENT, env_mode::GRADIENT, blend_mode::ALPHA);
+        let mut env = Self {
+            header: Self::make_header(env_mode::GRADIENT, env_mode::GRADIENT, blend_mode::ALPHA),
+            ..Default::default()
+        };
         // Blue sky defaults
-        env.pack_gradient(
-            0, 0x3366B2FF, // zenith: darker blue
-            0xB2D8F2FF, // sky_horizon: light blue
-            0x8B7355FF, // ground_horizon: tan/brown
-            0x4A3728FF, // nadir: dark brown
-            0.0,        // rotation
-            0.0,        // shift
-        );
+        env.pack_gradient(GradientConfig {
+            offset: 0,
+            zenith: 0x3366B2FF, // darker blue
+            sky_horizon: 0xB2D8F2FF, // light blue
+            ground_horizon: 0x8B7355FF, // tan/brown
+            nadir: 0x4A3728FF, // dark brown
+            rotation: 0.0,
+            shift: 0.0,
+        });
         env
     }
 
@@ -142,21 +254,8 @@ impl PackedEnvironmentState {
     /// - data[2]: color_secondary(RGB8, 24) + parallax_size(8) = 32 bits
     /// - data[3]: phase(u16, 16) + layer_count(2) + reserved(14) = 32 bits
     /// - data[4]: reserved
-    pub fn pack_scatter(
-        &mut self,
-        offset: usize,
-        variant: u32,         // 0-3: Stars, Vertical, Horizontal, Warp
-        density: u32,         // 0-255
-        size: u32,            // 0-255
-        glow: u32,            // 0-255
-        streak_length: u32,   // 0-63
-        color_primary: u32,   // RGB8 (0xRRGGBB00)
-        color_secondary: u32, // RGB8 (0xRRGGBB00)
-        parallax_rate: u32,   // 0-255
-        parallax_size: u32,   // 0-255
-        phase: u32,           // 0-65535
-        layer_count: u32,     // 1-3
-    ) {
+    pub fn pack_scatter(&mut self, config: ScatterConfig) {
+        let ScatterConfig { offset, variant, density, size, glow, streak_length, color_primary, color_secondary, parallax_rate, parallax_size, phase, layer_count } = config;
         // data[0]: variant(2) + density(8) + size(8) + glow(8) + streak_len(6)
         self.data[offset] = (variant & 0x3)
             | ((density & 0xFF) << 2)
@@ -186,19 +285,8 @@ impl PackedEnvironmentState {
     /// - data[2]: color_primary (RGBA8)
     /// - data[3]: color_accent (RGBA8)
     /// - data[4]: phase(u16) + reserved(16)
-    pub fn pack_lines(
-        &mut self,
-        offset: usize,
-        variant: u32,       // 0-2: Floor, Ceiling, Sphere
-        line_type: u32,     // 0-2: Horizontal, Vertical, Grid
-        thickness: u32,     // 0-255
-        spacing: f32,       // World units
-        fade_distance: f32, // World units
-        color_primary: u32, // RGBA8
-        color_accent: u32,  // RGBA8
-        accent_every: u32,  // Accent every Nth line
-        phase: u32,         // 0-65535
-    ) {
+    pub fn pack_lines(&mut self, config: LinesConfig) {
+        let LinesConfig { offset, variant, line_type, thickness, spacing, fade_distance, color_primary, color_accent, accent_every, phase } = config;
         // data[0]: variant(2) + line_type(2) + thickness(8) + accent_every(8) + reserved(12)
         self.data[offset] = (variant & 0x3)
             | ((line_type & 0x3) << 2)
@@ -227,18 +315,8 @@ impl PackedEnvironmentState {
     /// - data[2]: color_far (RGBA8)
     /// - data[3]: sky_zenith (RGBA8)
     /// - data[4]: sky_horizon (RGBA8) - seed stored in shared data[10]
-    pub fn pack_silhouette(
-        &mut self,
-        offset: usize,
-        jaggedness: u32,    // 0-255: 0=smooth hills, 255=sharp peaks
-        layer_count: u32,   // 1-3 depth layers
-        color_near: u32,    // RGBA8 nearest silhouette
-        color_far: u32,     // RGBA8 farthest silhouette
-        sky_zenith: u32,    // RGBA8 sky behind silhouettes
-        sky_horizon: u32,   // RGBA8 horizon behind silhouettes
-        parallax_rate: u32, // 0-255 layer separation
-        seed: u32,          // Noise seed for terrain shape
-    ) {
+    pub fn pack_silhouette(&mut self, config: SilhouetteConfig) {
+        let SilhouetteConfig { offset, jaggedness, layer_count, color_near, color_far, sky_zenith, sky_horizon, parallax_rate, seed } = config;
         // data[0]: jaggedness(8) + layer_count(2) + parallax_rate(8) + reserved(14)
         self.data[offset] = (jaggedness & 0xFF)
             | (((layer_count.clamp(1, 3) - 1) & 0x3) << 8)
@@ -273,20 +351,8 @@ impl PackedEnvironmentState {
     /// - data[2]: color_variation (RGBA8)
     /// - data[3]: parallax_rate(8) + reserved(8) + phase(16)
     /// - data[4]: reserved
-    pub fn pack_rectangles(
-        &mut self,
-        offset: usize,
-        variant: u32,         // 0-3: Scatter, Buildings, Bands, Panels
-        density: u32,         // 0-255 how many rectangles
-        lit_ratio: u32,       // 0-255 percentage lit
-        size_min: u32,        // 0-63 minimum size
-        size_max: u32,        // 0-63 maximum size
-        aspect: u32,          // 0-3 aspect ratio bias
-        color_primary: u32,   // RGBA8 main window color
-        color_variation: u32, // RGBA8 color variation
-        parallax_rate: u32,   // 0-255 layer separation
-        phase: u32,           // 0-65535 flicker phase
-    ) {
+    pub fn pack_rectangles(&mut self, config: RectanglesConfig) {
+        let RectanglesConfig { offset, variant, density, lit_ratio, size_min, size_max, aspect, color_primary, color_variation, parallax_rate, phase } = config;
         // data[0]: variant(2) + density(8) + lit_ratio(8) + size_min(6) + size_max(6) + aspect(2)
         self.data[offset] = (variant & 0x3)
             | ((density & 0xFF) << 2)
@@ -312,28 +378,16 @@ impl PackedEnvironmentState {
     /// Mode 5: Room - Interior of a 3D box with directional lighting
     ///
     /// # Data Layout (viewer packed into color alpha bytes - rooms are opaque)
+    ///
     /// - data[0]: color_ceiling_RGB(24) + viewer_x_snorm8(8)
     /// - data[1]: color_floor_RGB(24) + viewer_y_snorm8(8)
     /// - data[2]: color_walls_RGB(24) + viewer_z_snorm8(8)
     /// - data[3]: panel_size(f16) + panel_gap(8) + corner_darken(8)
     /// - data[4]: light_dir_oct(16) + light_intensity(8) + room_scale(8)
+    ///
     /// Note: Does NOT use shared data[10] - can safely layer with other modes
-    pub fn pack_room(
-        &mut self,
-        offset: usize,
-        color_ceiling: u32,    // RGB8 (alpha byte ignored, used for viewer_x)
-        color_floor: u32,      // RGB8 (alpha byte ignored, used for viewer_y)
-        color_walls: u32,      // RGB8 (alpha byte ignored, used for viewer_z)
-        panel_size: f32,       // World units
-        panel_gap: u32,        // 0-255
-        light_direction: Vec3, // Normalized light direction
-        light_intensity: u32,  // 0-255
-        corner_darken: u32,    // 0-255
-        room_scale: f32,       // Room size multiplier
-        viewer_x: i32,         // snorm8: -128 to 127 = -1.0 to 1.0 (8-bit precision)
-        viewer_y: i32,         // snorm8
-        viewer_z: i32,         // snorm8
-    ) {
+    pub fn pack_room(&mut self, config: RoomConfig) {
+        let RoomConfig { offset, color_ceiling, color_floor, color_walls, panel_size, panel_gap, light_direction, light_intensity, corner_darken, room_scale, viewer_x, viewer_y, viewer_z } = config;
         // Convert viewer positions from i32 to snorm8 (clamp to -128..127, store as u8)
         let vx = ((viewer_x.clamp(-128, 127) as i8) as u8) as u32;
         let vy = ((viewer_y.clamp(-128, 127) as i8) as u8) as u32;
@@ -369,22 +423,8 @@ impl PackedEnvironmentState {
     /// - data[2]: color_near (RGBA8)
     /// - data[3]: color_far (RGBA8)
     /// - data[4]: phase(u16) + reserved(16)
-    pub fn pack_curtains(
-        &mut self,
-        offset: usize,
-        layer_count: u32,   // 1-3 depth layers
-        density: u32,       // 0-255 structures per cell
-        height_min: u32,    // 0-63 minimum height
-        height_max: u32,    // 0-63 maximum height
-        width: u32,         // 0-31 structure width
-        spacing: u32,       // 0-31 gap between structures
-        waviness: u32,      // 0-255 organic wobble
-        color_near: u32,    // RGBA8 nearest structure
-        color_far: u32,     // RGBA8 farthest structure
-        glow: u32,          // 0-255 neon/magical glow
-        parallax_rate: u32, // 0-255 layer separation
-        phase: u32,         // 0-65535 scroll phase
-    ) {
+    pub fn pack_curtains(&mut self, config: CurtainsConfig) {
+        let CurtainsConfig { offset, layer_count, density, height_min, height_max, width, spacing, waviness, color_near, color_far, glow, parallax_rate, phase } = config;
         // data[0]: layer_count(2) + density(8) + height_min(6) + height_max(6) + width(5) + spacing(5)
         self.data[offset] = ((layer_count.clamp(1, 3) - 1) & 0x3)
             | ((density & 0xFF) << 2)
@@ -411,25 +451,16 @@ impl PackedEnvironmentState {
     /// Mode 7: Rings - Concentric rings around focal direction (tunnel/portal/vortex)
     ///
     /// # Data Layout
+    ///
     /// - data[0]: ring_count(8) + thickness(8) + center_falloff(8) + reserved(8)
     /// - data[1]: color_a (RGBA8)
     /// - data[2]: color_b (RGBA8)
     /// - data[3]: center_color (RGBA8)
     /// - data[4]: spiral_twist(f16) + axis_oct(16)
+    ///
     /// Note: phase is stored in shared data[10] upper 16 bits
-    pub fn pack_rings(
-        &mut self,
-        offset: usize,
-        ring_count: u32,     // 1-255
-        thickness: u32,      // 0-255
-        color_a: u32,        // RGBA8
-        color_b: u32,        // RGBA8
-        center_color: u32,   // RGBA8
-        center_falloff: u32, // 0-255
-        spiral_twist: f32,   // Degrees
-        axis: Vec3,          // Ring axis direction
-        phase: u32,          // 0-65535
-    ) {
+    pub fn pack_rings(&mut self, config: RingsConfig) {
+        let RingsConfig { offset, ring_count, thickness, color_a, color_b, center_color, center_falloff, spiral_twist, axis, phase } = config;
         // data[0]: ring_count(8) + thickness(8) + center_falloff(8) + reserved(8)
         self.data[offset] =
             (ring_count & 0xFF) | ((thickness & 0xFF) << 8) | ((center_falloff & 0xFF) << 16);
@@ -507,14 +538,17 @@ impl LightType {
 /// # Format
 ///
 /// **data0:**
+///
 /// - Directional: octahedral direction (snorm16x2)
 /// - Point: position XY (f16x2)
 ///
 /// **data1:** RGB8 (bits 31-8) + type (bit 7) + intensity (bits 6-0)
+///
 /// - Format: 0xRRGGBB_TI where T=type(1bit), I=intensity(7bits)
 /// - Intensity maps 0-127 -> 0.0-8.0 for HDR support
 ///
 /// **data2:**
+///
 /// - Directional: unused (0)
 /// - Point: position Z (f16, bits 15-0) + range (f16, bits 31-16)
 #[repr(C)]
@@ -1400,9 +1434,18 @@ mod tests {
         assert_eq!(FLAG_SKIP_NORMAL_MAP, 1 << 16);
 
         // Verify it doesn't overlap with other flags
-        assert_ne!(FLAG_SKIP_NORMAL_MAP & FLAG_SKINNING_MODE, FLAG_SKINNING_MODE);
-        assert_ne!(FLAG_SKIP_NORMAL_MAP & FLAG_TEXTURE_FILTER_LINEAR, FLAG_TEXTURE_FILTER_LINEAR);
-        assert_ne!(FLAG_SKIP_NORMAL_MAP & FLAG_UNIFORM_ALPHA_MASK, FLAG_UNIFORM_ALPHA_MASK);
+        assert_ne!(
+            FLAG_SKIP_NORMAL_MAP & FLAG_SKINNING_MODE,
+            FLAG_SKINNING_MODE
+        );
+        assert_ne!(
+            FLAG_SKIP_NORMAL_MAP & FLAG_TEXTURE_FILTER_LINEAR,
+            FLAG_TEXTURE_FILTER_LINEAR
+        );
+        assert_ne!(
+            FLAG_SKIP_NORMAL_MAP & FLAG_UNIFORM_ALPHA_MASK,
+            FLAG_UNIFORM_ALPHA_MASK
+        );
     }
 
     #[test]
@@ -1469,14 +1512,15 @@ mod tests {
     #[test]
     fn test_environment_gradient_packing() {
         let mut env = PackedEnvironmentState::default();
-        env.pack_gradient(
-            0, 0x3366B2FF, // zenith
-            0xB2D8F2FF, // sky_horizon
-            0x8B7355FF, // ground_horizon
-            0x4A3728FF, // nadir
-            45.0,       // rotation
-            0.25,       // shift
-        );
+        env.pack_gradient(GradientConfig {
+            offset: 0,
+            zenith: 0x3366B2FF,
+            sky_horizon: 0xB2D8F2FF,
+            ground_horizon: 0x8B7355FF,
+            nadir: 0x4A3728FF,
+            rotation: 45.0,
+            shift: 0.25,
+        });
 
         assert_eq!(env.data[0], 0x3366B2FF);
         assert_eq!(env.data[1], 0xB2D8F2FF);

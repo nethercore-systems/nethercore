@@ -27,18 +27,41 @@ impl ConsoleType {
         }
     }
 
-    /// Parse a console type from its string identifier.
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s {
-            "zx" => Some(Self::ZX),
-            "chroma" => Some(Self::Chroma),
-            _ => None,
-        }
-    }
-
     /// Get all known console types.
     pub const fn all() -> &'static [Self] {
         &[Self::ZX, Self::Chroma]
+    }
+}
+
+/// Error type for ConsoleType parsing
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParseConsoleTypeError {
+    input: String,
+}
+
+impl std::fmt::Display for ParseConsoleTypeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "unknown console type '{}' (expected: zx, chroma)",
+            self.input
+        )
+    }
+}
+
+impl std::error::Error for ParseConsoleTypeError {}
+
+impl std::str::FromStr for ConsoleType {
+    type Err = ParseConsoleTypeError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "zx" => Ok(Self::ZX),
+            "chroma" => Ok(Self::Chroma),
+            _ => Err(ParseConsoleTypeError {
+                input: s.to_string(),
+            }),
+        }
     }
 }
 

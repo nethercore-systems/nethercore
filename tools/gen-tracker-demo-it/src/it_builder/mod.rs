@@ -10,16 +10,18 @@ pub mod dawn;
 pub mod storm;
 
 // Stripped and embedded variants
-pub use acid::{generate_acid_it_stripped, generate_acid_it_embedded};
-pub use dawn::{generate_dawn_it_stripped, generate_dawn_it_embedded};
-pub use storm::{generate_storm_it_stripped, generate_storm_it_embedded};
+pub use acid::{generate_acid_it_embedded, generate_acid_it_stripped};
+pub use dawn::{generate_dawn_it_embedded, generate_dawn_it_stripped};
+pub use storm::{generate_storm_it_embedded, generate_storm_it_stripped};
 
 use nether_it::{ItInstrument, ItSample, NewNoteAction};
 
 /// Helper to create an instrument with a linked sample
 pub fn make_instrument(name: &str, sample_num: u8) -> ItInstrument {
-    let mut instr = ItInstrument::default();
-    instr.name = name.to_string();
+    let mut instr = ItInstrument {
+        name: name.to_string(),
+        ..Default::default()
+    };
 
     // Map all notes to use this sample
     for entry in instr.note_sample_table.iter_mut() {
@@ -46,10 +48,11 @@ pub fn make_instrument_fade(name: &str, sample_num: u8, fadeout: u16) -> ItInstr
 
 /// Helper to create a sample definition
 pub fn make_sample(name: &str, c5_speed: u32) -> ItSample {
-    let mut sample = ItSample::default();
-    sample.name = name.to_string();
-    sample.c5_speed = c5_speed;
-    sample.default_volume = 64;
-    sample.global_volume = 64;
-    sample
+    ItSample {
+        name: name.to_string(),
+        c5_speed,
+        default_volume: 64,
+        global_volume: 64,
+        ..Default::default()
+    }
 }

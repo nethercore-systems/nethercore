@@ -1499,23 +1499,58 @@ fn pack_partial_trs_binary_data(
     align_buffer(&mut buffer);
 
     // Bone 0: T, R, S
-    let bone0_t = pack_vec3(&mut buffer, &mut views, &mut accessors, &animation.bone0_translations);
+    let bone0_t = pack_vec3(
+        &mut buffer,
+        &mut views,
+        &mut accessors,
+        &animation.bone0_translations,
+    );
     align_buffer(&mut buffer);
-    let bone0_r = pack_vec4(&mut buffer, &mut views, &mut accessors, &animation.bone0_rotations);
+    let bone0_r = pack_vec4(
+        &mut buffer,
+        &mut views,
+        &mut accessors,
+        &animation.bone0_rotations,
+    );
     align_buffer(&mut buffer);
-    let bone0_s = pack_vec3(&mut buffer, &mut views, &mut accessors, &animation.bone0_scales);
+    let bone0_s = pack_vec3(
+        &mut buffer,
+        &mut views,
+        &mut accessors,
+        &animation.bone0_scales,
+    );
     align_buffer(&mut buffer);
 
     // Bone 1: R only
-    let bone1_r = pack_vec4(&mut buffer, &mut views, &mut accessors, &animation.bone1_rotations);
+    let bone1_r = pack_vec4(
+        &mut buffer,
+        &mut views,
+        &mut accessors,
+        &animation.bone1_rotations,
+    );
     align_buffer(&mut buffer);
 
     // Bone 2: T, R, S
-    let bone2_t = pack_vec3(&mut buffer, &mut views, &mut accessors, &animation.bone2_translations);
+    let bone2_t = pack_vec3(
+        &mut buffer,
+        &mut views,
+        &mut accessors,
+        &animation.bone2_translations,
+    );
     align_buffer(&mut buffer);
-    let bone2_r = pack_vec4(&mut buffer, &mut views, &mut accessors, &animation.bone2_rotations);
+    let bone2_r = pack_vec4(
+        &mut buffer,
+        &mut views,
+        &mut accessors,
+        &animation.bone2_rotations,
+    );
     align_buffer(&mut buffer);
-    let bone2_s = pack_vec3(&mut buffer, &mut views, &mut accessors, &animation.bone2_scales);
+    let bone2_s = pack_vec3(
+        &mut buffer,
+        &mut views,
+        &mut accessors,
+        &animation.bone2_scales,
+    );
     align_buffer(&mut buffer);
 
     // Store accessor indices for building JSON
@@ -1528,7 +1563,16 @@ fn pack_partial_trs_binary_data(
     // 8: bone0_t, 9: bone0_r, 10: bone0_s
     // 11: bone1_r
     // 12: bone2_t, 13: bone2_r, 14: bone2_s
-    let _ = (times_accessor, bone0_t, bone0_r, bone0_s, bone1_r, bone2_t, bone2_r, bone2_s);
+    let _ = (
+        times_accessor,
+        bone0_t,
+        bone0_r,
+        bone0_s,
+        bone1_r,
+        bone2_t,
+        bone2_r,
+        bone2_s,
+    );
 
     (buffer, views, accessors)
 }

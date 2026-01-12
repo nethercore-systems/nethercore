@@ -12,6 +12,12 @@ use crate::console::Console;
 use crate::rollback::{RollbackSession, SessionEvent};
 use crate::wasm::GameInstance;
 
+/// Tuple of mutable references to game instance and audio, where either can be None
+type GameAndAudioMut<'a, C> = (
+    Option<&'a mut GameInstance<<C as Console>::Input, <C as Console>::State, <C as Console>::RollbackState>>,
+    Option<&'a mut <C as Console>::Audio>,
+);
+
 /// Runtime configuration
 #[derive(Debug, Clone)]
 pub struct RuntimeConfig {
@@ -343,12 +349,7 @@ impl<C: Console> Runtime<C> {
     ///
     /// Returns (game, audio) tuple where either can be None.
     /// This allows the caller to access both without borrowing issues.
-    pub fn game_and_audio_mut(
-        &mut self,
-    ) -> (
-        Option<&mut GameInstance<C::Input, C::State, C::RollbackState>>,
-        Option<&mut C::Audio>,
-    ) {
+    pub fn game_and_audio_mut(&mut self) -> GameAndAudioMut<'_, C> {
         (self.game.as_mut(), self.audio.as_mut())
     }
 }
@@ -492,10 +493,8 @@ mod tests {
         let console = TestConsole;
         let mut runtime = Runtime::<TestConsole>::new(console);
 
-        let session = crate::rollback::RollbackSession::<TestInput, ()>::new_local(
-            2,
-            test_ram_limit(),
-        );
+        let session =
+            crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, test_ram_limit());
         runtime.set_session(session);
 
         assert!(runtime.session().is_some());
@@ -507,10 +506,8 @@ mod tests {
         let console = TestConsole;
         let mut runtime = Runtime::<TestConsole>::new(console);
 
-        let session = crate::rollback::RollbackSession::<TestInput, ()>::new_local(
-            2,
-            test_ram_limit(),
-        );
+        let session =
+            crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, test_ram_limit());
         runtime.set_session(session);
 
         // Verify mutable access
@@ -620,10 +617,8 @@ mod tests {
         let console = TestConsole;
         let mut runtime = Runtime::<TestConsole>::new(console);
 
-        let session = crate::rollback::RollbackSession::<TestInput, ()>::new_local(
-            2,
-            test_ram_limit(),
-        );
+        let session =
+            crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, test_ram_limit());
         runtime.set_session(session);
 
         // Local sessions don't use GGRS input, so this should succeed
@@ -656,10 +651,8 @@ mod tests {
         let console = TestConsole;
         let mut runtime = Runtime::<TestConsole>::new(console);
 
-        let session = crate::rollback::RollbackSession::<TestInput, ()>::new_local(
-            2,
-            test_ram_limit(),
-        );
+        let session =
+            crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, test_ram_limit());
         runtime.set_session(session);
 
         // Local sessions don't produce events
@@ -685,10 +678,8 @@ mod tests {
         let console = TestConsole;
         let mut runtime = Runtime::<TestConsole>::new(console);
 
-        let session = crate::rollback::RollbackSession::<TestInput, ()>::new_local(
-            2,
-            test_ram_limit(),
-        );
+        let session =
+            crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, test_ram_limit());
         runtime.set_session(session);
 
         // Should not panic (no-op for local sessions)

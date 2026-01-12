@@ -159,32 +159,78 @@ pub struct Assertion {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AssertExpr {
     /// memory[addr] == value
-    MemEq { addr: u32, value: i64 },
+    MemEq {
+        addr: u32,
+        value: i64,
+    },
     /// memory[addr] != value
-    MemNe { addr: u32, value: i64 },
+    MemNe {
+        addr: u32,
+        value: i64,
+    },
     /// memory[addr] > value
-    MemGt { addr: u32, value: i64 },
+    MemGt {
+        addr: u32,
+        value: i64,
+    },
     /// memory[addr] < value
-    MemLt { addr: u32, value: i64 },
+    MemLt {
+        addr: u32,
+        value: i64,
+    },
     /// memory[addr] >= value
-    MemGe { addr: u32, value: i64 },
+    MemGe {
+        addr: u32,
+        value: i64,
+    },
     /// memory[addr] <= value
-    MemLe { addr: u32, value: i64 },
+    MemLe {
+        addr: u32,
+        value: i64,
+    },
     /// memory[addr] ~= value ± tolerance
-    MemApprox { addr: u32, value: i64, tolerance: i64 },
+    MemApprox {
+        addr: u32,
+        value: i64,
+        tolerance: i64,
+    },
     /// memory[addr] > prev(memory[addr])
-    MemIncreased { addr: u32 },
+    MemIncreased {
+        addr: u32,
+    },
     /// memory[addr] < prev(memory[addr])
-    MemDecreased { addr: u32 },
+    MemDecreased {
+        addr: u32,
+    },
     /// tick > value
-    TickGt { value: u64 },
+    TickGt {
+        value: u64,
+    },
     /// Debug variable comparison (e.g., "$player_x > 100")
-    VarEq { name: String, value: f64 },
-    VarNe { name: String, value: f64 },
-    VarGt { name: String, value: f64 },
-    VarLt { name: String, value: f64 },
-    VarGe { name: String, value: f64 },
-    VarLe { name: String, value: f64 },
+    VarEq {
+        name: String,
+        value: f64,
+    },
+    VarNe {
+        name: String,
+        value: f64,
+    },
+    VarGt {
+        name: String,
+        value: f64,
+    },
+    VarLt {
+        name: String,
+        value: f64,
+    },
+    VarGe {
+        name: String,
+        value: f64,
+    },
+    VarLe {
+        name: String,
+        value: f64,
+    },
 }
 
 /// Log directive (uses debug-registered variable names)
@@ -339,9 +385,6 @@ mod tests {
         assert_eq!(DebugValueData::F32(0.5).as_f64(), Some(0.5));
         assert_eq!(DebugValueData::Bool(true).as_f64(), Some(1.0));
         assert_eq!(DebugValueData::Bool(false).as_f64(), Some(0.0));
-        assert_eq!(
-            DebugValueData::Vec2 { x: 1.0, y: 2.0 }.as_f64(),
-            None
-        );
+        assert_eq!(DebugValueData::Vec2 { x: 1.0, y: 2.0 }.as_f64(), None);
     }
 }

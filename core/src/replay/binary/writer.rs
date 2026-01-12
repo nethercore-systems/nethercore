@@ -61,10 +61,8 @@ impl<W: Write> BinaryWriter<W> {
 
         if header.flags.contains(ReplayFlags::COMPRESSED_INPUTS) {
             // Delta compression: store first frame raw, then XOR deltas
-            let mut prev_frame: Vec<Vec<u8>> = vec![
-                vec![0u8; header.input_size as usize];
-                header.player_count as usize
-            ];
+            let mut prev_frame: Vec<Vec<u8>> =
+                vec![vec![0u8; header.input_size as usize]; header.player_count as usize];
 
             let mut delta_buffer = Vec::new();
 
@@ -85,7 +83,8 @@ impl<W: Write> BinaryWriter<W> {
 
             // Compress the delta buffer with LZ4
             let compressed = compress_prepend_size(&delta_buffer);
-            self.writer.write_u32::<LittleEndian>(compressed.len() as u32)?;
+            self.writer
+                .write_u32::<LittleEndian>(compressed.len() as u32)?;
             self.writer.write_all(&compressed)?;
         } else {
             // Uncompressed: write raw input bytes
@@ -101,12 +100,14 @@ impl<W: Write> BinaryWriter<W> {
 
     /// Write checkpoints
     fn write_checkpoints(&mut self, checkpoints: &[Checkpoint]) -> io::Result<()> {
-        self.writer.write_u32::<LittleEndian>(checkpoints.len() as u32)?;
+        self.writer
+            .write_u32::<LittleEndian>(checkpoints.len() as u32)?;
 
         for checkpoint in checkpoints {
             self.writer.write_u64::<LittleEndian>(checkpoint.frame)?;
             let compressed = compress_prepend_size(&checkpoint.state);
-            self.writer.write_u32::<LittleEndian>(compressed.len() as u32)?;
+            self.writer
+                .write_u32::<LittleEndian>(compressed.len() as u32)?;
             self.writer.write_all(&compressed)?;
         }
 

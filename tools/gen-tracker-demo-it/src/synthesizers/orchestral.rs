@@ -59,19 +59,29 @@ fn _blep_triangle(phase: f32, dt: f32) -> f32 {
 
 /// Biquad lowpass filter with resonance
 struct BiquadLP {
-    x1: f32, x2: f32,
-    y1: f32, y2: f32,
-    b0: f32, b1: f32, b2: f32,
-    a1: f32, a2: f32,
+    x1: f32,
+    x2: f32,
+    y1: f32,
+    y2: f32,
+    b0: f32,
+    b1: f32,
+    b2: f32,
+    a1: f32,
+    a2: f32,
 }
 
 impl BiquadLP {
     fn new(cutoff_hz: f32, q: f32) -> Self {
         let mut filter = Self {
-            x1: 0.0, x2: 0.0,
-            y1: 0.0, y2: 0.0,
-            b0: 0.0, b1: 0.0, b2: 0.0,
-            a1: 0.0, a2: 0.0,
+            x1: 0.0,
+            x2: 0.0,
+            y1: 0.0,
+            y2: 0.0,
+            b0: 0.0,
+            b1: 0.0,
+            b2: 0.0,
+            a1: 0.0,
+            a2: 0.0,
         };
         filter.set_params(cutoff_hz, q);
         filter
@@ -93,7 +103,8 @@ impl BiquadLP {
 
     fn process(&mut self, x: f32) -> f32 {
         let y = self.b0 * x + self.b1 * self.x1 + self.b2 * self.x2
-              - self.a1 * self.y1 - self.a2 * self.y2;
+            - self.a1 * self.y1
+            - self.a2 * self.y2;
         self.x2 = self.x1;
         self.x1 = x;
         self.y2 = self.y1;
@@ -104,19 +115,29 @@ impl BiquadLP {
 
 /// Biquad highpass filter
 struct BiquadHP {
-    x1: f32, x2: f32,
-    y1: f32, y2: f32,
-    b0: f32, b1: f32, b2: f32,
-    a1: f32, a2: f32,
+    x1: f32,
+    x2: f32,
+    y1: f32,
+    y2: f32,
+    b0: f32,
+    b1: f32,
+    b2: f32,
+    a1: f32,
+    a2: f32,
 }
 
 impl BiquadHP {
     fn new(cutoff_hz: f32, q: f32) -> Self {
         let mut filter = Self {
-            x1: 0.0, x2: 0.0,
-            y1: 0.0, y2: 0.0,
-            b0: 0.0, b1: 0.0, b2: 0.0,
-            a1: 0.0, a2: 0.0,
+            x1: 0.0,
+            x2: 0.0,
+            y1: 0.0,
+            y2: 0.0,
+            b0: 0.0,
+            b1: 0.0,
+            b2: 0.0,
+            a1: 0.0,
+            a2: 0.0,
         };
         filter.set_params(cutoff_hz, q);
         filter
@@ -138,7 +159,8 @@ impl BiquadHP {
 
     fn process(&mut self, x: f32) -> f32 {
         let y = self.b0 * x + self.b1 * self.x1 + self.b2 * self.x2
-              - self.a1 * self.y1 - self.a2 * self.y2;
+            - self.a1 * self.y1
+            - self.a2 * self.y2;
         self.x2 = self.x1;
         self.x1 = x;
         self.y2 = self.y1;
@@ -155,7 +177,10 @@ struct SVFilter {
 
 impl SVFilter {
     fn new() -> Self {
-        Self { low: 0.0, band: 0.0 }
+        Self {
+            low: 0.0,
+            band: 0.0,
+        }
     }
 
     fn process(&mut self, input: f32, cutoff: f32, res: f32) -> (f32, f32, f32) {
@@ -347,7 +372,11 @@ pub fn generate_strings_violin() -> Vec<i16> {
         let t = i as f32 / SAMPLE_RATE;
 
         // Delayed vibrato that intensifies
-        let vib_depth = if t < 0.15 { 0.0 } else { ((t - 0.15) / 0.3).min(1.0) };
+        let vib_depth = if t < 0.15 {
+            0.0
+        } else {
+            ((t - 0.15) / 0.3).min(1.0)
+        };
         let vibrato = 1.0 + 0.008 * vib_depth * (vibrato_phase * 2.0 * PI).sin();
         vibrato_phase += 5.5 / SAMPLE_RATE;
 
@@ -581,7 +610,11 @@ pub fn generate_timpani() -> Vec<i16> {
         let noise_env = (-t * 40.0).exp();
 
         // Body resonance envelope
-        let body_env = if t < 0.003 { t / 0.003 } else { (-t * 2.8).exp() };
+        let body_env = if t < 0.003 {
+            t / 0.003
+        } else {
+            (-t * 2.8).exp()
+        };
 
         let sample = (tone * body_env * 0.85 + filtered_noise * noise_env * 0.5) * 31000.0;
         output.push(sample.clamp(-32767.0, 32767.0) as i16);
@@ -608,11 +641,19 @@ pub fn generate_snare_orch() -> Vec<i16> {
 
         // Body (low-mid frequencies)
         let body = body_hp.process(body_filter.process(noise));
-        let body_env = if t < 0.002 { t / 0.002 } else { (-t * 15.0).exp() };
+        let body_env = if t < 0.002 {
+            t / 0.002
+        } else {
+            (-t * 15.0).exp()
+        };
 
         // Snare wires (high frequencies, longer decay)
         let snare = snare_filter.process(noise);
-        let snare_env = if t < 0.001 { t / 0.001 } else { (-t * 10.0).exp() };
+        let snare_env = if t < 0.001 {
+            t / 0.001
+        } else {
+            (-t * 10.0).exp()
+        };
 
         let sample = (body * body_env * 0.7 + snare * snare_env * 0.5) * 30000.0;
         output.push(sample.clamp(-32767.0, 32767.0) as i16);
@@ -644,7 +685,11 @@ pub fn generate_cymbal_crash() -> Vec<i16> {
 
         let mix = band1 * 0.5 + band2 * 0.3 + band3 * 0.2;
 
-        let env = if t < 0.008 { t / 0.008 } else { (-t * 1.8).exp() };
+        let env = if t < 0.008 {
+            t / 0.008
+        } else {
+            (-t * 1.8).exp()
+        };
 
         let sample = mix * env * 26000.0;
         output.push(sample.clamp(-32767.0, 32767.0) as i16);
@@ -690,7 +735,11 @@ pub fn generate_harp_gliss() -> Vec<i16> {
         let filtered = filter.process(tone);
 
         // Fast attack, smooth decay
-        let env = if t < 0.004 { t / 0.004 } else { (-t * 3.0).exp() };
+        let env = if t < 0.004 {
+            t / 0.004
+        } else {
+            (-t * 3.0).exp()
+        };
 
         let sample = filtered * env * 30000.0;
         output.push(sample.clamp(-32767.0, 32767.0) as i16);
@@ -728,7 +777,11 @@ pub fn generate_piano() -> Vec<i16> {
 
         // Hammer transient (noise + click)
         let hammer_noise = rng.next_f32() * 2.0 - 1.0;
-        let hammer_env = if t < 0.002 { t / 0.002 } else { (-t * 80.0).exp() };
+        let hammer_env = if t < 0.002 {
+            t / 0.002
+        } else {
+            (-t * 80.0).exp()
+        };
         let hammer = hammer_noise * hammer_env * 0.2;
 
         // Filter darkens over time
@@ -736,7 +789,11 @@ pub fn generate_piano() -> Vec<i16> {
         filter.set_params(cutoff, 0.7);
         let filtered = filter.process(sum + hammer);
 
-        let env = if t < 0.003 { t / 0.003 } else { (-t * 1.8).exp() };
+        let env = if t < 0.003 {
+            t / 0.003
+        } else {
+            (-t * 1.8).exp()
+        };
 
         let sample = filtered * env * 31000.0;
         output.push(sample.clamp(-32767.0, 32767.0) as i16);

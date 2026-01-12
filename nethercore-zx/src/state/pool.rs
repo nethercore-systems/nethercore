@@ -61,6 +61,10 @@ where
     states: Vec<T>,
     /// Deduplication map (state -> index)
     map: HashMap<T, I>,
+    /// Whether this pool overflowed since the last clear().
+    overflowed_this_frame: bool,
+    /// Number of overflow attempts since the last clear().
+    overflow_count: u32,
 }
 
 impl<T, I> std::fmt::Debug for StatePool<T, I>
@@ -94,6 +98,8 @@ where
             max_capacity,
             states: Vec::new(),
             map: HashMap::new(),
+            overflowed_this_frame: false,
+            overflow_count: 0,
         }
     }
 
@@ -104,6 +110,8 @@ where
             max_capacity,
             states: Vec::with_capacity(initial_capacity),
             map: HashMap::with_capacity(initial_capacity),
+            overflowed_this_frame: false,
+            overflow_count: 0,
         }
     }
 
@@ -112,9 +120,8 @@ where
     /// If the exact state already exists, returns the existing index.
     /// Otherwise, adds a new entry and returns its index.
     ///
-    /// # Panics
-    ///
-    /// Panics if the pool exceeds max_capacity.
+    /// If the pool is at capacity, this does **not** panic. It logs once per frame
+    /// and returns the last valid index as a fallback.
     pub fn add(&mut self, state: T) -> I {
         // Check for existing (deduplication)
         if let Some(&existing_idx) = self.map.get(&state) {
@@ -124,10 +131,17 @@ where
         // Add new state
         let idx = self.states.len();
         if idx >= self.max_capacity {
-            panic!(
-                "{} pool overflow! Maximum {} unique states per frame.",
-                self.name, self.max_capacity
-            );
+            self.overflow_count = self.overflow_count.saturating_add(1);
+            if !self.overflowed_this_frame {
+                self.overflowed_this_frame = true;
+                tracing::error!(
+                    "{} pool overflow (max {} unique states per frame). Dropping new unique states for this frame.",
+                    self.name,
+                    self.max_capacity
+                );
+            }
+            // We can't allocate a new unique state; fall back to the last valid index.
+            return self.last_index().unwrap_or_else(|| I::from_raw(0));
         }
 
         let index = I::from_raw(idx as u32);
@@ -165,6 +179,18 @@ where
     pub fn clear(&mut self) {
         self.states.clear();
         self.map.clear();
+        self.overflowed_this_frame = false;
+        self.overflow_count = 0;
+    }
+
+    /// Number of overflow attempts since the last clear().
+    pub fn overflow_count(&self) -> u32 {
+        self.overflow_count
+    }
+
+    /// Whether the pool overflowed since the last clear().
+    pub fn overflowed(&self) -> bool {
+        self.overflowed_this_frame
     }
 
     /// Get a slice of all states
@@ -280,13 +306,18 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "pool overflow")]
     fn test_pool_overflow() {
         let mut pool: StatePool<TestState, TestIndex> = StatePool::new("test", 2);
 
         pool.add(TestState { value: 1 });
         pool.add(TestState { value: 2 });
-        pool.add(TestState { value: 3 }); // Should panic
+
+        // Over capacity: should not panic; should return last valid index.
+        let idx3 = pool.add(TestState { value: 3 });
+        assert_eq!(idx3, TestIndex(1));
+        assert_eq!(pool.len(), 2);
+        assert_eq!(pool.overflow_count(), 1);
+        assert!(pool.overflowed());
     }
 
     #[test]

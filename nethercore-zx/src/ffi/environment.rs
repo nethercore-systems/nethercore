@@ -8,6 +8,10 @@ use tracing::warn;
 use wasmtime::{Caller, Linker};
 
 use crate::graphics::env_mode;
+use crate::graphics::unified_shading_state::{
+    GradientConfig, ScatterConfig, LinesConfig, SilhouetteConfig,
+    RectanglesConfig, RoomConfig, CurtainsConfig, RingsConfig,
+};
 
 use super::ZXGameContext;
 
@@ -65,15 +69,15 @@ fn env_gradient(
     let state = &mut caller.data_mut().ffi;
 
     // Pack gradient into specified layer (0 = base, 1 = overlay)
-    state.current_environment_state.pack_gradient(
-        layer as usize,
+    state.current_environment_state.pack_gradient(GradientConfig {
+        offset: layer as usize,
         zenith,
         sky_horizon,
         ground_horizon,
         nadir,
         rotation,
         shift,
-    );
+    });
 
     // Set mode for the specified layer
     if layer == 0 {
@@ -136,8 +140,8 @@ fn env_scatter(
     let state = &mut caller.data_mut().ffi;
 
     // Pack scatter into specified layer
-    state.current_environment_state.pack_scatter(
-        layer as usize,
+    state.current_environment_state.pack_scatter(ScatterConfig {
+        offset: layer as usize,
         variant,
         density,
         size,
@@ -148,8 +152,8 @@ fn env_scatter(
         parallax_rate,
         parallax_size,
         phase,
-        1, // layer_count default
-    );
+        layer_count: 1, // layer_count default
+    });
 
     // Set mode for the specified layer
     if layer == 0 {
@@ -203,8 +207,8 @@ fn env_lines(
     let state = &mut caller.data_mut().ffi;
 
     // Pack lines into specified layer
-    state.current_environment_state.pack_lines(
-        layer as usize,
+    state.current_environment_state.pack_lines(LinesConfig {
+        offset: layer as usize,
         variant,
         line_type,
         thickness,
@@ -214,7 +218,7 @@ fn env_lines(
         color_accent,
         accent_every,
         phase,
-    );
+    });
 
     // Set mode for the specified layer
     if layer == 0 {
@@ -264,8 +268,8 @@ fn env_silhouette(
 ) {
     let state = &mut caller.data_mut().ffi;
 
-    state.current_environment_state.pack_silhouette(
-        layer as usize,
+    state.current_environment_state.pack_silhouette(SilhouetteConfig {
+        offset: layer as usize,
         jaggedness,
         layer_count,
         color_near,
@@ -274,7 +278,7 @@ fn env_silhouette(
         sky_horizon,
         parallax_rate,
         seed,
-    );
+    });
 
     // Set mode for the specified layer
     if layer == 0 {
@@ -331,8 +335,8 @@ fn env_rectangles(
 ) {
     let state = &mut caller.data_mut().ffi;
 
-    state.current_environment_state.pack_rectangles(
-        layer as usize,
+    state.current_environment_state.pack_rectangles(RectanglesConfig {
+        offset: layer as usize,
         variant,
         density,
         lit_ratio,
@@ -343,7 +347,7 @@ fn env_rectangles(
         color_variation,
         parallax_rate,
         phase,
-    );
+    });
 
     // Set mode for the specified layer
     if layer == 0 {
@@ -405,21 +409,21 @@ fn env_room(
 ) {
     let state = &mut caller.data_mut().ffi;
 
-    state.current_environment_state.pack_room(
-        layer as usize,
+    state.current_environment_state.pack_room(RoomConfig {
+        offset: layer as usize,
         color_ceiling,
         color_floor,
         color_walls,
         panel_size,
         panel_gap,
-        glam::Vec3::new(light_dir_x, light_dir_y, light_dir_z),
+        light_direction: glam::Vec3::new(light_dir_x, light_dir_y, light_dir_z),
         light_intensity,
         corner_darken,
         room_scale,
         viewer_x,
         viewer_y,
         viewer_z,
-    );
+    });
 
     // Set mode for the specified layer
     if layer == 0 {
@@ -479,8 +483,8 @@ fn env_curtains(
 ) {
     let state = &mut caller.data_mut().ffi;
 
-    state.current_environment_state.pack_curtains(
-        layer as usize,
+    state.current_environment_state.pack_curtains(CurtainsConfig {
+        offset: layer as usize,
         layer_count,
         density,
         height_min,
@@ -493,7 +497,7 @@ fn env_curtains(
         glow,
         parallax_rate,
         phase,
-    );
+    });
 
     // Set mode for the specified layer
     if layer == 0 {
@@ -546,8 +550,8 @@ fn env_rings(
     let state = &mut caller.data_mut().ffi;
 
     // Pack rings into specified layer
-    state.current_environment_state.pack_rings(
-        layer as usize,
+    state.current_environment_state.pack_rings(RingsConfig {
+        offset: layer as usize,
         ring_count,
         thickness,
         color_a,
@@ -555,9 +559,9 @@ fn env_rings(
         center_color,
         center_falloff,
         spiral_twist,
-        glam::Vec3::new(axis_x, axis_y, axis_z),
+        axis: glam::Vec3::new(axis_x, axis_y, axis_z),
         phase,
-    );
+    });
 
     // Set mode for the specified layer
     if layer == 0 {

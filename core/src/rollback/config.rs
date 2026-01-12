@@ -4,8 +4,8 @@
 
 use std::marker::PhantomData;
 
-use ggrs::Config;
 use crate::console::ConsoleInput;
+use ggrs::Config;
 
 use super::state::GameStateSnapshot;
 

@@ -11,7 +11,6 @@ use nether_it::{ItFlags, ItNote, ItWriter};
 // ============================================================================
 // Main Generators
 // ============================================================================
-
 /// Generate stripped IT file (no sample data, for ROM/external samples)
 pub fn generate_dawn_it_stripped() -> (Vec<u8>, Vec<(&'static str, Vec<i16>)>) {
     let mut writer = ItWriter::new("Nether Dawn");
@@ -362,8 +361,7 @@ fn build_intro_pattern(writer: &mut ItWriter, pat: u8) {
         pat,
         0,
         0,
-        ItNote::play_note(D2, 1, 20)
-            .with_effect(0x18, 20), // Pan left
+        ItNote::play_note(D2, 1, 20).with_effect(0x18, 20), // Pan left
     );
     // Volume slide up for crescendo
     writer.set_note(
@@ -378,8 +376,7 @@ fn build_intro_pattern(writer: &mut ItWriter, pat: u8) {
         pat,
         16,
         2,
-        ItNote::play_note(A5, 3, 30)
-            .with_effect(0x18, 32), // Center pan
+        ItNote::play_note(A5, 3, 30).with_effect(0x18, 32), // Center pan
     );
     // Add vibrato on sustain
     writer.set_note(
@@ -405,8 +402,7 @@ fn build_intro_pattern(writer: &mut ItWriter, pat: u8) {
         pat,
         32,
         14,
-        ItNote::play_note(D3, 15, 18)
-            .with_effect(0x18, 32), // Center
+        ItNote::play_note(D3, 15, 18).with_effect(0x18, 32), // Center
     );
     writer.set_note(
         pat,
@@ -478,7 +474,7 @@ fn build_theme_a1_pattern(writer: &mut ItWriter, pat: u8) {
         2,
         ItNote::play_note(D5, 3, 58).with_effect(0x08, 0x34),
     ); // Peak + vibrato
-    // Bar 3-4: B4 - A4 - F#4 - E4 (descending with portamento)
+       // Bar 3-4: B4 - A4 - F#4 - E4 (descending with portamento)
     writer.set_note(pat, 32, 2, ItNote::play_note(B4, 3, 54)); // Accent
     writer.set_note(
         pat,
@@ -602,7 +598,7 @@ fn build_theme_a2_pattern(writer: &mut ItWriter, pat: u8) {
     writer.set_note(pat, 0, 12, ItNote::play_note(FS3, 13, 42));
     writer.set_note(pat, 4, 12, ItNote::play_note(A3, 13, 38));
     writer.set_note(pat, 8, 12, ItNote::play_note(D4, 13, 45)); // Peak
-    // Add second phrase
+                                                                // Add second phrase
     writer.set_note(pat, 32, 12, ItNote::play_note(E4, 13, 40));
     writer.set_note(pat, 36, 12, ItNote::play_note(D4, 13, 38));
     writer.set_note(pat, 40, 12, ItNote::play_note(B3, 13, 42));
@@ -652,7 +648,7 @@ fn build_development_pattern(writer: &mut ItWriter, pat: u8) {
         2,
         ItNote::play_note(A5, 3, 60).with_effect(0x08, 0x34),
     ); // Peak with vibrato
-    // Second phrase - descending tension
+       // Second phrase - descending tension
     writer.set_note(pat, 32, 2, ItNote::play_note(FS5, 3, 58));
     writer.set_note(pat, 40, 2, ItNote::play_note(D5, 3, 55));
     writer.set_note(
@@ -838,7 +834,12 @@ fn build_climax_pattern(writer: &mut ItWriter, pat: u8) {
     // Harp glissando with crescendo
     let harp_vels = [50, 54, 58, 62, 66];
     for (i, note) in [D4, FS4, A4, D5, FS5].iter().enumerate() {
-        writer.set_note(pat, (i * 2) as u16, 9, ItNote::play_note(*note, 10, harp_vels[i]));
+        writer.set_note(
+            pat,
+            (i * 2) as u16,
+            9,
+            ItNote::play_note(*note, 10, harp_vels[i]),
+        );
     }
 
     // Choir at full power with vibrato - alternating ah/oh

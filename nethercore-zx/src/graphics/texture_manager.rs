@@ -26,6 +26,16 @@ pub(crate) struct TextureEntry {
     pub size_bytes: usize,
 }
 
+/// Configuration for loading block-compressed textures
+struct TextureBcConfig<'a> {
+    width: u32,
+    height: u32,
+    data: &'a [u8],
+    wgpu_format: wgpu::TextureFormat,
+    format_name: &'a str,
+    track_vram: bool,
+}
+
 /// Manages game textures, VRAM budget, and fallback textures.
 ///
 /// This struct owns all texture resources and handles:
@@ -158,22 +168,26 @@ impl TextureManager {
             TextureFormat::Bc7 => self.load_texture_bc_internal(
                 device,
                 queue,
-                width,
-                height,
-                data,
-                wgpu::TextureFormat::Bc7RgbaUnorm,
-                "BC7",
-                true,
+                TextureBcConfig {
+                    width,
+                    height,
+                    data,
+                    wgpu_format: wgpu::TextureFormat::Bc7RgbaUnorm,
+                    format_name: "BC7",
+                    track_vram: true,
+                },
             ),
             TextureFormat::Bc5 => self.load_texture_bc_internal(
                 device,
                 queue,
-                width,
-                height,
-                data,
-                wgpu::TextureFormat::Bc5RgUnorm,
-                "BC5",
-                true,
+                TextureBcConfig {
+                    width,
+                    height,
+                    data,
+                    wgpu_format: wgpu::TextureFormat::Bc5RgUnorm,
+                    format_name: "BC5",
+                    track_vram: true,
+                },
             ),
         }
     }
@@ -185,13 +199,9 @@ impl TextureManager {
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        width: u32,
-        height: u32,
-        data: &[u8],
-        wgpu_format: wgpu::TextureFormat,
-        format_name: &str,
-        track_vram: bool,
+        config: TextureBcConfig,
     ) -> Result<TextureHandle> {
+        let TextureBcConfig { width, height, data, wgpu_format, format_name, track_vram } = config;
         // BC7/BC5: 4×4 blocks, 16 bytes per block
         let blocks_x = width.div_ceil(4);
         let blocks_y = height.div_ceil(4);

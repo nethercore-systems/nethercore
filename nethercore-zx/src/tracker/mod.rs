@@ -39,8 +39,8 @@ mod utils;
 use std::sync::Arc;
 
 pub use channels::{
-    TrackerChannel, DCA_CUT, DCA_NOTE_FADE, DCA_NOTE_OFF, DCT_INSTRUMENT, DCT_NOTE, DCT_OFF,
-    DCT_SAMPLE, NNA_CONTINUE, NNA_CUT, NNA_NOTE_FADE, NNA_NOTE_OFF,
+    DCA_CUT, DCA_NOTE_FADE, DCA_NOTE_OFF, DCT_INSTRUMENT, DCT_NOTE, DCT_OFF, DCT_SAMPLE,
+    NNA_CONTINUE, NNA_CUT, NNA_NOTE_FADE, NNA_NOTE_OFF, TrackerChannel,
 };
 pub use state::{CachedRowState, RowStateCache};
 pub use utils::{
@@ -213,11 +213,10 @@ impl TrackerEngine {
     pub fn new() -> Self {
         Self {
             modules: Vec::new(),
-            channels: std::array::from_fn(|_| {
-                let mut ch = TrackerChannel::default();
-                ch.sample_direction = 1;
-                ch.volume_fadeout = 65535;
-                ch
+            channels: std::array::from_fn(|_| TrackerChannel {
+                sample_direction: 1,
+                volume_fadeout: 65535,
+                ..Default::default()
             }),
             global_volume: 1.0,
             next_handle: 1,

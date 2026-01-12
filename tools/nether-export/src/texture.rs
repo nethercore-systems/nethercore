@@ -202,7 +202,7 @@ fn compress_bc5_internal(pixels: &[u8], width: u32, height: u32) -> Result<Vec<u
             let dst_idx = (y * padded_width + x) * 2;
 
             // Copy only R and G channels
-            rg_data[dst_idx] = pixels[src_idx];     // R
+            rg_data[dst_idx] = pixels[src_idx]; // R
             rg_data[dst_idx + 1] = pixels[src_idx + 1]; // G
         }
     }

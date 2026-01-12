@@ -12,12 +12,12 @@ use std::time::{Duration, Instant};
 
 use nethercore_shared::netplay::NetplayMetadata;
 
+use super::NchsError;
 use super::messages::{
     JoinAccept, JoinReject, JoinRejectReason, JoinRequest, LobbyState, LobbyUpdate, NchsMessage,
     NetworkConfig, PlayerConnectionInfo, PlayerInfo, PlayerSlot, SessionStart,
 };
 use super::socket::NchsSocket;
-use super::NchsError;
 
 /// Host state machine states
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -114,6 +114,11 @@ impl HostStateMachine {
     ) -> Result<Self, NchsError> {
         let socket = NchsSocket::bind(&format!("0.0.0.0:{}", port))
             .map_err(|e| NchsError::BindFailed(e.to_string()))?;
+        if socket.port() == u16::MAX {
+            return Err(NchsError::BindFailed(
+                "Port 65535 not supported (GGRS uses port+1)".to_string(),
+            ));
+        }
 
         // Determine real IP address for sharing with peers
         // Prefer non-loopback address, fall back to localhost
@@ -244,13 +249,14 @@ impl HostStateMachine {
             NchsMessage::GuestReady(ready) => self.handle_guest_ready(from, ready.ready),
             NchsMessage::Ping => {
                 // Respond with Pong
-                let _ = self.socket.send_to(from, &NchsMessage::Pong);
+                if let Err(e) = self.socket.send_to(from, &NchsMessage::Pong) {
+                    tracing::warn!(error = %e, "Failed to send Pong to {}", from);
+                }
                 // Update last_seen if this is a known player
-                if let Some(handle) = self.addr_to_handle.get(&from) {
-                    if let Some(player) = self.players.get_mut(handle) {
+                if let Some(handle) = self.addr_to_handle.get(&from)
+                    && let Some(player) = self.players.get_mut(handle) {
                         player.last_seen = Instant::now();
                     }
-                }
                 None
             }
             NchsMessage::PunchAck(_) => {
@@ -274,17 +280,25 @@ impl HostStateMachine {
                     player_handle: handle,
                     lobby: self.lobby_state(),
                 };
-                let _ = self.socket.send_to(from, &NchsMessage::JoinAccept(accept));
+                if let Err(e) = self.socket.send_to(from, &NchsMessage::JoinAccept(accept)) {
+                    tracing::warn!(error = %e, "Failed to send JoinAccept to {}", from);
+                }
             }
             return None;
         }
 
         // Validate request
         if let Some(reject) = self.validate_join_request(&req) {
-            let _ = self.socket.send_to(from, &NchsMessage::JoinReject(reject.clone()));
-            return Some(HostEvent::Error(NchsError::ValidationFailed(
-                format!("{:?}", reject.reason),
-            )));
+            if let Err(e) = self
+                .socket
+                .send_to(from, &NchsMessage::JoinReject(reject.clone()))
+            {
+                tracing::warn!(error = %e, "Failed to send JoinReject to {}", from);
+            }
+            return Some(HostEvent::Error(NchsError::ValidationFailed(format!(
+                "{:?}",
+                reject.reason
+            ))));
         }
 
         // Check if lobby is full
@@ -293,7 +307,9 @@ impl HostStateMachine {
                 reason: JoinRejectReason::LobbyFull,
                 message: None,
             };
-            let _ = self.socket.send_to(from, &NchsMessage::JoinReject(reject));
+            if let Err(e) = self.socket.send_to(from, &NchsMessage::JoinReject(reject)) {
+                tracing::warn!(error = %e, "Failed to send JoinReject to {}", from);
+            }
             return None;
         }
 
@@ -319,7 +335,9 @@ impl HostStateMachine {
             player_handle: handle,
             lobby: self.lobby_state(),
         };
-        let _ = self.socket.send_to(from, &NchsMessage::JoinAccept(accept));
+        if let Err(e) = self.socket.send_to(from, &NchsMessage::JoinAccept(accept)) {
+            tracing::warn!(error = %e, "Failed to send JoinAccept to {}", from);
+        }
 
         // Broadcast lobby update to all other players
         self.broadcast_lobby_update();
@@ -412,7 +430,13 @@ impl HostStateMachine {
         let msg = NchsMessage::LobbyUpdate(update);
 
         for player in self.players.values() {
-            let _ = self.socket.send_to(player.addr, &msg);
+            if let Err(e) = self.socket.send_to(player.addr, &msg) {
+                tracing::warn!(
+                    error = %e,
+                    player = player.handle,
+                    "Failed to send LobbyUpdate"
+                );
+            }
         }
     }
 
@@ -422,11 +446,15 @@ impl HostStateMachine {
     /// Returns the SessionStart that will be sent to all players.
     pub fn start(&mut self) -> Result<SessionStart, NchsError> {
         if !self.all_ready() {
-            return Err(NchsError::ProtocolError("Not all players ready".to_string()));
+            return Err(NchsError::ProtocolError(
+                "Not all players ready".to_string(),
+            ));
         }
 
         if self.player_count() < 2 {
-            return Err(NchsError::ProtocolError("Need at least 2 players".to_string()));
+            return Err(NchsError::ProtocolError(
+                "Need at least 2 players".to_string(),
+            ));
         }
 
         // Generate random seed
@@ -437,23 +465,32 @@ impl HostStateMachine {
         let mut players = Vec::with_capacity(self.netplay.max_players as usize);
 
         // Add host
+        let host_ggrs_port = self.socket.port().checked_add(1).ok_or_else(|| {
+            NchsError::ProtocolError("Host port too high for GGRS (max 65534)".to_string())
+        })?;
         players.push(PlayerConnectionInfo {
             handle: 0,
             active: true,
             info: self.host_info.clone(),
             addr: self.public_addr.clone(),
-            ggrs_port: self.socket.port() + 1, // GGRS uses port + 1
+            ggrs_port: host_ggrs_port, // GGRS uses port + 1
         });
 
         // Add other players
         for handle in 1..self.netplay.max_players {
             if let Some(player) = self.players.get(&handle) {
+                let ggrs_port = player.addr.port().checked_add(1).ok_or_else(|| {
+                    NchsError::ProtocolError(format!(
+                        "Player {} port too high for GGRS (max 65534)",
+                        handle
+                    ))
+                })?;
                 players.push(PlayerConnectionInfo {
                     handle,
                     active: true,
                     info: player.info.clone(),
                     addr: player.addr.to_string(),
-                    ggrs_port: player.addr.port() + 1,
+                    ggrs_port,
                 });
             } else {
                 players.push(PlayerConnectionInfo {
@@ -481,7 +518,13 @@ impl HostStateMachine {
         // Send SessionStart to all guests
         let msg = NchsMessage::SessionStart(session_start.clone());
         for player in self.players.values() {
-            let _ = self.socket.send_to(player.addr, &msg);
+            if let Err(e) = self.socket.send_to(player.addr, &msg) {
+                tracing::warn!(
+                    error = %e,
+                    player = player.handle,
+                    "Failed to send SessionStart"
+                );
+            }
         }
 
         self.state = HostState::Starting;
@@ -560,23 +603,31 @@ impl HostStateMachine {
         let mut players = Vec::with_capacity(self.netplay.max_players as usize);
 
         // Add host
+        let host_ggrs_port = self.socket.port().checked_add(1).unwrap_or_else(|| {
+            tracing::warn!("Host port too high for GGRS (max 65534)");
+            0
+        });
         players.push(PlayerConnectionInfo {
             handle: 0,
             active: true,
             info: self.host_info.clone(),
             addr: self.public_addr.clone(),
-            ggrs_port: self.socket.port() + 1,
+            ggrs_port: host_ggrs_port,
         });
 
         // Add other players
         for handle in 1..self.netplay.max_players {
             if let Some(player) = self.players.get(&handle) {
+                let ggrs_port = player.addr.port().checked_add(1).unwrap_or_else(|| {
+                    tracing::warn!(player = handle, "Player port too high for GGRS (max 65534)");
+                    0
+                });
                 players.push(PlayerConnectionInfo {
                     handle,
                     active: true,
                     info: player.info.clone(),
                     addr: player.addr.to_string(),
-                    ggrs_port: player.addr.port() + 1,
+                    ggrs_port,
                 });
             } else {
                 players.push(PlayerConnectionInfo {

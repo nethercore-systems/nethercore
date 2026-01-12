@@ -1,11 +1,13 @@
 //! Create Nethercore ZX ROM (.nczx) files
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use clap::Args;
 use nethercore_shared::netplay::NetplayMetadata;
-use nethercore_shared::ZX_ROM_FORMAT;
+use nethercore_shared::{
+    is_safe_game_id, read_file_with_limit, MAX_PNG_BYTES, MAX_WASM_BYTES, ZX_ROM_FORMAT,
+};
 use zx_common::{ZXMetadata, ZXRom};
 
 /// Arguments for creating an Nethercore ZX ROM
@@ -75,8 +77,15 @@ pub struct CreateZxArgs {
 pub fn execute(args: CreateZxArgs) -> Result<()> {
     println!("Creating Nethercore ZX ROM: {}", args.output.display());
 
+    if !is_safe_game_id(&args.id) {
+        anyhow::bail!(
+            "Invalid game id '{}': must be a safe single path component",
+            args.id
+        );
+    }
+
     // 1. Read and validate WASM file
-    let code = std::fs::read(&args.wasm_file)
+    let code = read_file_with_limit(&args.wasm_file, MAX_WASM_BYTES)
         .with_context(|| format!("Failed to read WASM file: {}", args.wasm_file.display()))?;
 
     // Validate WASM magic bytes
@@ -109,7 +118,7 @@ pub fn execute(args: CreateZxArgs) -> Result<()> {
 
     let mut screenshots = Vec::new();
     for (i, screenshot_path) in args.screenshots.iter().enumerate() {
-        let screenshot_bytes = std::fs::read(screenshot_path)
+        let screenshot_bytes = read_file_with_limit(screenshot_path, MAX_PNG_BYTES)
             .with_context(|| format!("Failed to read screenshot: {}", screenshot_path.display()))?;
 
         // Validate PNG magic bytes
@@ -195,9 +204,11 @@ pub fn execute(args: CreateZxArgs) -> Result<()> {
 }
 
 /// Read an image and resize it to target dimensions, returning PNG bytes
-fn read_and_resize_image(path: &PathBuf, width: u32, height: u32) -> Result<Vec<u8>> {
-    let img =
-        image::open(path).with_context(|| format!("Failed to open image: {}", path.display()))?;
+fn read_and_resize_image(path: &Path, width: u32, height: u32) -> Result<Vec<u8>> {
+    let bytes = read_file_with_limit(path, MAX_PNG_BYTES)
+        .with_context(|| format!("Failed to read image: {}", path.display()))?;
+    let img = image::load_from_memory(&bytes)
+        .with_context(|| format!("Failed to decode image: {}", path.display()))?;
 
     // Resize to target dimensions
     let resized = img.resize_exact(width, height, image::imageops::FilterType::Lanczos3);

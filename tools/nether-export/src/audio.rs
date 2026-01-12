@@ -18,21 +18,33 @@ pub fn convert_wav(input: &Path, output: &Path) -> Result<()> {
     // Read samples
     let samples: Vec<i16> = match spec.sample_format {
         hound::SampleFormat::Int => match spec.bits_per_sample {
-            16 => reader.samples::<i16>().map(|s| s.unwrap()).collect(),
+            16 => reader
+                .samples::<i16>()
+                .map(|s| s.context("Failed to read i16 sample"))
+                .collect::<Result<Vec<_>>>()?,
             8 => reader
                 .samples::<i8>()
-                .map(|s| (s.unwrap() as i16) << 8)
-                .collect(),
+                .map(|s| {
+                    s.context("Failed to read i8 sample")
+                        .map(|v| (v as i16) << 8)
+                })
+                .collect::<Result<Vec<_>>>()?,
             24 | 32 => reader
                 .samples::<i32>()
-                .map(|s| (s.unwrap() >> (spec.bits_per_sample - 16)) as i16)
-                .collect(),
+                .map(|s| {
+                    s.context("Failed to read i32 sample")
+                        .map(|v| (v >> (spec.bits_per_sample - 16)) as i16)
+                })
+                .collect::<Result<Vec<_>>>()?,
             _ => bail!("Unsupported bit depth: {}", spec.bits_per_sample),
         },
         hound::SampleFormat::Float => reader
             .samples::<f32>()
-            .map(|s| (s.unwrap() * 32767.0) as i16)
-            .collect(),
+            .map(|s| {
+                s.context("Failed to read f32 sample")
+                    .map(|v| (v * 32767.0) as i16)
+            })
+            .collect::<Result<Vec<_>>>()?,
     };
 
     // Convert to mono if stereo

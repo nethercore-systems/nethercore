@@ -39,17 +39,21 @@ impl SimpleRng {
         }
     }
 
-    pub fn next(&mut self) -> u32 {
+    pub fn next_f32(&mut self) -> f32 {
+        self.next().unwrap() as f32 / u32::MAX as f32
+    }
+}
+
+impl Iterator for SimpleRng {
+    type Item = u32;
+
+    fn next(&mut self) -> Option<Self::Item> {
         let mut x = self.state;
         x ^= x << 13;
         x ^= x >> 17;
         x ^= x << 5;
         self.state = x;
-        x
-    }
-
-    pub fn next_f32(&mut self) -> f32 {
-        self.next() as f32 / u32::MAX as f32
+        Some(x)
     }
 }
 

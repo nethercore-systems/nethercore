@@ -114,7 +114,8 @@ fn debug_trigger_error<I, S, R>(
     error_type: u32,
     message_ptr: u32,
     message_len: u32,
-) where
+) -> Result<()>
+where
     I: ConsoleInput,
     S: Send + Default + 'static,
     R: ConsoleRollbackState,
@@ -134,26 +135,16 @@ fn debug_trigger_error<I, S, R>(
         custom_msg
     );
 
-    // Trigger the appropriate error type
-    match error_type {
-        0 => {
-            // Panic - causes WASM unreachable trap
-            panic!("{}", custom_msg);
-        }
-        1 => {
-            // Simulated out of bounds - also panics with descriptive message
-            panic!(
-                "Simulated out of bounds memory access at offset 0xDEADBEEF: {}",
-                custom_msg
-            );
-        }
-        2 => {
-            // Simulated stack overflow
-            panic!("Simulated stack overflow: {}", custom_msg);
-        }
-        _ => {
-            // Unknown error type - still trigger an error
-            panic!("Unknown error type {}: {}", error_type, custom_msg);
-        }
-    }
+    // Return a WASM trap instead of panicking (panic=abort in release builds).
+    let msg = match error_type {
+        0 => format!("unreachable: {}", custom_msg),
+        1 => format!(
+            "out of bounds memory access at offset 0xDEADBEEF: {}",
+            custom_msg
+        ),
+        2 => format!("call stack exhausted: {}", custom_msg),
+        _ => format!("unreachable: {}", custom_msg),
+    };
+
+    anyhow::bail!(msg)
 }

@@ -201,7 +201,10 @@ mod tests {
         let meta1 = NetplayMetadata::new(ConsoleType::ZX, TickRate::Fixed60, 4, 0x12345678);
         let meta2 = NetplayMetadata::new(ConsoleType::ZX, TickRate::Fixed60, 4, 0xDEADBEEF);
         let result = meta1.validate_compatibility(&meta2);
-        assert!(matches!(result, Err(NetplayMismatch::RomHashMismatch { .. })));
+        assert!(matches!(
+            result,
+            Err(NetplayMismatch::RomHashMismatch { .. })
+        ));
     }
 
     #[test]

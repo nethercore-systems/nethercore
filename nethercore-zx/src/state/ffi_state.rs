@@ -6,6 +6,7 @@ use glam::{Mat4, Vec3};
 use hashbrown::HashMap;
 
 use zx_common::ZXDataPack;
+use crate::graphics::unified_shading_state::GradientConfig;
 
 use super::{
     BoneMatrix3x4, Font, KeyframeGpuInfo, KeyframeSource, LoadedKeyframeCollection,
@@ -148,6 +149,10 @@ pub struct ZXFFIState {
 
     // GPU-instanced quad rendering (batched by texture)
     pub quad_batches: Vec<super::QuadBatch>,
+
+    // Diagnostics (reset each frame)
+    pub mvp_shading_overflowed_this_frame: bool,
+    pub mvp_shading_overflow_count: u32,
 }
 
 impl Default for ZXFFIState {
@@ -230,6 +235,8 @@ impl Default for ZXFFIState {
             current_environment_state: crate::graphics::PackedEnvironmentState::default_gradient(),
             environment_dirty: true, // Start dirty so first draw creates environment 0
             quad_batches: Vec::new(),
+            mvp_shading_overflowed_this_frame: false,
+            mvp_shading_overflow_count: 0,
         }
     }
 }
@@ -384,15 +391,15 @@ impl ZXFFIState {
             .set_blend_mode(blend_mode::ALPHA);
 
         // Pack gradient colors
-        self.current_environment_state.pack_gradient(
-            0,              // base mode offset
-            zenith_rgba,    // zenith
-            horizon_rgba,   // sky_horizon
-            ground_horizon, // ground_horizon
-            nadir,          // nadir
-            0.0,            // rotation
-            0.0,            // shift
-        );
+        self.current_environment_state.pack_gradient(GradientConfig {
+            offset: 0,              // base mode offset
+            zenith: zenith_rgba,
+            sky_horizon: horizon_rgba,
+            ground_horizon,
+            nadir,
+            rotation: 0.0,
+            shift: 0.0,
+        });
 
         self.environment_dirty = true;
     }
@@ -531,8 +538,10 @@ impl ZXFFIState {
     }
 
     /// Update dither offset in current shading state
+    ///
     /// - x: 0-3 pixel shift in X axis
     /// - y: 0-3 pixel shift in Y axis
+    ///
     /// Use different offsets for stacked transparent objects to prevent pattern cancellation
     pub fn update_dither_offset(&mut self, x: u8, y: u8) {
         use crate::graphics::{
@@ -720,7 +729,15 @@ impl ZXFFIState {
         // Add new combined state
         let buffer_idx = self.mvp_shading_states.len() as u32;
         if buffer_idx >= 65536 {
-            panic!("MVP+Shading state pool overflow! Maximum 65,536 unique states per frame.");
+            self.mvp_shading_overflow_count = self.mvp_shading_overflow_count.saturating_add(1);
+            if !self.mvp_shading_overflowed_this_frame {
+                self.mvp_shading_overflowed_this_frame = true;
+                tracing::error!(
+                    "MVP+Shading state pool overflow (max 65,536 unique states per frame). Dropping new unique MVP+Shading states for this frame."
+                );
+            }
+            // Fallback: reuse the last valid index rather than crashing the player.
+            return self.mvp_shading_states.len().saturating_sub(1) as u32;
         }
 
         self.mvp_shading_states.push(indices);
@@ -805,6 +822,8 @@ impl ZXFFIState {
         // Clear combined MVP+shading state pool
         self.mvp_shading_states.clear();
         self.mvp_shading_map.clear();
+        self.mvp_shading_overflowed_this_frame = false;
+        self.mvp_shading_overflow_count = 0;
 
         // Reset shading state pool for next frame
         self.shading_pool.clear();
@@ -830,7 +849,8 @@ impl ZXFFIState {
         // Reset render pass system - pass 0 is always the default pass
         self.current_pass_id = 0;
         self.pass_configs.clear();
-        self.pass_configs.push(crate::graphics::PassConfig::default());
+        self.pass_configs
+            .push(crate::graphics::PassConfig::default());
 
         // Note: color and shading state already rebuild each frame via add_shading_state()
     }

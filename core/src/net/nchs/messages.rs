@@ -417,10 +417,18 @@ impl std::fmt::Display for NchsDecodeError {
             Self::TooShort => write!(f, "Message too short for NCHS header"),
             Self::InvalidMagic => write!(f, "Invalid NCHS magic bytes"),
             Self::VersionMismatch { expected, got } => {
-                write!(f, "NCHS version mismatch: expected {}, got {}", expected, got)
+                write!(
+                    f,
+                    "NCHS version mismatch: expected {}, got {}",
+                    expected, got
+                )
             }
             Self::IncompletePayload { expected, got } => {
-                write!(f, "Incomplete payload: expected {} bytes, got {}", expected, got)
+                write!(
+                    f,
+                    "Incomplete payload: expected {} bytes, got {}",
+                    expected, got
+                )
             }
             Self::DecodeFailed(e) => write!(f, "Failed to decode NCHS message: {}", e),
         }
@@ -527,7 +535,10 @@ mod tests {
         let result = NchsMessage::from_bytes(&bytes);
         assert!(matches!(
             result,
-            Err(NchsDecodeError::VersionMismatch { expected: 1, got: 99 })
+            Err(NchsDecodeError::VersionMismatch {
+                expected: 1,
+                got: 99
+            })
         ));
     }
 

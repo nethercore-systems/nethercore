@@ -162,7 +162,9 @@ fn z_index(mut caller: Caller<'_, ZXGameContext>, n: u32) {
 fn begin_pass(mut caller: Caller<'_, ZXGameContext>, clear_depth: u32) {
     let state = &mut caller.data_mut().ffi;
     state.current_pass_id += 1;
-    state.pass_configs.push(PassConfig::standard(clear_depth != 0));
+    state
+        .pass_configs
+        .push(PassConfig::standard(clear_depth != 0));
 }
 
 /// Begin a stencil write pass (mask creation mode).
@@ -183,10 +185,16 @@ fn begin_pass(mut caller: Caller<'_, ZXGameContext>, clear_depth: u32) {
 /// draw_env();                       // Only visible inside circle
 /// begin_pass(0);                    // Back to normal rendering
 /// ```
-fn begin_pass_stencil_write(mut caller: Caller<'_, ZXGameContext>, ref_value: u32, clear_depth: u32) {
+fn begin_pass_stencil_write(
+    mut caller: Caller<'_, ZXGameContext>,
+    ref_value: u32,
+    clear_depth: u32,
+) {
     let state = &mut caller.data_mut().ffi;
     state.current_pass_id += 1;
-    state.pass_configs.push(PassConfig::stencil_write(ref_value as u8, clear_depth != 0));
+    state
+        .pass_configs
+        .push(PassConfig::stencil_write(ref_value as u8, clear_depth != 0));
 }
 
 /// Begin a stencil test pass (render inside mask).
@@ -197,10 +205,16 @@ fn begin_pass_stencil_write(mut caller: Caller<'_, ZXGameContext>, ref_value: u3
 /// # Arguments
 /// * `ref_value` — Stencil reference value to test against (must match write pass)
 /// * `clear_depth` — Non-zero to clear depth buffer at pass start
-fn begin_pass_stencil_test(mut caller: Caller<'_, ZXGameContext>, ref_value: u32, clear_depth: u32) {
+fn begin_pass_stencil_test(
+    mut caller: Caller<'_, ZXGameContext>,
+    ref_value: u32,
+    clear_depth: u32,
+) {
     let state = &mut caller.data_mut().ffi;
     state.current_pass_id += 1;
-    state.pass_configs.push(PassConfig::stencil_test(ref_value as u8, clear_depth != 0));
+    state
+        .pass_configs
+        .push(PassConfig::stencil_test(ref_value as u8, clear_depth != 0));
 }
 
 /// Begin a render pass with full control over depth and stencil state.

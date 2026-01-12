@@ -25,9 +25,8 @@ use crate::debug::types::ActionParamValue;
 // Re-export public types from state module
 #[allow(deprecated)]
 pub use state::{
-    GameState, GameStateWithConsole, MAX_PLAYERS, MAX_SAVE_SIZE, MAX_SAVE_SLOTS,
-    MemoryAccessError, WasmGameContext, read_bytes_from_memory, read_string_from_memory,
-    write_bytes_to_memory,
+    GameState, GameStateWithConsole, MAX_PLAYERS, MAX_SAVE_SIZE, MAX_SAVE_SLOTS, MemoryAccessError,
+    WasmGameContext, read_bytes_from_memory, read_string_from_memory, write_bytes_to_memory,
 };
 
 /// Shared WASM engine (one per application)

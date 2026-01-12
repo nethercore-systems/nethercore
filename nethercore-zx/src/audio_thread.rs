@@ -22,7 +22,7 @@
 //! let audio = ThreadedAudioOutput::new()?;
 //!
 //! // Each frame, send a snapshot
-//! let snapshot = AudioGenSnapshot::new(...);
+//! let snapshot = AudioGenSnapshot { /* fields */ };
 //! audio.send_snapshot(snapshot);
 //! ```
 
@@ -31,11 +31,11 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-use ringbuf::traits::{Observer, Producer};
 use ringbuf::HeapProd;
+use ringbuf::traits::{Observer, Producer};
 use tracing::{debug, error, trace, warn};
 
-use crate::audio::{generate_audio_frame_with_tracker, Sound};
+use crate::audio::{Sound, generate_audio_frame_with_tracker};
 use crate::state::{AudioPlaybackState, TrackerState};
 use crate::tracker::{TrackerEngine, TrackerEngineSnapshot};
 
@@ -71,28 +71,8 @@ pub struct AudioGenSnapshot {
 }
 
 impl AudioGenSnapshot {
-    /// Create a new audio snapshot
-    pub fn new(
-        audio: AudioPlaybackState,
-        tracker: TrackerState,
-        tracker_snapshot: TrackerEngineSnapshot,
-        sounds: Arc<Vec<Option<Sound>>>,
-        frame_number: i32,
-        tick_rate: u32,
-        sample_rate: u32,
-        is_rollback: bool,
-    ) -> Self {
-        Self {
-            audio,
-            tracker,
-            tracker_snapshot,
-            sounds,
-            frame_number,
-            tick_rate,
-            sample_rate,
-            is_rollback,
-        }
-    }
+    // Constructor removed - use direct struct construction instead
+    // Example: AudioGenSnapshot { audio, tracker, tracker_snapshot, sounds, frame_number, tick_rate, sample_rate, is_rollback }
 }
 
 /// Handle to the audio generation thread
@@ -137,7 +117,10 @@ impl AudioGenHandle {
 
     /// Check if the audio thread is still running
     pub fn is_alive(&self) -> bool {
-        self.handle.as_ref().map(|h| !h.is_finished()).unwrap_or(false)
+        self.handle
+            .as_ref()
+            .map(|h| !h.is_finished())
+            .unwrap_or(false)
     }
 }
 
@@ -212,8 +195,10 @@ impl AudioMetrics {
         let elapsed = self.last_log_time.elapsed();
         if elapsed.as_secs() >= 1 {
             let buffer_pct = (self.buffer_fill as f64 / RING_BUFFER_CAPACITY as f64) * 100.0;
-            let buffer_min_pct = (self.buffer_fill_min as f64 / RING_BUFFER_CAPACITY as f64) * 100.0;
-            let buffer_max_pct = (self.buffer_fill_max as f64 / RING_BUFFER_CAPACITY as f64) * 100.0;
+            let buffer_min_pct =
+                (self.buffer_fill_min as f64 / RING_BUFFER_CAPACITY as f64) * 100.0;
+            let buffer_max_pct =
+                (self.buffer_fill_max as f64 / RING_BUFFER_CAPACITY as f64) * 100.0;
             let buffer_range = self.buffer_fill_max.saturating_sub(self.buffer_fill_min);
 
             debug!(
@@ -221,10 +206,16 @@ impl AudioMetrics {
                  frames={}, samples={}, underruns={}, overruns={}, \
                  discontinuities={}, avg_gen={:.2}μs",
                 std::thread::current().id(),
-                buffer_pct, buffer_min_pct, buffer_max_pct, buffer_range,
-                self.frames_generated, self.samples_generated,
-                self.buffer_underruns, self.buffer_overruns,
-                self.discontinuities, self.avg_generation_time_us
+                buffer_pct,
+                buffer_min_pct,
+                buffer_max_pct,
+                buffer_range,
+                self.frames_generated,
+                self.samples_generated,
+                self.buffer_underruns,
+                self.buffer_overruns,
+                self.discontinuities,
+                self.avg_generation_time_us
             );
 
             // Reset counters for next interval (show per-second rates)
@@ -401,8 +392,16 @@ impl AudioGenThread {
             // 4. Wait with timeout (prevents busy loop)
             // cpal signals wake us up immediately when buffer space is available
             let (lock, cvar) = &*self.condvar;
-            let _guard = lock.lock().unwrap();
-            let _ = cvar.wait_timeout(_guard, Duration::from_millis(1)).unwrap();
+            let guard = lock.lock().unwrap_or_else(|e| {
+                tracing::warn!("Audio thread condvar mutex poisoned; continuing");
+                e.into_inner()
+            });
+            let _ = cvar
+                .wait_timeout(guard, Duration::from_millis(1))
+                .unwrap_or_else(|e| {
+                    tracing::warn!("Audio thread condvar wait mutex poisoned; continuing");
+                    e.into_inner()
+                });
 
             // Log metrics periodically
             self.metrics.maybe_log();
@@ -430,7 +429,8 @@ impl AudioGenThread {
         if !self.has_state {
             self.gen_audio = snapshot.audio;
             self.gen_tracker = snapshot.tracker;
-            self.tracker_engine.apply_snapshot(&snapshot.tracker_snapshot);
+            self.tracker_engine
+                .apply_snapshot(&snapshot.tracker_snapshot);
             self.last_snapshot = Some(snapshot);
             self.samples_since_snapshot = 0;
             self.has_state = true;
@@ -457,11 +457,16 @@ impl AudioGenThread {
                 if sound_changed && self.gen_audio.channels[i].sound != 0 {
                     self.crossfade_active = true;
                     self.crossfade_from = self.prev_frame_last;
-                    trace!("SFX change on channel {} ({} -> {}), scheduling crossfade",
-                           i, self.gen_audio.channels[i].sound, snap_channel.sound);
+                    trace!(
+                        "SFX change on channel {} ({} -> {}), scheduling crossfade",
+                        i, self.gen_audio.channels[i].sound, snap_channel.sound
+                    );
                 }
                 self.gen_audio.channels[i] = *snap_channel;
-                trace!("Merged new SFX on channel {}: sound {}", i, snap_channel.sound);
+                trace!(
+                    "Merged new SFX on channel {}: sound {}",
+                    i, snap_channel.sound
+                );
             } else if snap_channel.sound == 0 && self.gen_audio.channels[i].sound != 0 {
                 // SFX was stopped by game - stop it (instant, no pop needed for stop)
                 self.gen_audio.channels[i].sound = 0;
@@ -476,8 +481,7 @@ impl AudioGenThread {
 
         // Same for music channel - also detect sound ID change (song switch)
         let music_changed = snapshot.audio.music.sound != self.gen_audio.music.sound;
-        if snapshot.audio.music.sound != 0
-            && (snapshot.audio.music.position == 0 || music_changed)
+        if snapshot.audio.music.sound != 0 && (snapshot.audio.music.position == 0 || music_changed)
         {
             // New music started OR switched to different song
             // Use crossfade if we were already playing music (song changed mid-playback)
@@ -486,8 +490,7 @@ impl AudioGenThread {
                 self.crossfade_from = self.prev_frame_last;
                 trace!(
                     "Music change ({} -> {}), scheduling crossfade",
-                    self.gen_audio.music.sound,
-                    snapshot.audio.music.sound
+                    self.gen_audio.music.sound, snapshot.audio.music.sound
                 );
             }
             self.gen_audio.music = snapshot.audio.music;
@@ -511,13 +514,13 @@ impl AudioGenThread {
                 self.crossfade_from = self.prev_frame_last;
                 trace!(
                     "Tracker change ({} -> {}), scheduling crossfade",
-                    self.gen_tracker.handle,
-                    snapshot.tracker.handle
+                    self.gen_tracker.handle, snapshot.tracker.handle
                 );
             }
             // Full reset of tracker state for new module
             self.gen_tracker = snapshot.tracker;
-            self.tracker_engine.apply_snapshot(&snapshot.tracker_snapshot);
+            self.tracker_engine
+                .apply_snapshot(&snapshot.tracker_snapshot);
             trace!("Merged new tracker: handle {}", snapshot.tracker.handle);
         } else if snapshot.tracker.handle == 0 && self.gen_tracker.handle != 0 {
             // Tracker was stopped
@@ -552,7 +555,8 @@ impl AudioGenThread {
         // Full reset to rollback state
         self.gen_audio = snapshot.audio;
         self.gen_tracker = snapshot.tracker;
-        self.tracker_engine.apply_snapshot(&snapshot.tracker_snapshot);
+        self.tracker_engine
+            .apply_snapshot(&snapshot.tracker_snapshot);
         self.last_snapshot = Some(snapshot);
         self.samples_since_snapshot = 0;
 
@@ -611,7 +615,7 @@ impl AudioGenThread {
             let max_jump = jump_l.max(jump_r);
             if max_jump > 0.3 {
                 self.metrics.discontinuities += 1;
-                if self.metrics.discontinuities <= 10 || self.metrics.discontinuities % 100 == 0 {
+                if self.metrics.discontinuities <= 10 || self.metrics.discontinuities.is_multiple_of(100) {
                     warn!(
                         "Audio discontinuity at frame boundary: L={:.3}->{:.3} (d{:.3}), R={:.3}->{:.3} (d{:.3})",
                         prev_l, curr_l, jump_l, prev_r, curr_r, jump_r
@@ -623,10 +627,7 @@ impl AudioGenThread {
         // Update prev_frame_last for continuity tracking (AFTER discontinuity check)
         if self.output_buffer.len() >= 2 {
             let len = self.output_buffer.len();
-            self.prev_frame_last = (
-                self.output_buffer[len - 2],
-                self.output_buffer[len - 1],
-            );
+            self.prev_frame_last = (self.output_buffer[len - 2], self.output_buffer[len - 1]);
         }
 
         // Push to ring buffer
@@ -704,8 +705,8 @@ impl ThreadedAudioOutput {
     /// This spawns the audio generation thread and sets up the cpal output stream.
     pub fn new() -> Result<Self, String> {
         use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-        use ringbuf::traits::Split;
         use ringbuf::HeapRb;
+        use ringbuf::traits::Split;
 
         let host = cpal::default_host();
 
@@ -906,7 +907,8 @@ mod tests {
                 self.crossfade_from = self.prev_frame_last;
                 self.gen_audio = snapshot.audio;
                 self.gen_tracker = snapshot.tracker;
-                self.tracker_engine.apply_snapshot(&snapshot.tracker_snapshot);
+                self.tracker_engine
+                    .apply_snapshot(&snapshot.tracker_snapshot);
                 self.last_snapshot = Some(snapshot);
                 self.samples_since_snapshot = 0;
                 return;
@@ -916,7 +918,8 @@ mod tests {
             if !self.has_state {
                 self.gen_audio = snapshot.audio;
                 self.gen_tracker = snapshot.tracker;
-                self.tracker_engine.apply_snapshot(&snapshot.tracker_snapshot);
+                self.tracker_engine
+                    .apply_snapshot(&snapshot.tracker_snapshot);
                 self.last_snapshot = Some(snapshot);
                 self.samples_since_snapshot = 0;
                 self.has_state = true;
@@ -972,7 +975,8 @@ mod tests {
                 }
                 // Full reset of tracker state for new module
                 self.gen_tracker = snapshot.tracker;
-                self.tracker_engine.apply_snapshot(&snapshot.tracker_snapshot);
+                self.tracker_engine
+                    .apply_snapshot(&snapshot.tracker_snapshot);
             } else if snapshot.tracker.handle == 0 && self.gen_tracker.handle != 0 {
                 // Tracker was stopped
                 self.gen_tracker.handle = 0;
@@ -1017,16 +1021,16 @@ mod tests {
         audio.channels[0].position = 0;
         audio.channels[0].volume = 0.8;
 
-        let snapshot1 = AudioGenSnapshot::new(
+        let snapshot1 = AudioGenSnapshot {
             audio,
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            0,
-            60,
-            44100,
-            false,
-        );
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 0,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot1);
 
         // Generate 3 frames (audio advances)
@@ -1044,16 +1048,16 @@ mod tests {
         audio2.channels[0].position = 94080; // 1 frame worth
         audio2.channels[0].volume = 0.9; // Volume changed
 
-        let snapshot2 = AudioGenSnapshot::new(
-            audio2,
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            1,
-            60,
-            44100,
-            false,
-        );
+        let snapshot2 = AudioGenSnapshot {
+            audio: audio2,
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 1,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot2);
 
         // Position should NOT have been reset to frame 1
@@ -1069,7 +1073,10 @@ mod tests {
         );
 
         // No crossfade needed (this is normal operation)
-        assert!(!audio_gen.crossfade_active, "No crossfade for normal snapshot");
+        assert!(
+            !audio_gen.crossfade_active,
+            "No crossfade for normal snapshot"
+        );
     }
 
     #[test]
@@ -1081,16 +1088,16 @@ mod tests {
         audio.channels[0].sound = 1;
         audio.channels[0].position = 0;
 
-        let snapshot1 = AudioGenSnapshot::new(
+        let snapshot1 = AudioGenSnapshot {
             audio,
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            0,
-            60,
-            44100,
-            false,
-        );
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 0,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot1);
 
         // Generate 2 frames
@@ -1105,21 +1112,27 @@ mod tests {
         audio2.channels[1].sound = 2; // NEW!
         audio2.channels[1].position = 0; // position == 0 means NEW
 
-        let snapshot2 = AudioGenSnapshot::new(
-            audio2,
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            1,
-            60,
-            44100,
-            false,
-        );
+        let snapshot2 = AudioGenSnapshot {
+            audio: audio2,
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 1,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot2);
 
         // Channel 1 should now be active
-        assert_eq!(audio_gen.gen_audio.channels[1].sound, 2, "New SFX should start");
-        assert_eq!(audio_gen.gen_audio.channels[1].position, 0, "New SFX starts at position 0");
+        assert_eq!(
+            audio_gen.gen_audio.channels[1].sound, 2,
+            "New SFX should start"
+        );
+        assert_eq!(
+            audio_gen.gen_audio.channels[1].position, 0,
+            "New SFX starts at position 0"
+        );
 
         // Channel 0 position should NOT have been reset
         assert_eq!(
@@ -1133,16 +1146,16 @@ mod tests {
         let mut audio_gen = TestableAudioGen::new();
 
         // Initial snapshot
-        let snapshot1 = AudioGenSnapshot::new(
-            AudioPlaybackState::default(),
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            0,
-            60,
-            44100,
-            false,
-        );
+        let snapshot1 = AudioGenSnapshot {
+            audio: AudioPlaybackState::default(),
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 0,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot1);
 
         // Set prev_frame_last to simulate audio playing
@@ -1158,16 +1171,16 @@ mod tests {
         rollback_audio.channels[0].sound = 3; // Different state
         rollback_audio.channels[0].position = 12345;
 
-        let rollback_snapshot = AudioGenSnapshot::new(
-            rollback_audio,
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            2,
-            60,
-            44100,
-            true, // is_rollback!
-        );
+        let rollback_snapshot = AudioGenSnapshot {
+            audio: rollback_audio,
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 2,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: true, // is_rollback!
+        };
         audio_gen.handle_snapshot(rollback_snapshot);
 
         // State should be reset to rollback values
@@ -1175,8 +1188,15 @@ mod tests {
         assert_eq!(audio_gen.gen_audio.channels[0].position, 12345);
 
         // Crossfade should be scheduled
-        assert!(audio_gen.crossfade_active, "Crossfade should be scheduled for rollback");
-        assert_eq!(audio_gen.crossfade_from, (0.5, 0.5), "Crossfade from prev_frame_last");
+        assert!(
+            audio_gen.crossfade_active,
+            "Crossfade should be scheduled for rollback"
+        );
+        assert_eq!(
+            audio_gen.crossfade_from,
+            (0.5, 0.5),
+            "Crossfade from prev_frame_last"
+        );
     }
 
     #[test]
@@ -1190,16 +1210,16 @@ mod tests {
         audio.channels[0].volume = 0.5;
         audio.channels[0].pan = 0.0;
 
-        let snapshot1 = AudioGenSnapshot::new(
+        let snapshot1 = AudioGenSnapshot {
             audio,
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            0,
-            60,
-            44100,
-            false,
-        );
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 0,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot1);
 
         // Generate frames
@@ -1214,16 +1234,16 @@ mod tests {
         audio2.channels[0].volume = 0.8; // Changed
         audio2.channels[0].pan = -0.5; // Changed
 
-        let snapshot2 = AudioGenSnapshot::new(
-            audio2,
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            1,
-            60,
-            44100,
-            false,
-        );
+        let snapshot2 = AudioGenSnapshot {
+            audio: audio2,
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 1,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot2);
 
         // Volume and pan should be updated
@@ -1243,16 +1263,16 @@ mod tests {
         let tracker_snapshot = tracker_engine.snapshot();
         let sounds = Arc::new(Vec::new());
 
-        let snapshot = AudioGenSnapshot::new(
+        let snapshot = AudioGenSnapshot {
             audio,
             tracker,
             tracker_snapshot,
             sounds,
-            0,
-            60,
-            44100,
-            false,
-        );
+            frame_number: 0,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
 
         assert_eq!(snapshot.frame_number, 0);
         assert_eq!(snapshot.tick_rate, 60);
@@ -1299,16 +1319,16 @@ mod tests {
 
         let handle = AudioGenThread::spawn(producer, 44100);
 
-        let snapshot = AudioGenSnapshot::new(
-            AudioPlaybackState::default(),
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            0,
-            60,
-            44100,
-            false,
-        );
+        let snapshot = AudioGenSnapshot {
+            audio: AudioPlaybackState::default(),
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 0,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
 
         assert!(handle.send_snapshot(snapshot));
 
@@ -1335,9 +1355,7 @@ mod tests {
         // Test that crossfade smooths transitions
         let mut output_buffer = vec![
             -0.5, -0.5, // First stereo pair
-            -0.4, -0.4,
-            -0.3, -0.3,
-            -0.2, -0.2,
+            -0.4, -0.4, -0.3, -0.3, -0.2, -0.2,
         ];
         let crossfade_from = (0.8, 0.8);
         let crossfade_samples = 4; // 4 stereo pairs
@@ -1387,16 +1405,16 @@ mod tests {
         audio.music.sound = 10;
         audio.music.position = 0;
 
-        let snapshot1 = AudioGenSnapshot::new(
+        let snapshot1 = AudioGenSnapshot {
             audio,
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            0,
-            60,
-            44100,
-            false,
-        );
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 0,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot1);
         audio_gen.prev_frame_last = (0.7, 0.7);
 
@@ -1414,24 +1432,39 @@ mod tests {
         // channels[3] stays silent
         rollback_audio.music.sound = 0; // Music stopped
 
-        let rollback = AudioGenSnapshot::new(
-            rollback_audio,
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            2,
-            60,
-            44100,
-            true,
-        );
+        let rollback = AudioGenSnapshot {
+            audio: rollback_audio,
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 2,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: true,
+        };
         audio_gen.handle_snapshot(rollback);
 
         // ALL channels should match rollback state exactly
-        assert_eq!(audio_gen.gen_audio.channels[0].sound, 0, "Channel 0 should be silent");
-        assert_eq!(audio_gen.gen_audio.channels[1].sound, 99, "Channel 1 should have new sound");
-        assert_eq!(audio_gen.gen_audio.channels[1].position, 50000, "Channel 1 position should match rollback");
-        assert_eq!(audio_gen.gen_audio.channels[2].sound, 0, "Channel 2 should be silent");
-        assert_eq!(audio_gen.gen_audio.music.sound, 0, "Music should be stopped");
+        assert_eq!(
+            audio_gen.gen_audio.channels[0].sound, 0,
+            "Channel 0 should be silent"
+        );
+        assert_eq!(
+            audio_gen.gen_audio.channels[1].sound, 99,
+            "Channel 1 should have new sound"
+        );
+        assert_eq!(
+            audio_gen.gen_audio.channels[1].position, 50000,
+            "Channel 1 position should match rollback"
+        );
+        assert_eq!(
+            audio_gen.gen_audio.channels[2].sound, 0,
+            "Channel 2 should be silent"
+        );
+        assert_eq!(
+            audio_gen.gen_audio.music.sound, 0,
+            "Music should be stopped"
+        );
         assert!(audio_gen.crossfade_active, "Crossfade should be active");
     }
 
@@ -1447,16 +1480,16 @@ mod tests {
         audio.music.sound = 5;
         audio.music.position = 0;
 
-        let snapshot1 = AudioGenSnapshot::new(
+        let snapshot1 = AudioGenSnapshot {
             audio,
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            0,
-            60,
-            44100,
-            false,
-        );
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 0,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot1);
         audio_gen.prev_frame_last = (0.9, -0.9); // Non-zero audio was playing
 
@@ -1465,16 +1498,16 @@ mod tests {
         }
 
         // Rollback to silence
-        let rollback = AudioGenSnapshot::new(
-            AudioPlaybackState::default(), // All zeros
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            1,
-            60,
-            44100,
-            true,
-        );
+        let rollback = AudioGenSnapshot {
+            audio: AudioPlaybackState::default(), // All zeros
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 1,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: true,
+        };
         audio_gen.handle_snapshot(rollback);
 
         // Should be completely silent
@@ -1491,16 +1524,16 @@ mod tests {
         let mut audio_gen = TestableAudioGen::new();
 
         // Initial snapshot with silence
-        let snapshot1 = AudioGenSnapshot::new(
-            AudioPlaybackState::default(),
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            0,
-            60,
-            44100,
-            false,
-        );
+        let snapshot1 = AudioGenSnapshot {
+            audio: AudioPlaybackState::default(),
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 0,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot1);
         audio_gen.prev_frame_last = (0.0, 0.0); // Silence
 
@@ -1514,16 +1547,16 @@ mod tests {
         rollback_audio.channels[0].position = 12345;
         rollback_audio.channels[0].volume = 1.0;
 
-        let rollback = AudioGenSnapshot::new(
-            rollback_audio,
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            1,
-            60,
-            44100,
-            true,
-        );
+        let rollback = AudioGenSnapshot {
+            audio: rollback_audio,
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 1,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: true,
+        };
         audio_gen.handle_snapshot(rollback);
 
         // Should have sound playing
@@ -1543,16 +1576,16 @@ mod tests {
         let mut audio = AudioPlaybackState::default();
         audio.channels[0].sound = 1;
 
-        let snapshot1 = AudioGenSnapshot::new(
+        let snapshot1 = AudioGenSnapshot {
             audio,
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            0,
-            60,
-            44100,
-            false,
-        );
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 0,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot1);
         audio_gen.generate_frame();
         audio_gen.prev_frame_last = (0.5, 0.5);
@@ -1562,16 +1595,16 @@ mod tests {
         rollback1_audio.channels[0].sound = 2;
         rollback1_audio.channels[0].position = 1000;
 
-        let rollback1 = AudioGenSnapshot::new(
-            rollback1_audio,
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            1,
-            60,
-            44100,
-            true,
-        );
+        let rollback1 = AudioGenSnapshot {
+            audio: rollback1_audio,
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 1,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: true,
+        };
         audio_gen.handle_snapshot(rollback1);
 
         assert_eq!(audio_gen.gen_audio.channels[0].sound, 2);
@@ -1587,16 +1620,16 @@ mod tests {
         rollback2_audio.channels[0].sound = 3;
         rollback2_audio.channels[0].position = 2000;
 
-        let rollback2 = AudioGenSnapshot::new(
-            rollback2_audio,
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            2,
-            60,
-            44100,
-            true,
-        );
+        let rollback2 = AudioGenSnapshot {
+            audio: rollback2_audio,
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 2,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: true,
+        };
         audio_gen.handle_snapshot(rollback2);
 
         // Should have latest rollback state
@@ -1605,7 +1638,10 @@ mod tests {
         // New crossfade from latest prev_frame_last
         assert!(audio_gen.crossfade_active);
         assert_eq!(audio_gen.crossfade_from, (0.3, 0.3));
-        assert_ne!(audio_gen.crossfade_from, crossfade1, "Second rollback should use updated crossfade source");
+        assert_ne!(
+            audio_gen.crossfade_from, crossfade1,
+            "Second rollback should use updated crossfade source"
+        );
     }
 
     #[test]
@@ -1618,16 +1654,16 @@ mod tests {
         audio.channels[0].sound = 1;
         audio.channels[0].position = 0;
 
-        let snapshot1 = AudioGenSnapshot::new(
+        let snapshot1 = AudioGenSnapshot {
             audio,
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            0,
-            60,
-            44100,
-            false,
-        );
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 0,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot1);
         audio_gen.prev_frame_last = (0.5, 0.5);
         audio_gen.generate_frame();
@@ -1637,16 +1673,16 @@ mod tests {
         rollback_audio.channels[0].sound = 2;
         rollback_audio.channels[0].position = 5000;
 
-        let rollback = AudioGenSnapshot::new(
-            rollback_audio.clone(),
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            1,
-            60,
-            44100,
-            true,
-        );
+        let rollback = AudioGenSnapshot {
+            audio: rollback_audio.clone(),
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 1,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: true,
+        };
         audio_gen.handle_snapshot(rollback);
         audio_gen.crossfade_active = false; // Simulate crossfade completed
 
@@ -1661,22 +1697,21 @@ mod tests {
         normal_audio.channels[0].position = 6000; // Behind where we are
         normal_audio.channels[0].volume = 0.7; // Volume change
 
-        let normal = AudioGenSnapshot::new(
-            normal_audio,
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            2,
-            60,
-            44100,
-            false, // NOT rollback
-        );
+        let normal = AudioGenSnapshot {
+            audio: normal_audio,
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 2,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false, // NOT rollback
+        };
         audio_gen.handle_snapshot(normal);
 
         // Position should NOT be reset (merge logic)
         assert_eq!(
-            audio_gen.gen_audio.channels[0].position,
-            position_after_rollback,
+            audio_gen.gen_audio.channels[0].position, position_after_rollback,
             "Position should not change for normal snapshot after rollback"
         );
         // But volume should update
@@ -1697,16 +1732,16 @@ mod tests {
         tracker.tick = 0;
         tracker.volume = 64;
 
-        let snapshot1 = AudioGenSnapshot::new(
-            AudioPlaybackState::default(),
+        let snapshot1 = AudioGenSnapshot {
+            audio: AudioPlaybackState::default(),
             tracker,
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            0,
-            60,
-            44100,
-            false,
-        );
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 0,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot1);
 
         // Simulate tracker advancing
@@ -1723,16 +1758,16 @@ mod tests {
         rollback_tracker.volume = 48;
         rollback_tracker.flags = 0xFF;
 
-        let rollback = AudioGenSnapshot::new(
-            AudioPlaybackState::default(),
-            rollback_tracker,
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            1,
-            60,
-            44100,
-            true,
-        );
+        let rollback = AudioGenSnapshot {
+            audio: AudioPlaybackState::default(),
+            tracker: rollback_tracker,
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 1,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: true,
+        };
         audio_gen.handle_snapshot(rollback);
 
         // ALL tracker fields should match rollback
@@ -1748,16 +1783,16 @@ mod tests {
         // samples_since_snapshot counter should reset on rollback
         let mut audio_gen = TestableAudioGen::new();
 
-        let snapshot1 = AudioGenSnapshot::new(
-            AudioPlaybackState::default(),
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            0,
-            60,
-            44100,
-            false,
-        );
+        let snapshot1 = AudioGenSnapshot {
+            audio: AudioPlaybackState::default(),
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 0,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot1);
 
         // Generate many frames
@@ -1769,16 +1804,16 @@ mod tests {
         assert!(samples_before > 0, "Should have generated samples");
 
         // Rollback
-        let rollback = AudioGenSnapshot::new(
-            AudioPlaybackState::default(),
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            5,
-            60,
-            44100,
-            true,
-        );
+        let rollback = AudioGenSnapshot {
+            audio: AudioPlaybackState::default(),
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 5,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: true,
+        };
         audio_gen.handle_snapshot(rollback);
 
         assert_eq!(
@@ -1799,16 +1834,16 @@ mod tests {
         audio.channels[0].position = 10000;
 
         // First snapshot is a rollback (unusual but should handle gracefully)
-        let rollback = AudioGenSnapshot::new(
+        let rollback = AudioGenSnapshot {
             audio,
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            0,
-            60,
-            44100,
-            true, // is_rollback
-        );
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 0,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: true, // is_rollback
+        };
         audio_gen.handle_snapshot(rollback);
 
         // Should still initialize state correctly
@@ -1828,16 +1863,16 @@ mod tests {
         audio.channels[0].sound = 1;
         audio.channels[0].position = 0;
 
-        let snapshot1 = AudioGenSnapshot::new(
+        let snapshot1 = AudioGenSnapshot {
             audio,
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            0,
-            60,
-            44100,
-            false,
-        );
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 0,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot1);
 
         // Generate MANY frames (simulate lag or prediction)
@@ -1854,16 +1889,16 @@ mod tests {
         rollback_audio.channels[0].sound = 1;
         rollback_audio.channels[0].position = 50000; // Much earlier
 
-        let rollback = AudioGenSnapshot::new(
-            rollback_audio,
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            5,
-            60,
-            44100,
-            true,
-        );
+        let rollback = AudioGenSnapshot {
+            audio: rollback_audio,
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 5,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: true,
+        };
         audio_gen.handle_snapshot(rollback);
 
         // Position should match rollback (going backwards)
@@ -1884,16 +1919,16 @@ mod tests {
         audio.music.volume = 0.8;
         audio.music.pan = 0.0;
 
-        let snapshot1 = AudioGenSnapshot::new(
+        let snapshot1 = AudioGenSnapshot {
             audio,
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            0,
-            60,
-            44100,
-            false,
-        );
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 0,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot1);
 
         for _ in 0..5 {
@@ -1908,16 +1943,16 @@ mod tests {
         rollback_audio.music.volume = 0.5;
         rollback_audio.music.pan = -0.3;
 
-        let rollback = AudioGenSnapshot::new(
-            rollback_audio,
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            2,
-            60,
-            44100,
-            true,
-        );
+        let rollback = AudioGenSnapshot {
+            audio: rollback_audio,
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 2,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: true,
+        };
         audio_gen.handle_snapshot(rollback);
 
         // Music should match rollback exactly
@@ -1932,34 +1967,37 @@ mod tests {
         // has_state should remain true after rollback
         let mut audio_gen = TestableAudioGen::new();
 
-        let snapshot1 = AudioGenSnapshot::new(
-            AudioPlaybackState::default(),
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            0,
-            60,
-            44100,
-            false,
-        );
+        let snapshot1 = AudioGenSnapshot {
+            audio: AudioPlaybackState::default(),
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 0,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot1);
         assert!(audio_gen.has_state);
 
         // Rollback
-        let rollback = AudioGenSnapshot::new(
-            AudioPlaybackState::default(),
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            1,
-            60,
-            44100,
-            true,
-        );
+        let rollback = AudioGenSnapshot {
+            audio: AudioPlaybackState::default(),
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 1,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: true,
+        };
         audio_gen.handle_snapshot(rollback);
 
         // has_state should still be true
-        assert!(audio_gen.has_state, "has_state should remain true after rollback");
+        assert!(
+            audio_gen.has_state,
+            "has_state should remain true after rollback"
+        );
     }
 
     #[test]
@@ -1971,18 +2009,21 @@ mod tests {
         audio.channels[0].sound = 1;
         audio.channels[0].position = 0;
 
-        let snapshot1 = AudioGenSnapshot::new(
+        let snapshot1 = AudioGenSnapshot {
             audio,
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            0,
-            60,
-            44100,
-            false,
-        );
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 0,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot1);
-        assert!(!audio_gen.crossfade_active, "Initial snapshot should not trigger crossfade");
+        assert!(
+            !audio_gen.crossfade_active,
+            "Initial snapshot should not trigger crossfade"
+        );
 
         for _ in 0..3 {
             audio_gen.generate_frame();
@@ -1995,16 +2036,16 @@ mod tests {
             audio.channels[0].position = (frame as u32) * 94080; // Main thread position (ignored)
             audio.channels[0].volume = 0.5 + (frame as f32 * 0.05);
 
-            let snapshot = AudioGenSnapshot::new(
+            let snapshot = AudioGenSnapshot {
                 audio,
-                TrackerState::default(),
-                TrackerEngine::new().snapshot(),
-                Arc::new(Vec::new()),
-                frame,
-                60,
-                44100,
-                false,
-            );
+                tracker: TrackerState::default(),
+                tracker_snapshot: TrackerEngine::new().snapshot(),
+                sounds: Arc::new(Vec::new()),
+                frame_number: frame,
+                tick_rate: 60,
+                sample_rate: 44100,
+                is_rollback: false,
+            };
             audio_gen.handle_snapshot(snapshot);
 
             assert!(
@@ -2025,16 +2066,16 @@ mod tests {
         audio.channels[0].sound = 1;
         audio.channels[0].position = 0;
 
-        let snapshot1 = AudioGenSnapshot::new(
+        let snapshot1 = AudioGenSnapshot {
             audio,
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            0,
-            60,
-            44100,
-            false,
-        );
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 0,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot1);
         audio_gen.generate_frame();
 
@@ -2042,16 +2083,16 @@ mod tests {
         let mut audio2 = AudioPlaybackState::default();
         audio2.channels[0].sound = 0; // Stopped
 
-        let snapshot2 = AudioGenSnapshot::new(
-            audio2,
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            1,
-            60,
-            44100,
-            false,
-        );
+        let snapshot2 = AudioGenSnapshot {
+            audio: audio2,
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 1,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot2);
 
         // SFX should be stopped
@@ -2270,12 +2311,12 @@ mod tests {
 
         // Test various discontinuity magnitudes
         let test_cases = [
-            (0.0, 0.5),   // Silence to mid-volume
-            (0.5, 0.0),   // Mid-volume to silence
-            (1.0, -1.0),  // Full positive to full negative (worst case)
-            (-1.0, 1.0),  // Full negative to full positive
-            (0.3, 0.35),  // Small change (shouldn't really need crossfade but still works)
-            (0.9, -0.9),  // Large swing
+            (0.0, 0.5),  // Silence to mid-volume
+            (0.5, 0.0),  // Mid-volume to silence
+            (1.0, -1.0), // Full positive to full negative (worst case)
+            (-1.0, 1.0), // Full negative to full positive
+            (0.3, 0.35), // Small change (shouldn't really need crossfade but still works)
+            (0.9, -0.9), // Large swing
         ];
 
         let crossfade_samples = 44;
@@ -2330,19 +2371,22 @@ mod tests {
         audio.music.position = 0;
         audio.music.volume = 0.8;
 
-        let snapshot1 = AudioGenSnapshot::new(
+        let snapshot1 = AudioGenSnapshot {
             audio,
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            0,
-            60,
-            44100,
-            false,
-        );
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 0,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot1);
         assert_eq!(audio_gen.gen_audio.music.sound, 1);
-        assert!(!audio_gen.crossfade_active, "No crossfade on first snapshot");
+        assert!(
+            !audio_gen.crossfade_active,
+            "No crossfade on first snapshot"
+        );
 
         // Generate some frames
         audio_gen.generate_frame();
@@ -2355,20 +2399,23 @@ mod tests {
         audio2.music.position = 0; // New song starts at 0
         audio2.music.volume = 0.9;
 
-        let snapshot2 = AudioGenSnapshot::new(
-            audio2,
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            2,
-            60,
-            44100,
-            false,
-        );
+        let snapshot2 = AudioGenSnapshot {
+            audio: audio2,
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 2,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot2);
 
         // Music should have changed
-        assert_eq!(audio_gen.gen_audio.music.sound, 2, "Music should switch to song 2");
+        assert_eq!(
+            audio_gen.gen_audio.music.sound, 2,
+            "Music should switch to song 2"
+        );
         // Crossfade should be active due to song change
         assert!(
             audio_gen.crossfade_active,
@@ -2391,16 +2438,16 @@ mod tests {
         audio.channels[0].sound = 1;
         audio.channels[0].position = 0;
 
-        let snapshot1 = AudioGenSnapshot::new(
+        let snapshot1 = AudioGenSnapshot {
             audio,
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            0,
-            60,
-            44100,
-            false,
-        );
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 0,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot1);
         assert!(!audio_gen.crossfade_active);
 
@@ -2413,20 +2460,23 @@ mod tests {
         audio2.channels[0].sound = 2; // Different SFX!
         audio2.channels[0].position = 0;
 
-        let snapshot2 = AudioGenSnapshot::new(
-            audio2,
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            1,
-            60,
-            44100,
-            false,
-        );
+        let snapshot2 = AudioGenSnapshot {
+            audio: audio2,
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 1,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot2);
 
         assert_eq!(audio_gen.gen_audio.channels[0].sound, 2);
-        assert!(audio_gen.crossfade_active, "Crossfade should trigger on SFX change");
+        assert!(
+            audio_gen.crossfade_active,
+            "Crossfade should trigger on SFX change"
+        );
     }
 
     #[test]
@@ -2440,16 +2490,16 @@ mod tests {
         audio.music.sound = 1;
         audio.music.position = 0;
 
-        let snapshot1 = AudioGenSnapshot::new(
+        let snapshot1 = AudioGenSnapshot {
             audio,
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            0,
-            60,
-            44100,
-            false,
-        );
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 0,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot1);
 
         // Generate frames so audio thread advances
@@ -2463,16 +2513,16 @@ mod tests {
         audio2.music.sound = 2;
         audio2.music.position = 50000; // Non-zero! This is the key test case
 
-        let snapshot2 = AudioGenSnapshot::new(
-            audio2,
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            5,
-            60,
-            44100,
-            false,
-        );
+        let snapshot2 = AudioGenSnapshot {
+            audio: audio2,
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 5,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot2);
 
         // Should still detect the song change and switch
@@ -2494,16 +2544,16 @@ mod tests {
         audio.music.position = 0;
         audio.music.volume = 0.5;
 
-        let snapshot1 = AudioGenSnapshot::new(
+        let snapshot1 = AudioGenSnapshot {
             audio,
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            0,
-            60,
-            44100,
-            false,
-        );
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 0,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot1);
         audio_gen.generate_frame();
 
@@ -2513,21 +2563,24 @@ mod tests {
         audio2.music.position = 100000; // Advanced position
         audio2.music.volume = 0.8; // Different volume
 
-        let snapshot2 = AudioGenSnapshot::new(
-            audio2,
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            1,
-            60,
-            44100,
-            false,
-        );
+        let snapshot2 = AudioGenSnapshot {
+            audio: audio2,
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 1,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot2);
 
         // Volume should update but NO crossfade
         assert_eq!(audio_gen.gen_audio.music.volume, 0.8);
-        assert!(!audio_gen.crossfade_active, "Same song should NOT trigger crossfade");
+        assert!(
+            !audio_gen.crossfade_active,
+            "Same song should NOT trigger crossfade"
+        );
     }
 
     // ========================================================================
@@ -2549,16 +2602,16 @@ mod tests {
         tracker1.row = 0;
         tracker1.flags = crate::state::tracker_flags::PLAYING;
 
-        let snapshot1 = AudioGenSnapshot::new(
-            AudioPlaybackState::default(),
-            tracker1,
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            0,
-            60,
-            44100,
-            false,
-        );
+        let snapshot1 = AudioGenSnapshot {
+            audio: AudioPlaybackState::default(),
+            tracker: tracker1,
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 0,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot1);
 
         // Verify initial state
@@ -2579,24 +2632,36 @@ mod tests {
         tracker2.row = 0;
         tracker2.flags = crate::state::tracker_flags::PLAYING;
 
-        let snapshot2 = AudioGenSnapshot::new(
-            AudioPlaybackState::default(),
-            tracker2,
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            1,
-            60,
-            44100,
-            false,
-        );
+        let snapshot2 = AudioGenSnapshot {
+            audio: AudioPlaybackState::default(),
+            tracker: tracker2,
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 1,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot2);
 
         // New tracker should be loaded completely
-        assert_eq!(audio_gen.gen_tracker.handle, 2, "Handle should change to new module");
-        assert_eq!(audio_gen.gen_tracker.bpm, 140, "BPM should be from new module");
-        assert_eq!(audio_gen.gen_tracker.speed, 4, "Speed should be from new module");
+        assert_eq!(
+            audio_gen.gen_tracker.handle, 2,
+            "Handle should change to new module"
+        );
+        assert_eq!(
+            audio_gen.gen_tracker.bpm, 140,
+            "BPM should be from new module"
+        );
+        assert_eq!(
+            audio_gen.gen_tracker.speed, 4,
+            "Speed should be from new module"
+        );
         // Position should reset for new module
-        assert_eq!(audio_gen.gen_tracker.order_position, 0, "Position should reset");
+        assert_eq!(
+            audio_gen.gen_tracker.order_position, 0,
+            "Position should reset"
+        );
         assert_eq!(audio_gen.gen_tracker.row, 0, "Row should reset");
     }
 
@@ -2610,16 +2675,16 @@ mod tests {
         tracker1.handle = 1;
         tracker1.flags = crate::state::tracker_flags::PLAYING;
 
-        let snapshot1 = AudioGenSnapshot::new(
-            AudioPlaybackState::default(),
-            tracker1,
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            0,
-            60,
-            44100,
-            false,
-        );
+        let snapshot1 = AudioGenSnapshot {
+            audio: AudioPlaybackState::default(),
+            tracker: tracker1,
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 0,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot1);
 
         // Simulate audio playing
@@ -2631,21 +2696,28 @@ mod tests {
         tracker2.handle = 2; // Different!
         tracker2.flags = crate::state::tracker_flags::PLAYING;
 
-        let snapshot2 = AudioGenSnapshot::new(
-            AudioPlaybackState::default(),
-            tracker2,
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            1,
-            60,
-            44100,
-            false,
-        );
+        let snapshot2 = AudioGenSnapshot {
+            audio: AudioPlaybackState::default(),
+            tracker: tracker2,
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 1,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot2);
 
         // Crossfade should be scheduled
-        assert!(audio_gen.crossfade_active, "Song change should trigger crossfade");
-        assert_eq!(audio_gen.crossfade_from, (0.3, -0.2), "Crossfade from prev_frame_last");
+        assert!(
+            audio_gen.crossfade_active,
+            "Song change should trigger crossfade"
+        );
+        assert_eq!(
+            audio_gen.crossfade_from,
+            (0.3, -0.2),
+            "Crossfade from prev_frame_last"
+        );
     }
 
     #[test]
@@ -2661,16 +2733,16 @@ mod tests {
         tracker1.speed = 6;
         tracker1.flags = crate::state::tracker_flags::PLAYING;
 
-        let snapshot1 = AudioGenSnapshot::new(
-            AudioPlaybackState::default(),
-            tracker1,
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            0,
-            60,
-            44100,
-            false,
-        );
+        let snapshot1 = AudioGenSnapshot {
+            audio: AudioPlaybackState::default(),
+            tracker: tracker1,
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 0,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot1);
 
         assert_eq!(audio_gen.gen_tracker.bpm, 120);
@@ -2688,27 +2760,36 @@ mod tests {
         tracker2.row = 8;
         tracker2.flags = crate::state::tracker_flags::PLAYING;
 
-        let snapshot2 = AudioGenSnapshot::new(
-            AudioPlaybackState::default(),
-            tracker2,
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            1,
-            60,
-            44100,
-            false,
-        );
+        let snapshot2 = AudioGenSnapshot {
+            audio: AudioPlaybackState::default(),
+            tracker: tracker2,
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 1,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot2);
 
         // BPM should be updated
-        assert_eq!(audio_gen.gen_tracker.bpm, 180, "BPM should be merged from snapshot");
+        assert_eq!(
+            audio_gen.gen_tracker.bpm, 180,
+            "BPM should be merged from snapshot"
+        );
 
         // But timing should NOT be reset (audio thread is authoritative)
-        assert_eq!(audio_gen.gen_tracker.order_position, 2, "Order position should NOT change");
+        assert_eq!(
+            audio_gen.gen_tracker.order_position, 2,
+            "Order position should NOT change"
+        );
         assert_eq!(audio_gen.gen_tracker.row, 16, "Row should NOT change");
 
         // No crossfade (same song, just tempo change)
-        assert!(!audio_gen.crossfade_active, "Tempo change should NOT trigger crossfade");
+        assert!(
+            !audio_gen.crossfade_active,
+            "Tempo change should NOT trigger crossfade"
+        );
     }
 
     #[test]
@@ -2721,16 +2802,16 @@ mod tests {
         tracker1.speed = 6;
         tracker1.flags = crate::state::tracker_flags::PLAYING;
 
-        let snapshot1 = AudioGenSnapshot::new(
-            AudioPlaybackState::default(),
-            tracker1,
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            0,
-            60,
-            44100,
-            false,
-        );
+        let snapshot1 = AudioGenSnapshot {
+            audio: AudioPlaybackState::default(),
+            tracker: tracker1,
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 0,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot1);
 
         assert_eq!(audio_gen.gen_tracker.speed, 6);
@@ -2741,19 +2822,22 @@ mod tests {
         tracker2.speed = 3; // Speed changed!
         tracker2.flags = crate::state::tracker_flags::PLAYING;
 
-        let snapshot2 = AudioGenSnapshot::new(
-            AudioPlaybackState::default(),
-            tracker2,
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            1,
-            60,
-            44100,
-            false,
-        );
+        let snapshot2 = AudioGenSnapshot {
+            audio: AudioPlaybackState::default(),
+            tracker: tracker2,
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 1,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot2);
 
-        assert_eq!(audio_gen.gen_tracker.speed, 3, "Speed should be merged from snapshot");
+        assert_eq!(
+            audio_gen.gen_tracker.speed, 3,
+            "Speed should be merged from snapshot"
+        );
     }
 
     #[test]
@@ -2765,16 +2849,16 @@ mod tests {
         tracker1.handle = 1;
         tracker1.flags = crate::state::tracker_flags::PLAYING;
 
-        let snapshot1 = AudioGenSnapshot::new(
-            AudioPlaybackState::default(),
-            tracker1,
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            0,
-            60,
-            44100,
-            false,
-        );
+        let snapshot1 = AudioGenSnapshot {
+            audio: AudioPlaybackState::default(),
+            tracker: tracker1,
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 0,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot1);
 
         assert_eq!(audio_gen.gen_tracker.handle, 1);
@@ -2785,16 +2869,16 @@ mod tests {
         tracker2.handle = 0; // Stopped!
         tracker2.flags = 0;
 
-        let snapshot2 = AudioGenSnapshot::new(
-            AudioPlaybackState::default(),
-            tracker2,
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            1,
-            60,
-            44100,
-            false,
-        );
+        let snapshot2 = AudioGenSnapshot {
+            audio: AudioPlaybackState::default(),
+            tracker: tracker2,
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 1,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot2);
 
         assert_eq!(audio_gen.gen_tracker.handle, 0, "Tracker should be stopped");
@@ -2807,16 +2891,16 @@ mod tests {
         let mut audio_gen = TestableAudioGen::new();
 
         // Empty initial state
-        let snapshot1 = AudioGenSnapshot::new(
-            AudioPlaybackState::default(),
-            TrackerState::default(),
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            0,
-            60,
-            44100,
-            false,
-        );
+        let snapshot1 = AudioGenSnapshot {
+            audio: AudioPlaybackState::default(),
+            tracker: TrackerState::default(),
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 0,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot1);
 
         assert_eq!(audio_gen.gen_tracker.handle, 0);
@@ -2827,19 +2911,25 @@ mod tests {
         tracker.handle = 1;
         tracker.flags = crate::state::tracker_flags::PLAYING;
 
-        let snapshot2 = AudioGenSnapshot::new(
-            AudioPlaybackState::default(),
+        let snapshot2 = AudioGenSnapshot {
+            audio: AudioPlaybackState::default(),
             tracker,
-            TrackerEngine::new().snapshot(),
-            Arc::new(Vec::new()),
-            1,
-            60,
-            44100,
-            false,
-        );
+            tracker_snapshot: TrackerEngine::new().snapshot(),
+            sounds: Arc::new(Vec::new()),
+            frame_number: 1,
+            tick_rate: 60,
+            sample_rate: 44100,
+            is_rollback: false,
+        };
         audio_gen.handle_snapshot(snapshot2);
 
-        assert_eq!(audio_gen.gen_tracker.handle, 1, "First tracker should start");
-        assert!(!audio_gen.crossfade_active, "First tracker should NOT trigger crossfade");
+        assert_eq!(
+            audio_gen.gen_tracker.handle, 1,
+            "First tracker should start"
+        );
+        assert!(
+            !audio_gen.crossfade_active,
+            "First tracker should NOT trigger crossfade"
+        );
     }
 }

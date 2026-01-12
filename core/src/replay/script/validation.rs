@@ -35,7 +35,11 @@ impl std::fmt::Display for ValidationError {
                 player + 1
             ),
             ValidationError::OrphanedActionParams(frame) => {
-                write!(f, "action params provided without action at frame {}", frame)
+                write!(
+                    f,
+                    "action params provided without action at frame {}",
+                    frame
+                )
             }
         }
     }

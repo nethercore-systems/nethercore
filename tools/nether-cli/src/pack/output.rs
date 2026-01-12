@@ -59,10 +59,7 @@ pub fn default_output_path(
     override_path: Option<PathBuf>,
 ) -> PathBuf {
     override_path.unwrap_or_else(|| {
-        project_dir.join(format!(
-            "{}.{}",
-            manifest.game.id, ZX_ROM_FORMAT.extension
-        ))
+        project_dir.join(format!("{}.{}", manifest.game.id, ZX_ROM_FORMAT.extension))
     })
 }
 

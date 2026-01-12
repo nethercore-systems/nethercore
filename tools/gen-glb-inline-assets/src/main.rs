@@ -17,6 +17,12 @@ use std::f32::consts::TAU;
 use std::fs;
 use std::path::PathBuf;
 
+/// Face definition: (normal, corners with positions and UVs)
+type FaceDefinition = ([f32; 3], [([f32; 3], [f32; 2]); 4]);
+
+/// Skinned mesh data: (positions, normals, uvs, colors, joints, weights, indices)
+type SkinnedMeshData = (Vec<[f32; 3]>, Vec<[f32; 3]>, Vec<[f32; 2]>, Vec<[f32; 4]>, Vec<[u8; 4]>, Vec<[f32; 4]>, Vec<u16>);
+
 /// Bone count for the test skeleton
 const BONE_COUNT: usize = 3;
 /// Frame count for each animation
@@ -176,15 +182,7 @@ fn generate_multi_animation_glb() -> Vec<u8> {
 }
 
 /// Create mesh data: 3 stacked cubes with proper UV mapping and vertex colors
-fn create_mesh_data() -> (
-    Vec<[f32; 3]>,
-    Vec<[f32; 3]>,
-    Vec<[f32; 2]>,
-    Vec<[f32; 4]>,
-    Vec<[u8; 4]>,
-    Vec<[f32; 4]>,
-    Vec<u16>,
-) {
+fn create_mesh_data() -> SkinnedMeshData {
     let half_w = 0.3;
     let mut positions = Vec::new();
     let mut normals = Vec::new();
@@ -201,13 +199,13 @@ fn create_mesh_data() -> (
         [0.2, 0.2, 1.0, 1.0], // Blue for head
     ];
 
-    for seg in 0..BONE_COUNT {
+    for (seg, &color) in segment_colors.iter().enumerate() {
         let y_base = seg as f32 * SEGMENT_HEIGHT;
         let bone = seg as u8;
         let base_vert = (seg * 24) as u16;
 
         // Face definitions: (normal, corners with UVs)
-        let faces: Vec<([f32; 3], [([f32; 3], [f32; 2]); 4])> = vec![
+        let faces: Vec<FaceDefinition> = vec![
             // Front (+Z)
             (
                 [0.0, 0.0, 1.0],
@@ -277,7 +275,7 @@ fn create_mesh_data() -> (
                 positions.push(*pos);
                 normals.push(*normal);
                 uvs.push(*uv);
-                colors.push(segment_colors[seg]);
+                colors.push(color);
                 joints.push([bone, 0, 0, 0]);
                 weights.push([1.0, 0.0, 0.0, 0.0]);
             }

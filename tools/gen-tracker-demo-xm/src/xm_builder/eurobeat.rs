@@ -577,7 +577,7 @@ fn generate_pattern_prechorus() -> Vec<u8> {
         // Lead rises: 0→4→8, 12→14, 16→20→22, 26→28→30
         // Brass answers each mini-phrase with punchy stabs
         match row {
-            6 => write_note_fx(&mut data, F3_E, BRASS, FX_NOTE_CUT, 0x04),  // Answer first rise
+            6 => write_note_fx(&mut data, F3_E, BRASS, FX_NOTE_CUT, 0x04), // Answer first rise
             14 => write_note_fx(&mut data, F3_E, BRASS, FX_NOTE_CUT, 0x04), // Answer E→F
             22 => write_note_fx(&mut data, G3_E, BRASS, FX_NOTE_CUT, 0x04), // Answer G rise
             30 => write_note_fx(&mut data, A3_E, BRASS, FX_NOTE_CUT, 0x04), // Final answer (leading tone tension!)
@@ -885,8 +885,7 @@ fn generate_pattern_drop() -> Vec<u8> {
     // Dm arp: D-F-A-D, C arp: C-E-G-C, Bb arp: Bb-D-F-Bb, A arp: A-C#-E-A
     let lead_arp: [u8; 32] = [
         // Rows 0-7: Dm arpeggio x2
-        D5_E, F5_E, A5_E, D6_E, D5_E, F5_E, A5_E, D6_E,
-        // Rows 8-15: C major arpeggio x2
+        D5_E, F5_E, A5_E, D6_E, D5_E, F5_E, A5_E, D6_E, // Rows 8-15: C major arpeggio x2
         C5_E, E5_E, G5_E, C6_E, C5_E, E5_E, G5_E, C6_E,
         // Rows 16-23: Bb major arpeggio x2
         BB4_E, D5_E, F5_E, BB5_E, BB4_E, D5_E, F5_E, BB5_E,
@@ -931,10 +930,10 @@ fn generate_pattern_drop() -> Vec<u8> {
         // In drop, arpeggios are busy so brass marks structure on DOWNBEATS
         // Note-cut for punchy stabs that don't interfere with arpeggios
         match row {
-            0 => write_note_fx(&mut data, D4_E, BRASS, FX_NOTE_CUT, 0x03),   // Dm start (shorter cut)
-            8 => write_note_fx(&mut data, C4_E, BRASS, FX_NOTE_CUT, 0x03),   // C chord
+            0 => write_note_fx(&mut data, D4_E, BRASS, FX_NOTE_CUT, 0x03), // Dm start (shorter cut)
+            8 => write_note_fx(&mut data, C4_E, BRASS, FX_NOTE_CUT, 0x03), // C chord
             16 => write_note_fx(&mut data, BB3_E, BRASS, FX_NOTE_CUT, 0x03), // Bb chord
-            24 => write_note_fx(&mut data, A3_E, BRASS, FX_NOTE_CUT, 0x03),  // A chord
+            24 => write_note_fx(&mut data, A3_E, BRASS, FX_NOTE_CUT, 0x03), // A chord
             _ => write_empty(&mut data),
         }
 
@@ -947,13 +946,13 @@ fn generate_pattern_drop() -> Vec<u8> {
 
         // Ch8: Harmony - Octave doubling on peaks of each arpeggio
         match row {
-            3 => write_note(&mut data, D5_E, SUPERSAW),  // Dm peak
+            3 => write_note(&mut data, D5_E, SUPERSAW), // Dm peak
             7 => write_note(&mut data, D5_E, SUPERSAW),
             11 => write_note(&mut data, C5_E, SUPERSAW), // C peak
             15 => write_note(&mut data, C5_E, SUPERSAW),
             19 => write_note(&mut data, BB4_E, SUPERSAW), // Bb peak
             23 => write_note(&mut data, BB4_E, SUPERSAW),
-            27 => write_note(&mut data, A4_E, SUPERSAW),  // A peak
+            27 => write_note(&mut data, A4_E, SUPERSAW), // A peak
             31 => write_note(&mut data, A4_E, SUPERSAW),
             _ => write_empty(&mut data),
         }

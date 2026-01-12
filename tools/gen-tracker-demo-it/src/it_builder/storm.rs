@@ -116,7 +116,6 @@ enum BreakStyle {
 // ============================================================================
 // Main Generators
 // ============================================================================
-
 /// Generate stripped IT file (no sample data, for ROM/external samples)
 pub fn generate_storm_it_stripped() -> (Vec<u8>, Vec<(&'static str, Vec<i16>)>) {
     let mut writer = ItWriter::new("Nether Storm");
@@ -256,15 +255,33 @@ pub fn generate_storm_it_stripped() -> (Vec<u8>, Vec<(&'static str, Vec<i16>)>) 
 
     // Pattern 3: Drop A1 (main drop, clean)
     let pat_drop_a1 = writer.add_pattern(64);
-    build_drop_pattern(&mut writer, pat_drop_a1, Section::DropA, 0, BreakStyle::None);
+    build_drop_pattern(
+        &mut writer,
+        pat_drop_a1,
+        Section::DropA,
+        0,
+        BreakStyle::None,
+    );
 
     // Pattern 4: Drop A2 (variation with ghost break)
     let pat_drop_a2 = writer.add_pattern(64);
-    build_drop_pattern(&mut writer, pat_drop_a2, Section::DropA, 1, BreakStyle::Ghost);
+    build_drop_pattern(
+        &mut writer,
+        pat_drop_a2,
+        Section::DropA,
+        1,
+        BreakStyle::Ghost,
+    );
 
     // Pattern 5: Drop A3 (full break layer)
     let pat_drop_a3 = writer.add_pattern(64);
-    build_drop_pattern(&mut writer, pat_drop_a3, Section::DropA, 2, BreakStyle::Accent);
+    build_drop_pattern(
+        &mut writer,
+        pat_drop_a3,
+        Section::DropA,
+        2,
+        BreakStyle::Accent,
+    );
 
     // Pattern 6: Breakdown
     let pat_breakdown = writer.add_pattern(64);
@@ -276,15 +293,33 @@ pub fn generate_storm_it_stripped() -> (Vec<u8>, Vec<(&'static str, Vec<i16>)>) 
 
     // Pattern 8: Drop B1 (climax start)
     let pat_drop_b1 = writer.add_pattern(64);
-    build_drop_pattern(&mut writer, pat_drop_b1, Section::DropB, 0, BreakStyle::Ghost);
+    build_drop_pattern(
+        &mut writer,
+        pat_drop_b1,
+        Section::DropB,
+        0,
+        BreakStyle::Ghost,
+    );
 
     // Pattern 9: Drop B2 (climax variation)
     let pat_drop_b2 = writer.add_pattern(64);
-    build_drop_pattern(&mut writer, pat_drop_b2, Section::DropB, 1, BreakStyle::Accent);
+    build_drop_pattern(
+        &mut writer,
+        pat_drop_b2,
+        Section::DropB,
+        1,
+        BreakStyle::Accent,
+    );
 
     // Pattern 10: Drop B3 (maximum intensity)
     let pat_drop_b3 = writer.add_pattern(64);
-    build_drop_pattern(&mut writer, pat_drop_b3, Section::DropB, 2, BreakStyle::Fill);
+    build_drop_pattern(
+        &mut writer,
+        pat_drop_b3,
+        Section::DropB,
+        2,
+        BreakStyle::Fill,
+    );
 
     // Pattern 11: Outro
     let pat_outro = writer.add_pattern(64);
@@ -294,16 +329,25 @@ pub fn generate_storm_it_stripped() -> (Vec<u8>, Vec<(&'static str, Vec<i16>)>) 
     // Order table: 19 entries for ~66 second track (proper DnB structure)
     // ========================================================================
     writer.set_orders(&[
-        pat_intro,                                      // 0: Intro (4 bars)
-        pat_build_a, pat_build_b,                       // 1-2: Build (8 bars)
-        pat_drop_a1, pat_drop_a2, pat_drop_a1, pat_drop_a3, // 3-6: Drop A (16 bars)
-        pat_breakdown,                                  // 7: Breakdown (4 bars)
-        pat_build_a, pat_build_c,                       // 8-9: Build (8 bars)
-        pat_drop_b1, pat_drop_b2, pat_drop_b1, pat_drop_b3, // 10-13: Drop B (16 bars)
-        pat_breakdown,                                  // 14: Breakdown 2 (4 bars)
-        pat_build_c,                                    // 15: Build C (4 bars)
-        pat_drop_b1, pat_drop_b3,                       // 16-17: Final drop (8 bars)
-        pat_outro,                                      // 18: Outro (4 bars)
+        pat_intro, // 0: Intro (4 bars)
+        pat_build_a,
+        pat_build_b, // 1-2: Build (8 bars)
+        pat_drop_a1,
+        pat_drop_a2,
+        pat_drop_a1,
+        pat_drop_a3,   // 3-6: Drop A (16 bars)
+        pat_breakdown, // 7: Breakdown (4 bars)
+        pat_build_a,
+        pat_build_c, // 8-9: Build (8 bars)
+        pat_drop_b1,
+        pat_drop_b2,
+        pat_drop_b1,
+        pat_drop_b3,   // 10-13: Drop B (16 bars)
+        pat_breakdown, // 14: Breakdown 2 (4 bars)
+        pat_build_c,   // 15: Build C (4 bars)
+        pat_drop_b1,
+        pat_drop_b3, // 16-17: Final drop (8 bars)
+        pat_outro,   // 18: Outro (4 bars)
     ]);
 
     // Set song message
@@ -456,15 +500,33 @@ pub fn generate_storm_it_embedded() -> (Vec<u8>, Vec<(&'static str, Vec<i16>)>) 
 
     // Pattern 3: Drop A1 (main drop, clean)
     let pat_drop_a1 = writer.add_pattern(64);
-    build_drop_pattern(&mut writer, pat_drop_a1, Section::DropA, 0, BreakStyle::None);
+    build_drop_pattern(
+        &mut writer,
+        pat_drop_a1,
+        Section::DropA,
+        0,
+        BreakStyle::None,
+    );
 
     // Pattern 4: Drop A2 (variation with ghost break)
     let pat_drop_a2 = writer.add_pattern(64);
-    build_drop_pattern(&mut writer, pat_drop_a2, Section::DropA, 1, BreakStyle::Ghost);
+    build_drop_pattern(
+        &mut writer,
+        pat_drop_a2,
+        Section::DropA,
+        1,
+        BreakStyle::Ghost,
+    );
 
     // Pattern 5: Drop A3 (full break layer)
     let pat_drop_a3 = writer.add_pattern(64);
-    build_drop_pattern(&mut writer, pat_drop_a3, Section::DropA, 2, BreakStyle::Accent);
+    build_drop_pattern(
+        &mut writer,
+        pat_drop_a3,
+        Section::DropA,
+        2,
+        BreakStyle::Accent,
+    );
 
     // Pattern 6: Breakdown
     let pat_breakdown = writer.add_pattern(64);
@@ -476,15 +538,33 @@ pub fn generate_storm_it_embedded() -> (Vec<u8>, Vec<(&'static str, Vec<i16>)>) 
 
     // Pattern 8: Drop B1 (climax start)
     let pat_drop_b1 = writer.add_pattern(64);
-    build_drop_pattern(&mut writer, pat_drop_b1, Section::DropB, 0, BreakStyle::Ghost);
+    build_drop_pattern(
+        &mut writer,
+        pat_drop_b1,
+        Section::DropB,
+        0,
+        BreakStyle::Ghost,
+    );
 
     // Pattern 9: Drop B2 (climax variation)
     let pat_drop_b2 = writer.add_pattern(64);
-    build_drop_pattern(&mut writer, pat_drop_b2, Section::DropB, 1, BreakStyle::Accent);
+    build_drop_pattern(
+        &mut writer,
+        pat_drop_b2,
+        Section::DropB,
+        1,
+        BreakStyle::Accent,
+    );
 
     // Pattern 10: Drop B3 (maximum intensity)
     let pat_drop_b3 = writer.add_pattern(64);
-    build_drop_pattern(&mut writer, pat_drop_b3, Section::DropB, 2, BreakStyle::Fill);
+    build_drop_pattern(
+        &mut writer,
+        pat_drop_b3,
+        Section::DropB,
+        2,
+        BreakStyle::Fill,
+    );
 
     // Pattern 11: Outro
     let pat_outro = writer.add_pattern(64);
@@ -494,16 +574,25 @@ pub fn generate_storm_it_embedded() -> (Vec<u8>, Vec<(&'static str, Vec<i16>)>) 
     // Order table: 19 entries for ~66 second track (proper DnB structure)
     // ========================================================================
     writer.set_orders(&[
-        pat_intro,                                      // 0: Intro (4 bars)
-        pat_build_a, pat_build_b,                       // 1-2: Build (8 bars)
-        pat_drop_a1, pat_drop_a2, pat_drop_a1, pat_drop_a3, // 3-6: Drop A (16 bars)
-        pat_breakdown,                                  // 7: Breakdown (4 bars)
-        pat_build_a, pat_build_c,                       // 8-9: Build (8 bars)
-        pat_drop_b1, pat_drop_b2, pat_drop_b1, pat_drop_b3, // 10-13: Drop B (16 bars)
-        pat_breakdown,                                  // 14: Breakdown 2 (4 bars)
-        pat_build_c,                                    // 15: Build C (4 bars)
-        pat_drop_b1, pat_drop_b3,                       // 16-17: Final drop (8 bars)
-        pat_outro,                                      // 18: Outro (4 bars)
+        pat_intro, // 0: Intro (4 bars)
+        pat_build_a,
+        pat_build_b, // 1-2: Build (8 bars)
+        pat_drop_a1,
+        pat_drop_a2,
+        pat_drop_a1,
+        pat_drop_a3,   // 3-6: Drop A (16 bars)
+        pat_breakdown, // 7: Breakdown (4 bars)
+        pat_build_a,
+        pat_build_c, // 8-9: Build (8 bars)
+        pat_drop_b1,
+        pat_drop_b2,
+        pat_drop_b1,
+        pat_drop_b3,   // 10-13: Drop B (16 bars)
+        pat_breakdown, // 14: Breakdown 2 (4 bars)
+        pat_build_c,   // 15: Build C (4 bars)
+        pat_drop_b1,
+        pat_drop_b3, // 16-17: Final drop (8 bars)
+        pat_outro,   // 18: Outro (4 bars)
     ]);
 
     // Set song message
@@ -527,7 +616,12 @@ fn add_kick_dnb(writer: &mut ItWriter, pat: u8, bar: u16) {
     // Beat 1 (row 0)
     writer.set_note(pat, base, CH_KICK, ItNote::play_note(F2, INST_KICK, 64));
     // Beat 2.5 (row 10) - syncopation
-    writer.set_note(pat, base + 10, CH_KICK, ItNote::play_note(F2, INST_KICK, 58));
+    writer.set_note(
+        pat,
+        base + 10,
+        CH_KICK,
+        ItNote::play_note(F2, INST_KICK, 58),
+    );
 }
 
 /// Enhanced kick pattern for climax (more syncopation)
@@ -538,16 +632,31 @@ fn add_kick_climax(writer: &mut ItWriter, pat: u8, bar: u16) {
     // Extra kick on row 6 for energy
     writer.set_note(pat, base + 6, CH_KICK, ItNote::play_note(F2, INST_KICK, 52));
     // Beat 2.5
-    writer.set_note(pat, base + 10, CH_KICK, ItNote::play_note(F2, INST_KICK, 60));
+    writer.set_note(
+        pat,
+        base + 10,
+        CH_KICK,
+        ItNote::play_note(F2, INST_KICK, 60),
+    );
 }
 
 /// Main snares on beat 2 and 4
 fn add_main_snares(writer: &mut ItWriter, pat: u8, bar: u16) {
     let base = bar * 16;
     // Beat 2 (row 4)
-    writer.set_note(pat, base + 4, CH_SNARE, ItNote::play_note(C5, INST_SNARE, 64));
+    writer.set_note(
+        pat,
+        base + 4,
+        CH_SNARE,
+        ItNote::play_note(C5, INST_SNARE, 64),
+    );
     // Beat 4 (row 12)
-    writer.set_note(pat, base + 12, CH_SNARE, ItNote::play_note(C5, INST_SNARE, 64));
+    writer.set_note(
+        pat,
+        base + 12,
+        CH_SNARE,
+        ItNote::play_note(C5, INST_SNARE, 64),
+    );
 }
 
 /// Ghost snares with density control (0=none, 1=light, 2=medium)
@@ -559,13 +668,33 @@ fn add_ghost_snares(writer: &mut ItWriter, pat: u8, bar: u16, density: u8) {
     let base = bar * 16;
 
     // Light (density 1): just before main snares for anticipation
-    writer.set_note(pat, base + 2, CH_SNARE, ItNote::play_note(C5, INST_SNARE, 22));
-    writer.set_note(pat, base + 10, CH_SNARE, ItNote::play_note(C5, INST_SNARE, 22));
+    writer.set_note(
+        pat,
+        base + 2,
+        CH_SNARE,
+        ItNote::play_note(C5, INST_SNARE, 22),
+    );
+    writer.set_note(
+        pat,
+        base + 10,
+        CH_SNARE,
+        ItNote::play_note(C5, INST_SNARE, 22),
+    );
 
     if density >= 2 {
         // Medium (density 2): add after-snare ghosts for shuffle feel
-        writer.set_note(pat, base + 6, CH_SNARE, ItNote::play_note(C5, INST_SNARE, 18));
-        writer.set_note(pat, base + 14, CH_SNARE, ItNote::play_note(C5, INST_SNARE, 16));
+        writer.set_note(
+            pat,
+            base + 6,
+            CH_SNARE,
+            ItNote::play_note(C5, INST_SNARE, 18),
+        );
+        writer.set_note(
+            pat,
+            base + 14,
+            CH_SNARE,
+            ItNote::play_note(C5, INST_SNARE, 16),
+        );
     }
 }
 
@@ -575,23 +704,33 @@ fn add_hihat_groove(writer: &mut ItWriter, pat: u8, bar: u16, use_opens: bool) {
     // 8th note pattern: every 2 rows (8 hits per bar, not 16)
     // Velocity: strong on downbeats, medium on upbeats
     let positions: [(u16, u8); 8] = [
-        (0, 55),   // Beat 1 - strong
-        (2, 38),   // &
-        (4, 50),   // Beat 2 - strong
-        (6, 35),   // & (open hat position)
-        (8, 52),   // Beat 3 - strong
-        (10, 38),  // &
-        (12, 50),  // Beat 4 - strong
-        (14, 35),  // & (open hat position)
+        (0, 55),  // Beat 1 - strong
+        (2, 38),  // &
+        (4, 50),  // Beat 2 - strong
+        (6, 35),  // & (open hat position)
+        (8, 52),  // Beat 3 - strong
+        (10, 38), // &
+        (12, 50), // Beat 4 - strong
+        (14, 35), // & (open hat position)
     ];
 
     for (offset, vel) in positions {
         let abs_row = base + offset;
         // Open hi-hats on the "and" of 2 and 4 for groove
         if use_opens && (offset == 6 || offset == 14) {
-            writer.set_note(pat, abs_row, CH_HIHAT_OPEN, ItNote::play_note(C5, INST_HH_OPEN, vel + 5));
+            writer.set_note(
+                pat,
+                abs_row,
+                CH_HIHAT_OPEN,
+                ItNote::play_note(C5, INST_HH_OPEN, vel + 5),
+            );
         } else {
-            writer.set_note(pat, abs_row, CH_HIHAT, ItNote::play_note(C5, INST_HH_CLOSED, vel));
+            writer.set_note(
+                pat,
+                abs_row,
+                CH_HIHAT,
+                ItNote::play_note(C5, INST_HH_CLOSED, vel),
+            );
         }
     }
 }
@@ -625,7 +764,12 @@ fn add_kick_fill(writer: &mut ItWriter, pat: u8, bar: u16) {
     // Syncopated fill kicks - only at positions NOT used by add_kick_dnb (which uses 0 and 10)
     let hits = [(3, 48), (6, 50), (14, 45)];
     for (offset, vel) in hits {
-        writer.set_note(pat, base + offset, CH_KICK, ItNote::play_note(F2, INST_KICK, vel));
+        writer.set_note(
+            pat,
+            base + offset,
+            CH_KICK,
+            ItNote::play_note(F2, INST_KICK, vel),
+        );
     }
 }
 
@@ -646,15 +790,30 @@ fn add_break_layer(writer: &mut ItWriter, pat: u8, style: BreakStyle) {
             // Layer with snares only - one per bar on beat 2
             for bar in 0u16..4 {
                 let base = bar * 16;
-                writer.set_note(pat, base + 4, CH_BREAK, ItNote::play_note(C5, INST_BREAK, 35));
+                writer.set_note(
+                    pat,
+                    base + 4,
+                    CH_BREAK,
+                    ItNote::play_note(C5, INST_BREAK, 35),
+                );
             }
         }
         BreakStyle::Fill => {
             // Accent on snares only, slightly louder for climax
             for bar in 0u16..4 {
                 let base = bar * 16;
-                writer.set_note(pat, base + 4, CH_BREAK, ItNote::play_note(C5, INST_BREAK, 40));
-                writer.set_note(pat, base + 12, CH_BREAK, ItNote::play_note(C5, INST_BREAK, 38));
+                writer.set_note(
+                    pat,
+                    base + 4,
+                    CH_BREAK,
+                    ItNote::play_note(C5, INST_BREAK, 40),
+                );
+                writer.set_note(
+                    pat,
+                    base + 12,
+                    CH_BREAK,
+                    ItNote::play_note(C5, INST_BREAK, 38),
+                );
             }
         }
     }
@@ -687,10 +846,20 @@ fn add_bass_rebalanced(writer: &mut ItWriter, pat: u8, section: Section) {
 
     for (row, sub_note, reese_note) in roots {
         // Sub: delayed by 1 row for sidechain feel, lower velocity
-        writer.set_note(pat, row + 1, CH_SUB, ItNote::play_note(sub_note, INST_SUB, 42));
+        writer.set_note(
+            pat,
+            row + 1,
+            CH_SUB,
+            ItNote::play_note(sub_note, INST_SUB, 42),
+        );
 
         // Reese: main audible bass, also delayed for pumping feel
-        writer.set_note(pat, row + 1, CH_REESE, ItNote::play_note(reese_note, INST_REESE, reese_vel));
+        writer.set_note(
+            pat,
+            row + 1,
+            CH_REESE,
+            ItNote::play_note(reese_note, INST_REESE, reese_vel),
+        );
 
         // Reese melodic movement (8 rows later)
         if row + 8 < 64 {
@@ -719,31 +888,33 @@ fn add_wobble_accent(writer: &mut ItWriter, pat: u8) {
 fn add_lead_melody(writer: &mut ItWriter, pat: u8, section: Section, variation: u8) {
     if section == Section::DropA {
         // Drop A: Simple stab accents on key beats - one per bar
-        writer.set_note(pat, 0, CH_STAB, ItNote::play_note(F4, INST_STAB, 55));   // Bar 1
+        writer.set_note(pat, 0, CH_STAB, ItNote::play_note(F4, INST_STAB, 55)); // Bar 1
         writer.set_note(pat, 16, CH_STAB, ItNote::play_note(AB4, INST_STAB, 52)); // Bar 2
-        writer.set_note(pat, 32, CH_STAB, ItNote::play_note(C5, INST_STAB, 55));  // Bar 3
+        writer.set_note(pat, 32, CH_STAB, ItNote::play_note(C5, INST_STAB, 55)); // Bar 3
         writer.set_note(pat, 48, CH_STAB, ItNote::play_note(EB4, INST_STAB, 50)); // Bar 4
 
         if variation >= 1 {
             // Variation: add off-beat accents (still sparse - one extra per bar)
-            writer.set_note(pat, 10, CH_STAB, ItNote::play_note(C5, INST_STAB, 45));  // Bar 1 offbeat
-            writer.set_note(pat, 26, CH_STAB, ItNote::play_note(F5, INST_STAB, 52));  // Bar 2 offbeat
+            writer.set_note(pat, 10, CH_STAB, ItNote::play_note(C5, INST_STAB, 45)); // Bar 1 offbeat
+            writer.set_note(pat, 26, CH_STAB, ItNote::play_note(F5, INST_STAB, 52)); // Bar 2 offbeat
             writer.set_note(pat, 42, CH_STAB, ItNote::play_note(AB4, INST_STAB, 48)); // Bar 3 offbeat
-            writer.set_note(pat, 58, CH_STAB, ItNote::play_note(F5, INST_STAB, 55));  // Bar 4 end
+            writer.set_note(pat, 58, CH_STAB, ItNote::play_note(F5, INST_STAB, 55));
+            // Bar 4 end
         }
     } else {
         // Drop B: Stronger accents, still sparse - avoid rapid notes
-        writer.set_note(pat, 0, CH_LEAD, ItNote::play_note(F5, INST_LEAD, 58));   // Bar 1 - high!
+        writer.set_note(pat, 0, CH_LEAD, ItNote::play_note(F5, INST_LEAD, 58)); // Bar 1 - high!
         writer.set_note(pat, 16, CH_LEAD, ItNote::play_note(EB5, INST_LEAD, 55)); // Bar 2
-        writer.set_note(pat, 32, CH_LEAD, ItNote::play_note(C5, INST_LEAD, 55));  // Bar 3
+        writer.set_note(pat, 32, CH_LEAD, ItNote::play_note(C5, INST_LEAD, 55)); // Bar 3
         writer.set_note(pat, 48, CH_LEAD, ItNote::play_note(AB4, INST_LEAD, 52)); // Bar 4
 
         if variation >= 1 {
             // Variation: add off-beat responses (still one per bar, not rapid)
-            writer.set_note(pat, 8, CH_LEAD, ItNote::play_note(C5, INST_LEAD, 50));   // Bar 1 response
+            writer.set_note(pat, 8, CH_LEAD, ItNote::play_note(C5, INST_LEAD, 50)); // Bar 1 response
             writer.set_note(pat, 24, CH_LEAD, ItNote::play_note(AB4, INST_LEAD, 48)); // Bar 2 response
-            writer.set_note(pat, 40, CH_LEAD, ItNote::play_note(F5, INST_LEAD, 55));  // Bar 3 response
-            writer.set_note(pat, 56, CH_LEAD, ItNote::play_note(F5, INST_LEAD, 60));  // Bar 4 climax
+            writer.set_note(pat, 40, CH_LEAD, ItNote::play_note(F5, INST_LEAD, 55)); // Bar 3 response
+            writer.set_note(pat, 56, CH_LEAD, ItNote::play_note(F5, INST_LEAD, 60));
+            // Bar 4 climax
         }
 
         // Impact at start of Drop B
@@ -764,7 +935,12 @@ fn build_intro_pattern(writer: &mut ItWriter, pat: u8) {
 
     // Very sparse hi-hats (every 16 rows)
     for row in (8..64).step_by(16) {
-        writer.set_note(pat, row as u16, CH_HIHAT, ItNote::play_note(C5, INST_HH_CLOSED, 22));
+        writer.set_note(
+            pat,
+            row as u16,
+            CH_HIHAT,
+            ItNote::play_note(C5, INST_HH_CLOSED, 22),
+        );
     }
 }
 
@@ -779,7 +955,12 @@ fn build_build_a_pattern(writer: &mut ItWriter, pat: u8) {
     // Eighth note hi-hats with some variation
     for row in (0..64).step_by(8) {
         let vel = if row % 16 == 0 { 52 } else { 42 };
-        writer.set_note(pat, row as u16, CH_HIHAT, ItNote::play_note(C5, INST_HH_CLOSED, vel));
+        writer.set_note(
+            pat,
+            row as u16,
+            CH_HIHAT,
+            ItNote::play_note(C5, INST_HH_CLOSED, vel),
+        );
     }
 
     // Pad
@@ -800,7 +981,12 @@ fn build_build_b_pattern(writer: &mut ItWriter, pat: u8) {
     // Hi-hats get faster
     for row in (0..48).step_by(4) {
         let vel = 35 + (row as u8 / 4);
-        writer.set_note(pat, row as u16, CH_HIHAT, ItNote::play_note(C5, INST_HH_CLOSED, vel));
+        writer.set_note(
+            pat,
+            row as u16,
+            CH_HIHAT,
+            ItNote::play_note(C5, INST_HH_CLOSED, vel),
+        );
     }
 
     // Snare roll from row 48-63 (accelerating crescendo)
@@ -815,7 +1001,13 @@ fn build_build_b_pattern(writer: &mut ItWriter, pat: u8) {
 }
 
 /// Unified drop pattern builder with variation control
-fn build_drop_pattern(writer: &mut ItWriter, pat: u8, section: Section, variation: u8, break_style: BreakStyle) {
+fn build_drop_pattern(
+    writer: &mut ItWriter,
+    pat: u8,
+    section: Section,
+    variation: u8,
+    break_style: BreakStyle,
+) {
     // Drums for all 4 bars
     for bar in 0u16..4 {
         // Kick pattern
@@ -870,7 +1062,12 @@ fn build_breakdown_pattern(writer: &mut ItWriter, pat: u8) {
 
     // Half-time hi-hats
     for row in (0..64).step_by(16) {
-        writer.set_note(pat, row as u16, CH_HIHAT, ItNote::play_note(C5, INST_HH_CLOSED, 35));
+        writer.set_note(
+            pat,
+            row as u16,
+            CH_HIHAT,
+            ItNote::play_note(C5, INST_HH_CLOSED, 35),
+        );
     }
 
     // Sub bass with movement
@@ -897,7 +1094,12 @@ fn build_build_c_pattern(writer: &mut ItWriter, pat: u8) {
     for row in 0..48 {
         if row % 2 == 0 {
             let vel = 30 + (row as u8 / 3);
-            writer.set_note(pat, row as u16, CH_HIHAT, ItNote::play_note(C5, INST_HH_CLOSED, vel));
+            writer.set_note(
+                pat,
+                row as u16,
+                CH_HIHAT,
+                ItNote::play_note(C5, INST_HH_CLOSED, vel),
+            );
         }
     }
 
@@ -933,7 +1135,12 @@ fn build_outro_pattern(writer: &mut ItWriter, pat: u8) {
 
     // Sparse hi-hats
     for row in (0..64).step_by(16) {
-        writer.set_note(pat, row as u16, CH_HIHAT, ItNote::play_note(C5, INST_HH_CLOSED, 28));
+        writer.set_note(
+            pat,
+            row as u16,
+            CH_HIHAT,
+            ItNote::play_note(C5, INST_HH_CLOSED, 28),
+        );
     }
 
     // Cymbal decay

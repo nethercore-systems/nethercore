@@ -15,9 +15,12 @@ use std::path::Path;
 
 use crate::formats::write_nether_mesh;
 use crate::{
-    pack_bone_weights_unorm8, pack_tangent_f32x4, vertex_stride_packed, FORMAT_COLOR, FORMAT_NORMAL,
-    FORMAT_SKINNED, FORMAT_TANGENT, FORMAT_UV,
+    pack_bone_weights_unorm8, pack_tangent_f32x4, vertex_stride_packed, FORMAT_COLOR,
+    FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_TANGENT, FORMAT_UV,
 };
+
+/// Skinning data: tuple of (bone indices, bone weights)
+type SkinningData<'a> = (&'a [[u8; 4]], &'a [[f32; 4]]);
 
 /// Result of in-memory mesh conversion
 pub struct ConvertedMesh {
@@ -266,7 +269,9 @@ pub fn convert_gltf_to_memory(input: &Path) -> Result<ConvertedMesh> {
             bail!(
                 "Index {} at position {} exceeds maximum {} for u16 indices. \
                 The mesh has too many vertices (>65536). Split the mesh into smaller parts.",
-                value, idx, MAX_INDEX_VALUE
+                value,
+                idx,
+                MAX_INDEX_VALUE
             );
         }
 
@@ -404,7 +409,9 @@ pub fn convert_gltf(input: &Path, output: &Path, format_override: Option<&str>) 
             bail!(
                 "Index {} at position {} exceeds maximum {} for u16 indices. \
                 The mesh has too many vertices (>65536). Split the mesh into smaller parts.",
-                value, idx, MAX_INDEX_VALUE
+                value,
+                idx,
+                MAX_INDEX_VALUE
             );
         }
 
@@ -486,7 +493,7 @@ fn pack_vertices_skinned(
     colors: Option<&[[f32; 4]]>,
     normals: Option<&[[f32; 3]]>,
     tangents: Option<&[[f32; 4]]>,
-    skinning: Option<(&[[u8; 4]], &[[f32; 4]])>,
+    skinning: Option<SkinningData>,
     format: u8,
 ) -> Vec<u8> {
     use crate::{

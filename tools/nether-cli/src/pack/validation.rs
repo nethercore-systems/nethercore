@@ -31,9 +31,7 @@ pub fn warn_compression_mismatch(render_mode: u8, compress_textures: bool) {
     }
 
     if render_mode == 0 && compress_textures {
-        eprintln!(
-            "  WARNING: Detected render_mode 0 (Lambert) but compress_textures=true."
-        );
+        eprintln!("  WARNING: Detected render_mode 0 (Lambert) but compress_textures=true.");
         eprintln!("      Lambert mode works best with uncompressed RGBA8 textures.");
         eprintln!("      Consider setting 'compress_textures = false' in nether.toml");
     }

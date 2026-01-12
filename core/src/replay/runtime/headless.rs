@@ -8,9 +8,9 @@ use hashbrown::HashMap;
 use std::path::Path;
 use std::time::Instant;
 
+use crate::replay::InputLayout;
 use crate::replay::script::{CompiledAction, CompiledScript, Compiler};
 use crate::replay::types::DebugValueData;
-use crate::replay::InputLayout;
 
 use super::executor::{DebugVariableInfo, ExecutionReport, ScriptExecutor};
 
@@ -145,12 +145,12 @@ impl HeadlessRunner {
         self.start_time = Some(Instant::now());
 
         while !self.executor.is_complete() {
-            if let Some(start) = self.start_time {
-                if start.elapsed().as_secs() > self.config.timeout_secs {
-                    self.executor.stop_with_error("Execution timeout exceeded".to_string());
+            if let Some(start) = self.start_time
+                && start.elapsed().as_secs() > self.config.timeout_secs {
+                    self.executor
+                        .stop_with_error("Execution timeout exceeded".to_string());
                     break;
                 }
-            }
 
             let actions = self.executor.current_actions();
             if !actions.is_empty() {
@@ -180,11 +180,8 @@ impl HeadlessRunner {
 
             if take_snapshot {
                 let input_string = format_input_frame(inputs);
-                self.executor.capture_post_snapshot(
-                    pre_values,
-                    post_values.clone(),
-                    input_string,
-                );
+                self.executor
+                    .capture_post_snapshot(pre_values, post_values.clone(), input_string);
             }
 
             let assertions = {
@@ -240,7 +237,10 @@ fn format_input_frame(inputs: Option<&Vec<Vec<u8>>>) -> String {
         Some(players) => {
             let mut parts = Vec::new();
             for (index, bytes) in players.iter().enumerate() {
-                let hex = bytes.iter().map(|b| format!("{:02x}", b)).collect::<String>();
+                let hex = bytes
+                    .iter()
+                    .map(|b| format!("{:02x}", b))
+                    .collect::<String>();
                 parts.push(format!("p{}:{}", index, hex));
             }
             parts.join(" ")
@@ -251,8 +251,8 @@ fn format_input_frame(inputs: Option<&Vec<Vec<u8>>>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::replay::types::InputSequence;
     use crate::replay::StructuredInput;
+    use crate::replay::types::InputSequence;
 
     // Simple test input layout (for future tests)
     #[allow(dead_code)]

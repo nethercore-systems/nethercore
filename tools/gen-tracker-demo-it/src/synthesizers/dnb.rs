@@ -22,7 +22,9 @@ fn soft_clip(x: f32, threshold: f32) -> f32 {
     if x.abs() < threshold {
         x
     } else {
-        x.signum() * (threshold + (1.0 - threshold) * soft_saturate((x.abs() - threshold) / (1.0 - threshold)))
+        x.signum()
+            * (threshold
+                + (1.0 - threshold) * soft_saturate((x.abs() - threshold) / (1.0 - threshold)))
     }
 }
 
@@ -59,7 +61,10 @@ struct StateVariableFilter {
 
 impl StateVariableFilter {
     fn new() -> Self {
-        Self { low: 0.0, band: 0.0 }
+        Self {
+            low: 0.0,
+            band: 0.0,
+        }
     }
 
     fn process(&mut self, input: f32, cutoff: f32, resonance: f32) -> (f32, f32, f32) {
@@ -76,15 +81,30 @@ impl StateVariableFilter {
 
 /// Biquad low-pass filter
 struct BiquadLP {
-    x1: f32, x2: f32,
-    y1: f32, y2: f32,
-    b0: f32, b1: f32, b2: f32,
-    a1: f32, a2: f32,
+    x1: f32,
+    x2: f32,
+    y1: f32,
+    y2: f32,
+    b0: f32,
+    b1: f32,
+    b2: f32,
+    a1: f32,
+    a2: f32,
 }
 
 impl BiquadLP {
     fn new() -> Self {
-        Self { x1: 0.0, x2: 0.0, y1: 0.0, y2: 0.0, b0: 1.0, b1: 0.0, b2: 0.0, a1: 0.0, a2: 0.0 }
+        Self {
+            x1: 0.0,
+            x2: 0.0,
+            y1: 0.0,
+            y2: 0.0,
+            b0: 1.0,
+            b1: 0.0,
+            b2: 0.0,
+            a1: 0.0,
+            a2: 0.0,
+        }
     }
 
     fn set_params(&mut self, freq: f32, q: f32) {
@@ -101,7 +121,9 @@ impl BiquadLP {
     }
 
     fn process(&mut self, input: f32) -> f32 {
-        let output = self.b0 * input + self.b1 * self.x1 + self.b2 * self.x2 - self.a1 * self.y1 - self.a2 * self.y2;
+        let output = self.b0 * input + self.b1 * self.x1 + self.b2 * self.x2
+            - self.a1 * self.y1
+            - self.a2 * self.y2;
         self.x2 = self.x1;
         self.x1 = input;
         self.y2 = self.y1;
@@ -142,7 +164,9 @@ pub fn generate_kick_dnb() -> Vec<i16> {
 
         // === SUB BODY ===
         phase += freq / SAMPLE_RATE;
-        if phase >= 1.0 { phase -= 1.0; }
+        if phase >= 1.0 {
+            phase -= 1.0;
+        }
 
         // Pure sine for sub, with slight harmonic
         let body = (phase * TWO_PI).sin() + 0.15 * (phase * TWO_PI * 2.0).sin();
@@ -183,7 +207,9 @@ pub fn generate_snare_dnb() -> Vec<i16> {
         // === BODY TONE (200Hz pitched down) ===
         let body_freq = 200.0 * (-t * 15.0).exp() + 120.0;
         phase += body_freq / SAMPLE_RATE;
-        if phase >= 1.0 { phase -= 1.0; }
+        if phase >= 1.0 {
+            phase -= 1.0;
+        }
 
         let body = (phase * TWO_PI).sin();
         let body_env = (-t * 25.0).exp();
@@ -310,7 +336,11 @@ pub fn generate_break_slice() -> Vec<i16> {
         lp.set_params(freq, 2.0);
         let filtered = lp.process(noise);
 
-        let env = if t < 0.003 { t / 0.003 } else { (-t * 25.0).exp() };
+        let env = if t < 0.003 {
+            t / 0.003
+        } else {
+            (-t * 25.0).exp()
+        };
         let sample = soft_saturate(filtered * 1.5) * env * 30000.0;
         output.push(sample.clamp(-32767.0, 32767.0) as i16);
     }
@@ -330,7 +360,9 @@ pub fn generate_cymbal() -> Vec<i16> {
     let mut hp = StateVariableFilter::new();
 
     let mut phases = [0.0f32; 8];
-    let freqs = [2800.0, 3700.0, 4500.0, 5200.0, 6100.0, 7300.0, 8800.0, 10500.0];
+    let freqs = [
+        2800.0, 3700.0, 4500.0, 5200.0, 6100.0, 7300.0, 8800.0, 10500.0,
+    ];
 
     for i in 0..samples {
         let t = i as f32 / SAMPLE_RATE;
@@ -350,7 +382,11 @@ pub fn generate_cymbal() -> Vec<i16> {
         let (_, _, high) = hp.process(noise, 0.45, 0.2);
 
         let mix = metal * 0.6 + high * 0.4;
-        let env = if t < 0.002 { t / 0.002 } else { (-t * 3.0).exp() };
+        let env = if t < 0.002 {
+            t / 0.002
+        } else {
+            (-t * 3.0).exp()
+        };
         let sample = mix * env * 26000.0;
         output.push(sample.clamp(-32767.0, 32767.0) as i16);
     }
@@ -373,7 +409,9 @@ pub fn generate_bass_sub_dnb() -> Vec<i16> {
         let t = i as f32 / SAMPLE_RATE;
 
         phase += freq / SAMPLE_RATE;
-        if phase >= 1.0 { phase -= 1.0; }
+        if phase >= 1.0 {
+            phase -= 1.0;
+        }
 
         // Pure sine with slight harmonic for presence
         let sub = (phase * TWO_PI).sin();
@@ -417,7 +455,9 @@ pub fn generate_bass_reese() -> Vec<i16> {
         let mut sum = 0.0f32;
         for (j, d) in detune.iter().enumerate() {
             phases[j] += freq * d / SAMPLE_RATE;
-            if phases[j] >= 1.0 { phases[j] -= 1.0; }
+            if phases[j] >= 1.0 {
+                phases[j] -= 1.0;
+            }
             sum += blep_saw(phases[j], dt * d);
         }
         sum /= 4.0;
@@ -466,7 +506,9 @@ pub fn generate_bass_wobble() -> Vec<i16> {
         let mut sum = 0.0f32;
         for (j, d) in detune.iter().enumerate() {
             phases[j] += freq * d / SAMPLE_RATE;
-            if phases[j] >= 1.0 { phases[j] -= 1.0; }
+            if phases[j] >= 1.0 {
+                phases[j] -= 1.0;
+            }
             let saw = blep_saw(phases[j], dt * d);
             let sq = blep_square(phases[j], dt * d);
             sum += saw * 0.6 + sq * 0.4;
@@ -521,7 +563,9 @@ pub fn generate_pad_dark() -> Vec<i16> {
         let mut sum = 0.0f32;
         for (j, d) in detune.iter().enumerate() {
             phases[j] += freq * d / SAMPLE_RATE;
-            if phases[j] >= 1.0 { phases[j] -= 1.0; }
+            if phases[j] >= 1.0 {
+                phases[j] -= 1.0;
+            }
             sum += blep_saw(phases[j], dt * d);
         }
         sum /= 5.0;
@@ -567,7 +611,9 @@ pub fn generate_lead_stab() -> Vec<i16> {
         let mut sum = 0.0f32;
         for (j, d) in detune.iter().enumerate() {
             phases[j] += freq * d / SAMPLE_RATE;
-            if phases[j] >= 1.0 { phases[j] -= 1.0; }
+            if phases[j] >= 1.0 {
+                phases[j] -= 1.0;
+            }
             sum += blep_saw(phases[j], dt * d);
         }
         sum /= 5.0; // Slight boost
@@ -610,7 +656,11 @@ pub fn generate_lead_main() -> Vec<i16> {
         let t = i as f32 / SAMPLE_RATE;
 
         // Delayed vibrato
-        let vib_depth = if t > 0.15 { ((t - 0.15) / 0.2).min(1.0) } else { 0.0 };
+        let vib_depth = if t > 0.15 {
+            ((t - 0.15) / 0.2).min(1.0)
+        } else {
+            0.0
+        };
         vibrato_phase += 5.5 / SAMPLE_RATE;
         let vibrato = 1.0 + 0.008 * vib_depth * (vibrato_phase * TWO_PI).sin();
 
@@ -621,7 +671,9 @@ pub fn generate_lead_main() -> Vec<i16> {
         let mut sum = 0.0f32;
         for (j, d) in detune.iter().enumerate() {
             phases[j] += actual_freq * d / SAMPLE_RATE;
-            if phases[j] >= 1.0 { phases[j] -= 1.0; }
+            if phases[j] >= 1.0 {
+                phases[j] -= 1.0;
+            }
             sum += blep_saw(phases[j], dt * d);
         }
         sum = sum / 3.0 * 0.7 + blep_square(phases[1], dt) * 0.3;
@@ -665,7 +717,9 @@ pub fn generate_fx_riser() -> Vec<i16> {
         // Rising sine
         let freq = 150.0 + 1500.0 * progress.powf(2.0);
         phase += freq / SAMPLE_RATE;
-        if phase >= 1.0 { phase -= 1.0; }
+        if phase >= 1.0 {
+            phase -= 1.0;
+        }
         let sine = (phase * TWO_PI).sin();
 
         // Noise with rising filter
@@ -699,7 +753,9 @@ pub fn generate_fx_impact() -> Vec<i16> {
         // Massive pitch drop
         let freq = 150.0 * (-t * 12.0).exp() + 30.0;
         phase += freq / SAMPLE_RATE;
-        if phase >= 1.0 { phase -= 1.0; }
+        if phase >= 1.0 {
+            phase -= 1.0;
+        }
         let sub = (phase * TWO_PI).sin();
 
         // Noise burst

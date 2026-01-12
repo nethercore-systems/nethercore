@@ -65,8 +65,12 @@ fn generate_storm(output_dir: &Path) {
         println!("  Wrote: {}", wav_path.display());
     }
 
-    println!("  Done: {} bytes stripped, {} bytes embedded, {} samples",
-             it_stripped.len(), it_embedded.len(), samples.len());
+    println!(
+        "  Done: {} bytes stripped, {} bytes embedded, {} samples",
+        it_stripped.len(),
+        it_embedded.len(),
+        samples.len()
+    );
 }
 
 fn generate_acid(output_dir: &Path) {
@@ -91,8 +95,12 @@ fn generate_acid(output_dir: &Path) {
         println!("  Wrote: {}", wav_path.display());
     }
 
-    println!("  Done: {} bytes stripped, {} bytes embedded, {} samples",
-             it_stripped.len(), it_embedded.len(), samples.len());
+    println!(
+        "  Done: {} bytes stripped, {} bytes embedded, {} samples",
+        it_stripped.len(),
+        it_embedded.len(),
+        samples.len()
+    );
 }
 
 fn generate_dawn(output_dir: &Path) {
@@ -117,8 +125,12 @@ fn generate_dawn(output_dir: &Path) {
         println!("  Wrote: {}", wav_path.display());
     }
 
-    println!("  Done: {} bytes stripped, {} bytes embedded, {} samples",
-             it_stripped.len(), it_embedded.len(), samples.len());
+    println!(
+        "  Done: {} bytes stripped, {} bytes embedded, {} samples",
+        it_stripped.len(),
+        it_embedded.len(),
+        samples.len()
+    );
 }
 
 #[cfg(test)]
@@ -154,8 +166,8 @@ mod tests {
         assert_eq!(module.initial_tempo, 130);
         assert_eq!(module.initial_speed, 6);
         assert_eq!(module.num_instruments, 11); // Updated: 7 → 11 instruments
-        assert_eq!(module.num_samples, 11);     // Updated: 7 → 11 samples
-        assert_eq!(module.num_patterns, 12);    // Updated: 6 → 12 patterns
+        assert_eq!(module.num_samples, 11); // Updated: 7 → 11 samples
+        assert_eq!(module.num_patterns, 12); // Updated: 6 → 12 patterns
     }
 
     #[test]

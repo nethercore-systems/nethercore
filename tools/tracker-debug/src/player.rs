@@ -125,12 +125,14 @@ impl DebugPlayer {
         let handle = engine.load_xm_module(xm_module.clone(), sound_handles);
 
         // Initialize state
-        let mut state = TrackerState::default();
-        state.handle = handle;
-        state.flags = tracker_flags::PLAYING | tracker_flags::LOOPING;
-        state.speed = xm_module.default_speed;
-        state.bpm = xm_module.default_bpm;
-        state.volume = 256;
+        let state = TrackerState {
+            handle,
+            flags: tracker_flags::PLAYING | tracker_flags::LOOPING,
+            speed: xm_module.default_speed,
+            bpm: xm_module.default_bpm,
+            volume: 256,
+            ..Default::default()
+        };
 
         let total_orders = xm_module.song_length;
         let num_channels = xm_module.num_channels;
@@ -195,12 +197,14 @@ impl DebugPlayer {
         let handle = engine.load_it_module(it_module.clone(), sound_handles);
 
         // Initialize state
-        let mut state = TrackerState::default();
-        state.handle = handle;
-        state.flags = tracker_flags::PLAYING | tracker_flags::LOOPING;
-        state.speed = it_module.initial_speed as u16;
-        state.bpm = it_module.initial_tempo as u16;
-        state.volume = 256;
+        let state = TrackerState {
+            handle,
+            flags: tracker_flags::PLAYING | tracker_flags::LOOPING,
+            speed: it_module.initial_speed as u16,
+            bpm: it_module.initial_tempo as u16,
+            volume: 256,
+            ..Default::default()
+        };
 
         let total_orders = it_module.total_orders();
         let num_channels = it_module.num_channels;

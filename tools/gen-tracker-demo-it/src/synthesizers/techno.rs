@@ -26,7 +26,10 @@ struct StateVariableFilter {
 
 impl StateVariableFilter {
     fn new() -> Self {
-        Self { low: 0.0, band: 0.0 }
+        Self {
+            low: 0.0,
+            band: 0.0,
+        }
     }
 
     fn process(&mut self, input: f32, cutoff: f32, resonance: f32) -> (f32, f32, f32) {
@@ -43,15 +46,30 @@ impl StateVariableFilter {
 
 /// Biquad low-pass filter (professional quality)
 struct BiquadLP {
-    x1: f32, x2: f32,
-    y1: f32, y2: f32,
-    b0: f32, b1: f32, b2: f32,
-    a1: f32, a2: f32,
+    x1: f32,
+    x2: f32,
+    y1: f32,
+    y2: f32,
+    b0: f32,
+    b1: f32,
+    b2: f32,
+    a1: f32,
+    a2: f32,
 }
 
 impl BiquadLP {
     fn new() -> Self {
-        Self { x1: 0.0, x2: 0.0, y1: 0.0, y2: 0.0, b0: 1.0, b1: 0.0, b2: 0.0, a1: 0.0, a2: 0.0 }
+        Self {
+            x1: 0.0,
+            x2: 0.0,
+            y1: 0.0,
+            y2: 0.0,
+            b0: 1.0,
+            b1: 0.0,
+            b2: 0.0,
+            a1: 0.0,
+            a2: 0.0,
+        }
     }
 
     fn set_params(&mut self, freq: f32, q: f32) {
@@ -68,7 +86,9 @@ impl BiquadLP {
     }
 
     fn process(&mut self, input: f32) -> f32 {
-        let output = self.b0 * input + self.b1 * self.x1 + self.b2 * self.x2 - self.a1 * self.y1 - self.a2 * self.y2;
+        let output = self.b0 * input + self.b1 * self.x1 + self.b2 * self.x2
+            - self.a1 * self.y1
+            - self.a2 * self.y2;
         self.x2 = self.x1;
         self.x1 = input;
         self.y2 = self.y1;
@@ -79,15 +99,30 @@ impl BiquadLP {
 
 /// Biquad high-pass filter (professional quality)
 struct BiquadHP {
-    x1: f32, x2: f32,
-    y1: f32, y2: f32,
-    b0: f32, b1: f32, b2: f32,
-    a1: f32, a2: f32,
+    x1: f32,
+    x2: f32,
+    y1: f32,
+    y2: f32,
+    b0: f32,
+    b1: f32,
+    b2: f32,
+    a1: f32,
+    a2: f32,
 }
 
 impl BiquadHP {
     fn new() -> Self {
-        Self { x1: 0.0, x2: 0.0, y1: 0.0, y2: 0.0, b0: 1.0, b1: 0.0, b2: 0.0, a1: 0.0, a2: 0.0 }
+        Self {
+            x1: 0.0,
+            x2: 0.0,
+            y1: 0.0,
+            y2: 0.0,
+            b0: 1.0,
+            b1: 0.0,
+            b2: 0.0,
+            a1: 0.0,
+            a2: 0.0,
+        }
     }
 
     fn set_params(&mut self, freq: f32, q: f32) {
@@ -104,7 +139,9 @@ impl BiquadHP {
     }
 
     fn process(&mut self, input: f32) -> f32 {
-        let output = self.b0 * input + self.b1 * self.x1 + self.b2 * self.x2 - self.a1 * self.y1 - self.a2 * self.y2;
+        let output = self.b0 * input + self.b1 * self.x1 + self.b2 * self.x2
+            - self.a1 * self.y1
+            - self.a2 * self.y2;
         self.x2 = self.x1;
         self.x1 = input;
         self.y2 = self.y1;
@@ -145,7 +182,9 @@ pub fn generate_kick_909() -> Vec<i16> {
 
         // === BODY ===
         phase += freq / SAMPLE_RATE;
-        if phase >= 1.0 { phase -= 1.0; }
+        if phase >= 1.0 {
+            phase -= 1.0;
+        }
 
         // Pure sine + slight 2nd harmonic for punch
         let body = (phase * TWO_PI).sin() + 0.2 * (phase * TWO_PI * 2.0).sin();
@@ -187,7 +226,9 @@ pub fn generate_clap_909() -> Vec<i16> {
         // === BODY TONE (180Hz pitched down) ===
         let body_freq = 180.0 * (-t * 18.0).exp() + 100.0;
         phase += body_freq / SAMPLE_RATE;
-        if phase >= 1.0 { phase -= 1.0; }
+        if phase >= 1.0 {
+            phase -= 1.0;
+        }
 
         let body = (phase * TWO_PI).sin();
         let body_env = (-t * 28.0).exp();
@@ -198,15 +239,19 @@ pub fn generate_clap_909() -> Vec<i16> {
         let noise = noise_lp.process(band * 0.6 + high * 0.4);
 
         // Multi-tap envelope for clap character
-        let layer1 = if t < 0.002 { (t / 0.002).powf(0.5) } else { (-t * 35.0).exp() };
-        let layer2 = if t >= 0.003 && t < 0.006 {
+        let layer1 = if t < 0.002 {
+            (t / 0.002).powf(0.5)
+        } else {
+            (-t * 35.0).exp()
+        };
+        let layer2 = if (0.003..0.006).contains(&t) {
             ((t - 0.003) / 0.003).powf(0.5) * 0.7
         } else if t >= 0.006 {
             (-((t - 0.006) * 30.0)).exp() * 0.7
         } else {
             0.0
         };
-        let layer3 = if t >= 0.008 && t < 0.012 {
+        let layer3 = if (0.008..0.012).contains(&t) {
             ((t - 0.008) / 0.004).powf(0.5) * 0.5
         } else if t >= 0.012 {
             (-((t - 0.012) * 25.0)).exp() * 0.5
@@ -314,14 +359,14 @@ pub fn generate_hat_909_open() -> Vec<i16> {
 // ============================================================================
 
 pub fn generate_bass_303() -> Vec<i16> {
-    use super::common::{exp_decay, exp_attack, sawtooth_blep};
+    use super::common::{exp_attack, exp_decay, sawtooth_blep};
 
-    let duration = 0.8;  // Longer for natural release
+    let duration = 0.8; // Longer for natural release
     let samples = (SAMPLE_RATE * duration) as usize;
     let mut output = Vec::with_capacity(samples);
 
     // Base frequency (this will be modulated by note pitch in the tracker)
-    let base_freq = 82.41;  // E2 note
+    let base_freq = 82.41; // E2 note
     let phase_inc = base_freq / SAMPLE_RATE;
     let mut phase = 0.0f32;
     let mut filter = StateVariableFilter::new();
@@ -332,15 +377,17 @@ pub fn generate_bass_303() -> Vec<i16> {
         // === ANTI-ALIASED SAWTOOTH WAVE (PolyBLEP) ===
         let saw = sawtooth_blep(phase, phase_inc);
         phase += phase_inc;
-        if phase >= 1.0 { phase -= 1.0; }
+        if phase >= 1.0 {
+            phase -= 1.0;
+        }
 
         // === FILTER ENVELOPE (exponential for natural sound) ===
         // Creates the "squelch" when accent is triggered
         let filter_env = if t < 0.005 {
-            exp_attack(t / 0.005, 12.0) * 3.0  // Very fast exponential attack
+            exp_attack(t / 0.005, 12.0) * 3.0 // Very fast exponential attack
         } else {
             let decay_t = (t - 0.005) / 0.15;
-            3.0 * exp_decay(decay_t, 6.0).max(0.5)  // Exponential decay to sustain
+            3.0 * exp_decay(decay_t, 6.0).max(0.5) // Exponential decay to sustain
         };
 
         // === RESONANT BANDPASS FILTER ===
@@ -350,18 +397,18 @@ pub fn generate_bass_303() -> Vec<i16> {
         let cutoff_norm = (cutoff_hz / SAMPLE_RATE).min(0.45);
 
         // High resonance creates the "squelch"
-        let resonance = 0.85;  // Very high for acid character
+        let resonance = 0.85; // Very high for acid character
 
         // Process through state variable filter (we want bandpass output)
         let (_low, band, _high) = filter.process(saw, cutoff_norm, resonance);
 
         // === AMPLITUDE ENVELOPE (exponential) ===
         let amp_env = if t < 0.003 {
-            exp_attack(t / 0.003, 10.0)  // Smooth attack
+            exp_attack(t / 0.003, 10.0) // Smooth attack
         } else if t < 0.7 {
-            1.0  // Sustain
+            1.0 // Sustain
         } else {
-            exp_decay((t - 0.7) / 0.1, 8.0)  // Smooth exponential release
+            exp_decay((t - 0.7) / 0.1, 8.0) // Smooth exponential release
         };
 
         // === OUTPUT ===
@@ -385,7 +432,7 @@ pub fn generate_bass_303() -> Vec<i16> {
 pub fn generate_pad_acid() -> Vec<i16> {
     use super::common::{exp_attack, exp_decay};
 
-    let duration = 2.5;  // Longer for fuller sustain
+    let duration = 2.5; // Longer for fuller sustain
     let samples = (SAMPLE_RATE * duration) as usize;
     let mut output = Vec::with_capacity(samples);
 
@@ -400,10 +447,10 @@ pub fn generate_pad_acid() -> Vec<i16> {
 
         // Five detuned oscillators for richer chorus effect
         let osc1 = (t * base_freq * TWO_PI).sin();
-        let osc2 = (t * base_freq * 1.005 * TWO_PI).sin();  // +5 cents
-        let osc3 = (t * base_freq * 0.995 * TWO_PI).sin();  // -5 cents
-        let osc4 = (t * base_freq * 1.010 * TWO_PI).sin();  // +10 cents
-        let osc5 = (t * base_freq * 0.990 * TWO_PI).sin();  // -10 cents
+        let osc2 = (t * base_freq * 1.005 * TWO_PI).sin(); // +5 cents
+        let osc3 = (t * base_freq * 0.995 * TWO_PI).sin(); // -5 cents
+        let osc4 = (t * base_freq * 1.010 * TWO_PI).sin(); // +10 cents
+        let osc5 = (t * base_freq * 0.990 * TWO_PI).sin(); // -10 cents
 
         let mut oscillator = (osc1 + osc2 + osc3 + osc4 + osc5) / 5.0;
 
@@ -413,11 +460,11 @@ pub fn generate_pad_acid() -> Vec<i16> {
 
         // Exponential ADSR envelope
         let amp_env = if t < 0.3 {
-            exp_attack(t / 0.3, 5.0)  // Slow exponential attack
+            exp_attack(t / 0.3, 5.0) // Slow exponential attack
         } else if t < 2.0 {
-            1.0  // Sustain
+            1.0 // Sustain
         } else {
-            exp_decay((t - 2.0) / 0.5, 6.0)  // Smooth exponential release
+            exp_decay((t - 2.0) / 0.5, 6.0) // Smooth exponential release
         };
 
         let saturated = soft_saturate(oscillator * amp_env * 1.2) * 0.7;
@@ -436,7 +483,7 @@ pub fn generate_pad_acid() -> Vec<i16> {
 pub fn generate_stab_acid() -> Vec<i16> {
     use super::common::{exp_attack, exp_decay, sawtooth_blep};
 
-    let duration = 0.4;  // Longer tail for natural release
+    let duration = 0.4; // Longer tail for natural release
     let samples = (SAMPLE_RATE * duration) as usize;
     let mut output = Vec::with_capacity(samples);
 
@@ -451,10 +498,10 @@ pub fn generate_stab_acid() -> Vec<i16> {
     let mut phase5 = 0.0f32;
 
     let freq1 = base_freq;
-    let freq2 = base_freq * 1.005;  // +5 cents
-    let freq3 = base_freq * 0.995;  // -5 cents
-    let freq4 = base_freq * 1.010;  // +10 cents
-    let freq5 = base_freq * 0.990;  // -10 cents
+    let freq2 = base_freq * 1.005; // +5 cents
+    let freq3 = base_freq * 0.995; // -5 cents
+    let freq4 = base_freq * 1.010; // +10 cents
+    let freq5 = base_freq * 0.990; // -10 cents
 
     let phase_inc1 = freq1 / SAMPLE_RATE;
     let phase_inc2 = freq2 / SAMPLE_RATE;
@@ -472,19 +519,34 @@ pub fn generate_stab_acid() -> Vec<i16> {
         let saw4 = sawtooth_blep(phase4, phase_inc4);
         let saw5 = sawtooth_blep(phase5, phase_inc5);
 
-        phase1 += phase_inc1; if phase1 >= 1.0 { phase1 -= 1.0; }
-        phase2 += phase_inc2; if phase2 >= 1.0 { phase2 -= 1.0; }
-        phase3 += phase_inc3; if phase3 >= 1.0 { phase3 -= 1.0; }
-        phase4 += phase_inc4; if phase4 >= 1.0 { phase4 -= 1.0; }
-        phase5 += phase_inc5; if phase5 >= 1.0 { phase5 -= 1.0; }
+        phase1 += phase_inc1;
+        if phase1 >= 1.0 {
+            phase1 -= 1.0;
+        }
+        phase2 += phase_inc2;
+        if phase2 >= 1.0 {
+            phase2 -= 1.0;
+        }
+        phase3 += phase_inc3;
+        if phase3 >= 1.0 {
+            phase3 -= 1.0;
+        }
+        phase4 += phase_inc4;
+        if phase4 >= 1.0 {
+            phase4 -= 1.0;
+        }
+        phase5 += phase_inc5;
+        if phase5 >= 1.0 {
+            phase5 -= 1.0;
+        }
 
         let supersaw = (saw1 + saw2 + saw3 + saw4 + saw5) / 5.0;
 
         // Exponential amplitude envelope - punchy but smooth
         let amp_env = if t < 0.005 {
-            exp_attack(t / 0.005, 12.0)  // Very fast attack
+            exp_attack(t / 0.005, 12.0) // Very fast attack
         } else {
-            exp_decay((t - 0.005) / 0.35, 10.0)  // Fast exponential decay
+            exp_decay((t - 0.005) / 0.35, 10.0) // Fast exponential decay
         };
 
         let saturated = soft_saturate(supersaw * amp_env * 1.5) * 0.7;
@@ -501,13 +563,13 @@ pub fn generate_stab_acid() -> Vec<i16> {
 // ============================================================================
 
 pub fn generate_bass_303_squelch() -> Vec<i16> {
-    use super::common::{exp_decay, exp_attack, sawtooth_blep};
+    use super::common::{exp_attack, exp_decay, sawtooth_blep};
 
-    let duration = 0.8;  // Longer for natural release
+    let duration = 0.8; // Longer for natural release
     let samples = (SAMPLE_RATE * duration) as usize;
     let mut output = Vec::with_capacity(samples);
 
-    let base_freq = 82.41;  // E2
+    let base_freq = 82.41; // E2
     let phase_inc = base_freq / SAMPLE_RATE;
     let mut phase = 0.0f32;
     let mut filter = StateVariableFilter::new();
@@ -518,22 +580,24 @@ pub fn generate_bass_303_squelch() -> Vec<i16> {
         // === ANTI-ALIASED SAWTOOTH WAVE (PolyBLEP) ===
         let saw = sawtooth_blep(phase, phase_inc);
         phase += phase_inc;
-        if phase >= 1.0 { phase -= 1.0; }
+        if phase >= 1.0 {
+            phase -= 1.0;
+        }
 
         // === MORE AGGRESSIVE filter envelope for maximum squelch ===
         let filter_env = if t < 0.005 {
-            exp_attack(t / 0.005, 15.0) * 4.0  // Very aggressive attack
+            exp_attack(t / 0.005, 15.0) * 4.0 // Very aggressive attack
         } else {
-            let decay_t = (t - 0.005) / 0.12;  // Faster decay
-            4.0 * exp_decay(decay_t, 8.0).max(0.3)  // Lower sustain
+            let decay_t = (t - 0.005) / 0.12; // Faster decay
+            4.0 * exp_decay(decay_t, 8.0).max(0.3) // Lower sustain
         };
 
         // === WIDER filter sweep ===
-        let cutoff_hz = 200.0 + 2800.0 * filter_env;  // Up to 3kHz vs 2kHz
+        let cutoff_hz = 200.0 + 2800.0 * filter_env; // Up to 3kHz vs 2kHz
         let cutoff_norm = (cutoff_hz / SAMPLE_RATE).min(0.45);
 
         // === HIGHER resonance for maximum squelch ===
-        let resonance = 0.92;  // vs 0.85 in normal 303
+        let resonance = 0.92; // vs 0.85 in normal 303
 
         let (_low, band, _high) = filter.process(saw, cutoff_norm, resonance);
 
@@ -577,7 +641,9 @@ pub fn generate_riser_acid() -> Vec<i16> {
         // Rising sine
         let freq = 120.0 + 1400.0 * progress.powf(2.0);
         phase += freq / SAMPLE_RATE;
-        if phase >= 1.0 { phase -= 1.0; }
+        if phase >= 1.0 {
+            phase -= 1.0;
+        }
         let sine = (phase * TWO_PI).sin();
 
         // Noise with rising filter
@@ -602,12 +668,12 @@ pub fn generate_riser_acid() -> Vec<i16> {
 pub fn generate_atmosphere_acid() -> Vec<i16> {
     use super::common::{exp_attack, exp_decay};
 
-    let duration = 4.0;  // Very long sustain for subtle texture
+    let duration = 4.0; // Very long sustain for subtle texture
     let samples = (SAMPLE_RATE * duration) as usize;
     let mut output = Vec::with_capacity(samples);
 
     // Very low frequency for atmosphere
-    let base_freq = 55.0;  // A1
+    let base_freq = 55.0; // A1
 
     for i in 0..samples {
         let t = i as f32 / SAMPLE_RATE;
@@ -631,11 +697,11 @@ pub fn generate_atmosphere_acid() -> Vec<i16> {
 
         // Exponential ADSR envelope - very slow
         let amp_env = if t < 0.8 {
-            exp_attack(t / 0.8, 3.0)  // Very slow attack
+            exp_attack(t / 0.8, 3.0) // Very slow attack
         } else if t < 3.0 {
-            1.0  // Long sustain
+            1.0 // Long sustain
         } else {
-            exp_decay((t - 3.0) / 1.0, 4.0)  // Slow release
+            exp_decay((t - 3.0) / 1.0, 4.0) // Slow release
         };
 
         let saturated = soft_saturate(oscillator * amp_env * 1.1) * 0.7;
@@ -677,7 +743,11 @@ pub fn generate_crash_909() -> Vec<i16> {
 
         let mix = band1 * 0.5 + band2 * 0.3 + band3 * 0.2;
 
-        let env = if t < 0.008 { t / 0.008 } else { (-t * 2.2).exp() };
+        let env = if t < 0.008 {
+            t / 0.008
+        } else {
+            (-t * 2.2).exp()
+        };
 
         let saturated = soft_saturate(mix * env * 1.4) * 0.75;
         let sample = saturated * 27000.0;

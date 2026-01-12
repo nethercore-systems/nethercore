@@ -4,7 +4,7 @@
 //! evaluating assertions.
 
 use crate::replay::script::{
-    CompiledAction, CompiledAssertion, CompiledAssertValue, CompiledScript, CompareOp,
+    CompareOp, CompiledAction, CompiledAssertValue, CompiledAssertion, CompiledScript,
 };
 use crate::replay::types::{AssertionResult, DebugValueData, Snapshot};
 use hashbrown::HashMap;
@@ -125,7 +125,10 @@ impl ScriptExecutor {
     }
 
     /// Record pre-update snapshot values
-    pub fn capture_pre_snapshot(&mut self, values: HashMap<String, DebugValueData>) -> HashMap<String, DebugValueData> {
+    pub fn capture_pre_snapshot(
+        &mut self,
+        values: HashMap<String, DebugValueData>,
+    ) -> HashMap<String, DebugValueData> {
         values
     }
 
@@ -192,7 +195,11 @@ impl ScriptExecutor {
             expected: if passed {
                 None
             } else {
-                Some(format!("{} {}", assertion.operator, format_expected(&assertion.value, expected)))
+                Some(format!(
+                    "{} {}",
+                    assertion.operator,
+                    format_expected(&assertion.value, expected)
+                ))
             },
         });
 
@@ -243,7 +250,7 @@ impl ScriptExecutor {
 
         ExecutionReport {
             version: "1.0".to_string(),
-            script: None, // Set by caller if available
+            script: None,      // Set by caller if available
             executed_at: None, // Set by caller if available
             duration_ms: None, // Set by caller if available
             console: self.script.console.clone(),
@@ -294,10 +301,14 @@ fn compute_delta(
                 (DebugValueData::U32(a), DebugValueData::U32(b)) if a != b => {
                     Some(format!("{}", (*b as i64) - (*a as i64)))
                 }
-                (DebugValueData::F32(a), DebugValueData::F32(b)) if (a - b).abs() > f32::EPSILON => {
+                (DebugValueData::F32(a), DebugValueData::F32(b))
+                    if (a - b).abs() > f32::EPSILON =>
+                {
                     Some(format!("{:.2}", b - a))
                 }
-                (DebugValueData::F64(a), DebugValueData::F64(b)) if (a - b).abs() > f64::EPSILON => {
+                (DebugValueData::F64(a), DebugValueData::F64(b))
+                    if (a - b).abs() > f64::EPSILON =>
+                {
                     Some(format!("{:.2}", b - a))
                 }
                 (DebugValueData::Bool(a), DebugValueData::Bool(b)) if a != b => {
@@ -312,16 +323,10 @@ fn compute_delta(
         }
     }
 
-    if delta.is_empty() {
-        None
-    } else {
-        Some(delta)
-    }
+    if delta.is_empty() { None } else { Some(delta) }
 }
 
-fn map_to_btree(
-    values: HashMap<String, DebugValueData>,
-) -> BTreeMap<String, DebugValueData> {
+fn map_to_btree(values: HashMap<String, DebugValueData>) -> BTreeMap<String, DebugValueData> {
     values.into_iter().collect()
 }
 
@@ -801,13 +806,11 @@ mod tests {
             inputs,
             snap_frames: vec![],
             assertions: vec![],
-            actions: vec![
-                CompiledAction {
-                    frame: 0,
-                    name: "Load Level".to_string(),
-                    params,
-                },
-            ],
+            actions: vec![CompiledAction {
+                frame: 0,
+                name: "Load Level".to_string(),
+                params,
+            }],
             frame_count: 2,
         };
 
@@ -896,7 +899,10 @@ mod tests {
         let mut params = HashMap::new();
         params.insert("int_val".to_string(), ActionParamValue::Int(42));
         params.insert("float_val".to_string(), ActionParamValue::Float(3.14));
-        params.insert("string_val".to_string(), ActionParamValue::String("hello".to_string()));
+        params.insert(
+            "string_val".to_string(),
+            ActionParamValue::String("hello".to_string()),
+        );
         params.insert("bool_val".to_string(), ActionParamValue::Bool(true));
 
         let script = CompiledScript {
@@ -921,7 +927,10 @@ mod tests {
         assert_eq!(actions.len(), 1);
 
         let params = &actions[0].params;
-        assert!(matches!(params.get("int_val"), Some(ActionParamValue::Int(42))));
+        assert!(matches!(
+            params.get("int_val"),
+            Some(ActionParamValue::Int(42))
+        ));
         match params.get("float_val") {
             Some(ActionParamValue::Float(f)) => assert!((*f - 3.14).abs() < 0.001),
             _ => panic!("Expected Float"),
@@ -930,6 +939,9 @@ mod tests {
             params.get("string_val"),
             Some(ActionParamValue::String(s)) if s == "hello"
         ));
-        assert!(matches!(params.get("bool_val"), Some(ActionParamValue::Bool(true))));
+        assert!(matches!(
+            params.get("bool_val"),
+            Some(ActionParamValue::Bool(true))
+        ));
     }
 }

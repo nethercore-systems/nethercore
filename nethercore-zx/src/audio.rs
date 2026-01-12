@@ -316,7 +316,12 @@ pub fn advance_audio_positions(
 
     // Advance music channel position (if not using tracker)
     if !tracker_active && playback_state.music.sound != 0 {
-        advance_channel_position(&mut playback_state.music, sounds, resample_ratio, samples_per_frame);
+        advance_channel_position(
+            &mut playback_state.music,
+            sounds,
+            resample_ratio,
+            samples_per_frame,
+        );
     }
 
     // Advance tracker position (if using tracker)
@@ -596,7 +601,10 @@ impl ZXAudio {
                 use_threaded: true,
             }),
             Err(e) => {
-                warn!("Failed to create threaded audio output: {}. Audio disabled.", e);
+                warn!(
+                    "Failed to create threaded audio output: {}. Audio disabled.",
+                    e
+                );
                 Ok(Self {
                     output: None,
                     threaded_output: None,
@@ -758,16 +766,16 @@ impl nethercore_core::AudioGenerator for ZXAudioGenerator {
             //
             // The audio thread and main thread both advance positions by the same
             // amount, staying in sync.
-            let snapshot = crate::audio_thread::AudioGenSnapshot::new(
-                rollback_state.audio,
-                rollback_state.tracker,
-                state.tracker_engine.snapshot(),
-                Arc::new(state.sounds.clone()),
-                0, // frame_number not used currently
+            let snapshot = crate::audio_thread::AudioGenSnapshot {
+                audio: rollback_state.audio,
+                tracker: rollback_state.tracker,
+                tracker_snapshot: state.tracker_engine.snapshot(),
+                sounds: Arc::new(state.sounds.clone()),
+                frame_number: 0, // frame_number not used currently
                 tick_rate,
                 sample_rate,
-                false, // is_rollback - main loop only calls this for confirmed frames
-            );
+                is_rollback: false, // is_rollback - main loop only calls this for confirmed frames
+            };
             audio.send_snapshot(snapshot);
 
             // Advance main thread state (lightweight - no sample generation)

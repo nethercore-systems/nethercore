@@ -782,8 +782,7 @@ mod tests {
     fn test_rollback_session_sync_test() {
         let config = SessionConfig::sync_test();
         let session =
-            RollbackSession::<TestInput, ()>::new_sync_test(config, test_ram_limit())
-                .unwrap();
+            RollbackSession::<TestInput, ()>::new_sync_test(config, test_ram_limit()).unwrap();
         assert_eq!(session.session_type(), SessionType::SyncTest);
     }
 
@@ -989,8 +988,7 @@ mod tests {
     fn test_rollback_session_sync_test_has_player_config() {
         let config = SessionConfig::sync_test();
         let session =
-            RollbackSession::<TestInput, ()>::new_sync_test(config, test_ram_limit())
-                .unwrap();
+            RollbackSession::<TestInput, ()>::new_sync_test(config, test_ram_limit()).unwrap();
         let player_config = session.player_config();
         assert_eq!(player_config.num_players(), 1);
         assert!(player_config.is_local_player(0));

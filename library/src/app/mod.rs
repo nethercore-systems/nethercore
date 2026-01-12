@@ -18,6 +18,7 @@ use crate::ui::{LibraryUi, LobbyUi, MultiplayerDialog, UiAction};
 use nethercore_core::app::config::Config;
 use nethercore_core::library::{LocalGame, RomLoaderRegistry};
 use nethercore_core::net::nchs::{NchsConfig, NchsSession, NetworkConfig, PlayerInfo};
+use nethercore_shared::{MAX_ROM_BYTES, read_file_with_limit};
 use zx_common::ZXRom;
 
 /// Library application state
@@ -376,7 +377,7 @@ impl App {
         max_players: u8,
     ) -> anyhow::Result<LobbySession> {
         // Load ROM to get netplay metadata
-        let rom_bytes = std::fs::read(&game.rom_path)?;
+        let rom_bytes = read_file_with_limit(&game.rom_path, MAX_ROM_BYTES)?;
         let rom = ZXRom::from_bytes(&rom_bytes)?;
         let mut netplay = rom.metadata.netplay;
 
@@ -408,7 +409,7 @@ impl App {
         host_addr: &str,
     ) -> anyhow::Result<LobbySession> {
         // Load ROM to get netplay metadata
-        let rom_bytes = std::fs::read(&game.rom_path)?;
+        let rom_bytes = read_file_with_limit(&game.rom_path, MAX_ROM_BYTES)?;
         let rom = ZXRom::from_bytes(&rom_bytes)?;
         let netplay = rom.metadata.netplay;
 

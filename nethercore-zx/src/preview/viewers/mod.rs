@@ -402,9 +402,11 @@ impl ZXAssetViewer {
                 egui::TextureFilter::Nearest
             };
 
-            let mut options = egui::TextureOptions::default();
-            options.magnification = filter;
-            options.minification = filter;
+            let options = egui::TextureOptions {
+                magnification: filter,
+                minification: filter,
+                ..Default::default()
+            };
 
             self.cached_texture = Some(ctx.load_texture(texture_name, color_image, options));
             self.cached_texture_id = Some(cache_id.to_string());
@@ -554,10 +556,12 @@ impl ZXAssetViewer {
         let handle = engine.load_xm_module(xm_module.clone(), sound_handles);
 
         // Initialize tracker state
-        let mut state = TrackerState::default();
-        state.handle = handle;
-        state.flags = tracker_flags::PLAYING;
-        state.volume = 256; // Full volume
+        let state = TrackerState {
+            handle,
+            flags: tracker_flags::PLAYING,
+            volume: 256, // Full volume
+            ..Default::default()
+        };
 
         self.tracker_engine = Some(engine);
         self.tracker_state = Some(state);
@@ -1489,18 +1493,17 @@ impl CoreAssetViewer<NethercoreZX, ZXDataPack> for ZXAssetViewer {
                 }
             }
 
-            // Debug: print once per second approximately
-            static mut DEBUG_COUNTER: u32 = 0;
-            unsafe {
-                DEBUG_COUNTER += 1;
-                if DEBUG_COUNTER.is_multiple_of(30) {
-                    eprintln!(
-                        "DEBUG render: {} samples, max_sample={:.4}, tracker_sounds.len()={}",
-                        samples_to_generate,
-                        max_sample,
-                        self.tracker_sounds.len()
-                    );
-                }
+            // Debug: log once per second approximately
+            static DEBUG_COUNTER: std::sync::atomic::AtomicU32 =
+                std::sync::atomic::AtomicU32::new(0);
+            let counter = DEBUG_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+            if counter.is_multiple_of(30) {
+                tracing::debug!(
+                    samples_to_generate,
+                    max_sample,
+                    tracker_sounds_len = self.tracker_sounds.len(),
+                    "preview audio render"
+                );
             }
 
             // Push to audio output

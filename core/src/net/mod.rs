@@ -26,10 +26,25 @@ pub mod nchs;
 
 // Re-export commonly used NCHS types
 pub use nchs::{
-    NchsConfig, NchsError, NchsEvent, NchsRole, NchsSession, NchsSocket, NchsSocketError, NchsState,
-    // Message types
-    JoinReject, JoinRejectReason, JoinRequest, LobbyState, NetworkConfig, PlayerConnectionInfo,
-    PlayerInfo, SaveConfig, SaveMode, SessionStart,
     // Constants
     DEFAULT_NCHS_PORT,
+    // Message types
+    JoinReject,
+    JoinRejectReason,
+    JoinRequest,
+    LobbyState,
+    NchsConfig,
+    NchsError,
+    NchsEvent,
+    NchsRole,
+    NchsSession,
+    NchsSocket,
+    NchsSocketError,
+    NchsState,
+    NetworkConfig,
+    PlayerConnectionInfo,
+    PlayerInfo,
+    SaveConfig,
+    SaveMode,
+    SessionStart,
 };

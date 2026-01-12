@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use clap::Args;
+use nethercore_shared::{read_file_with_limit, MAX_WASM_BYTES};
 use std::path::PathBuf;
 use xxhash_rust::xxh3::xxh3_64;
 
@@ -35,7 +36,7 @@ pub fn execute(args: PackArgs) -> Result<()> {
 
     let wasm_path = manifest::resolve_wasm_path(&ctx, args.wasm)?;
 
-    let code = std::fs::read(&wasm_path)
+    let code = read_file_with_limit(&wasm_path, MAX_WASM_BYTES)
         .with_context(|| format!("Failed to read WASM file: {}", wasm_path.display()))?;
     println!("  WASM: {} ({} bytes)", wasm_path.display(), code.len());
 
@@ -56,8 +57,12 @@ pub fn execute(args: PackArgs) -> Result<()> {
     } else {
         1
     };
-    let netplay =
-        NetplayMetadata::new(ConsoleType::ZX, ctx.manifest.tick_rate(), max_players, rom_hash);
+    let netplay = NetplayMetadata::new(
+        ConsoleType::ZX,
+        ctx.manifest.tick_rate(),
+        max_players,
+        rom_hash,
+    );
 
     if ctx.manifest.netplay.enabled {
         println!(
@@ -68,13 +73,7 @@ pub fn execute(args: PackArgs) -> Result<()> {
         println!("  Netplay: disabled");
     }
 
-    let rom = output::build_rom(
-        &ctx.manifest,
-        code,
-        data_pack,
-        render_mode,
-        netplay,
-    );
+    let rom = output::build_rom(&ctx.manifest, code, data_pack, render_mode, netplay);
 
     rom.validate().context("ROM validation failed")?;
 
