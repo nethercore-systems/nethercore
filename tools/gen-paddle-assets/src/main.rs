@@ -262,3 +262,79 @@ fn generate_win_wav(path: &Path) {
 
     writer.finalize().unwrap();
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use image::GenericImageView;
+    use tempfile::TempDir;
+
+    #[test]
+    fn ball_png_is_16x16_with_transparent_corners() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("ball.png");
+        generate_ball_png(&path);
+
+        let img = image::open(&path).unwrap();
+        assert_eq!(img.dimensions(), (16, 16));
+
+        let corner = img.get_pixel(0, 0).0;
+        let center = img.get_pixel(8, 8).0;
+        assert_eq!(corner[3], 0);
+        assert_eq!(center, [255, 255, 255, 255]);
+    }
+
+    #[test]
+    fn paddle_png_is_8x32_with_opaque_center() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("paddle.png");
+        generate_paddle_png(&path);
+
+        let img = image::open(&path).unwrap();
+        assert_eq!(img.dimensions(), (8, 32));
+
+        let corner = img.get_pixel(0, 0).0;
+        let center = img.get_pixel(4, 16).0;
+        assert_eq!(corner[3], 0);
+        assert_eq!(center, [255, 255, 255, 255]);
+    }
+
+    fn assert_wav_mono_22050(path: &Path, expected_samples: usize) {
+        let mut reader = hound::WavReader::open(path).unwrap();
+        let spec = reader.spec();
+        assert_eq!(spec.channels, 1);
+        assert_eq!(spec.sample_rate, 22050);
+        assert_eq!(spec.bits_per_sample, 16);
+
+        let samples: Vec<i16> = reader.samples::<i16>().map(Result::unwrap).collect();
+        assert_eq!(samples.len(), expected_samples);
+        assert!(samples.iter().any(|s| *s != 0), "expected some non-zero samples");
+    }
+
+    #[test]
+    fn hit_wav_has_expected_length_and_header() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("hit.wav");
+        generate_hit_wav(&path);
+        assert_wav_mono_22050(&path, (SAMPLE_RATE * 0.08) as usize);
+    }
+
+    #[test]
+    fn score_wav_has_expected_length_and_header() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("score.wav");
+        generate_score_wav(&path);
+        assert_wav_mono_22050(&path, (SAMPLE_RATE * 0.15) as usize);
+    }
+
+    #[test]
+    fn win_wav_has_expected_length_and_header() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("win.wav");
+        generate_win_wav(&path);
+
+        // 3 notes (0.12s) + 3 gaps (0.02s) + 0.3s chord.
+        let expected = (SAMPLE_RATE * (3.0 * (0.12 + 0.02) + 0.3)) as usize;
+        assert_wav_mono_22050(&path, expected);
+    }
+}

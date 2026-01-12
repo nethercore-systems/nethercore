@@ -10,11 +10,14 @@ glb-builder = { path = "../glb-builder" }
 gltf-json = "1"
 
 # For asset conversion
-nether-export = { path = "../nether-export" }
-zx-common = { path = "../../zx-common" }
+nether-export = { path = "../nether-export", default-features = false }
+zx-common = { path = "../../zx-common", default-features = false }
 
 # For PNG generation
 image = { workspace = true }
 
 # Error handling
 anyhow = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

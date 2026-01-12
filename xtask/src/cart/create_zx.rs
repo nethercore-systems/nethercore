@@ -224,3 +224,142 @@ fn read_and_resize_image(path: &Path, width: u32, height: u32) -> Result<Vec<u8>
 
     Ok(png_bytes)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn write_min_wasm(path: &Path) {
+        // WASM magic + version 1.
+        std::fs::write(path, b"\0asm\x01\0\0\0").expect("write wasm");
+    }
+
+    fn write_png(path: &Path, width: u32, height: u32) {
+        let img = image::RgbaImage::from_pixel(width, height, image::Rgba([255, 0, 0, 255]));
+        img.save(path).expect("write png");
+    }
+
+    fn base_args(tmp: &TempDir) -> CreateZxArgs {
+        let wasm_file = tmp.path().join("game.wasm");
+        write_min_wasm(&wasm_file);
+
+        CreateZxArgs {
+            wasm_file,
+            id: "test-game".to_string(),
+            title: "Test Game".to_string(),
+            author: "Test Author".to_string(),
+            version: "1.2.3".to_string(),
+            description: "desc".to_string(),
+            tags: vec!["tag1".to_string(), "tag2".to_string()],
+            thumbnail: None,
+            screenshots: vec![],
+            platform_game_id: None,
+            platform_author_id: None,
+            render_mode: None,
+            default_resolution: None,
+            target_fps: None,
+            output: tmp.path().join("out.nczx"),
+        }
+    }
+
+    #[test]
+    fn create_zx_writes_parseable_rom() {
+        let tmp = TempDir::new().unwrap();
+        let args = base_args(&tmp);
+        execute(args).expect("create-zx execute");
+
+        let bytes = std::fs::read(tmp.path().join("out.nczx")).expect("read out.nczx");
+        let rom = ZXRom::from_bytes(&bytes).expect("parse ZXRom");
+
+        assert_eq!(rom.metadata.id, "test-game");
+        assert_eq!(rom.metadata.title, "Test Game");
+        assert_eq!(rom.metadata.author, "Test Author");
+        assert_eq!(rom.metadata.version, "1.2.3");
+        assert_eq!(rom.metadata.tags, vec!["tag1".to_string(), "tag2".to_string()]);
+        assert_eq!(rom.screenshots.len(), 0);
+        assert!(rom.thumbnail.is_none());
+    }
+
+    #[test]
+    fn create_zx_resizes_thumbnail_to_256_square() {
+        let tmp = TempDir::new().unwrap();
+
+        let thumb_path = tmp.path().join("thumb.png");
+        write_png(&thumb_path, 8, 4);
+
+        let mut args = base_args(&tmp);
+        args.thumbnail = Some(thumb_path);
+        execute(args).expect("create-zx execute");
+
+        let bytes = std::fs::read(tmp.path().join("out.nczx")).expect("read out.nczx");
+        let rom = ZXRom::from_bytes(&bytes).expect("parse ZXRom");
+        let thumb = rom.thumbnail.expect("thumbnail present");
+
+        let img = image::load_from_memory(&thumb).expect("decode thumbnail");
+        assert_eq!(img.width(), 256);
+        assert_eq!(img.height(), 256);
+    }
+
+    #[test]
+    fn create_zx_rejects_too_many_screenshots_without_reading_them() {
+        let tmp = TempDir::new().unwrap();
+
+        let mut args = base_args(&tmp);
+        args.screenshots = (0..6)
+            .map(|i| tmp.path().join(format!("screenshot{}.png", i)))
+            .collect();
+
+        let err = execute(args).expect_err("expected error");
+        assert!(
+            err.to_string().contains("Too many screenshots"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
+    fn create_zx_rejects_invalid_wasm_magic() {
+        let tmp = TempDir::new().unwrap();
+        let wasm_file = tmp.path().join("bad.wasm");
+        std::fs::write(&wasm_file, b"not wasm").unwrap();
+
+        let mut args = base_args(&tmp);
+        args.wasm_file = wasm_file;
+
+        let err = execute(args).expect_err("expected error");
+        assert!(
+            err.to_string().contains("missing \\0asm"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
+    fn create_zx_rejects_unsafe_game_id() {
+        let tmp = TempDir::new().unwrap();
+        let mut args = base_args(&tmp);
+        args.id = "../evil".to_string();
+
+        let err = execute(args).expect_err("expected error");
+        assert!(
+            err.to_string().contains("Invalid game id"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
+    fn create_zx_rejects_invalid_screenshot_png_magic() {
+        let tmp = TempDir::new().unwrap();
+
+        let bad_png = tmp.path().join("bad.png");
+        std::fs::write(&bad_png, b"not a png").unwrap();
+
+        let mut args = base_args(&tmp);
+        args.screenshots = vec![bad_png];
+
+        let err = execute(args).expect_err("expected error");
+        assert!(
+            err.to_string().contains("Invalid PNG file"),
+            "got: {err}"
+        );
+    }
+}

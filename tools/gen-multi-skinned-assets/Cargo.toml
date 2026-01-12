@@ -5,4 +5,7 @@ edition = "2021"
 description = "Generate assets for multi-skinned-rom example"
 
 [dependencies]
-zx-common = { path = "../../zx-common" }
+zx-common = { path = "../../zx-common", default-features = false }
+
+[dev-dependencies]
+tempfile = { workspace = true }

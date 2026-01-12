@@ -2,12 +2,20 @@
 //!
 //! Converts tracker module samples to the Sound type used by TrackerEngine.
 
-use anyhow::{Context, Result};
-use nethercore_zx::audio::Sound;
+use anyhow::Result;
+
+#[cfg(feature = "playback")]
+use anyhow::Context;
 use std::io::{Cursor, Read, Seek, SeekFrom};
+
+#[cfg(feature = "playback")]
 use std::sync::Arc;
 
+#[cfg(feature = "playback")]
+use nethercore_zx::audio::Sound;
+
 /// Load samples from an XM file
+#[cfg(feature = "playback")]
 pub fn load_xm_samples(data: &[u8]) -> Result<Vec<Option<Sound>>> {
     let extracted = nether_xm::extract_samples(data).context("Failed to extract XM samples")?;
 
@@ -41,6 +49,7 @@ pub fn load_xm_samples(data: &[u8]) -> Result<Vec<Option<Sound>>> {
 }
 
 /// Load samples from an IT file
+#[cfg(feature = "playback")]
 pub fn load_it_samples(data: &[u8], module: &nether_it::ItModule) -> Result<Vec<Option<Sound>>> {
     // IT samples are 1-indexed, so index 0 is unused
     let mut sounds = vec![None];
@@ -110,6 +119,7 @@ fn extract_it_sample_offsets(data: &[u8]) -> Result<Vec<u32>> {
 }
 
 /// Convert IT SampleData to Vec<i16>
+#[cfg(feature = "playback")]
 fn convert_sample_data_to_i16(sample_data: nether_it::SampleData) -> Vec<i16> {
     match sample_data {
         nether_it::SampleData::I8(data) => {
@@ -130,4 +140,41 @@ fn read_u32(cursor: &mut Cursor<&[u8]>) -> Result<u32> {
     let mut buf = [0u8; 4];
     cursor.read_exact(&mut buf)?;
     Ok(u32::from_le_bytes(buf))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::extract_it_sample_offsets;
+
+    #[test]
+    fn extract_it_sample_offsets_reads_sample_pointer_table() {
+        let num_orders: u16 = 2;
+        let num_instruments: u16 = 1;
+        let num_samples: u16 = 3;
+
+        let sample_table_offset = 0xC0usize + num_orders as usize + (num_instruments as usize * 4);
+        let total_len = sample_table_offset + (num_samples as usize * 4);
+        let mut data = vec![0u8; total_len];
+
+        // Write OrdNum/InsNum/SmpNum at offset 0x20.
+        data[0x20..0x22].copy_from_slice(&num_orders.to_le_bytes());
+        data[0x22..0x24].copy_from_slice(&num_instruments.to_le_bytes());
+        data[0x24..0x26].copy_from_slice(&num_samples.to_le_bytes());
+
+        let offsets = [0x1111_1111u32, 0x2222_2222u32, 0x3333_3333u32];
+        for (i, off) in offsets.iter().enumerate() {
+            let start = sample_table_offset + i * 4;
+            data[start..start + 4].copy_from_slice(&off.to_le_bytes());
+        }
+
+        let parsed = extract_it_sample_offsets(&data).expect("extract offsets");
+        assert_eq!(parsed, offsets.to_vec());
+    }
+
+    #[test]
+    fn extract_it_sample_offsets_rejects_too_small_file() {
+        let data = vec![0u8; 10];
+        let err = extract_it_sample_offsets(&data).expect_err("expected error");
+        assert!(err.to_string().contains("IT file too small"));
+    }
 }

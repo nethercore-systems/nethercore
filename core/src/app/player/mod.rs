@@ -5,6 +5,8 @@
 
 mod error_ui;
 mod types;
+#[cfg(test)]
+mod tests;
 
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -46,6 +48,18 @@ pub use types::{LoadedRom, RomLoader, StandaloneConfig, StandaloneGraphicsSuppor
 fn format_ggrs_addr(addr: &str, port: u16) -> String {
     if let Ok(socket_addr) = addr.parse::<SocketAddr>() {
         return SocketAddr::new(socket_addr.ip(), port).to_string();
+    }
+
+    if let Ok(ip) = addr.parse::<std::net::IpAddr>() {
+        return SocketAddr::new(ip, port).to_string();
+    }
+
+    if let Some(stripped) = addr
+        .strip_prefix('[')
+        .and_then(|s| s.strip_suffix(']'))
+        && let Ok(ip) = stripped.parse::<std::net::IpAddr>()
+    {
+        return SocketAddr::new(ip, port).to_string();
     }
 
     // Fallback: split on the last ':' to preserve IPv6 host parts without brackets.

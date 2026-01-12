@@ -6,5 +6,8 @@ edition = "2021"
 [dependencies]
 image = "0.24"
 clap = { version = "4.0", features = ["derive"] }
-nether-export = { path = "../nether-export" }
+nether-export = { path = "../nether-export", default-features = false }
 hound = "3.5"
+
+[dev-dependencies]
+tempfile = "3"

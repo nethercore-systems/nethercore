@@ -173,7 +173,11 @@ pub fn sanitize_game_id(name: &str) -> String {
         result.pop();
     }
 
-    result
+    if result.is_empty() {
+        "game".to_string()
+    } else {
+        result
+    }
 }
 
 /// Parse a key string to a winit KeyCode.
@@ -193,5 +197,45 @@ pub fn parse_key_code(s: &str) -> Option<winit::keyboard::KeyCode> {
         "F11" => Some(KeyCode::F11),
         "F12" => Some(KeyCode::F12),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{WaitingForPeer, parse_key_code, sanitize_game_id};
+    use crate::rollback::LocalSocket;
+    use winit::keyboard::KeyCode;
+
+    #[test]
+    fn sanitize_game_id_basic_transforms() {
+        assert_eq!(sanitize_game_id("My Game"), "my-game");
+        assert_eq!(sanitize_game_id("My__Game"), "my-game");
+        assert_eq!(sanitize_game_id("Game---Name"), "game-name");
+        assert_eq!(sanitize_game_id("Game-"), "game");
+    }
+
+    #[test]
+    fn sanitize_game_id_falls_back_for_non_ascii_or_empty() {
+        assert_eq!(sanitize_game_id(""), "game");
+        assert_eq!(sanitize_game_id("日本語ゲーム"), "game");
+        assert_eq!(sanitize_game_id("___"), "game");
+        assert_eq!(sanitize_game_id("!!!"), "game");
+    }
+
+    #[test]
+    fn parse_key_code_is_case_insensitive_for_function_keys() {
+        assert_eq!(parse_key_code("f1"), Some(KeyCode::F1));
+        assert_eq!(parse_key_code("F12"), Some(KeyCode::F12));
+        assert_eq!(parse_key_code("F13"), None);
+    }
+
+    #[test]
+    fn join_url_includes_ip_port_and_game_id() {
+        let socket = LocalSocket::bind("0.0.0.0:0").expect("bind LocalSocket");
+        let waiting = WaitingForPeer::new(socket, 1234, "my-game".to_string());
+        assert_eq!(
+            waiting.join_url("127.0.0.1"),
+            "nethercore://join/127.0.0.1:1234/my-game"
+        );
     }
 }

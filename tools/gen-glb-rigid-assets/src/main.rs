@@ -558,6 +558,73 @@ fn generate_animation_glb() -> Vec<u8> {
     assemble_glb(&root, buffer.data())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::{MeshType, generate_animation_glb, generate_mesh_glb};
+
+    fn json_chunk(glb: &[u8]) -> Option<&[u8]> {
+        if glb.len() < 12 || &glb[0..4] != b"glTF" {
+            return None;
+        }
+        let version = u32::from_le_bytes([glb[4], glb[5], glb[6], glb[7]]);
+        if version != 2 {
+            return None;
+        }
+        let len = u32::from_le_bytes([glb[8], glb[9], glb[10], glb[11]]) as usize;
+        if len != glb.len() {
+            return None;
+        }
+
+        let mut offset = 12;
+        while offset + 8 <= glb.len() {
+            let chunk_len =
+                u32::from_le_bytes([glb[offset], glb[offset + 1], glb[offset + 2], glb[offset + 3]])
+                    as usize;
+            let chunk_type = &glb[offset + 4..offset + 8];
+            offset += 8;
+
+            if offset + chunk_len > glb.len() {
+                return None;
+            }
+            let chunk_data = &glb[offset..offset + chunk_len];
+            offset += chunk_len;
+
+            if chunk_type == b"JSON" {
+                return Some(chunk_data);
+            }
+        }
+
+        None
+    }
+
+    #[test]
+    fn rigid_mesh_glbs_contain_expected_node_names() {
+        for (mesh_type, expected) in [
+            (MeshType::Base, "\"Base\""),
+            (MeshType::Arm, "\"Arm\""),
+            (MeshType::Claw, "\"Claw\""),
+        ] {
+            let glb = generate_mesh_glb(mesh_type);
+            let json = json_chunk(&glb).expect("JSON chunk");
+            let s = String::from_utf8_lossy(json);
+            assert!(s.contains(expected), "missing expected name {expected}");
+        }
+    }
+
+    #[test]
+    fn rigid_animation_glb_contains_operate_animation_and_skin() {
+        let glb = generate_animation_glb();
+        let json = json_chunk(&glb).expect("JSON chunk");
+        let s = String::from_utf8_lossy(json);
+
+        assert!(s.contains("\"Operate\""), "missing Operate animation");
+        assert!(s.contains("\"RigidSkeleton\""), "missing skin");
+        assert!(s.contains("\"Base\""));
+        assert!(s.contains("\"Arm\""));
+        assert!(s.contains("\"Claw\""));
+    }
+}
+
 /// Create "Operate" animation for the mechanical arm
 /// Node 0 (Base): Rotates around Y
 /// Node 1 (Arm): Tilts (X rotation) and extends (Z translation)

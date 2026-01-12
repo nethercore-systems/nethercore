@@ -2,6 +2,7 @@
 //!
 //! Creates a simple 3-bone wave animation for testing the keyframe system.
 
+use std::path::Path;
 use std::f32::consts::TAU;
 use std::fs::File;
 use std::io::Write;
@@ -21,15 +22,29 @@ fn main() {
     let bone_count: u8 = 3;
     let frame_count: u16 = 30;
 
+    write_wave_animation(&output_path, bone_count, frame_count);
+
+    let file_size = 4 + (frame_count as usize * bone_count as usize * 16);
+    println!(
+        "Generated {} ({} bones, {} frames, {} bytes)",
+        output_path.display(),
+        bone_count,
+        frame_count,
+        file_size
+    );
+}
+
+fn write_wave_animation(path: &Path, bone_count: u8, frame_count: u16) {
+    let data = generate_wave_animation_bytes(bone_count, frame_count);
+    let mut file = File::create(path).expect("Failed to create output file");
+    file.write_all(&data).expect("Failed to write animation");
+}
+
+fn generate_wave_animation_bytes(bone_count: u8, frame_count: u16) -> Vec<u8> {
     let header = NetherZXAnimationHeader::new(bone_count, frame_count);
+    let mut bytes = Vec::with_capacity(header.file_size());
+    bytes.extend_from_slice(&header.to_bytes());
 
-    let mut file = File::create(&output_path).expect("Failed to create output file");
-
-    // Write header (4 bytes)
-    file.write_all(&header.to_bytes())
-        .expect("Failed to write header");
-
-    // Write frame data
     for frame in 0..frame_count {
         let t = (frame as f32 / frame_count as f32) * TAU;
 
@@ -50,20 +65,39 @@ fn main() {
             let py = bone as f32 * 1.5 - 1.5; // -1.5, 0.0, 1.5
 
             // Encode to platform format
-            let keyframe = encode_bone_transform([qx, qy, qz, qw], [0.0, py, 0.0], [1.0, 1.0, 1.0]);
-
-            // Write 16-byte keyframe
-            file.write_all(&keyframe.to_bytes())
-                .expect("Failed to write keyframe");
+            let keyframe =
+                encode_bone_transform([qx, qy, qz, qw], [0.0, py, 0.0], [1.0, 1.0, 1.0]);
+            bytes.extend_from_slice(&keyframe.to_bytes());
         }
     }
 
-    let file_size = 4 + (frame_count as usize * bone_count as usize * 16);
-    println!(
-        "Generated {} ({} bones, {} frames, {} bytes)",
-        output_path.display(),
-        bone_count,
-        frame_count,
-        file_size
-    );
+    bytes
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use zx_common::formats::animation::NetherZXAnimationHeader;
+
+    #[test]
+    fn wave_animation_bytes_have_valid_header_and_expected_size() {
+        let bytes = generate_wave_animation_bytes(3, 30);
+
+        let header = NetherZXAnimationHeader::from_bytes(&bytes[0..4]).unwrap();
+        assert!(header.validate());
+        assert_eq!(header.bone_count, 3);
+        assert_eq!(header.frame_count, 30);
+
+        assert_eq!(bytes.len(), header.file_size());
+        assert!(bytes[NetherZXAnimationHeader::SIZE..].iter().any(|b| *b != 0));
+    }
+
+    #[test]
+    fn write_wave_animation_writes_output_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("anim.nczxanim");
+        write_wave_animation(&path, 3, 30);
+        assert!(path.is_file());
+        assert!(std::fs::metadata(&path).unwrap().len() > 4);
+    }
 }

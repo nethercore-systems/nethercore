@@ -502,3 +502,78 @@ fn generate_horizontal_animation(path: &PathBuf, bone_count: u8, frame_count: u1
         frame_count
     );
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+    use zx_common::formats::animation::NetherZXAnimationHeader;
+    use zx_common::formats::mesh::NetherZXMeshHeader;
+    use zx_common::formats::skeleton::{INVERSE_BIND_MATRIX_SIZE, NetherZXSkeletonHeader};
+    use zx_common::packing::vertex_stride_packed;
+
+    #[test]
+    fn generates_skeleton_with_expected_size() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("skel.nczxskel");
+
+        generate_skeleton(
+            &path,
+            3,
+            &[[0.0, 0.0, 0.0], [0.0, -1.5, 0.0], [0.0, -3.0, 0.0]],
+        );
+
+        let bytes = std::fs::read(&path).unwrap();
+        let header = NetherZXSkeletonHeader::from_bytes(&bytes).unwrap();
+        assert_eq!(header.bone_count, 3);
+        assert_eq!(header.reserved, 0);
+
+        let expected_size = NetherZXSkeletonHeader::SIZE + (3 * INVERSE_BIND_MATRIX_SIZE);
+        assert_eq!(bytes.len(), expected_size);
+    }
+
+    #[test]
+    fn generates_skinned_mesh_with_expected_counts_and_layout() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("mesh.nczxmesh");
+
+        generate_arm_mesh(&path, 3, 1.5, true);
+
+        let bytes = std::fs::read(&path).unwrap();
+        let header = NetherZXMeshHeader::from_bytes(&bytes).unwrap();
+        assert_eq!(header.format, FORMAT_POS_NORMAL_SKINNED);
+
+        assert_eq!(header.vertex_count, 3 * 24);
+        assert_eq!(header.index_count, 3 * 36);
+
+        let stride = vertex_stride_packed(header.format) as usize;
+        let expected_size =
+            NetherZXMeshHeader::SIZE + (header.vertex_count as usize * stride) + (header.index_count as usize * 2);
+        assert_eq!(bytes.len(), expected_size);
+    }
+
+    #[test]
+    fn generates_animation_with_expected_size_and_nonzero_payload() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("anim.nczxanim");
+
+        generate_animation(
+            &path,
+            3,
+            30,
+            &[(0.0, 0.5), (0.5, 0.7), (1.0, 0.4)],
+        );
+
+        let bytes = std::fs::read(&path).unwrap();
+        let header = NetherZXAnimationHeader::from_bytes(&bytes).unwrap();
+        assert!(header.validate());
+        assert_eq!(header.bone_count, 3);
+        assert_eq!(header.frame_count, 30);
+        assert_eq!(bytes.len(), header.file_size());
+
+        assert!(
+            bytes[NetherZXAnimationHeader::SIZE..].iter().any(|b| *b != 0),
+            "expected some non-zero keyframe bytes"
+        );
+    }
+}

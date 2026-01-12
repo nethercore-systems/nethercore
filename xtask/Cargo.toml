@@ -23,3 +23,6 @@ image = { workspace = true }  # NOTE: Upgraded from 0.24 to 0.25
 sha2 = { workspace = true }
 rayon = { workspace = true }
 walkdir = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

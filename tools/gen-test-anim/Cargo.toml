@@ -9,4 +9,7 @@ name = "gen-test-anim"
 path = "src/main.rs"
 
 [dependencies]
-zx-common = { path = "../../zx-common" }
+zx-common = { path = "../../zx-common", default-features = false }
+
+[dev-dependencies]
+tempfile = { workspace = true }

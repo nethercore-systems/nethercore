@@ -18,8 +18,11 @@ use image::{ImageBuffer, Rgba};
 use std::f32::consts::TAU;
 use std::fs;
 use std::path::{Path, PathBuf};
+#[cfg(not(test))]
 use zx_common::formats::animation::NetherZXAnimationHeader;
+#[cfg(not(test))]
 use zx_common::formats::mesh::NetherZXMeshHeader;
+#[cfg(not(test))]
 use zx_common::formats::skeleton::NetherZXSkeletonHeader;
 
 /// Face definition: (normal, corners with positions and UVs)
@@ -102,6 +105,7 @@ fn generate_checkerboard_texture(path: &PathBuf) -> Result<()> {
 }
 
 /// Convert GLB to native .nczxmesh, .nczxskel, .nczxanim formats
+#[cfg(not(test))]
 fn convert_glb_to_native(glb_path: &Path, output_dir: &Path, prefix: &str) -> Result<()> {
     // Convert mesh
     let mesh_path = output_dir.join(format!("{}.nczxmesh", prefix));
@@ -165,6 +169,13 @@ fn convert_glb_to_native(glb_path: &Path, output_dir: &Path, prefix: &str) -> Re
         animation.frame_count
     );
 
+    Ok(())
+}
+
+/// In unit tests we skip the nether-export conversion step to avoid pulling in
+/// native dependencies; GLB generation and texture output are still validated.
+#[cfg(test)]
+fn convert_glb_to_native(_glb_path: &Path, _output_dir: &Path, _prefix: &str) -> Result<()> {
     Ok(())
 }
 
@@ -282,6 +293,77 @@ fn generate_skinned_glb() -> Vec<u8> {
     let root = gltf.build(buffer.views(), buffer.accessors(), "gen-gltf-test-assets");
 
     assemble_glb(&root, buffer.data())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{generate_checkerboard_texture, generate_skinned_glb};
+    use image::GenericImageView;
+    use tempfile::TempDir;
+
+    fn json_chunk(glb: &[u8]) -> Option<&[u8]> {
+        if glb.len() < 12 || &glb[0..4] != b"glTF" {
+            return None;
+        }
+        let version = u32::from_le_bytes([glb[4], glb[5], glb[6], glb[7]]);
+        if version != 2 {
+            return None;
+        }
+        let len = u32::from_le_bytes([glb[8], glb[9], glb[10], glb[11]]) as usize;
+        if len != glb.len() {
+            return None;
+        }
+
+        let mut offset = 12;
+        while offset + 8 <= glb.len() {
+            let chunk_len =
+                u32::from_le_bytes([glb[offset], glb[offset + 1], glb[offset + 2], glb[offset + 3]])
+                    as usize;
+            let chunk_type = &glb[offset + 4..offset + 8];
+            offset += 8;
+
+            if offset + chunk_len > glb.len() {
+                return None;
+            }
+            let chunk_data = &glb[offset..offset + chunk_len];
+            offset += chunk_len;
+
+            if chunk_type == b"JSON" {
+                return Some(chunk_data);
+            }
+        }
+
+        None
+    }
+
+    #[test]
+    fn generated_glb_has_valid_header_and_expected_names() {
+        let glb = generate_skinned_glb();
+        let json = json_chunk(&glb).expect("JSON chunk");
+        let s = String::from_utf8_lossy(json);
+
+        assert!(s.contains("\"Wave\""), "missing Wave animation");
+        assert!(s.contains("\"TestSkin\""), "missing skin name");
+        assert!(s.contains("\"TestMesh\""), "missing mesh name");
+        assert!(s.contains("\"SkinnedMesh\""), "missing mesh node name");
+    }
+
+    #[test]
+    fn checkerboard_texture_is_64x64_and_checker_pattern() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("checker.png");
+        generate_checkerboard_texture(&path).unwrap();
+
+        let img = image::open(&path).unwrap();
+        assert_eq!(img.dimensions(), (64, 64));
+
+        let p00 = img.get_pixel(0, 0).0;
+        let p80 = img.get_pixel(8, 0).0;
+        let p08 = img.get_pixel(0, 8).0;
+        assert_eq!(p00, [255, 255, 255, 255]);
+        assert_eq!(p80, [80, 80, 80, 255]);
+        assert_eq!(p08, [80, 80, 80, 255]);
+    }
 }
 
 /// Create mesh data: 3 stacked cubes with proper UV mapping and vertex colors

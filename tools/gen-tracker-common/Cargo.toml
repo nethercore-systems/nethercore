@@ -6,3 +6,6 @@ description = "Shared utilities for procedural tracker music generators"
 
 [dependencies]
 # No external deps - pure Rust
+
+[dev-dependencies]
+tempfile = "3"

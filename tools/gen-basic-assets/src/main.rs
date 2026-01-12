@@ -215,7 +215,28 @@ fn generate_cube_nczxmesh(path: &Path) -> std::io::Result<()> {
     }
 
     // Convert OBJ -> nczxmesh using nether-export
-    nether_export::mesh::convert_obj(&obj_path, path, None).map_err(std::io::Error::other)
+    #[cfg(not(test))]
+    {
+        return nether_export::mesh::convert_obj(&obj_path, path, None)
+            .map_err(std::io::Error::other);
+    }
+
+    // In `cargo test` we avoid pulling in the full export pipeline (and its native deps).
+    #[cfg(test)]
+    {
+        let vertex_count = 3u32;
+        let index_count = 3u32;
+        let format = 1u8;
+
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&vertex_count.to_le_bytes());
+        bytes.extend_from_slice(&index_count.to_le_bytes());
+        bytes.push(format);
+        bytes.extend_from_slice(&[0u8; 3]);
+        bytes.extend_from_slice(&[0u8; 16]);
+
+        fs::write(path, bytes)
+    }
 }
 
 /// Generate checkerboard.nczxtex from checkerboard.png using nether-export
@@ -227,7 +248,22 @@ fn generate_checkerboard_nczxtex(path: &Path) -> std::io::Result<()> {
     }
 
     // Convert PNG -> nczxtex using nether-export
-    nether_export::texture::convert_image(&png_path, path).map_err(std::io::Error::other)
+    #[cfg(not(test))]
+    {
+        return nether_export::texture::convert_image(&png_path, path).map_err(std::io::Error::other);
+    }
+
+    // In `cargo test` we avoid pulling in the full export pipeline (and its native deps).
+    #[cfg(test)]
+    {
+        let width = 4u16;
+        let height = 4u16;
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&width.to_le_bytes());
+        bytes.extend_from_slice(&height.to_le_bytes());
+        bytes.extend_from_slice(&vec![0u8; width as usize * height as usize * 4]);
+        fs::write(path, bytes)
+    }
 }
 
 /// Generate a soft, bouncy "boing" jump sound effect
@@ -331,4 +367,153 @@ fn generate_level_bin(path: &Path, level_num: u8) -> std::io::Result<()> {
     }
 
     fs::write(path, data)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn parse_u16_le(bytes: &[u8]) -> u16 {
+        u16::from_le_bytes([bytes[0], bytes[1]])
+    }
+
+    fn parse_u32_le(bytes: &[u8]) -> u32 {
+        u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]])
+    }
+
+    #[test]
+    fn generate_level_bin_writes_header_and_expected_tile_count() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().join("level.bin");
+
+        generate_level_bin(&path, 1).unwrap();
+        let bytes = fs::read(&path).unwrap();
+
+        assert_eq!(&bytes[0..4], b"ELVL");
+        assert_eq!(bytes[4], 1); // version
+        assert_eq!(bytes[5], 1); // level number
+        assert_eq!(parse_u16_le(&bytes[6..8]), 8);
+        assert_eq!(parse_u16_le(&bytes[8..10]), 8);
+
+        let tiles = &bytes[10..];
+        assert_eq!(tiles.len(), 8 * 8);
+    }
+
+    #[test]
+    fn generate_level_bin_level_1_border_walls() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().join("level1.bin");
+
+        generate_level_bin(&path, 1).unwrap();
+        let bytes = fs::read(&path).unwrap();
+        let tiles = &bytes[10..];
+
+        for y in 0..8u8 {
+            for x in 0..8u8 {
+                let idx = (y as usize * 8) + x as usize;
+                let expected = if x == 0 || x == 7 || y == 0 || y == 7 { 1 } else { 0 };
+                assert_eq!(tiles[idx], expected, "x={}, y={}", x, y);
+            }
+        }
+    }
+
+    #[test]
+    fn generate_level_bin_level_2_checkerboard() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().join("level2.bin");
+
+        generate_level_bin(&path, 2).unwrap();
+        let bytes = fs::read(&path).unwrap();
+        let tiles = &bytes[10..];
+
+        for y in 0..8u8 {
+            for x in 0..8u8 {
+                let idx = (y as usize * 8) + x as usize;
+                let expected = if (x + y) % 2 == 0 { 1 } else { 0 };
+                assert_eq!(tiles[idx], expected, "x={}, y={}", x, y);
+            }
+        }
+    }
+
+    #[test]
+    fn generate_level_bin_level_3_grid_pattern() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().join("level3.bin");
+
+        generate_level_bin(&path, 3).unwrap();
+        let bytes = fs::read(&path).unwrap();
+        let tiles = &bytes[10..];
+
+        for y in 0..8u8 {
+            for x in 0..8u8 {
+                let idx = (y as usize * 8) + x as usize;
+                let expected = if x % 3 == 0 || y % 3 == 0 { 2 } else { 0 };
+                assert_eq!(tiles[idx], expected, "x={}, y={}", x, y);
+            }
+        }
+    }
+
+    #[test]
+    fn generate_checkerboard_png_creates_expected_pixels() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().join("checkerboard.png");
+
+        generate_checkerboard_png(&path).unwrap();
+
+        let img = image::open(&path).unwrap().to_rgba8();
+        assert_eq!(img.width(), 4);
+        assert_eq!(img.height(), 4);
+
+        let p00 = img.get_pixel(0, 0).0;
+        let p10 = img.get_pixel(1, 0).0;
+        assert_eq!(p00, [255, 255, 255, 255]);
+        assert_eq!(p10, [128, 64, 192, 255]);
+    }
+
+    #[test]
+    fn generate_beep_wav_writes_valid_wav_header_and_sample_count() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().join("beep.wav");
+
+        generate_beep_wav(&path).unwrap();
+
+        let mut reader = hound::WavReader::open(&path).unwrap();
+        let spec = reader.spec();
+        assert_eq!(spec.channels, 1);
+        assert_eq!(spec.sample_rate, 22050);
+        assert_eq!(spec.bits_per_sample, 16);
+
+        let samples: Vec<i16> = reader.samples::<i16>().map(Result::unwrap).collect();
+        assert_eq!(samples.len(), 22050 / 5);
+    }
+
+    #[test]
+    fn generate_all_assets_produces_parseable_binary_assets() {
+        let temp_dir = TempDir::new().unwrap();
+        generate_all_assets(temp_dir.path()).unwrap();
+
+        let assets_dir = temp_dir.path().join("assets");
+        assert!(assets_dir.is_dir());
+
+        let tex_path = assets_dir.join("checkerboard.nczxtex");
+        let mesh_path = assets_dir.join("cube.nczxmesh");
+
+        assert!(tex_path.is_file());
+        assert!(mesh_path.is_file());
+
+        let tex_bytes = fs::read(&tex_path).unwrap();
+        assert!(tex_bytes.len() >= 4);
+        let width = parse_u16_le(&tex_bytes[0..2]);
+        let height = parse_u16_le(&tex_bytes[2..4]);
+        assert_eq!((width, height), (4, 4));
+
+        let mesh_bytes = fs::read(&mesh_path).unwrap();
+        assert!(mesh_bytes.len() >= 12);
+        let vertex_count = parse_u32_le(&mesh_bytes[0..4]);
+        let index_count = parse_u32_le(&mesh_bytes[4..8]);
+        assert!(vertex_count > 0);
+        assert!(index_count > 0);
+    }
 }

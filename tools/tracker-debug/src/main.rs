@@ -3,24 +3,40 @@
 //! A CLI tool for testing and debugging the tracker music pipeline with
 //! real-time playback and interactive controls.
 
-mod audio;
 mod cli;
-mod display;
-mod player;
+#[cfg(any(test, feature = "playback"))]
 mod sound_loader;
 
+#[cfg(all(not(test), feature = "playback"))]
+mod audio;
+#[cfg(all(not(test), feature = "playback"))]
+mod display;
+#[cfg(all(not(test), feature = "playback"))]
+mod player;
+
+#[cfg(all(not(test), feature = "playback"))]
 use anyhow::{Result, bail};
+#[cfg(all(not(test), feature = "playback"))]
 use clap::Parser;
+#[cfg(all(not(test), feature = "playback"))]
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+#[cfg(all(not(test), feature = "playback"))]
 use std::path::Path;
+#[cfg(all(not(test), feature = "playback"))]
 use std::sync::{Arc, Mutex};
+#[cfg(all(not(test), feature = "playback"))]
 use std::time::Duration;
 
+#[cfg(all(not(test), feature = "playback"))]
 use audio::AudioPlayer;
+#[cfg(all(not(test), feature = "playback"))]
 use cli::{Cli, Commands};
+#[cfg(all(not(test), feature = "playback"))]
 use display::Display;
+#[cfg(all(not(test), feature = "playback"))]
 use player::{DebugPlayer, PlayerCommand};
 
+#[cfg(all(not(test), feature = "playback"))]
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -38,6 +54,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+#[cfg(all(not(test), feature = "playback"))]
 fn run_player(path: &Path, via_ncxm: bool, via_ncit: bool, verbose: bool) -> Result<()> {
     // Determine format from extension
     let extension = path
@@ -74,6 +91,7 @@ fn run_player(path: &Path, via_ncxm: bool, via_ncit: bool, verbose: bool) -> Res
     result
 }
 
+#[cfg(all(not(test), feature = "playback"))]
 fn main_loop(player: &Arc<Mutex<DebugPlayer>>, display: &mut Display) -> Result<()> {
     loop {
         // Poll for keyboard input with timeout
@@ -112,4 +130,10 @@ fn main_loop(player: &Arc<Mutex<DebugPlayer>>, display: &mut Display) -> Result<
         let state = player.lock().unwrap().get_display_state();
         display.render(&state)?;
     }
+}
+
+#[cfg(all(not(test), not(feature = "playback")))]
+fn main() {
+    eprintln!("tracker-debug built without `playback` feature; enable it to run the interactive player.");
+    std::process::exit(2);
 }

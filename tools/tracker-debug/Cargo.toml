@@ -12,7 +12,7 @@ path = "src/main.rs"
 nether-xm = { path = "../../nether-xm" }
 nether-it = { path = "../../nether-it" }
 nether-tracker = { path = "../../nether-tracker" }
-nethercore-zx = { path = "../../nethercore-zx" }
+nethercore-zx = { path = "../../nethercore-zx", default-features = false, optional = true }
 
 # CLI & Terminal
 clap = { workspace = true }
@@ -20,7 +20,11 @@ ratatui = { workspace = true }
 crossterm = { workspace = true }
 
 # Audio
-cpal = { workspace = true }
+cpal = { workspace = true, optional = true }
 
 # Error handling
 anyhow = { workspace = true }
+
+[features]
+default = ["playback"]
+playback = ["dep:nethercore-zx", "dep:cpal"]
