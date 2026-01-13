@@ -179,12 +179,12 @@ The host application includes screenshot and GIF recording capabilities:
 | GIF Toggle | **F10** | Start/stop GIF recording |
 
 Files are saved to:
-- Screenshots: `~/.nethercore/Nethercore/screenshots/`
-- GIFs: `~/.nethercore/Nethercore/gifs/`
+- Screenshots: your Nethercore data directory under `screenshots/`
+- GIFs: your Nethercore data directory under `gifs/`
 
 Filenames include game name and timestamp (e.g., `platformer_screenshot_2025-01-15_14-30-45.png`).
 
-**Configuration** (`~/.nethercore/config.toml`):
+**Configuration** (`config.toml` in your platform-specific config directory):
 ```toml
 [capture]
 screenshot = "F9"
@@ -208,7 +208,7 @@ These docs are built with [mdBook](https://rust-lang.github.io/mdBook/).
 
 ```bash
 # Install mdBook
-cargo install mdbook
+cargo install mdbook mdbook-tabs
 
 # Build static HTML (outputs to docs/book/book/)
 cd docs/book

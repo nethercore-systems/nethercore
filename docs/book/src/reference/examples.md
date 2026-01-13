@@ -1,21 +1,21 @@
 # Example Games
 
-The Nethercore repository includes 41 working examples organized into 8 categories. Each example is a complete, buildable project.
+The Nethercore repository includes **46 working examples** organized into 8 categories. Each example is a complete, buildable project (Rust, C, or Zig).
 
 ## Location
 
 Examples are organized by category:
 
 ```
-nethercore/examples/
+examples/
 ├── 1-getting-started/   (4 examples)
 ├── 2-graphics/          (6 examples)
 ├── 3-inspectors/        (13 examples)
 ├── 4-animation/         (6 examples)
-├── 5-audio/             (2 examples)
-├── 6-assets/            (4 examples)
+├── 5-audio/             (5 examples)
+├── 6-assets/            (7 examples)
 ├── 7-games/             (2 examples)
-├── 8-advanced/          (4 examples)
+├── 8-advanced/          (3 examples)
 └── examples-common/     (support library)
 ```
 
@@ -23,12 +23,12 @@ nethercore/examples/
 
 New to Nethercore? Follow this progression:
 
-1. **[hello-world](https://github.com/nethercore/nethercore/tree/main/examples/1-getting-started/hello-world)** - 2D text and rectangles, basic input
-2. **[triangle](https://github.com/nethercore/nethercore/tree/main/examples/1-getting-started/triangle)** - Your first 3D shape
-3. **[textured-quad](https://github.com/nethercore/nethercore/tree/main/examples/2-graphics/textured-quad)** - Loading and applying textures
-4. **[procedural-shapes](https://github.com/nethercore/nethercore/tree/main/examples/2-graphics/procedural-shapes)** - Procedural meshes with texture toggle
-5. **[paddle](https://github.com/nethercore/nethercore/tree/main/examples/7-games/paddle)** - Complete game with the [tutorial](../tutorials/paddle/index.md)
-6. **[platformer](https://github.com/nethercore/nethercore/tree/main/examples/7-games/platformer)** - Advanced example with physics, billboards, UI
+1. **[hello-world](https://github.com/nethercore-systems/nethercore/tree/main/examples/1-getting-started/hello-world)** - 2D text and rectangles, basic input
+2. **[triangle](https://github.com/nethercore-systems/nethercore/tree/main/examples/1-getting-started/triangle)** - Your first 3D shape
+3. **[textured-quad](https://github.com/nethercore-systems/nethercore/tree/main/examples/2-graphics/textured-quad)** - Loading and applying textures
+4. **[procedural-shapes](https://github.com/nethercore-systems/nethercore/tree/main/examples/2-graphics/procedural-shapes)** - Procedural meshes with texture toggle
+5. **[paddle](https://github.com/nethercore-systems/nethercore/tree/main/examples/7-games/paddle)** - Complete game with the [tutorial](../tutorials/paddle/index.md)
+6. **[platformer](https://github.com/nethercore-systems/nethercore/tree/main/examples/7-games/platformer)** - Advanced example with physics, billboards, UI
 
 ## By Category
 
@@ -86,7 +86,10 @@ New to Nethercore? Follow this progression:
 | Example | Description |
 |---------|-------------|
 | **audio-demo** | Sound effects, panning, channels, looping |
-| **tracker-demo** | XM tracker music playback |
+| **tracker-demo-xm** | XM tracker music playback |
+| **tracker-demo-xm-split** | XM tracker music with split sample workflow |
+| **tracker-demo-it** | IT tracker music playback |
+| **tracker-demo-it-split** | IT tracker demo with separate sample assets |
 
 ### 6. Asset Loading
 
@@ -96,6 +99,9 @@ New to Nethercore? Follow this progression:
 | **font-demo** | Custom font loading with rom_font |
 | **level-loader** | Level data loading with rom_data |
 | **asset-test** | Pre-converted asset testing (.nczxmesh, .nczxtex) |
+| **gltf-test** | GLTF import pipeline validation (mesh, skeleton, animation) |
+| **glb-inline** | Direct `.glb` references with multiple animations |
+| **glb-rigid** | Rigid transform animation imported from GLB |
 
 ### 7. Complete Games
 
@@ -111,7 +117,6 @@ New to Nethercore? Follow this progression:
 | **stencil-demo** | All 4 stencil masking modes |
 | **viewport-test** | Split-screen rendering (2P, 4P) |
 | **rear-mirror** | Rear-view mirror using viewport |
-| **scope-shooter** | Sniper scope mechanic with stencil |
 
 ### Support Library
 
@@ -123,7 +128,7 @@ New to Nethercore? Follow this progression:
 
 ### Using nether CLI (Recommended for Game Developers)
 
-Each example includes a `nether.toml` manifest:
+Many examples include a `nether.toml` manifest:
 
 ```bash
 cd examples/7-games/paddle
@@ -140,11 +145,11 @@ To build and install all examples at once:
 cargo xtask build-examples
 ```
 
-This compiles all examples and installs them to `~/.nethercore/games/` for testing in the library UI.
+This builds the Cargo-based examples and installs them into your Nethercore data directory under `games/` (the command prints the exact path).
 
 ## Example Structure
 
-All examples follow this pattern:
+Most Rust examples follow this pattern:
 
 ```
 category/example-name/

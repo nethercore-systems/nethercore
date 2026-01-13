@@ -83,7 +83,7 @@ use nethercore_shared::math::BoneMatrix3x4;
 
 /// Nethercore ZX data pack
 ///
-/// Contains all bundled assets for an Nethercore ZX ROM. Assets are stored
+/// Contains all bundled assets for a Nethercore ZX ROM. Assets are stored
 /// in GPU-ready formats and loaded directly to VRAM/audio memory.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, Encode, Decode)]
 pub struct ZXDataPack {

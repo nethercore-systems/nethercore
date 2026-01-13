@@ -12,7 +12,7 @@ pub struct InstallArgs {
     #[arg(value_name = "ROM_FILE")]
     pub rom_path: PathBuf,
 
-    /// Override data directory (default: ~/.nethercore)
+    /// Override data directory (default: platform-specific Nethercore data dir)
     #[arg(long, value_name = "DIR")]
     pub data_dir: Option<PathBuf>,
 }

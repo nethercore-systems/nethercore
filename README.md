@@ -42,7 +42,7 @@ If you prefer to build from source:
 # Clone and build
 git clone https://github.com/nethercore-systems/nethercore
 cd nethercore
-cargo build --release
+cargo build --release -p nethercore-library -p nether-cli
 
 # Binaries will be in target/release/
 ```
@@ -131,9 +131,9 @@ cargo xtask build-examples
 ```
 
 This will:
-1. Compile each example to WASM (targeting `wasm32-unknown-unknown`)
-2. Install them to `~/.nethercore/games/` (or platform-specific equivalent)
-3. Generate a manifest for each game
+1. Build the Rust examples under `/examples` (directories with `Cargo.toml`)
+2. Install them into your Nethercore data directory under `games/` (the command prints the exact path)
+3. Generate a manifest for each installed example
 
 **Run the examples:**
 ```bash
@@ -143,15 +143,15 @@ cargo run
 # Or launch a game directly (faster for development)
 cargo run -- platformer      # Launch by full name
 cargo run -- plat            # Launch by prefix match
-cargo run -- CUBE            # Case-insensitive
+cargo run -- PADDLE          # Case-insensitive
 ```
 
 The examples will appear in the Nethercore ZX game library. Use the refresh button if you add new games while the app is running.
 
 **CLI Launch Features:**
-- **Exact matching**: `cargo run -- cube` launches cube
+- **Exact matching**: `cargo run -- paddle` launches paddle
 - **Prefix matching**: `cargo run -- plat` launches platformer (if unique)
-- **Case-insensitive**: `CUBE`, `Cube`, and `cube` all work
+- **Case-insensitive**: `PADDLE`, `Paddle`, and `paddle` all work
 - **Error messages**: Invalid games show suggestions and available games list
 
 The `/examples` directory contains 46 example games covering graphics, animation, audio, and more.
@@ -194,14 +194,14 @@ Nethercore includes built-in screenshot and GIF recording:
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| Screenshot | **F9** | Save PNG to `~/.nethercore/Nethercore/screenshots/` |
-| GIF Toggle | **F10** | Start/stop GIF recording, saves to `~/.nethercore/Nethercore/gifs/` |
+| Screenshot | **F9** | Save PNG to your Nethercore data directory under `screenshots/` |
+| GIF Toggle | **F10** | Start/stop GIF recording, saves to your Nethercore data directory under `gifs/` |
 
 Filenames include the game name and timestamp: `platformer_screenshot_2025-01-15_14-30-45.png`
 
 ### Configuration
 
-All capture keys are configurable in `~/.nethercore/config.toml`:
+All capture keys are configurable in `config.toml` (stored in your platform-specific config directory):
 
 ```toml
 [capture]
@@ -217,7 +217,7 @@ Searchable API documentation is available as an mdBook:
 
 ```bash
 # Install mdBook
-cargo install mdbook
+cargo install mdbook mdbook-tabs
 
 # Build and serve locally
 cd docs/book

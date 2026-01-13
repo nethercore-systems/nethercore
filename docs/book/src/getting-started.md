@@ -14,7 +14,7 @@ After completing the Getting Started guides, continue with:
 
 - **[Build Paddle](./tutorials/paddle/index.md)** - A complete game tutorial from scratch
 - **[API Reference](./cheat-sheet.md)** - All available functions
-- **[Example Games](https://github.com/nethercore/nethercore/tree/main/examples)** - 28+ examples to learn from
+- **[Example Games](https://github.com/nethercore-systems/nethercore/tree/main/examples)** - Dozens of examples to learn from
 
 ## Minimum Requirements
 

@@ -24,7 +24,7 @@ Fantasy console runtime/player with rollback netcode, console implementations (Z
 - Tests: `cargo test`
 - Format: `cargo fmt`
 - Build examples: `cargo xtask build-examples`
-- Serve mdBook: `cd docs/book; mdbook serve`
+- Serve mdBook: `cd docs/book; mdbook serve` (requires `mdbook` + `mdbook-tabs` installed)
 
 Handy cargo aliases (see `.cargo/config.toml`):
 - `cargo xtask …` (alias to `run --package xtask --`)

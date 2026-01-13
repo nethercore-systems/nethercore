@@ -1,8 +1,8 @@
 //! Screenshot and GIF recording functionality.
 //!
 //! Provides console-agnostic screen capture capabilities for gameplay recording.
-//! - Screenshots saved as PNG to `~/.nethercore/screenshots/`
-//! - GIFs saved to `~/.nethercore/gifs/`
+//! - Screenshots saved as PNG under `<data_dir>/screenshots/`
+//! - GIFs saved under `<data_dir>/gifs/`
 //!
 //! Screenshots are signed with HMAC to verify they came from the Nethercore player
 //! when uploaded to the platform.

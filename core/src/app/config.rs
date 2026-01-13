@@ -1,4 +1,4 @@
-//! Configuration management (~/.nethercore/config.toml)
+//! Configuration management (platform config directory)
 //!
 //! Handles loading, saving, and providing defaults for application settings.
 //! Settings are stored in TOML format in the platform-specific config directory.
@@ -73,7 +73,7 @@ pub struct AudioConfig {
 /// Configures hotkeys and behavior for the debug inspection panel.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DebugConfig {
-    /// Toggle debug inspection panel (default: F4)
+    /// Toggle runtime stats panel (default: F3)
     #[serde(default = "default_panel_toggle")]
     pub panel_toggle: String,
     /// Toggle pause/resume (default: F5)
@@ -190,13 +190,10 @@ impl Default for CaptureConfig {
     }
 }
 
-/// Returns the platform-specific configuration directory.
+/// Returns the platform-specific configuration directory used by Nethercore.
 ///
-/// On Windows: `%APPDATA%\Nethercore\config`
-/// On macOS: `~/Library/Application Support/io.nethercore.Nethercore`
-/// On Linux: `~/.config/Nethercore`
-///
-/// Returns `None` if the home directory cannot be determined.
+/// Uses `directories::ProjectDirs::from("io.nethercore", "", "Nethercore")`.
+/// The config file is stored at `<config_dir>/config.toml`.
 pub fn config_dir() -> Option<PathBuf> {
     directories::ProjectDirs::from("io.nethercore", "", "Nethercore")
         .map(|dirs| dirs.config_dir().to_path_buf())
@@ -204,12 +201,8 @@ pub fn config_dir() -> Option<PathBuf> {
 
 /// Returns the platform-specific data directory for game storage.
 ///
-/// On Windows: `%APPDATA%\Nethercore\data`
-/// On macOS: `~/Library/Application Support/io.nethercore.Nethercore`
-/// On Linux: `~/.local/share/Nethercore`
-///
-/// This is where downloaded games and save data are stored.
-/// Returns `None` if the home directory cannot be determined.
+/// Uses `directories::ProjectDirs::from("io.nethercore", "", "Nethercore")`.
+/// This is where downloaded games and save data are stored (typically under `<data_dir>/games/`).
 pub fn data_dir() -> Option<PathBuf> {
     directories::ProjectDirs::from("io.nethercore", "", "Nethercore")
         .map(|dirs| dirs.data_dir().to_path_buf())

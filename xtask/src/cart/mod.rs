@@ -14,7 +14,7 @@ use clap::Subcommand;
 #[derive(Debug, Subcommand)]
 #[allow(clippy::large_enum_variant)]
 pub enum CartCommand {
-    /// Create an Nethercore ZX ROM (.nczx) from a WASM file
+    /// Create a Nethercore ZX ROM (.nczx) from a WASM file
     #[command(name = "create-zx")]
     CreateZx(create_zx::CreateZxArgs),
 

@@ -6,7 +6,7 @@ Convert 3D models, textures, and audio into optimized Nethercore formats.
 
 ## Quick Start
 
-Getting assets into an Nethercore game is 3 steps:
+Getting assets into a Nethercore game is 3 steps:
 
 **1. Export from your 3D tool** (Blender, Maya, etc.) as glTF, GLB, or OBJ
 

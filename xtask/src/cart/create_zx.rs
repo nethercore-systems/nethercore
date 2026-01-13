@@ -10,7 +10,7 @@ use nethercore_shared::{
 };
 use zx_common::{ZXMetadata, ZXRom};
 
-/// Arguments for creating an Nethercore ZX ROM
+/// Arguments for creating a Nethercore ZX ROM
 #[derive(Debug, Args)]
 pub struct CreateZxArgs {
     /// Path to the compiled WASM file

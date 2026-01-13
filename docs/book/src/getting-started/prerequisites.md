@@ -50,10 +50,8 @@ rustup target list --installed | grep wasm32
 ```
 
 You should see:
-```
-rustc 1.75.0 (82e1608df 2023-12-21)
-wasm32-unknown-unknown
-```
+- a `rustc ...` version line
+- `wasm32-unknown-unknown` in the installed target list
 
 {{#endtab}}
 
@@ -102,7 +100,6 @@ Or add the include path to your build.
 
 You should see:
 ```
-clang version 18.1.2 (https://github.com/aspect-build/llvm-project ...)
 Target: wasm32-unknown-wasi
 ```
 
@@ -144,7 +141,7 @@ zig version
 
 You should see:
 ```
-0.13.0
+0.x.y
 ```
 
 {{#endtab}}

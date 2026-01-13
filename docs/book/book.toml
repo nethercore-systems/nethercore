@@ -13,8 +13,8 @@ build-dir = "book"
 [output.html]
 default-theme = "navy"
 preferred-dark-theme = "navy"
-git-repository-url = "https://github.com/nethercore/nethercore"
-edit-url-template = "https://github.com/nethercore/nethercore/edit/main/docs/book/{path}"
+git-repository-url = "https://github.com/nethercore-systems/nethercore"
+edit-url-template = "https://github.com/nethercore-systems/nethercore/edit/main/docs/book/{path}"
 additional-css = ["theme/tabs.css", "theme/lang-selector.css"]
 additional-js = ["theme/tabs.js", "theme/lang-selector.js"]
 

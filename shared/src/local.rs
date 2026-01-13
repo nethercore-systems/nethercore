@@ -11,7 +11,7 @@ fn default_console_type() -> String {
 
 /// Cached game metadata stored locally.
 ///
-/// Stored as `manifest.json` in `~/.nethercore/games/{game_id}/`.
+/// Stored as `manifest.json` in `<data_dir>/games/{game_id}/`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LocalGameManifest {
     /// Unique game identifier (matches API game ID).

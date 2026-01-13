@@ -304,17 +304,19 @@ nether build --output my-game.nczx
 # Launch the game library
 cargo run -p nethercore-library
 
-# Or copy ROM to games directory manually
-cp my-game.nczx ~/.nethercore/roms/
+# Or install the ROM into your local library (extracts to `games/{game_id}/`)
+cargo xtask cart install my-game.nczx
 ```
 
 ### 3. Verify Installation
 
 Check that the game was installed correctly:
 
+> Tip: `cargo xtask build-examples` prints the resolved games directory (`Games directory: ...`).
+
 ```bash
-# Check games directory
-ls ~/.nethercore/games/my-game/
+# Check the installed game directory (platform-specific base dir)
+ls "<nethercore_data_dir>/games/my-game/"
 
 # Should contain:
 # - manifest.json

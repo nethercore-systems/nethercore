@@ -26,8 +26,7 @@ use std::path::PathBuf;
 pub trait DataDirProvider: Send + Sync {
     /// Returns the platform-specific data directory path.
     ///
-    /// This is where games are stored locally (typically `~/.nethercore/games/`
-    /// or platform equivalent).
+    /// This is where games are stored locally (typically `<data_dir>/games/`).
     ///
     /// Returns `None` if the home directory cannot be determined or the
     /// platform doesn't support data directories.
@@ -36,7 +35,7 @@ pub trait DataDirProvider: Send + Sync {
 
 /// Default implementation of DataDirProvider using the standard Nethercore data directory.
 ///
-/// Uses `~/.nethercore/` (or platform equivalent) for all consoles.
+/// Uses the platform-specific Nethercore data directory for all consoles.
 /// This is suitable for most use cases where consoles share the same data directory.
 pub struct DefaultDataDirProvider;
 

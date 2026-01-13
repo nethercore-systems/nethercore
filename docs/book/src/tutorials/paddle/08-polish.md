@@ -261,14 +261,14 @@ Ideas to try:
 ### Build More Games
 
 Check out these resources:
-- **[Example Games](https://github.com/nethercore/nethercore/tree/main/examples)** — 28+ examples
+- **[Example Games](https://github.com/nethercore-systems/nethercore/tree/main/examples)** — Dozens of examples
 - **[API Reference](../../cheat-sheet.md)** — All available functions
 - **[Asset Pipeline](../../guides/asset-pipeline.md)** — Advanced asset workflows
 - **[Render Modes Guide](../../guides/render-modes.md)** — 3D graphics
 
 ### Join the Community
 
-- Share your game in [GitHub Discussions](https://github.com/nethercore/nethercore/discussions)
+- Share your game in [GitHub Discussions](https://github.com/nethercore-systems/nethercore/discussions)
 - Report bugs or request features
 - Help other developers
 
@@ -287,7 +287,7 @@ You can compare your code or use it as a reference.
 
 In this tutorial, you learned:
 
-1. **Setup** — Creating an Nethercore project
+1. **Setup** — Creating a Nethercore project
 2. **Drawing** — Using `draw_rect()` for 2D graphics
 3. **Input** — Reading sticks and buttons
 4. **Physics** — Ball movement and collision
@@ -298,4 +298,4 @@ In this tutorial, you learned:
 9. **Audio** — Loading and playing sound effects from ROM
 10. **Publishing** — Sharing your game with the world
 
-**You're now an Nethercore game developer!**
+**You're now a Nethercore game developer!**

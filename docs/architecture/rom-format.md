@@ -410,7 +410,7 @@ Displays:
 When a ROM is installed to the local library:
 
 ```
-~/.nethercore/games/{game_id}/
+<nethercore_data_dir>/games/{game_id}/
 ├── manifest.json        # Metadata for library UI
 ├── rom.wasm            # Extracted WASM code
 └── thumbnail.png       # Extracted thumbnail (if present)
@@ -458,7 +458,7 @@ Large game with assets:
 ## Error Messages
 
 **"Invalid NCZX magic bytes"**
-- File is not an Nethercore ZX ROM
+- File is not a Nethercore ZX ROM
 - File may be corrupted
 - Wrong ROM type
 

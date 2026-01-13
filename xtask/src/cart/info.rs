@@ -28,7 +28,7 @@ pub fn execute(args: InfoArgs) -> Result<()> {
     }
 }
 
-/// Inspect an Nethercore ZX ROM
+/// Inspect a Nethercore ZX ROM
 fn inspect_z_rom(rom_path: &PathBuf) -> Result<()> {
     // Read ROM file
     let rom_bytes = std::fs::read(rom_path)

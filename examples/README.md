@@ -39,7 +39,7 @@ nether build
 Build all examples at once:
 
 ```bash
-# From repository root - builds all examples and installs to ~/.nethercore/games/
+# From repository root - builds all Rust examples and installs them to your Nethercore data directory under `games/` (prints the exact path)
 cargo xtask build-examples
 
 # Run any example from the library
@@ -148,7 +148,7 @@ Sound effects and music playback.
 |---------|-------------|------------|--------------|
 | **audio-demo** | Sound effects, panning, channels, looping | 🟢 Beginner | `play_sound()`, channels, panning |
 | **tracker-demo-xm** | XM tracker music playback (three songs) | 🟡 Intermediate | XM modules, embedded sample extraction |
-| **tracker-demo-split** | XM tracker music with split sample workflow | 🟡 Intermediate | Split samples (WAV), explicit `[[assets.sounds]]` |
+| **tracker-demo-xm-split** | XM tracker music with split sample workflow | 🟡 Intermediate | Split samples (WAV), explicit `[[assets.sounds]]` |
 | **tracker-demo-it** | IT tracker music playback (three songs) | 🟡 Intermediate | IT modules, embedded sample extraction |
 | **tracker-demo-it-split** | IT tracker demo with separate sample assets | 🟡 Intermediate | Split assets, explicit `[[assets.sounds]]` |
 
