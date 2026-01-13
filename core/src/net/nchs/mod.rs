@@ -205,11 +205,8 @@ impl NchsSession {
     ///
     /// The guest connects to the host and waits for lobby updates.
     pub fn join(host_addr: &str, config: NchsConfig) -> Result<Self, NchsError> {
-        let guest_machine = GuestStateMachine::new(
-            host_addr,
-            config.netplay,
-            config.player_info.clone(),
-        )?;
+        let guest_machine =
+            GuestStateMachine::new(host_addr, config.netplay, config.player_info.clone())?;
 
         Ok(Self {
             inner: SessionInner::Guest(guest_machine),

@@ -308,7 +308,10 @@ mod tests {
 
         let samples: Vec<i16> = reader.samples::<i16>().map(Result::unwrap).collect();
         assert_eq!(samples.len(), expected_samples);
-        assert!(samples.iter().any(|s| *s != 0), "expected some non-zero samples");
+        assert!(
+            samples.iter().any(|s| *s != 0),
+            "expected some non-zero samples"
+        );
     }
 
     #[test]

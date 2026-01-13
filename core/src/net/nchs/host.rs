@@ -254,9 +254,10 @@ impl HostStateMachine {
                 }
                 // Update last_seen if this is a known player
                 if let Some(handle) = self.addr_to_handle.get(&from)
-                    && let Some(player) = self.players.get_mut(handle) {
-                        player.last_seen = Instant::now();
-                    }
+                    && let Some(player) = self.players.get_mut(handle)
+                {
+                    player.last_seen = Instant::now();
+                }
                 None
             }
             NchsMessage::PunchAck(_) => {

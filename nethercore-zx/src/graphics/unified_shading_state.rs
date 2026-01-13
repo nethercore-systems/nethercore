@@ -218,7 +218,15 @@ impl PackedEnvironmentState {
     /// Pack gradient parameters into data[offset..offset+5]
     /// Mode 0: Gradient - 4-color sky/ground gradient
     pub fn pack_gradient(&mut self, config: GradientConfig) {
-        let GradientConfig { offset, zenith, sky_horizon, ground_horizon, nadir, rotation, shift } = config;
+        let GradientConfig {
+            offset,
+            zenith,
+            sky_horizon,
+            ground_horizon,
+            nadir,
+            rotation,
+            shift,
+        } = config;
         self.data[offset] = zenith;
         self.data[offset + 1] = sky_horizon;
         self.data[offset + 2] = ground_horizon;
@@ -235,10 +243,10 @@ impl PackedEnvironmentState {
         // Blue sky defaults
         env.pack_gradient(GradientConfig {
             offset: 0,
-            zenith: 0x3366B2FF, // darker blue
-            sky_horizon: 0xB2D8F2FF, // light blue
+            zenith: 0x3366B2FF,         // darker blue
+            sky_horizon: 0xB2D8F2FF,    // light blue
             ground_horizon: 0x8B7355FF, // tan/brown
-            nadir: 0x4A3728FF, // dark brown
+            nadir: 0x4A3728FF,          // dark brown
             rotation: 0.0,
             shift: 0.0,
         });
@@ -255,7 +263,20 @@ impl PackedEnvironmentState {
     /// - data[3]: phase(u16, 16) + layer_count(2) + reserved(14) = 32 bits
     /// - data[4]: reserved
     pub fn pack_scatter(&mut self, config: ScatterConfig) {
-        let ScatterConfig { offset, variant, density, size, glow, streak_length, color_primary, color_secondary, parallax_rate, parallax_size, phase, layer_count } = config;
+        let ScatterConfig {
+            offset,
+            variant,
+            density,
+            size,
+            glow,
+            streak_length,
+            color_primary,
+            color_secondary,
+            parallax_rate,
+            parallax_size,
+            phase,
+            layer_count,
+        } = config;
         // data[0]: variant(2) + density(8) + size(8) + glow(8) + streak_len(6)
         self.data[offset] = (variant & 0x3)
             | ((density & 0xFF) << 2)
@@ -286,7 +307,18 @@ impl PackedEnvironmentState {
     /// - data[3]: color_accent (RGBA8)
     /// - data[4]: phase(u16) + reserved(16)
     pub fn pack_lines(&mut self, config: LinesConfig) {
-        let LinesConfig { offset, variant, line_type, thickness, spacing, fade_distance, color_primary, color_accent, accent_every, phase } = config;
+        let LinesConfig {
+            offset,
+            variant,
+            line_type,
+            thickness,
+            spacing,
+            fade_distance,
+            color_primary,
+            color_accent,
+            accent_every,
+            phase,
+        } = config;
         // data[0]: variant(2) + line_type(2) + thickness(8) + accent_every(8) + reserved(12)
         self.data[offset] = (variant & 0x3)
             | ((line_type & 0x3) << 2)
@@ -316,7 +348,17 @@ impl PackedEnvironmentState {
     /// - data[3]: sky_zenith (RGBA8)
     /// - data[4]: sky_horizon (RGBA8) - seed stored in shared data[10]
     pub fn pack_silhouette(&mut self, config: SilhouetteConfig) {
-        let SilhouetteConfig { offset, jaggedness, layer_count, color_near, color_far, sky_zenith, sky_horizon, parallax_rate, seed } = config;
+        let SilhouetteConfig {
+            offset,
+            jaggedness,
+            layer_count,
+            color_near,
+            color_far,
+            sky_zenith,
+            sky_horizon,
+            parallax_rate,
+            seed,
+        } = config;
         // data[0]: jaggedness(8) + layer_count(2) + parallax_rate(8) + reserved(14)
         self.data[offset] = (jaggedness & 0xFF)
             | (((layer_count.clamp(1, 3) - 1) & 0x3) << 8)
@@ -352,7 +394,19 @@ impl PackedEnvironmentState {
     /// - data[3]: parallax_rate(8) + reserved(8) + phase(16)
     /// - data[4]: reserved
     pub fn pack_rectangles(&mut self, config: RectanglesConfig) {
-        let RectanglesConfig { offset, variant, density, lit_ratio, size_min, size_max, aspect, color_primary, color_variation, parallax_rate, phase } = config;
+        let RectanglesConfig {
+            offset,
+            variant,
+            density,
+            lit_ratio,
+            size_min,
+            size_max,
+            aspect,
+            color_primary,
+            color_variation,
+            parallax_rate,
+            phase,
+        } = config;
         // data[0]: variant(2) + density(8) + lit_ratio(8) + size_min(6) + size_max(6) + aspect(2)
         self.data[offset] = (variant & 0x3)
             | ((density & 0xFF) << 2)
@@ -387,7 +441,21 @@ impl PackedEnvironmentState {
     ///
     /// Note: Does NOT use shared data[10] - can safely layer with other modes
     pub fn pack_room(&mut self, config: RoomConfig) {
-        let RoomConfig { offset, color_ceiling, color_floor, color_walls, panel_size, panel_gap, light_direction, light_intensity, corner_darken, room_scale, viewer_x, viewer_y, viewer_z } = config;
+        let RoomConfig {
+            offset,
+            color_ceiling,
+            color_floor,
+            color_walls,
+            panel_size,
+            panel_gap,
+            light_direction,
+            light_intensity,
+            corner_darken,
+            room_scale,
+            viewer_x,
+            viewer_y,
+            viewer_z,
+        } = config;
         // Convert viewer positions from i32 to snorm8 (clamp to -128..127, store as u8)
         let vx = ((viewer_x.clamp(-128, 127) as i8) as u8) as u32;
         let vy = ((viewer_y.clamp(-128, 127) as i8) as u8) as u32;
@@ -424,7 +492,21 @@ impl PackedEnvironmentState {
     /// - data[3]: color_far (RGBA8)
     /// - data[4]: phase(u16) + reserved(16)
     pub fn pack_curtains(&mut self, config: CurtainsConfig) {
-        let CurtainsConfig { offset, layer_count, density, height_min, height_max, width, spacing, waviness, color_near, color_far, glow, parallax_rate, phase } = config;
+        let CurtainsConfig {
+            offset,
+            layer_count,
+            density,
+            height_min,
+            height_max,
+            width,
+            spacing,
+            waviness,
+            color_near,
+            color_far,
+            glow,
+            parallax_rate,
+            phase,
+        } = config;
         // data[0]: layer_count(2) + density(8) + height_min(6) + height_max(6) + width(5) + spacing(5)
         self.data[offset] = ((layer_count.clamp(1, 3) - 1) & 0x3)
             | ((density & 0xFF) << 2)
@@ -460,7 +542,18 @@ impl PackedEnvironmentState {
     ///
     /// Note: phase is stored in shared data[10] upper 16 bits
     pub fn pack_rings(&mut self, config: RingsConfig) {
-        let RingsConfig { offset, ring_count, thickness, color_a, color_b, center_color, center_falloff, spiral_twist, axis, phase } = config;
+        let RingsConfig {
+            offset,
+            ring_count,
+            thickness,
+            color_a,
+            color_b,
+            center_color,
+            center_falloff,
+            spiral_twist,
+            axis,
+            phase,
+        } = config;
         // data[0]: ring_count(8) + thickness(8) + center_falloff(8) + reserved(8)
         self.data[offset] =
             (ring_count & 0xFF) | ((thickness & 0xFF) << 8) | ((center_falloff & 0xFF) << 16);

@@ -13,7 +13,8 @@ pub fn decompile(replay: &Replay, layout: &dyn InputLayout) -> ReplayScript {
     // Convert each frame to a FrameEntry
     for (frame_idx, frame_inputs) in replay.inputs.iter().enumerate() {
         // Get player 1-4 inputs
-        let p1 = frame_inputs.first()
+        let p1 = frame_inputs
+            .first()
             .map(|bytes| bytes_to_input(bytes, layout));
         let p2 = frame_inputs
             .get(1)

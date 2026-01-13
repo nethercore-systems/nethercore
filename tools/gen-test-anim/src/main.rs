@@ -2,10 +2,10 @@
 //!
 //! Creates a simple 3-bone wave animation for testing the keyframe system.
 
-use std::path::Path;
 use std::f32::consts::TAU;
 use std::fs::File;
 use std::io::Write;
+use std::path::Path;
 use std::path::PathBuf;
 use zx_common::formats::animation::{encode_bone_transform, NetherZXAnimationHeader};
 
@@ -65,8 +65,7 @@ fn generate_wave_animation_bytes(bone_count: u8, frame_count: u16) -> Vec<u8> {
             let py = bone as f32 * 1.5 - 1.5; // -1.5, 0.0, 1.5
 
             // Encode to platform format
-            let keyframe =
-                encode_bone_transform([qx, qy, qz, qw], [0.0, py, 0.0], [1.0, 1.0, 1.0]);
+            let keyframe = encode_bone_transform([qx, qy, qz, qw], [0.0, py, 0.0], [1.0, 1.0, 1.0]);
             bytes.extend_from_slice(&keyframe.to_bytes());
         }
     }
@@ -89,7 +88,9 @@ mod tests {
         assert_eq!(header.frame_count, 30);
 
         assert_eq!(bytes.len(), header.file_size());
-        assert!(bytes[NetherZXAnimationHeader::SIZE..].iter().any(|b| *b != 0));
+        assert!(bytes[NetherZXAnimationHeader::SIZE..]
+            .iter()
+            .any(|b| *b != 0));
     }
 
     #[test]

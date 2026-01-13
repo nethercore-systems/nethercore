@@ -29,7 +29,15 @@ use zx_common::formats::skeleton::NetherZXSkeletonHeader;
 type FaceDefinition = ([f32; 3], [([f32; 3], [f32; 2]); 4]);
 
 /// Skinned mesh data: (positions, normals, uvs, colors, joints, weights, indices)
-type SkinnedMeshData = (Vec<[f32; 3]>, Vec<[f32; 3]>, Vec<[f32; 2]>, Vec<[f32; 4]>, Vec<[u8; 4]>, Vec<[f32; 4]>, Vec<u16>);
+type SkinnedMeshData = (
+    Vec<[f32; 3]>,
+    Vec<[f32; 3]>,
+    Vec<[f32; 2]>,
+    Vec<[f32; 4]>,
+    Vec<[u8; 4]>,
+    Vec<[f32; 4]>,
+    Vec<u16>,
+);
 
 /// Bone count for the test skeleton
 const BONE_COUNT: usize = 3;
@@ -316,9 +324,12 @@ mod tests {
 
         let mut offset = 12;
         while offset + 8 <= glb.len() {
-            let chunk_len =
-                u32::from_le_bytes([glb[offset], glb[offset + 1], glb[offset + 2], glb[offset + 3]])
-                    as usize;
+            let chunk_len = u32::from_le_bytes([
+                glb[offset],
+                glb[offset + 1],
+                glb[offset + 2],
+                glb[offset + 3],
+            ]) as usize;
             let chunk_type = &glb[offset + 4..offset + 8];
             offset += 8;
 

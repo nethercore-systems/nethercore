@@ -5,8 +5,8 @@ use std::sync::Arc;
 use glam::{Mat4, Vec3};
 use hashbrown::HashMap;
 
-use zx_common::ZXDataPack;
 use crate::graphics::unified_shading_state::GradientConfig;
+use zx_common::ZXDataPack;
 
 use super::{
     BoneMatrix3x4, Font, KeyframeGpuInfo, KeyframeSource, LoadedKeyframeCollection,
@@ -391,15 +391,16 @@ impl ZXFFIState {
             .set_blend_mode(blend_mode::ALPHA);
 
         // Pack gradient colors
-        self.current_environment_state.pack_gradient(GradientConfig {
-            offset: 0,              // base mode offset
-            zenith: zenith_rgba,
-            sky_horizon: horizon_rgba,
-            ground_horizon,
-            nadir,
-            rotation: 0.0,
-            shift: 0.0,
-        });
+        self.current_environment_state
+            .pack_gradient(GradientConfig {
+                offset: 0, // base mode offset
+                zenith: zenith_rgba,
+                sky_horizon: horizon_rgba,
+                ground_horizon,
+                nadir,
+                rotation: 0.0,
+                shift: 0.0,
+            });
 
         self.environment_dirty = true;
     }

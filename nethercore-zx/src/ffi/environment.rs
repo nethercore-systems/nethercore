@@ -9,8 +9,8 @@ use wasmtime::{Caller, Linker};
 
 use crate::graphics::env_mode;
 use crate::graphics::unified_shading_state::{
-    GradientConfig, ScatterConfig, LinesConfig, SilhouetteConfig,
-    RectanglesConfig, RoomConfig, CurtainsConfig, RingsConfig,
+    CurtainsConfig, GradientConfig, LinesConfig, RectanglesConfig, RingsConfig, RoomConfig,
+    ScatterConfig, SilhouetteConfig,
 };
 
 use super::ZXGameContext;
@@ -69,15 +69,17 @@ fn env_gradient(
     let state = &mut caller.data_mut().ffi;
 
     // Pack gradient into specified layer (0 = base, 1 = overlay)
-    state.current_environment_state.pack_gradient(GradientConfig {
-        offset: layer as usize,
-        zenith,
-        sky_horizon,
-        ground_horizon,
-        nadir,
-        rotation,
-        shift,
-    });
+    state
+        .current_environment_state
+        .pack_gradient(GradientConfig {
+            offset: layer as usize,
+            zenith,
+            sky_horizon,
+            ground_horizon,
+            nadir,
+            rotation,
+            shift,
+        });
 
     // Set mode for the specified layer
     if layer == 0 {
@@ -268,17 +270,19 @@ fn env_silhouette(
 ) {
     let state = &mut caller.data_mut().ffi;
 
-    state.current_environment_state.pack_silhouette(SilhouetteConfig {
-        offset: layer as usize,
-        jaggedness,
-        layer_count,
-        color_near,
-        color_far,
-        sky_zenith,
-        sky_horizon,
-        parallax_rate,
-        seed,
-    });
+    state
+        .current_environment_state
+        .pack_silhouette(SilhouetteConfig {
+            offset: layer as usize,
+            jaggedness,
+            layer_count,
+            color_near,
+            color_far,
+            sky_zenith,
+            sky_horizon,
+            parallax_rate,
+            seed,
+        });
 
     // Set mode for the specified layer
     if layer == 0 {
@@ -335,19 +339,21 @@ fn env_rectangles(
 ) {
     let state = &mut caller.data_mut().ffi;
 
-    state.current_environment_state.pack_rectangles(RectanglesConfig {
-        offset: layer as usize,
-        variant,
-        density,
-        lit_ratio,
-        size_min,
-        size_max,
-        aspect,
-        color_primary,
-        color_variation,
-        parallax_rate,
-        phase,
-    });
+    state
+        .current_environment_state
+        .pack_rectangles(RectanglesConfig {
+            offset: layer as usize,
+            variant,
+            density,
+            lit_ratio,
+            size_min,
+            size_max,
+            aspect,
+            color_primary,
+            color_variation,
+            parallax_rate,
+            phase,
+        });
 
     // Set mode for the specified layer
     if layer == 0 {
@@ -483,21 +489,23 @@ fn env_curtains(
 ) {
     let state = &mut caller.data_mut().ffi;
 
-    state.current_environment_state.pack_curtains(CurtainsConfig {
-        offset: layer as usize,
-        layer_count,
-        density,
-        height_min,
-        height_max,
-        width,
-        spacing,
-        waviness,
-        color_near,
-        color_far,
-        glow,
-        parallax_rate,
-        phase,
-    });
+    state
+        .current_environment_state
+        .pack_curtains(CurtainsConfig {
+            offset: layer as usize,
+            layer_count,
+            density,
+            height_min,
+            height_max,
+            width,
+            spacing,
+            waviness,
+            color_near,
+            color_far,
+            glow,
+            parallax_rate,
+            phase,
+        });
 
     // Set mode for the specified layer
     if layer == 0 {

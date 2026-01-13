@@ -13,7 +13,7 @@ pub use wav_writer::write_wav;
 
 #[cfg(test)]
 mod tests {
-    use super::{SimpleRng, apply_fades, formant_filter, write_wav};
+    use super::{apply_fades, formant_filter, write_wav, SimpleRng};
     use std::fs;
 
     #[test]
@@ -28,11 +28,7 @@ mod tests {
         assert_eq!(samples[889], 10_000);
         assert!(samples[999] < 10_000);
 
-        let peak = samples
-            .iter()
-            .map(|s| (*s as i32).abs())
-            .max()
-            .unwrap_or(0);
+        let peak = samples.iter().map(|s| (*s as i32).abs()).max().unwrap_or(0);
         assert!(peak <= 10_000);
     }
 

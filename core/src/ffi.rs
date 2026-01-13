@@ -80,10 +80,10 @@ fn log_message<I: ConsoleInput, S, R: ConsoleRollbackState>(
 ) {
     if let Some(memory) = caller.data().game.memory
         && let Ok(bytes) = read_bytes_from_memory(memory, &caller, ptr, len)
-            && let Ok(msg) = std::str::from_utf8(&bytes)
-        {
-            tracing::info!("[GAME] {}", msg);
-        }
+        && let Ok(msg) = std::str::from_utf8(&bytes)
+    {
+        tracing::info!("[GAME] {}", msg);
+    }
 }
 
 /// Request to quit to the library

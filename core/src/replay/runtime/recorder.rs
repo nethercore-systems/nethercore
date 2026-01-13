@@ -123,7 +123,10 @@ impl Recorder {
         if !self.recording || self.config.checkpoint_interval == 0 {
             return false;
         }
-        self.frame_count > 0 && self.frame_count.is_multiple_of(self.config.checkpoint_interval)
+        self.frame_count > 0
+            && self
+                .frame_count
+                .is_multiple_of(self.config.checkpoint_interval)
     }
 
     /// Get the current frame count

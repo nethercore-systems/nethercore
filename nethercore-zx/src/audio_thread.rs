@@ -71,8 +71,27 @@ pub struct AudioGenSnapshot {
 }
 
 impl AudioGenSnapshot {
-    // Constructor removed - use direct struct construction instead
-    // Example: AudioGenSnapshot { audio, tracker, tracker_snapshot, sounds, frame_number, tick_rate, sample_rate, is_rollback }
+    pub fn new(
+        audio: AudioPlaybackState,
+        tracker: TrackerState,
+        tracker_snapshot: TrackerEngineSnapshot,
+        sounds: Arc<Vec<Option<Sound>>>,
+        frame_number: i32,
+        tick_rate: u32,
+        sample_rate: u32,
+        is_rollback: bool,
+    ) -> Self {
+        Self {
+            audio,
+            tracker,
+            tracker_snapshot,
+            sounds,
+            frame_number,
+            tick_rate,
+            sample_rate,
+            is_rollback,
+        }
+    }
 }
 
 /// Handle to the audio generation thread
@@ -615,7 +634,9 @@ impl AudioGenThread {
             let max_jump = jump_l.max(jump_r);
             if max_jump > 0.3 {
                 self.metrics.discontinuities += 1;
-                if self.metrics.discontinuities <= 10 || self.metrics.discontinuities.is_multiple_of(100) {
+                if self.metrics.discontinuities <= 10
+                    || self.metrics.discontinuities.is_multiple_of(100)
+                {
                     warn!(
                         "Audio discontinuity at frame boundary: L={:.3}->{:.3} (d{:.3}), R={:.3}->{:.3} (d{:.3})",
                         prev_l, curr_l, jump_l, prev_r, curr_r, jump_r

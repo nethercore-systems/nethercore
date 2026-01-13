@@ -146,11 +146,12 @@ impl HeadlessRunner {
 
         while !self.executor.is_complete() {
             if let Some(start) = self.start_time
-                && start.elapsed().as_secs() > self.config.timeout_secs {
-                    self.executor
-                        .stop_with_error("Execution timeout exceeded".to_string());
-                    break;
-                }
+                && start.elapsed().as_secs() > self.config.timeout_secs
+            {
+                self.executor
+                    .stop_with_error("Execution timeout exceeded".to_string());
+                break;
+            }
 
             let actions = self.executor.current_actions();
             if !actions.is_empty() {

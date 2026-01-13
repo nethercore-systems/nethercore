@@ -14,7 +14,13 @@ use crate::wasm::GameInstance;
 
 /// Tuple of mutable references to game instance and audio, where either can be None
 type GameAndAudioMut<'a, C> = (
-    Option<&'a mut GameInstance<<C as Console>::Input, <C as Console>::State, <C as Console>::RollbackState>>,
+    Option<
+        &'a mut GameInstance<
+            <C as Console>::Input,
+            <C as Console>::State,
+            <C as Console>::RollbackState,
+        >,
+    >,
     Option<&'a mut <C as Console>::Audio>,
 );
 

@@ -22,7 +22,13 @@ use std::fs;
 use std::path::PathBuf;
 
 /// Mesh data: (positions, normals, colors, indices, material_name)
-type MeshData = (Vec<[f32; 3]>, Vec<[f32; 3]>, Vec<[f32; 4]>, Vec<u16>, String);
+type MeshData = (
+    Vec<[f32; 3]>,
+    Vec<[f32; 3]>,
+    Vec<[f32; 4]>,
+    Vec<u16>,
+    String,
+);
 
 /// Number of nodes for the rigid hierarchy (Base, Arm, Claw)
 const NODE_COUNT: usize = 3;
@@ -560,7 +566,7 @@ fn generate_animation_glb() -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
-    use super::{MeshType, generate_animation_glb, generate_mesh_glb};
+    use super::{generate_animation_glb, generate_mesh_glb, MeshType};
 
     fn json_chunk(glb: &[u8]) -> Option<&[u8]> {
         if glb.len() < 12 || &glb[0..4] != b"glTF" {
@@ -577,9 +583,12 @@ mod tests {
 
         let mut offset = 12;
         while offset + 8 <= glb.len() {
-            let chunk_len =
-                u32::from_le_bytes([glb[offset], glb[offset + 1], glb[offset + 2], glb[offset + 3]])
-                    as usize;
+            let chunk_len = u32::from_le_bytes([
+                glb[offset],
+                glb[offset + 1],
+                glb[offset + 2],
+                glb[offset + 3],
+            ]) as usize;
             let chunk_type = &glb[offset + 4..offset + 8];
             offset += 8;
 

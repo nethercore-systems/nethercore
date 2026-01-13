@@ -4,9 +4,9 @@
 //! for any console that implements the Console trait and required support traits.
 
 mod error_ui;
-mod types;
 #[cfg(test)]
 mod tests;
+mod types;
 
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -54,9 +54,7 @@ fn format_ggrs_addr(addr: &str, port: u16) -> String {
         return SocketAddr::new(ip, port).to_string();
     }
 
-    if let Some(stripped) = addr
-        .strip_prefix('[')
-        .and_then(|s| s.strip_suffix(']'))
+    if let Some(stripped) = addr.strip_prefix('[').and_then(|s| s.strip_suffix(']'))
         && let Ok(ip) = stripped.parse::<std::net::IpAddr>()
     {
         return SocketAddr::new(ip, port).to_string();

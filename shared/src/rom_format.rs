@@ -119,7 +119,9 @@ pub fn get_rom_format_by_console(console_type: ConsoleType) -> Option<&'static R
 
 /// Get the ROM format for a console type string.
 pub fn get_rom_format_by_console_type(console_type: &str) -> Option<&'static RomFormat> {
-    ConsoleType::from_str(console_type).ok().and_then(get_rom_format_by_console)
+    ConsoleType::from_str(console_type)
+        .ok()
+        .and_then(get_rom_format_by_console)
 }
 
 /// Get the ROM format for a file extension (without the dot).
@@ -132,7 +134,8 @@ pub fn get_rom_format_by_extension(ext: &str) -> Option<&'static RomFormat> {
 
 /// Get the console type for a ROM file extension (without the dot).
 pub fn get_console_type_by_extension(ext: &str) -> Option<ConsoleType> {
-    get_rom_format_by_extension(ext).and_then(|format| ConsoleType::from_str(format.console_type).ok())
+    get_rom_format_by_extension(ext)
+        .and_then(|format| ConsoleType::from_str(format.console_type).ok())
 }
 
 #[cfg(test)]

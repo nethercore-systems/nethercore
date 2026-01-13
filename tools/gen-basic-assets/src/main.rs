@@ -217,8 +217,7 @@ fn generate_cube_nczxmesh(path: &Path) -> std::io::Result<()> {
     // Convert OBJ -> nczxmesh using nether-export
     #[cfg(not(test))]
     {
-        return nether_export::mesh::convert_obj(&obj_path, path, None)
-            .map_err(std::io::Error::other);
+        nether_export::mesh::convert_obj(&obj_path, path, None).map_err(std::io::Error::other)
     }
 
     // In `cargo test` we avoid pulling in the full export pipeline (and its native deps).
@@ -250,7 +249,7 @@ fn generate_checkerboard_nczxtex(path: &Path) -> std::io::Result<()> {
     // Convert PNG -> nczxtex using nether-export
     #[cfg(not(test))]
     {
-        return nether_export::texture::convert_image(&png_path, path).map_err(std::io::Error::other);
+        nether_export::texture::convert_image(&png_path, path).map_err(std::io::Error::other)
     }
 
     // In `cargo test` we avoid pulling in the full export pipeline (and its native deps).
@@ -413,7 +412,11 @@ mod tests {
         for y in 0..8u8 {
             for x in 0..8u8 {
                 let idx = (y as usize * 8) + x as usize;
-                let expected = if x == 0 || x == 7 || y == 0 || y == 7 { 1 } else { 0 };
+                let expected = if x == 0 || x == 7 || y == 0 || y == 7 {
+                    1
+                } else {
+                    0
+                };
                 assert_eq!(tiles[idx], expected, "x={}, y={}", x, y);
             }
         }

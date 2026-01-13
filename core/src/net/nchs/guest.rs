@@ -235,18 +235,20 @@ impl GuestStateMachine {
         // Check join timeout
         if self.state == GuestState::Joining
             && let Some(sent_at) = self.join_sent_at
-                && sent_at.elapsed() > JOIN_TIMEOUT {
-                    self.state = GuestState::Failed;
-                    return Some(GuestEvent::Error(NchsError::Timeout));
-                }
+            && sent_at.elapsed() > JOIN_TIMEOUT
+        {
+            self.state = GuestState::Failed;
+            return Some(GuestEvent::Error(NchsError::Timeout));
+        }
 
         // Check punch timeout
         if self.state == GuestState::Punching
             && let Some(started_at) = self.punch_started_at
-                && started_at.elapsed() > PUNCH_TIMEOUT {
-                    self.state = GuestState::Failed;
-                    return Some(GuestEvent::Error(NchsError::PunchFailed));
-                }
+            && started_at.elapsed() > PUNCH_TIMEOUT
+        {
+            self.state = GuestState::Failed;
+            return Some(GuestEvent::Error(NchsError::PunchFailed));
+        }
 
         None
     }
@@ -392,11 +394,10 @@ impl GuestStateMachine {
             let retry_count = (elapsed.as_millis() / PUNCH_RETRY_INTERVAL.as_millis()) as u32;
 
             // Retry every PUNCH_RETRY_INTERVAL
-            if elapsed.as_millis() % PUNCH_RETRY_INTERVAL.as_millis() < 50
-                && retry_count > 0 {
-                    tracing::debug!("Punch retry #{}", retry_count);
-                    self.send_punch_hellos();
-                }
+            if elapsed.as_millis() % PUNCH_RETRY_INTERVAL.as_millis() < 50 && retry_count > 0 {
+                tracing::debug!("Punch retry #{}", retry_count);
+                self.send_punch_hellos();
+            }
         }
     }
 

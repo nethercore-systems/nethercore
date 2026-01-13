@@ -201,7 +201,14 @@ impl TextureManager {
         queue: &wgpu::Queue,
         config: TextureBcConfig,
     ) -> Result<TextureHandle> {
-        let TextureBcConfig { width, height, data, wgpu_format, format_name, track_vram } = config;
+        let TextureBcConfig {
+            width,
+            height,
+            data,
+            wgpu_format,
+            format_name,
+            track_vram,
+        } = config;
         // BC7/BC5: 4×4 blocks, 16 bytes per block
         let blocks_x = width.div_ceil(4);
         let blocks_y = height.div_ceil(4);

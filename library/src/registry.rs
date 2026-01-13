@@ -36,8 +36,7 @@ use anyhow::{Context, Result};
 
 use nethercore_core::library::{LocalGame, RomLoaderRegistry};
 use nethercore_shared::{
-    ConsoleType, ROM_FORMATS, get_console_type_by_extension,
-    get_rom_format_by_console_type,
+    ConsoleType, ROM_FORMATS, get_console_type_by_extension, get_rom_format_by_console_type,
 };
 
 use zx_common::ZXRomLoader;

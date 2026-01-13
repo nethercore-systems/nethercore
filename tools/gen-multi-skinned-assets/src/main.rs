@@ -509,7 +509,7 @@ mod tests {
     use tempfile::TempDir;
     use zx_common::formats::animation::NetherZXAnimationHeader;
     use zx_common::formats::mesh::NetherZXMeshHeader;
-    use zx_common::formats::skeleton::{INVERSE_BIND_MATRIX_SIZE, NetherZXSkeletonHeader};
+    use zx_common::formats::skeleton::{NetherZXSkeletonHeader, INVERSE_BIND_MATRIX_SIZE};
     use zx_common::packing::vertex_stride_packed;
 
     #[test]
@@ -547,8 +547,9 @@ mod tests {
         assert_eq!(header.index_count, 3 * 36);
 
         let stride = vertex_stride_packed(header.format) as usize;
-        let expected_size =
-            NetherZXMeshHeader::SIZE + (header.vertex_count as usize * stride) + (header.index_count as usize * 2);
+        let expected_size = NetherZXMeshHeader::SIZE
+            + (header.vertex_count as usize * stride)
+            + (header.index_count as usize * 2);
         assert_eq!(bytes.len(), expected_size);
     }
 
@@ -557,12 +558,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("anim.nczxanim");
 
-        generate_animation(
-            &path,
-            3,
-            30,
-            &[(0.0, 0.5), (0.5, 0.7), (1.0, 0.4)],
-        );
+        generate_animation(&path, 3, 30, &[(0.0, 0.5), (0.5, 0.7), (1.0, 0.4)]);
 
         let bytes = std::fs::read(&path).unwrap();
         let header = NetherZXAnimationHeader::from_bytes(&bytes).unwrap();
@@ -572,7 +568,9 @@ mod tests {
         assert_eq!(bytes.len(), header.file_size());
 
         assert!(
-            bytes[NetherZXAnimationHeader::SIZE..].iter().any(|b| *b != 0),
+            bytes[NetherZXAnimationHeader::SIZE..]
+                .iter()
+                .any(|b| *b != 0),
             "expected some non-zero keyframe bytes"
         );
     }

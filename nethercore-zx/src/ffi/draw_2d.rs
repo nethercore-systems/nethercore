@@ -342,22 +342,22 @@ fn draw_text(mut caller: Caller<'_, ZXGameContext>, ptr: u32, len: u32, x: f32, 
     // Extract font data into local variables to avoid cloning the entire Font struct.
     // Only the char_widths Vec is cloned (if present), all other fields are Copy types.
     let custom_font_data: Option<CustomFontData> = if font_handle == 0 {
-            None
-        } else {
-            let font_index = (font_handle - 1) as usize;
-            state.fonts.get(font_index).map(|font| {
-                (
-                    font.texture,
-                    font.atlas_width,
-                    font.atlas_height,
-                    font.char_width,
-                    font.char_height,
-                    font.first_codepoint,
-                    font.char_count,
-                    font.char_widths.clone(), // Only clone the widths Vec, not the whole Font
-                )
-            })
-        };
+        None
+    } else {
+        let font_index = (font_handle - 1) as usize;
+        state.fonts.get(font_index).map(|font| {
+            (
+                font.texture,
+                font.atlas_width,
+                font.atlas_height,
+                font.char_width,
+                font.char_height,
+                font.first_codepoint,
+                font.char_count,
+                font.char_widths.clone(), // Only clone the widths Vec, not the whole Font
+            )
+        })
+    };
 
     // Bind the appropriate font texture to slot 0
     if let Some((texture, ..)) = custom_font_data {

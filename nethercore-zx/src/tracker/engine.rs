@@ -1419,14 +1419,14 @@ impl TrackerEngine {
                     .modules
                     .get(raw_handle as usize)
                     .and_then(|m| m.as_ref())
-                    && let Some(instr) = loaded.module.instruments.get(instr_idx)
-                    && let Some(ref env) = instr.pitch_envelope
-                    && env.is_enabled()
-                    && !env.is_filter()
-                {
-                    let env_val = env.value_at(channel.pitch_envelope_pos) as f32;
-                    channel.pitch_envelope_value = env_val;
-                }
+                && let Some(instr) = loaded.module.instruments.get(instr_idx)
+                && let Some(ref env) = instr.pitch_envelope
+                && env.is_enabled()
+                && !env.is_filter()
+            {
+                let env_val = env.value_at(channel.pitch_envelope_pos) as f32;
+                channel.pitch_envelope_value = env_val;
+            }
 
             // Update filter envelope (IT only)
             if channel.filter_envelope_enabled
@@ -1434,14 +1434,14 @@ impl TrackerEngine {
                     .modules
                     .get(raw_handle as usize)
                     .and_then(|m| m.as_ref())
-                    && let Some(instr) = loaded.module.instruments.get(instr_idx)
-                    && let Some(ref env) = instr.pitch_envelope
-                    && env.is_filter()
-                {
-                    let env_val = env.value_at(channel.filter_envelope_pos) as f32;
-                    channel.filter_cutoff = (env_val / VOLUME_ENVELOPE_MAX).clamp(0.0, 1.0);
-                    channel.filter_dirty = true;
-                }
+                && let Some(instr) = loaded.module.instruments.get(instr_idx)
+                && let Some(ref env) = instr.pitch_envelope
+                && env.is_filter()
+            {
+                let env_val = env.value_at(channel.filter_envelope_pos) as f32;
+                channel.filter_cutoff = (env_val / VOLUME_ENVELOPE_MAX).clamp(0.0, 1.0);
+                channel.filter_dirty = true;
+            }
 
             // Sample with interpolation
             let mut sample = sample_channel(channel, &sound.data, sample_rate);
@@ -1459,14 +1459,14 @@ impl TrackerEngine {
                     .modules
                     .get(raw_handle as usize)
                     .and_then(|m| m.as_ref())
-                    && let Some(instr) = loaded.module.instruments.get(instr_idx)
-                    && let Some(ref env) = instr.volume_envelope
-                    && env.is_enabled()
-                {
-                    let env_val =
-                        env.value_at(channel.volume_envelope_pos) as f32 / VOLUME_ENVELOPE_MAX;
-                    vol *= env_val;
-                }
+                && let Some(instr) = loaded.module.instruments.get(instr_idx)
+                && let Some(ref env) = instr.volume_envelope
+                && env.is_enabled()
+            {
+                let env_val =
+                    env.value_at(channel.volume_envelope_pos) as f32 / VOLUME_ENVELOPE_MAX;
+                vol *= env_val;
+            }
 
             if channel.key_off {
                 vol *= channel.volume_fadeout as f32 / VOLUME_FADEOUT_MAX;
@@ -1495,13 +1495,13 @@ impl TrackerEngine {
                     .modules
                     .get(raw_handle as usize)
                     .and_then(|m| m.as_ref())
-                    && let Some(instr) = loaded.module.instruments.get(instr_idx)
-                    && let Some(ref env) = instr.panning_envelope
-                    && env.is_enabled()
-                {
-                    let env_val = env.value_at(channel.panning_envelope_pos) as f32;
-                    pan = (env_val - PAN_ENVELOPE_CENTER) / PAN_ENVELOPE_CENTER;
-                }
+                && let Some(instr) = loaded.module.instruments.get(instr_idx)
+                && let Some(ref env) = instr.panning_envelope
+                && env.is_enabled()
+            {
+                let env_val = env.value_at(channel.panning_envelope_pos) as f32;
+                pan = (env_val - PAN_ENVELOPE_CENTER) / PAN_ENVELOPE_CENTER;
+            }
 
             if channel.panbrello_active && channel.panbrello_depth > 0 {
                 let waveform_value = SINE_LUT[(channel.panbrello_pos >> 4) as usize & 0xF] as f32;

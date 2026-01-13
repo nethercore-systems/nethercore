@@ -134,6 +134,8 @@ fn main_loop(player: &Arc<Mutex<DebugPlayer>>, display: &mut Display) -> Result<
 
 #[cfg(all(not(test), not(feature = "playback")))]
 fn main() {
-    eprintln!("tracker-debug built without `playback` feature; enable it to run the interactive player.");
+    eprintln!(
+        "tracker-debug built without `playback` feature; enable it to run the interactive player."
+    );
     std::process::exit(2);
 }

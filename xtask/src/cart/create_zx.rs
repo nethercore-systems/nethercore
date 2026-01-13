@@ -276,7 +276,10 @@ mod tests {
         assert_eq!(rom.metadata.title, "Test Game");
         assert_eq!(rom.metadata.author, "Test Author");
         assert_eq!(rom.metadata.version, "1.2.3");
-        assert_eq!(rom.metadata.tags, vec!["tag1".to_string(), "tag2".to_string()]);
+        assert_eq!(
+            rom.metadata.tags,
+            vec!["tag1".to_string(), "tag2".to_string()]
+        );
         assert_eq!(rom.screenshots.len(), 0);
         assert!(rom.thumbnail.is_none());
     }
@@ -327,10 +330,7 @@ mod tests {
         args.wasm_file = wasm_file;
 
         let err = execute(args).expect_err("expected error");
-        assert!(
-            err.to_string().contains("missing \\0asm"),
-            "got: {err}"
-        );
+        assert!(err.to_string().contains("missing \\0asm"), "got: {err}");
     }
 
     #[test]
@@ -340,10 +340,7 @@ mod tests {
         args.id = "../evil".to_string();
 
         let err = execute(args).expect_err("expected error");
-        assert!(
-            err.to_string().contains("Invalid game id"),
-            "got: {err}"
-        );
+        assert!(err.to_string().contains("Invalid game id"), "got: {err}");
     }
 
     #[test]
@@ -357,9 +354,6 @@ mod tests {
         args.screenshots = vec![bad_png];
 
         let err = execute(args).expect_err("expected error");
-        assert!(
-            err.to_string().contains("Invalid PNG file"),
-            "got: {err}"
-        );
+        assert!(err.to_string().contains("Invalid PNG file"), "got: {err}");
     }
 }
