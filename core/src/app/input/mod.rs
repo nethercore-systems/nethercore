@@ -1,7 +1,7 @@
 //! Input handling for keyboard and gamepad
 
 mod keyboard_mapping;
-mod keycode_serde;
+pub(crate) mod keycode_serde; // Made pub(crate) for tests
 mod manager;
 
 pub use keyboard_mapping::KeyboardMapping;

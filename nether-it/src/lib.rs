@@ -58,7 +58,7 @@ pub use extract::{ExtractedSample, extract_samples};
 pub use minimal::{pack_it_minimal, pack_ncit, parse_it_minimal, parse_ncit, strip_it_samples};
 pub use module::{
     DuplicateCheckAction, DuplicateCheckType, ItEnvelope, ItEnvelopeFlags, ItFlags, ItInstrument,
-    ItModule, ItNote, ItPattern, ItSample, ItSampleFlags, NewNoteAction, note_from_name,
+    ItModule, ItNote, ItPattern, ItSample, ItSampleFlags, NewNoteAction, VolumeEffect, note_from_name,
 };
 pub use parser::{
     SampleData, SampleInfo, get_instrument_names, get_sample_names, load_sample_data, parse_it,

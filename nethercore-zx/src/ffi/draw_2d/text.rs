@@ -1,0 +1,536 @@
+//! Text and font rendering functions
+//!
+//! Functions for drawing text and managing custom fonts.
+
+use anyhow::Result;
+use tracing::warn;
+use wasmtime::{Caller, Linker};
+
+use crate::ffi::ZXGameContext;
+use crate::state::Font;
+
+use super::SCREEN_SPACE_DEPTH;
+
+/// Custom font data: (texture, atlas_width, atlas_height, char_width, char_height, first_char, char_count, char_widths)
+type CustomFontData = (u32, u32, u32, u8, u8, u32, u32, Option<Vec<u8>>);
+
+/// Default font texture size used when texture dimensions cannot be determined.
+const DEFAULT_FONT_TEXTURE_SIZE: (u32, u32) = (1024, 1024);
+
+/// Register text and font FFI functions
+pub(super) fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
+    linker.func_wrap("env", "draw_text", draw_text)?;
+    linker.func_wrap("env", "text_width", text_width)?;
+    linker.func_wrap("env", "load_font", load_font)?;
+    linker.func_wrap("env", "load_font_ex", load_font_ex)?;
+    linker.func_wrap("env", "font_bind", font_bind)?;
+    Ok(())
+}
+
+/// Draw text with the built-in font
+///
+/// # Arguments
+/// * `ptr` — Pointer to UTF-8 string data
+/// * `len` — Length of string in bytes
+/// * `x` — Screen X coordinate in pixels (0 = left edge)
+/// * `y` — Screen Y coordinate in pixels (baseline)
+/// * `size` — Font size in pixels
+///
+/// Supports full UTF-8 encoding. Text is left-aligned with no wrapping.
+/// Uses color from set_color().
+fn draw_text(mut caller: Caller<'_, ZXGameContext>, ptr: u32, len: u32, x: f32, y: f32, size: f32) {
+    // Read UTF-8 string from WASM memory
+    let memory = match caller.data().game.memory {
+        Some(m) => m,
+        None => {
+            warn!("draw_text: no WASM memory available");
+            return;
+        }
+    };
+
+    let text_str = {
+        let mem_data = memory.data(&caller);
+        let ptr = ptr as usize;
+        let len = len as usize;
+
+        if ptr + len > mem_data.len() {
+            warn!(
+                "draw_text: string data ({} bytes at {}) exceeds memory bounds ({})",
+                len,
+                ptr,
+                mem_data.len()
+            );
+            return;
+        }
+
+        let bytes = &mem_data[ptr..ptr + len];
+        // Validate UTF-8 and copy to owned string
+        match std::str::from_utf8(bytes) {
+            Ok(s) => s.to_string(), // Convert to owned String
+            Err(_) => {
+                warn!("draw_text: invalid UTF-8 string");
+                return;
+            }
+        }
+    };
+
+    // Skip empty text
+    if text_str.is_empty() {
+        return;
+    }
+
+    let state = &mut caller.data_mut().ffi;
+
+    // Offset by viewport origin for split-screen support
+    let vp = state.current_viewport;
+    let screen_x = vp.x as f32 + x;
+    let screen_y = vp.y as f32 + y;
+
+    // Text always uses nearest filtering (crisp pixels, no blurry interpolation)
+    state.texture_filter = crate::graphics::TextureFilter::Nearest;
+    state.update_texture_filter(false);
+
+    // Get shading state index (includes current color from set_color)
+    let shading_state_index = state.add_shading_state();
+
+    // Force lazy push of view matrix if pending
+    if let Some(mat) = state.current_view_matrix.take() {
+        state.view_matrices.push(mat);
+    }
+    let view_idx = (state.view_matrices.len() - 1) as u32;
+
+    // Convert layer to depth for ordering
+    let depth = SCREEN_SPACE_DEPTH;
+
+    // Determine which font to use
+    let font_handle = state.current_font;
+
+    // Extract font data into local variables to avoid cloning the entire Font struct.
+    // Only the char_widths Vec is cloned (if present), all other fields are Copy types.
+    let custom_font_data: Option<CustomFontData> = if font_handle == 0 {
+        None
+    } else {
+        let font_index = (font_handle - 1) as usize;
+        state.fonts.get(font_index).map(|font| {
+            (
+                font.texture,
+                font.atlas_width,
+                font.atlas_height,
+                font.char_width,
+                font.char_height,
+                font.first_codepoint,
+                font.char_count,
+                font.char_widths.clone(), // Only clone the widths Vec, not the whole Font
+            )
+        })
+    };
+
+    // Bind the appropriate font texture to slot 0
+    if let Some((texture, ..)) = custom_font_data {
+        state.bound_textures[0] = texture;
+    } else {
+        // For built-in font, use reserved handle (u32::MAX - 1)
+        // This handle is mapped to the actual built-in font texture at startup
+        state.bound_textures[0] = u32::MAX - 1;
+    }
+
+    // Generate quad instances for each character
+    let mut cursor_x = screen_x;
+
+    if let Some((
+        _texture,
+        atlas_width,
+        atlas_height,
+        char_width,
+        char_height,
+        first_codepoint,
+        char_count,
+        ref char_widths,
+    )) = custom_font_data
+    {
+        // Custom font rendering
+        let scale = size / char_height as f32;
+        let glyph_height = size;
+
+        // Use stored atlas dimensions
+        let texture_width = atlas_width;
+        let texture_height = atlas_height;
+
+        let max_glyph_width = char_width as u32;
+        let glyphs_per_row = texture_width / max_glyph_width.max(1);
+
+        for ch in text_str.chars() {
+            let char_code = ch as u32;
+
+            // Calculate glyph index
+            if char_code < first_codepoint || char_code >= first_codepoint + char_count {
+                // Character not in font, skip or use replacement
+                continue;
+            }
+            let glyph_index = (char_code - first_codepoint) as usize;
+
+            // Get glyph width (variable or fixed)
+            let glyph_width_px = char_widths
+                .as_ref()
+                .and_then(|widths| widths.get(glyph_index).copied())
+                .unwrap_or(char_width);
+            let glyph_width = glyph_width_px as f32 * scale;
+
+            // Calculate UV coordinates
+            let col = glyph_index % glyphs_per_row as usize;
+            let row = glyph_index / glyphs_per_row as usize;
+
+            let u0 = (col * max_glyph_width as usize) as f32 / texture_width as f32;
+            let v0 = (row * char_height as usize) as f32 / texture_height as f32;
+            let u1 = ((col * max_glyph_width as usize) + glyph_width_px as usize) as f32
+                / texture_width as f32;
+            let v1 = ((row + 1) * char_height as usize) as f32 / texture_height as f32;
+
+            // Create quad instance for this glyph
+            let instance = crate::graphics::QuadInstance::sprite(
+                cursor_x,
+                screen_y,
+                depth,
+                glyph_width,
+                glyph_height,
+                0.0, // no rotation
+                [u0, v0, u1, v1],
+                shading_state_index.0,
+                view_idx,
+            );
+            state.add_quad_instance(instance, state.current_z_index);
+
+            cursor_x += glyph_width;
+        }
+    } else {
+        // Built-in font rendering
+        let scale = size / crate::font::GLYPH_HEIGHT as f32;
+        let glyph_width = crate::font::GLYPH_WIDTH as f32 * scale;
+        let glyph_height = crate::font::GLYPH_HEIGHT as f32 * scale;
+
+        for ch in text_str.chars() {
+            let char_code = ch as u32;
+
+            // Get UV coordinates for this character
+            let (u0, v0, u1, v1) = crate::font::get_glyph_uv(char_code);
+
+            // Create quad instance for this glyph
+            let instance = crate::graphics::QuadInstance::sprite(
+                cursor_x,
+                screen_y,
+                depth,
+                glyph_width,
+                glyph_height,
+                0.0, // no rotation
+                [u0, v0, u1, v1],
+                shading_state_index.0,
+                view_idx,
+            );
+            state.add_quad_instance(instance, state.current_z_index);
+
+            cursor_x += glyph_width;
+        }
+    }
+}
+
+/// Load a fixed-width bitmap font from a texture atlas
+///
+/// The texture must contain a grid of glyphs arranged left-to-right, top-to-bottom.
+/// Each glyph occupies char_width × char_height pixels.
+///
+/// # Arguments
+/// * `texture` — Handle to the texture atlas
+/// * `char_width` — Width of each glyph in pixels
+/// * `char_height` — Height of each glyph in pixels
+/// * `first_codepoint` — Unicode codepoint of the first glyph
+/// * `char_count` — Number of glyphs in the font
+///
+/// # Returns
+/// Handle to the loaded font (use with `font_bind()`)
+///
+/// # Notes
+/// - Call this in `init()` - font loading is not allowed during gameplay
+/// - All glyphs in a fixed-width font have the same width
+/// - The texture must have enough space for char_count glyphs
+#[inline]
+fn load_font(
+    mut caller: Caller<'_, ZXGameContext>,
+    texture: u32,
+    char_width: u32,
+    char_height: u32,
+    first_codepoint: u32,
+    char_count: u32,
+) -> u32 {
+    // Only allow during init
+    if !caller.data().game.in_init {
+        warn!("load_font: can only be called during init()");
+        return 0;
+    }
+
+    // Validate parameters
+    if texture == 0 {
+        warn!("load_font: invalid texture handle 0");
+        return 0;
+    }
+    if char_width == 0 || char_width > 255 {
+        warn!("load_font: char_width must be 1-255");
+        return 0;
+    }
+    if char_height == 0 || char_height > 255 {
+        warn!("load_font: char_height must be 1-255");
+        return 0;
+    }
+    if char_count == 0 {
+        warn!("load_font: char_count must be > 0");
+        return 0;
+    }
+
+    let state = &mut caller.data_mut().ffi;
+
+    // Look up texture dimensions from pending_textures
+    let (atlas_width, atlas_height) = state
+        .pending_textures
+        .iter()
+        .find(|t| t.handle == texture)
+        .map(|t| (t.width, t.height))
+        .unwrap_or_else(|| {
+            warn!(
+                "load_font: texture {} not found in pending_textures, using {}x{}",
+                texture, DEFAULT_FONT_TEXTURE_SIZE.0, DEFAULT_FONT_TEXTURE_SIZE.1
+            );
+            DEFAULT_FONT_TEXTURE_SIZE
+        });
+
+    // Allocate font handle
+    let handle = state.next_font_handle;
+    state.next_font_handle += 1;
+
+    // Create font descriptor
+    let font = Font {
+        texture,
+        atlas_width,
+        atlas_height,
+        char_width: char_width as u8,
+        char_height: char_height as u8,
+        first_codepoint,
+        char_count,
+        char_widths: None, // Fixed-width
+    };
+
+    state.fonts.push(font);
+    handle
+}
+
+/// Load a variable-width bitmap font from a texture atlas
+///
+/// Like `load_font()`, but allows each glyph to have a different width.
+///
+/// # Arguments
+/// * `texture` — Handle to the texture atlas
+/// * `widths_ptr` — Pointer to array of char_count u8 widths
+/// * `char_height` — Height of each glyph in pixels
+/// * `first_codepoint` — Unicode codepoint of the first glyph
+/// * `char_count` — Number of glyphs in the font
+///
+/// # Returns
+/// Handle to the loaded font (use with `font_bind()`)
+///
+/// # Notes
+/// - Call this in `init()` - font loading is not allowed during gameplay
+/// - The widths array must have exactly char_count entries
+/// - Glyphs are still arranged in a grid, but can have custom widths
+#[inline]
+fn load_font_ex(
+    mut caller: Caller<'_, ZXGameContext>,
+    texture: u32,
+    widths_ptr: u32,
+    char_height: u32,
+    first_codepoint: u32,
+    char_count: u32,
+) -> u32 {
+    // Only allow during init
+    if !caller.data().game.in_init {
+        warn!("load_font_ex: can only be called during init()");
+        return 0;
+    }
+
+    // Validate parameters
+    if texture == 0 {
+        warn!("load_font_ex: invalid texture handle 0");
+        return 0;
+    }
+    if char_height == 0 || char_height > 255 {
+        warn!("load_font_ex: char_height must be 1-255");
+        return 0;
+    }
+    if char_count == 0 {
+        warn!("load_font_ex: char_count must be > 0");
+        return 0;
+    }
+
+    // Read widths array from WASM memory
+    let memory = match caller.data().game.memory {
+        Some(m) => m,
+        None => {
+            warn!("load_font_ex: no WASM memory available");
+            return 0;
+        }
+    };
+
+    let widths = {
+        let mem_data = memory.data(&caller);
+        let ptr = widths_ptr as usize;
+        let len = char_count as usize;
+
+        if ptr + len > mem_data.len() {
+            warn!(
+                "load_font_ex: widths array ({} bytes at {}) exceeds memory bounds ({})",
+                len,
+                ptr,
+                mem_data.len()
+            );
+            return 0;
+        }
+
+        mem_data[ptr..ptr + len].to_vec()
+    };
+
+    let state = &mut caller.data_mut().ffi;
+
+    // Look up texture dimensions from pending_textures
+    let (atlas_width, atlas_height) = state
+        .pending_textures
+        .iter()
+        .find(|t| t.handle == texture)
+        .map(|t| (t.width, t.height))
+        .unwrap_or_else(|| {
+            warn!(
+                "load_font_ex: texture {} not found in pending_textures, using {}x{}",
+                texture, DEFAULT_FONT_TEXTURE_SIZE.0, DEFAULT_FONT_TEXTURE_SIZE.1
+            );
+            DEFAULT_FONT_TEXTURE_SIZE
+        });
+
+    // Allocate font handle
+    let handle = state.next_font_handle;
+    state.next_font_handle += 1;
+
+    // Get max width from widths array for grid calculations
+    let max_char_width = widths.iter().copied().max().unwrap_or(8);
+
+    // Create font descriptor
+    let font = Font {
+        texture,
+        atlas_width,
+        atlas_height,
+        char_width: max_char_width, // Max width for grid calculations
+        char_height: char_height as u8,
+        first_codepoint,
+        char_count,
+        char_widths: Some(widths),
+    };
+
+    state.fonts.push(font);
+    handle
+}
+
+/// Bind a font for subsequent draw_text() calls
+///
+/// # Arguments
+/// * `font_handle` — Font handle from load_font() or load_font_ex(), or 0 for built-in font
+///
+/// # Notes
+/// - Font handle 0 uses the built-in 8×8 monospace font (default)
+/// - Custom fonts persist for all subsequent draw_text() calls until changed
+#[inline]
+fn font_bind(mut caller: Caller<'_, ZXGameContext>, font_handle: u32) {
+    let state = &mut caller.data_mut().ffi;
+
+    // Validate font handle (0 is always valid = built-in)
+    if font_handle != 0 {
+        // Check if handle is valid (font exists)
+        let font_index = (font_handle - 1) as usize;
+        if font_index >= state.fonts.len() {
+            warn!("font_bind: invalid font handle {}", font_handle);
+            return;
+        }
+    }
+
+    state.current_font = font_handle;
+}
+
+/// Measure the width of text when rendered
+///
+/// # Arguments
+/// * `ptr` — Pointer to UTF-8 string data
+/// * `len` — Length of string in bytes
+/// * `size` — Font size in pixels
+///
+/// # Returns
+/// Width in pixels that the text would occupy when rendered.
+fn text_width(caller: Caller<'_, ZXGameContext>, ptr: u32, len: u32, size: f32) -> f32 {
+    // Read UTF-8 string from WASM memory
+    let memory = match caller.data().game.memory {
+        Some(m) => m,
+        None => return 0.0,
+    };
+
+    let text_str = {
+        let mem_data = memory.data(&caller);
+        let ptr = ptr as usize;
+        let len = len as usize;
+
+        if ptr + len > mem_data.len() {
+            return 0.0;
+        }
+
+        match std::str::from_utf8(&mem_data[ptr..ptr + len]) {
+            Ok(s) => s.to_string(),
+            Err(_) => return 0.0,
+        }
+    };
+
+    if text_str.is_empty() {
+        return 0.0;
+    }
+
+    let state = &caller.data().ffi;
+    let font_handle = state.current_font;
+
+    // Calculate width based on font type
+    if font_handle == 0 {
+        // Built-in font: 8x8 fixed-width
+        let scale = size / crate::font::GLYPH_HEIGHT as f32;
+        let glyph_width = crate::font::GLYPH_WIDTH as f32 * scale;
+        text_str.chars().count() as f32 * glyph_width
+    } else {
+        // Custom font
+        let font_index = (font_handle - 1) as usize;
+        if let Some(font) = state.fonts.get(font_index) {
+            let scale = size / font.char_height as f32;
+
+            let mut total_width = 0.0f32;
+            for ch in text_str.chars() {
+                let char_code = ch as u32;
+
+                if char_code < font.first_codepoint
+                    || char_code >= font.first_codepoint + font.char_count
+                {
+                    continue;
+                }
+                let glyph_index = (char_code - font.first_codepoint) as usize;
+
+                let glyph_width_px = font
+                    .char_widths
+                    .as_ref()
+                    .and_then(|widths| widths.get(glyph_index).copied())
+                    .unwrap_or(font.char_width);
+
+                total_width += glyph_width_px as f32 * scale;
+            }
+            total_width
+        } else {
+            0.0
+        }
+    }
+}

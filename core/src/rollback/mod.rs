@@ -62,8 +62,8 @@ pub use player::{MAX_PLAYERS, PlayerSessionConfig};
 
 // Re-export public types from state
 pub use state::{
-    GameStateSnapshot, LoadStateError, RollbackStateManager, STATE_POOL_SIZE, SaveStateError,
-    StatePool,
+    GameStateSnapshot, HostRollbackState, LoadStateError, RollbackStateManager, STATE_POOL_SIZE,
+    SaveStateError, StatePool, HOST_STATE_SIZE,
 };
 
 // Re-export public types from session

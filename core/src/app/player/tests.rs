@@ -1,4 +1,5 @@
-use super::{format_ggrs_addr, sanitize_game_id};
+use super::connection::format_ggrs_addr;
+use super::sanitize_game_id;
 
 #[test]
 fn format_ggrs_addr_replaces_port_for_ipv4_socket_addr() {
