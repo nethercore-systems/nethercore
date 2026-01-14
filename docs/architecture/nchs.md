@@ -34,14 +34,19 @@ Instead of extracting tick rate and render mode from `init()` at runtime, declar
 
 ```toml
 # nether.toml
-[package]
-name = "my-game"
+[game]
+id = "my-game"
+title = "My Game"
+author = "Developer"
 version = "0.1.0"
 
-[game]
-tick_rate = 60        # Updates per second (30, 60, or 120)
-render_mode = "mode7" # Render mode (optional, default varies by console)
-max_players = 4       # Maximum players supported
+# Netplay-critical config (baked into the ROM)
+tick_rate = 60      # Updates per second (30, 60, or 120)
+max_players = 4     # Maximum players supported (1-4)
+
+# ZX-only (0-3): 0=Lambert, 1=Matcap, 2=MR-Blinn-Phong, 3=Blinn-Phong
+# Default: 0
+render_mode = 0
 
 [netplay]
 enabled = true        # Can this game be played online?
@@ -72,7 +77,7 @@ tick_rate = 60   # Action games (default)
 tick_rate = 120  # Fighting games, precision required
 ```
 
-Tick rate and render mode are **manifest-only** - no `set_tick_rate()` or `set_render_mode()` FFI functions exist. This ensures consistency between local and online play.
+Tick rate and render mode are **manifest-declared** and baked into the ROM. For online play, tick rate is enforced by the NCHS session config (GGRS fps) and must match across peers; games should treat it as fixed for the session.
 
 ---
 
@@ -118,54 +123,8 @@ compress_textures = true   # Compress ALL textures by default
 
 Default is `false` (RGBA8) for backward compatibility and pixel-art friendliness.
 
-#### Per-Asset Override
-
-Individual textures can override the global setting:
-
-```toml
-[game]
-id = "hybrid-game"
-title = "Hybrid Game"
-author = "Developer"
-version = "1.0.0"
-compress_textures = true   # Enable BC7 globally
-
-# 3D world textures - use global setting (BC7)
-[[assets.textures]]
-id = "terrain"
-path = "textures/terrain.png"
-
-[[assets.textures]]
-id = "character"
-path = "textures/character.png"
-
-# Pixel art sprites - override to RGBA8
-[[assets.textures]]
-id = "player-sprite"
-path = "textures/player.png"
-compress = false            # Override: keep as RGBA8
-
-# Bitmap font - override to RGBA8
-[[assets.textures]]
-id = "font"
-path = "textures/font.png"
-compress = false            # Override: keep as RGBA8
-
-# UI elements - override to RGBA8
-[[assets.textures]]
-id = "ui-icons"
-path = "textures/ui.png"
-compress = false            # Override: keep as RGBA8
-```
-
-#### Resolution Logic
-
-```rust
-fn should_compress(global_compress: bool, asset_compress: Option<bool>) -> bool {
-    // Per-asset setting takes precedence
-    asset_compress.unwrap_or(global_compress)
-}
-```
+> Note: As of the current `nether-cli` packer, texture compression is a **single global choice**
+> (`compress_textures`) applied to all textures. Per-texture overrides are not implemented yet.
 
 ### Compression and Render Modes
 
@@ -179,8 +138,9 @@ fn should_compress(global_compress: bool, asset_compress: Option<bool>) -> bool 
 The `nether build` command will warn if compression settings don't match render mode:
 
 ```
-⚠ Warning: render_mode = "matcap" typically uses compressed textures.
-  Consider setting compress_textures = true in nether.toml
+WARNING: Detected render_mode 1 (Matcap/PBR/Hybrid) but compress_textures=false.
+      Consider enabling texture compression for better performance:
+      Add 'compress_textures = true' to [game] section in nether.toml
 ```
 
 ### Size Impact

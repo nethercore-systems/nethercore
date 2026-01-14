@@ -4,6 +4,12 @@
 
 This repo contains the Nethercore runtime/player, shared types, console implementations (ZX), tooling, and documentation.
 
+## TL;DR (How to Navigate)
+
+- For **game-facing APIs / ABI**, treat `include/zx.rs` as the source of truth.
+- For **ROM packing + asset formats**, start at `docs/architecture/rom-format.md` and `zx-common/`.
+- For **rollback/determinism**, start at `docs/architecture/overview.md` and keep anything reachable from `update()` deterministic.
+
 ## Start Here (Canonical Docs)
 
 - Game-dev docs (mdBook): `docs/book/`
@@ -22,6 +28,15 @@ This repo contains the Nethercore runtime/player, shared types, console implemen
 - `tools/` — CLI + exporters
 - `docs/` — mdBook + architecture notes
 - `examples/` — example games
+
+## Quick Commands
+
+- Build: `cargo build`
+- Test: `cargo test`
+- Format: `cargo fmt`
+- Lint: `cargo clippy --all-targets -- -D warnings`
+- Run player (library UI): `cargo run`
+- Serve mdBook: `cd docs/book && mdbook serve` (requires `mdbook` + `mdbook-tabs`)
 
 ## Cross-Repo Dependency (Local Paths)
 

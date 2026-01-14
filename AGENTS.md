@@ -2,6 +2,14 @@
 
 Fantasy console runtime/player with rollback netcode, console implementations (ZX), shared types, CLI tooling, and game-dev documentation.
 
+## Start Here (Canonical)
+
+- Runtime/player overview: `docs/architecture/overview.md`
+- ZX rendering architecture: `docs/architecture/zx/rendering.md`
+- ZX FFI ABI (signatures + docs): `include/zx.rs`
+- ROM format + packing: `docs/architecture/rom-format.md`
+- NCHS (handshake protocol + netplay model): `docs/architecture/nchs.md`
+
 ## Repo Map
 
 - `core/` — Shared console framework (WASM runtime, rollback, inspection)
@@ -36,7 +44,7 @@ Handy cargo aliases (see `.cargo/config.toml`):
 - Avoid non-deterministic sources in simulation: wall-clock time, OS RNG, filesystem/network, thread timing, unordered iteration, floating-point drift without care.
 - Keep render-only work in rendering paths; rollback can re-run `update()` many times.
 
-## When Changing Shared Types / FFI
+## Cross-Repo Notes (Shared Types / FFI)
 
 - `include/zx.rs` is the ABI source of truth; verify any FFI change against it and update docs/examples accordingly.
 - `nethercore-platform/backend` depends on `shared/` and `zx-common/` via local path; coordinated changes must keep that repo building.

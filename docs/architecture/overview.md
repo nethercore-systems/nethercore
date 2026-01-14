@@ -167,7 +167,7 @@ pub fn register_all(linker: &mut Linker) -> Result<()> {
     Ok(())
 }
 
-// src/ffi/audio.rs
+// src/ffi/audio/mod.rs
 pub(super) fn register(linker: &mut Linker) -> Result<()> {
     linker.func_wrap("env", "play_sound", play_sound)?;
     linker.func_wrap("env", "stop_sound", stop_sound)?;
@@ -215,81 +215,65 @@ struct PrivateType { /* ... */ }
 
 ## Real Examples from Nethercore
 
-### Example 1: FFI Module Split (4,262 → ~150 lines)
+### Example 1: ZX FFI split by domain
 
-**Before:**
-```
-nethercore-zx/src/ffi.rs         4,262 lines   ❌
-```
+Keep `mod.rs` focused on registration/orchestration, and split the API by domain:
 
-**After:**
 ```
 nethercore-zx/src/ffi/
-├── mod.rs              80 lines     ✅  (Registration only)
-├── audio.rs           200 lines     ✅
-├── camera.rs          200 lines     ✅
-├── config.rs          180 lines     ✅
-├── draw_2d.rs         620 lines     ✅
-├── draw_3d.rs         450 lines     ✅
-├── input.rs           500 lines     ✅
-├── lighting.rs        220 lines     ✅
-├── material.rs        400 lines     ✅
-├── mesh.rs            450 lines     ✅
-├── render_state.rs    150 lines     ✅
-├── skinning.rs        120 lines     ✅
-├── sky.rs             150 lines     ✅
-├── texture.rs         250 lines     ✅
-└── transform.rs       350 lines     ✅
+├── mod.rs                  # Registration/orchestration only
+├── assets.rs
+├── audio/                  # Music/tracker/sound
+├── draw_2d/                # Sprites/shapes/text
+├── environment/            # Sky + environment state
+├── keyframes/              # Keyframe load/query/access
+├── mesh_generators/        # Procedural mesh helpers
+├── camera.rs
+├── config.rs
+├── draw_3d.rs
+├── input.rs
+├── lighting.rs
+├── material.rs
+├── mesh.rs
+├── render_state.rs
+├── rom.rs
+├── skinning.rs
+├── texture.rs
+├── transform.rs
+└── viewport.rs
 ```
 
 **Key decisions:**
-- Organized by domain (audio, graphics, input) not by technical layer
-- Each module self-contained: types + functions + registration
-- mod.rs purely orchestrates registration, no implementation
+- Split by *game-facing API domain* (audio/graphics/input/etc.), not by technical layer.
+- Keep registration in `mod.rs`; keep implementations in domain modules.
+- Keep the “init-only / rollback-safe” rules co-located with the FFI code that enforces them.
 
-### Example 2: App Module Split (1,760 → ~600 lines)
+### Example 2: Graphics subsystem uses “subsystem folders”
 
-**Before:**
-```
-nethercore-zx/src/app.rs         1,760 lines   ❌
-```
+`nethercore-zx/src/graphics/` is organized around responsibilities that change together:
 
-**After:**
 ```
-nethercore-zx/src/app/
-├── mod.rs              700 lines     ✅  (App struct + render loop)
-├── init.rs             160 lines     ✅  (Initialization)
-├── game_session.rs     350 lines     ✅  (Game lifecycle)
-├── ui.rs               200 lines     ✅  (UI actions + input)
-└── debug.rs             45 lines     ✅  (FPS calculation)
+nethercore-zx/src/graphics/
+├── buffer/                 # GPU buffers + retained mesh storage
+├── frame/                  # Per-frame submission + bind-group caching
+├── pipeline/               # Pipeline keys, creation, cache
+├── unified_shading_state/  # Packed shading/environment state
+├── vertex/                 # Vertex formats + helpers
+└── zx_graphics.rs          # High-level graphics facade
 ```
 
-**Key decisions:**
-- Split by lifecycle phase and responsibility
-- mod.rs keeps the main render loop (complex orchestration)
-- Submodules handle distinct concerns (init, session, UI, debug)
-- All tests remain in mod.rs (integration-style tests)
+### Example 3: State split between config, staging, rollback
 
-### Example 3: State Module Split (740 → ~100 lines)
+Keep init config and rollback-relevant state explicit, and keep “FFI staging” isolated:
 
-**Before:**
-```
-nethercore-zx/src/state.rs       740 lines     ⚠️
-```
-
-**After:**
 ```
 nethercore-zx/src/state/
-├── mod.rs              100 lines     ✅  (Re-exports + QuadBatch)
-├── config.rs            40 lines     ✅  (Init configuration)
-├── resources.rs         60 lines     ✅  (Pending resources)
-└── ffi_state.rs        600 lines     ✅  (Main FFI state)
+├── config.rs               # Init-time console config (ZXInitConfig)
+├── ffi_state/              # Per-frame staging written by FFI calls
+├── rollback_state.rs       # Rollback-reachable state
+├── resources.rs            # Pending resources created during init()
+└── pool.rs                 # Dedup/dirty-tracking pools
 ```
-
-**Key decisions:**
-- Separated config, resources, and runtime state
-- ffi_state.rs at 600 lines (acceptable for complex central type)
-- mod.rs minimal re-export layer
 
 ## When to Split a File
 
@@ -335,7 +319,7 @@ Place these at the top of:
 
 Each module should have a **single, clear purpose** expressible in one sentence:
 
-- ✅ **Good**: "`ffi/audio.rs` registers WebAssembly host functions for audio playback"
+- ✅ **Good**: "`ffi/audio/mod.rs` registers WebAssembly host functions for audio playback"
 - ❌ **Bad**: "`utils.rs` contains various helper functions"
 
 ### Avoid "Utility Dumping Grounds"
@@ -385,7 +369,7 @@ When refactoring a large file:
 
 **Example commit sequence:**
 ```
-git commit -m "Phase 1: Create ffi/audio.rs with audio FFI functions"
+git commit -m "Phase 1: Create ffi/audio/ with audio FFI functions"
 git commit -m "Phase 2: Create ffi/graphics.rs with graphics FFI functions"
 git commit -m "Phase 3: Create ffi/mod.rs with registration logic"
 git commit -m "Phase 4: Remove old ffi.rs monolithic file"
@@ -393,17 +377,12 @@ git commit -m "Phase 4: Remove old ffi.rs monolithic file"
 
 ## Success Metrics
 
-### Before Refactor (January 2025)
-- **Largest file**: 4,262 lines (ffi.rs)
-- **Files >1000 lines**: 5 files
-- **Average time to locate feature**: ~5 minutes
-- **Merge conflict rate**: High in large files
+These are the practical outcomes we want:
 
-### After Refactor (January 2025)
-- **Largest file**: 700 lines (app/mod.rs) ✅
-- **Files >1000 lines**: 0 files ✅
-- **Average time to locate feature**: <1 minute ✅
-- **Merge conflict rate**: Significantly reduced ✅
+- **Navigation stays fast**: most features live in one obvious module folder.
+- **Diffs stay local**: changes for a feature touch a small number of focused files.
+- **Merge conflicts stay low**: fewer “everyone edits the same file” hotspots.
+- **File size stays bounded**: proactively split before files become dumping grounds.
 
 ## Tools & Enforcement
 

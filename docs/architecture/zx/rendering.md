@@ -255,18 +255,14 @@ The renderer uses a unified buffer layout to minimize binding changes:
 
 ## Render Modes
 
-Nethercore ZX supports 4 forward rendering modes, set once in `init()`:
-
-```rust
-fn render_mode(mode: u32)  // 0-3, init-only
-```
+Nethercore ZX implements 4 forward rendering modes (0–3). The active mode is a **host-selected init config** (stored in `ZXInitConfig.render_mode` and applied by the resource manager); it is not currently configured via a game-side `render_mode()` FFI call.
 
 | Mode | Name | Shaders | Description |
 |------|------|---------|-------------|
-| 0 | **Lambert** | 16 | Texture × vertex color. Simple Lambert if normals present. |
-| 1 | **Matcap** | 8 | View-space normal matcap sampling. Stylized, cheap. |
-| 2 | **MR-Blinn-Phong** | 8 | Metallic-roughness Blinn-Phong. Energy-conserving. |
-| 3 | **Blinn-Phong** | 8 | Classic specular-shininess with rim lighting. |
+| 0 | **Lambert** | 24 | Texture × vertex color. Simple Lambert if normals present. |
+| 1 | **Matcap** | 16 | View-space normal matcap sampling. Stylized, cheap. |
+| 2 | **MR-Blinn-Phong** | 16 | Metallic-roughness Blinn-Phong. Energy-conserving. |
+| 3 | **Blinn-Phong** | 16 | Classic specular-shininess with rim lighting. |
 
 ### Mode 0: Lambert
 
@@ -736,12 +732,12 @@ Invalidate on:
 
 | File | Description |
 |------|-------------|
-| `nethercore-zx/src/graphics/mod.rs` | ZXGraphics main implementation |
-| `nethercore-zx/src/graphics/frame.rs` | Frame rendering and command execution |
-| `nethercore-zx/src/graphics/pipeline.rs` | Pipeline cache and creation |
-| `nethercore-zx/src/graphics/vertex.rs` | Vertex format definitions |
-| `nethercore-zx/src/graphics/unified_shading_state.rs` | Shading state packing |
-| `nethercore-zx/src/graphics/buffer.rs` | Buffer management |
+| `nethercore-zx/src/graphics/zx_graphics.rs` | ZX graphics facade (public API surface) |
+| `nethercore-zx/src/graphics/frame/render_frame.rs` | Frame rendering and command execution |
+| `nethercore-zx/src/graphics/pipeline/mod.rs` | Pipeline cache + creation entry points |
+| `nethercore-zx/src/graphics/vertex/mod.rs` | Vertex format definitions |
+| `nethercore-zx/src/graphics/unified_shading_state/mod.rs` | Shading/environment state packing |
+| `nethercore-zx/src/graphics/buffer/mod.rs` | Buffer management |
 | `nethercore-zx/src/graphics/command_buffer.rs` | Virtual render pass |
 | `nethercore-zx/src/graphics/texture_manager.rs` | Texture loading and VRAM tracking |
 | `nethercore-zx/src/shader_gen.rs` | Shader permutation system |
@@ -753,11 +749,11 @@ Invalidate on:
 
 ### "Render mode X requires NORMAL flag"
 
-Modes 1-3 need normals for lighting calculations. Use formats 4-7 or 12-15.
+Modes 1-3 need normals for lighting calculations. Use any format with the NORMAL bit set (e.g., 4-7, 12-15, 20-23, 28-31). Tangent-space normal mapping also requires NORMAL.
 
 ### Black screen after init
 
-Ensure `render_mode()` is called in `init()`, not `update()` or `render()`.
+Ensure you submit at least one draw in `render()`, and check for validation errors (invalid vertex format for the current render mode, missing resources, etc.).
 
 ### Textures appear as checkerboard
 

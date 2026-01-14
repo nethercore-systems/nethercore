@@ -9,7 +9,7 @@ This document lists wgpu features commonly available on desktop backends (D3D12,
 
 | Feature | Purpose | Status |
 |---------|---------|--------|
-| `TEXTURE_COMPRESSION_BC` | BC1-7 compressed textures (DXT/BCn) | Enabled in `init.rs` |
+| `TEXTURE_COMPRESSION_BC` | BC1-7 compressed textures (DXT/BCn) | Enabled in `nethercore-zx/src/graphics/init.rs` |
 
 ## Recommended for Desktop
 

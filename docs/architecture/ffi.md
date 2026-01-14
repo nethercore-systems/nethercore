@@ -4,18 +4,19 @@ This document covers the **shared FFI** common to all Nethercore consoles. For c
 
 - [Nethercore ZX](./nethercore-zx.md) — 5th gen (PS1/N64/Saturn)
 - [Nethercore Chroma](./nethercore-chroma.md) — 4th gen (Genesis/SNES/Neo Geo) *(Coming Soon)*
+- Canonical ZX FFI bindings (game-side): `../../include/zx.rs`
 
 ---
 
 ## Game Lifecycle
 
-All Nethercore games must export these three functions:
+Nethercore games are expected to export these three functions (missing exports are treated as no-ops by the player, but real games should provide at least `update()` and `render()`):
 
 ```rust
 #[no_mangle]
 pub extern "C" fn init() {
     // Called once at startup
-    // Set console configuration (resolution, tick rate, render mode)
+    // Set init-only configuration (e.g., clear color)
     // Initialize game state, create textures from embedded assets
 }
 
@@ -35,18 +36,13 @@ pub extern "C" fn render() {
 
 ### Console Configuration (init-only)
 
-Certain settings define the "mood" of your game and **must be set in `init()`**. These cannot be changed at runtime — calling them in `update()` or `render()` will fail/error.
+Init-only configuration is intentionally small. In the canonical ZX bindings (`include/zx.rs`), the stable init-only config surface is:
 
 ```rust
-fn set_tick_rate(fps: u32)                  // 24, 30, 60, or 120
 fn set_clear_color(color: u32)              // Auto-clear color (0xRRGGBBAA), default: black
-fn render_mode(mode: u32)                   // Nethercore ZX only: 0-3
 ```
 
-**Why init-only?**
-- Tick rate affects GGRS synchronization
-- Render mode determines shader pipelines
-- Changing these mid-game would break determinism and netplay
+Tick rate is controlled by the host/session (and baked into ROM netplay metadata for NCHS). Render mode is declared in `nether.toml` and baked into ROM metadata; it is not currently configured via FFI.
 
 ### Mode 2 Migration (2025)
 
@@ -91,16 +87,16 @@ Nethercore uses GGRS for deterministic rollback netcode. Key rules:
 
 ### Memory Limits
 
-Nethercore uses a **split ROM + RAM memory model** for efficient rollback:
+Memory models are console-specific:
 
-| Console | ROM (Cartridge) | RAM (Linear Memory) | VRAM |
+| Console | ROM limit | RAM (linear memory) | VRAM |
 |---------|-----------------|---------------------|------|
 | **Nethercore ZX** | 16 MB | 4 MB | 4 MB |
-| **Nethercore Chroma** | 4 MB | 2 MB | 1 MB |
+| **Nethercore Chroma** *(planned)* | 2 MB (unified) | 2 MB | 1 MB |
 
-**ROM (Cartridge):** Contains WASM code + bundled assets (via data pack). Not snapshotted.
+**ZX ROM (Cartridge):** contains WASM code + bundled assets (via data pack). Not snapshotted.
 - WASM bytecode (typically 50-200 KB)
-- Data pack assets: textures, meshes, sounds, fonts, raw data
+- Data pack assets: textures, meshes, skeletons, keyframes, sounds, fonts, trackers, raw data
 - Assets loaded via `rom_*` FFI go directly to VRAM/audio memory
 
 **RAM (Linear Memory):** Your game's working memory. Fully snapshotted for rollback.
@@ -365,10 +361,11 @@ These functions load assets from the ROM's data pack. Assets go directly to VRAM
 fn rom_texture(id_ptr: *const u8, id_len: u32) -> u32
 ```
 
-Loads a texture from the data pack by string ID. Returns a texture handle (0 if not found).
+Loads a texture from the data pack by string ID. Returns a texture handle (>0) on success and traps on failure (missing ID, no data pack, etc.).
 
 ```rust
-let tex = rom_texture(b"player".as_ptr(), 6);
+let id = b"player";
+let tex = rom_texture(id.as_ptr(), id.len() as u32);
 ```
 
 ---
@@ -379,10 +376,11 @@ let tex = rom_texture(b"player".as_ptr(), 6);
 fn rom_mesh(id_ptr: *const u8, id_len: u32) -> u32
 ```
 
-Loads a mesh from the data pack by string ID. Returns a mesh handle (0 if not found).
+Loads a mesh from the data pack by string ID. Returns a mesh handle (>0) on success and traps on failure.
 
 ```rust
-let mesh = rom_mesh(b"enemy".as_ptr(), 5);
+let id = b"enemy";
+let mesh = rom_mesh(id.as_ptr(), id.len() as u32);
 ```
 
 ---
@@ -393,10 +391,11 @@ let mesh = rom_mesh(b"enemy".as_ptr(), 5);
 fn rom_sound(id_ptr: *const u8, id_len: u32) -> u32
 ```
 
-Loads a sound from the data pack by string ID. Returns a sound handle (0 if not found).
+Loads a sound from the data pack by string ID. Returns a sound handle (>0) on success and traps on failure.
 
 ```rust
-let sfx = rom_sound(b"jump".as_ptr(), 4);
+let id = b"jump";
+let sfx = rom_sound(id.as_ptr(), id.len() as u32);
 ```
 
 ---
@@ -407,24 +406,41 @@ let sfx = rom_sound(b"jump".as_ptr(), 4);
 fn rom_skeleton(id_ptr: *const u8, id_len: u32) -> u32
 ```
 
-Loads a skeleton from the data pack by string ID. Returns a skeleton handle (0 if not found).
+Loads a skeleton from the data pack by string ID. Returns a skeleton handle (>0) on success and traps on failure.
 
 ```rust
-let skel = rom_skeleton(b"player_rig".as_ptr(), 10);
+let id = b"player_rig";
+let skel = rom_skeleton(id.as_ptr(), id.len() as u32);
 ```
 
 ---
 
-### rom_animation
+### rom_keyframes
 
 ```rust
-fn rom_animation(id_ptr: *const u8, id_len: u32) -> u32
+fn rom_keyframes(id_ptr: *const u8, id_len: u32) -> u32
 ```
 
-Loads an animation from the data pack by string ID. Returns an animation handle (0 if not found).
+Loads a keyframe collection (animation clip) from the data pack by string ID.
 
 ```rust
-let anim = rom_animation(b"walk".as_ptr(), 4);
+let id = b"walk";
+let anim = rom_keyframes(id.as_ptr(), id.len() as u32);
+```
+
+---
+
+### rom_tracker
+
+```rust
+fn rom_tracker(id_ptr: *const u8, id_len: u32) -> u32
+```
+
+Loads an XM/IT tracker module from the data pack by string ID. Returns a tracker handle (0 on error).
+
+```rust
+let id = b"song_main";
+let tracker = rom_tracker(id.as_ptr(), id.len() as u32);
 ```
 
 ---
@@ -435,10 +451,11 @@ let anim = rom_animation(b"walk".as_ptr(), 4);
 fn rom_font(id_ptr: *const u8, id_len: u32) -> u32
 ```
 
-Loads a bitmap font from the data pack by string ID. Returns a font handle (0 if not found).
+Loads a bitmap font from the data pack by string ID. Returns a font handle (>0) on success and traps on failure.
 
 ```rust
-let font = rom_font(b"ui_font".as_ptr(), 7);
+let id = b"ui_font";
+let font = rom_font(id.as_ptr(), id.len() as u32);
 ```
 
 ---
@@ -449,10 +466,11 @@ let font = rom_font(b"ui_font".as_ptr(), 7);
 fn rom_data_len(id_ptr: *const u8, id_len: u32) -> u32
 ```
 
-Returns the size in bytes of raw data in the data pack. Returns 0 if not found.
+Returns the size in bytes of raw data in the data pack. Traps if the ID is not found.
 
 ```rust
-let len = rom_data_len(b"level1".as_ptr(), 6);
+let id = b"level1";
+let len = rom_data_len(id.as_ptr(), id.len() as u32);
 ```
 
 ---
@@ -463,12 +481,13 @@ let len = rom_data_len(b"level1".as_ptr(), 6);
 fn rom_data(id_ptr: *const u8, id_len: u32, out_ptr: *mut u8, max_len: u32) -> u32
 ```
 
-Copies raw data from the data pack into WASM memory. Returns bytes copied (0 if not found or buffer too small).
+Copies raw data from the data pack into WASM memory. Returns bytes copied (≤ `max_len`) and traps if the ID is not found or if the destination is out of bounds.
 
 ```rust
-let len = rom_data_len(b"level1".as_ptr(), 6);
+let id = b"level1";
+let len = rom_data_len(id.as_ptr(), id.len() as u32);
 let mut buffer = vec![0u8; len as usize];
-rom_data(b"level1".as_ptr(), 6, buffer.as_mut_ptr(), len);
+rom_data(id.as_ptr(), id.len() as u32, buffer.as_mut_ptr(), len);
 ```
 
 ---

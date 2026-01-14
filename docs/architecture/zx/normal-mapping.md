@@ -1,13 +1,13 @@
-# Normal Map Implementation Plan
+# Normal Mapping (ZX)
 
 > Status: Implemented
-> Last reviewed: 2026-01-06
+> Last reviewed: 2026-01-14
 
 > **Revision Note (2026-01-03)**: This spec has been validated against the codebase. Key corrections:
-> - `FLAG_USE_NORMAL_MAP` changed from `0x100` (bit 8) to `0x10000` (bit 16) — bits 8-15 are used by dither
+> - The normal-map opt-out flag is `FLAG_SKIP_NORMAL_MAP = 0x10000` (bit 16) — bits 8-15 are used by dither
 > - Added `intel_tex_2::bc5` compression implementation details
 > - Added tangent packing Rust/WGSL code
-> - Added channel detection logic for auto-BC5 selection
+> - Clarified that BC5 is supported, but `nether.toml` does not currently expose per-texture format selection
 
 ## Executive Summary
 
@@ -253,42 +253,30 @@ BC5 provides:
 
 ### Implementation: Developer Experience
 
-**Problem**: Users manually tagging textures in nether.toml kills DevEx.
+Normal mapping is enabled/disabled by **what you draw**, not by special texture metadata:
 
-**Solution: Channel-Based Auto-Detection + Slot Binding**
+- Mesh has tangents → shader will treat **slot 3** as a normal map (unless opted out)
+- Mesh has no tangents → slot 3 is treated as a regular texture (e.g., extra matcap in Mode 1)
 
-The import pipeline detects based on how the texture is bound at runtime:
+**Texture packing today**
 
-```toml
-[[assets.textures]]
-id = "player"
-path = "assets/player.png"          # 4-channel → BC7 (albedo/MRE)
+`nether-cli pack` selects a single texture format for **all** textures via `game.compress_textures` in `nether.toml`:
 
-[[assets.textures]]
-id = "player_normal"
-path = "assets/player_normal.png"   # 2 or 3-channel → BC5 (normal)
-```
+- `compress_textures = false` → RGBA8
+- `compress_textures = true` → BC7
 
-**Channel-based detection in `nether-export`:**
-1. **2-channel texture**: Compress directly to BC5 (RG only)
-2. **3-channel texture**: Discard B channel (reconstructed), compress to BC5
-3. **4-channel texture**: BC7 (standard color/MRE texture)
+Normal maps still work under this scheme because shaders only read the **R/G** channels and reconstruct Z.
 
-**Why this works**: Normal maps only need X and Y. The B channel is mathematically derivable: `Z = sqrt(1 - X² - Y²)`. By detecting 2-3 channel input, we auto-select BC5 without any config.
+**BC5 support (optional optimization)**
 
-**Shader stays simple**: Always receives BC5 (RG), always reconstructs Z. No branching for different normal formats.
-
-**No manifest changes needed**: The existing `compress = true/false` flag continues to work:
-- `compress = true` + 4-channel → BC7 (albedo, MRE, specular)
-- `compress = true` + 2-3 channel → BC5 (normal maps)
-- `compress = false` → RGBA8 (uncompressed)
-
-This is fully backward compatible - existing projects work unchanged.
+- Runtime supports BC5 (`TextureFormat::Bc5`) in `nethercore-zx/src/graphics/texture_manager.rs`.
+- Tooling can emit BC5: see `compress_bc5` in `tools/nether-cli/src/pack/assets/texture.rs` and `tools/nether-export/src/texture.rs`.
+- `nether.toml` does not currently expose per-texture format selection or auto-detection for BC5.
 
 ### Texture Format Enum Extension
 
 ```rust
-// zx-common/src/formats/zx_data_pack.rs
+// zx-common/src/formats/zx_data_pack/types.rs
 pub enum TextureFormat {
     Rgba8,      // Uncompressed
     Bc7,        // Compressed color (albedo, MRE, specular)
@@ -322,79 +310,15 @@ impl TextureFormat {
 
 ### BC5 Compression Implementation
 
-The `intel_tex_2` crate (already in workspace) supports BC5 compression via `intel_tex_2::bc5`:
+BC5 compression is implemented (via `intel_tex_2`) in:
 
-```rust
-// tools/nether-cli/src/pack/mod.rs (and nether-export/src/texture.rs)
-use intel_tex_2::bc5;
+- `tools/nether-cli/src/pack/assets/texture.rs` (`compress_bc5`)
+- `tools/nether-export/src/texture.rs` (`compress_bc5`, `convert_image_with_format`)
 
-/// Compress RG8 pixels to BC5 format for normal maps
-pub fn compress_bc5(pixels: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
-    let w = width as usize;
-    let h = height as usize;
-
-    // Pad to multiple of 4 (BC5 requirement)
-    let padded_width = (w + 3) & !3;
-    let padded_height = (h + 3) & !3;
-    let blocks_x = padded_width / 4;
-    let blocks_y = padded_height / 4;
-
-    // BC5 = 16 bytes per 4x4 block
-    let mut output = vec![0u8; blocks_x * blocks_y * 16];
-
-    // Pad source if needed (edge extension)
-    let padded = if padded_width != w || padded_height != h {
-        pad_rg_texture(pixels, w, h, padded_width, padded_height)
-    } else {
-        pixels.to_vec()
-    };
-
-    // Create RG surface for intel_tex_2
-    let surface = intel_tex_2::RgSurface {
-        width: padded_width as u32,
-        height: padded_height as u32,
-        stride: padded_width as u32 * 2,  // 2 bytes per pixel (RG)
-        data: &padded,
-    };
-
-    bc5::compress_blocks_into(&surface, &mut output);
-    Ok(output)
-}
-```
-
-### Channel Detection for Auto-BC5
-
-```rust
-fn load_texture(id: &str, path: &Path, compress: bool) -> Result<PackedTexture> {
-    let img = image::open(path)?;
-    let channels = img.color().channel_count();
-    let (width, height) = img.dimensions();
-
-    let (format, data) = if !compress {
-        // Uncompressed: always RGBA8
-        let rgba = img.to_rgba8();
-        (TextureFormat::Rgba8, rgba.into_raw())
-    } else if channels <= 3 && is_normal_map_by_name(path) {
-        // 2-3 channel + name hint = normal map = BC5
-        let rg = extract_rg_channels(&img);
-        let compressed = compress_bc5(&rg, width, height)?;
-        (TextureFormat::Bc5, compressed)
-    } else {
-        // 4 channel or non-normal = BC7
-        let rgba = img.to_rgba8();
-        let compressed = compress_bc7(rgba.as_raw(), width, height)?;
-        (TextureFormat::Bc7, compressed)
-    };
-
-    Ok(PackedTexture::with_format(id, width as u16, height as u16, format, data))
-}
-
-/// Detect normal maps by filename convention
-fn is_normal_map_by_name(path: &Path) -> bool {
-    let name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-    name.ends_with("_normal") || name.ends_with("_n") || name.contains("normal")
-}
-```
+Both implementations:
+- pad to 4×4 blocks with edge extension
+- extract R/G channels from RGBA input
+- compress to 16 bytes per 4×4 block (`Bc5RgUnorm`)
 
 ---
 
@@ -404,11 +328,9 @@ fn is_normal_map_by_name(path: &Path) -> bool {
 
 ```wgsl
 // In fragment shader (modes 0, 2, 3)
-fn sample_normal_map(uv: vec2<f32>, tbn: mat3x3<f32>) -> vec3<f32> {
-    let flags = material.flags;
-
-    // Check if normal map is bound (bit 16)
-    if ((flags & 0x10000u) == 0u) {
+fn sample_normal_map(uv: vec2<f32>, tbn: mat3x3<f32>, flags: u32) -> vec3<f32> {
+    // Opt-out flag: when set, use vertex normals instead of sampling slot 3.
+    if ((flags & FLAG_SKIP_NORMAL_MAP) != 0u) {
         return tbn[2]; // Return vertex normal (TBN's Z column)
     }
 
@@ -456,188 +378,66 @@ Bits 0-7:   Feature flags (skinning, filter, uniform overrides, matcap)
 Bits 8-11:  FLAG_UNIFORM_ALPHA_MASK (dither transparency level)
 Bits 12-13: FLAG_DITHER_OFFSET_X_MASK
 Bits 14-15: FLAG_DITHER_OFFSET_Y_MASK
-Bits 16+:   Available for new flags
+Bits 16+:   Extensions (currently: bit 16 = FLAG_SKIP_NORMAL_MAP)
 ```
 
-### New Material Flag
+### Normal Map Flag (Opt-out)
 
 ```rust
-const FLAG_USE_NORMAL_MAP: u32 = 0x10000; // Bit 16 (NOT bit 8 - that's used by dither)
+pub const FLAG_SKIP_NORMAL_MAP: u32 = 1 << 16;
 ```
 
 FFI function:
 ```rust
-fn use_normal_map(enabled: bool);
+fn skip_normal_map(skip: u32);
 ```
 
 ---
 
-## Part 6: Implementation Steps
+## Implementation Map (Where Things Live)
 
-### Phase 1: Core Infrastructure
+### Mesh + Vertex Formats
 
-1. **Vertex format extension** (`zx-common/src/packing.rs`)
-   - Add `FORMAT_TANGENT = 16`
-   - Implement tangent packing (octahedral + sign)
-   - Update stride calculations for 32 formats
+- `zx-common/src/packing.rs` — vertex format flags + stride calculations (tangent = bit 4; tangents require normals).
+- `zx-common/src/formats/mesh.rs` — packed mesh format stores `format_flags` and packed vertex bytes.
+- `nethercore-zx/src/graphics/vertex/` — wgpu vertex buffer layouts for each vertex format.
 
-2. **GPU vertex layouts** (`nethercore-zx/src/graphics/vertex.rs`)
-   - Add LOC_TANGENT = 6
-   - Generate all 32 vertex format permutations
-   - Handle tangent attribute binding
+### Textures + Compression
 
-3. **Mesh format update** (`zx-common/src/formats/mesh.rs`)
-   - Support new format flag in `.nczxmesh`
-   - Update mesh validation
+- `zx-common/src/formats/zx_data_pack/types.rs` — `TextureFormat::{Rgba8, Bc7, Bc5}`.
+- `nethercore-zx/src/graphics/texture_manager.rs` — uploads textures and maps formats to wgpu (`Bc5RgUnorm` for BC5).
+- `tools/nether-cli/src/pack/assets/texture.rs` — BC7 + BC5 compression helpers; pack currently uses a single `TextureFormat` for all textures.
+- `tools/nether-export/src/texture.rs` — converts images to `.ncztex` with explicit format (RGBA8/BC7/BC5).
 
-### Phase 2: Texture Pipeline
+### Shading + FFI
 
-4. **BC5 compression** (`tools/nether-export/src/texture.rs`)
-   - Add BC5 compression via `intel_tex_2`
-   - Implement naming convention detection
-   - Add optional `format = "bc5"` in manifest
+- `include/zx.rs` — `material_normal(texture)` and `skip_normal_map(skip)`.
+- `nethercore-zx/src/ffi/material.rs` — binds slot 3 and toggles the skip flag.
+- `nethercore-zx/src/graphics/unified_shading_state/shading_state.rs` — `FLAG_SKIP_NORMAL_MAP` (bit 16) and flag packing.
+- `nethercore-zx/shaders/common.wgsl` — `build_tbn()` + `sample_normal_map()` (slot 3).
+- `nethercore-zx/shaders/mode1_matcap.wgsl` and `nethercore-zx/shaders/blinnphong_common.wgsl` — consume shading normals.
 
-5. **Texture format enum** (`zx-common/src/formats/texture.rs`)
-   - Add `TextureFormat::Bc5` variant
-   - Update `bc5_size()` calculation
+## Using Normal Maps (Today)
 
-6. **Runtime loading** (`nethercore-zx/src/graphics/texture_manager.rs`)
-   - Add `load_texture_bc5_internal()`
-   - Handle RG format in wgpu
+1. Use a mesh with UV + NORMAL + TANGENT (tangents require normals).
+2. Bind a texture to slot 3 with `material_normal(texture)`.
+3. (Optional) call `skip_normal_map(1)` to force vertex normals for a draw.
 
-### Phase 3: Shaders
+Notes:
+- Slot 3 is the normal map slot across render modes.
+- Mode 1 (Matcap) shares slot 3: if tangents are present it behaves as a normal map; otherwise it behaves like an extra matcap texture.
+- Normal maps work with RGBA8 or BC7 textures; BC5 is recommended but not required.
 
-7. **Shader updates** (`nethercore-zx/shaders/`)
-   - Update `common.wgsl`: Add slot3 binding, TBN structs
-   - Update `blinnphong_common.wgsl`: Normal map sampling
-   - Update mode shaders: Use TBN for lighting
-   - Add `FLAG_USE_NORMAL_MAP` flag
+## Budget Notes
 
-8. **FFI bindings** (`nethercore-zx/src/ffi/material.rs`)
-   - Add `material_normal(texture)` → binds to slot 3
-   - Add `use_normal_map(enabled)` flag setter
+- Tangents add **4 bytes per vertex** in the packed vertex format.
+- Normal maps:
+  - RGBA8: `width × height × 4` bytes
+  - BC7/BC5: `ceil(width/4) × ceil(height/4) × 16` bytes
 
-### Phase 4: Documentation & Tools
+Rule of thumb: a 256×256 normal map is ~32KB in BC7/BC5.
 
-9. **Documentation** (`docs/book/src/api/`)
-   - Update texture API docs
-   - Add normal mapping guide
-   - Update material reference
+## Future Work (Tooling)
 
-10. **nether-cli updates** (`tools/nether-cli/`)
-    - Handle BC5 format in build pipeline
-    - Update asset validation
-
----
-
-## Part 7: Plugin Updates Required
-
-### nethercore-ai-plugins Affected Plugins:
-
-| Plugin | Files to Update | Changes |
-|--------|-----------------|---------|
-| `zx-procgen` | `agents/asset-generator.md`, `skills/procedural-textures/` | Add normal map generation patterns |
-| `zx-procgen` | `skills/asset-quality-tiers/references/texture-enhancements.md` | Add normal map quality tiers |
-| `zx-dev` | `skills/zx-ffi-reference/references/ffi-api.md` | Document new FFI functions |
-| `zx-dev` | `skills/project-templates/` | Update templates with tangent vertex format |
-| `zx-game-design` | `skills/zx-constraints/references/resource-budgets.md` | Add normal map memory budgets |
-| `sound-design` | None | N/A |
-| `creative-direction` | `skills/art-vision/` | Add normal map guidelines to art direction |
-
-### Specific Plugin Changes:
-
-**zx-procgen** (highest priority):
-- Add `generate-normal-map` skill or extend `generate-texture`
-- Add height-to-normal conversion routine
-- Add normal map synthesis patterns (procedural normals)
-- Update quality reviewer for normal map validation
-
-**zx-dev**:
-- Update FFI cheat sheet with `material_normal()`, `use_normal_map()`
-- Add tangent vertex format to format reference
-- Update project scaffolding templates
-
-**creative-direction**:
-- Add normal map considerations to art direction skill
-- Document when normal maps add value vs. waste memory
-
----
-
-## Part 8: Memory Budget Considerations
-
-### Normal Map Cost
-
-Per texture:
-- BC5: `(width × height) / 2` bytes (same as BC7)
-- Example: 256×256 normal map = 32KB
-
-Per vertex (tangent):
-- Packed: 4 bytes per vertex
-- Example: 1000-vertex mesh = 4KB additional
-
-### Budget Recommendations
-
-| Quality Tier | Normal Map Resolution | Vertex Budget |
-|--------------|----------------------|---------------|
-| Placeholder | None (vertex normals) | 0 |
-| Temp | 64×64 (2KB) | +4B/vert |
-| Final | 128×128 (8KB) | +4B/vert |
-| Hero | 256×256 (32KB) | +4B/vert |
-
-### Total Impact
-
-Worst case (hero assets with normal maps everywhere):
-- 10 hero normal maps: 320KB textures
-- 50K vertices with tangents: 200KB vertex data
-- **Total**: ~520KB additional memory
-
-Well within ZX memory budget (16MB recommended).
-
----
-
-## Critical Files to Modify
-
-### Core Infrastructure
-| File | Changes |
-|------|---------|
-| `nethercore/zx-common/src/packing.rs` | Add FORMAT_TANGENT, tangent packing functions, update stride calculations |
-| `nethercore/zx-common/src/formats/texture.rs` | Add TextureFormat::Bc5, bc5_size() |
-| `nethercore/zx-common/src/formats/mesh.rs` | Support new format flag |
-| `nethercore/nethercore-zx/src/graphics/vertex.rs` | Add LOC_TANGENT, generate 32 format permutations |
-| `nethercore/nethercore-zx/src/graphics/texture_manager.rs` | Add load_texture_bc5_internal() |
-| `nethercore/nethercore-zx/src/ffi/material.rs` | Add material_normal(), use_normal_map() |
-
-### Shaders
-| File | Changes |
-|------|---------|
-| `nethercore/nethercore-zx/shaders/common.wgsl` | Add slot3 binding, TBN structs, FLAG_USE_NORMAL_MAP |
-| `nethercore/nethercore-zx/shaders/blinnphong_common.wgsl` | Add sample_normal_map(), TBN construction |
-| `nethercore/nethercore-zx/shaders/mode0_lambert.wgsl` | Integrate normal map sampling |
-| `nethercore/nethercore-zx/shaders/mode1_matcap.wgsl` | Perturb matcap UV with normal map |
-| `nethercore/nethercore-zx/shaders/mode2_mr.wgsl` | Integrate normal map sampling |
-| `nethercore/nethercore-zx/shaders/mode3_ss.wgsl` | Integrate normal map sampling |
-
-### Tools
-| File | Changes |
-|------|---------|
-| `nethercore/tools/nether-export/src/texture.rs` | Add BC5 compression, channel detection |
-| `nethercore/tools/nether-export/src/manifest.rs` | Add format field to texture config |
-
-### Plugins (nethercore-ai-plugins)
-| Plugin | Files |
-|--------|-------|
-| `zx-procgen` | agents/asset-generator.md, skills/procedural-textures/ |
-| `zx-dev` | skills/zx-ffi-reference/references/ffi-api.md |
-| `creative-direction` | skills/art-vision/ |
-
----
-
-## Decisions Made
-
-1. **BC5 Detection**: Channel-based auto-detection (2-3 channels → BC5, 4 channels → BC7). Shader always receives BC5, no complexity.
-
-2. **Mode 1 Matcap**: Flexible - tangent presence determines if slot 3 is matcap or normal map. Max 2 matcaps with normals, max 4 matcaps without.
-
-3. **Mode 0 Lambert**: Supports normal maps. Users who don't want it simply don't upload tangent vertex data.
-
-4. **Tangent space only**: KISS - only tangent space normal maps supported. No height/bump map conversion.
+- Expose per-texture format selection in `nether.toml` (e.g. `format = "bc5"`) and plumb through `tools/nether-cli`.
+- (Optional) add naming-based normal-map detection (`*_normal`) to auto-select BC5 when compression is enabled.

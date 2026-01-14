@@ -1,11 +1,11 @@
 # Replay Debug Action Integration
 
-> **Status:** Proposed (not yet implemented)
-> **Depends on:** Replay System (implemented), Debug Inspector Actions (implemented)
+> **Status:** Implemented (schema + compilation; execution depends on the replay backend)
+> Last reviewed: 2026-01-14
 
 ## Overview
 
-This document describes how to extend the replay system to invoke debug actions during script execution. This enables scenarios like "skip to level 2" without recording through menus, making test scripts more focused and maintainable.
+Replay scripts can invoke **debug actions** at specific frames (e.g. "Load Level") to set up game state without recording long input sequences. This keeps scripts short, stable, and focused on the behavior under test.
 
 ## Current State
 
@@ -58,11 +58,11 @@ p1 = "right+a"
 assert = "$player_x > 100"
 ```
 
-## Proposed Extension
+## Script Format: Actions
 
 ### Script Format Addition
 
-Add optional `action` and `action_params` fields to frame entries:
+Replay scripts support optional `action` and `action_params` fields on frame entries:
 
 ```toml
 console = "zx"
@@ -89,78 +89,57 @@ assert = "$player_x > 100"
 
 ### Parser Changes
 
-Extend `FrameEntry` in `script/parser.rs`:
+Implemented in `core/src/replay/script/ast.rs` (`FrameEntry`):
 
 ```rust
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct FrameEntry {
     pub f: u64,
+    #[serde(default)]
     pub p1: Option<InputValue>,
+    #[serde(default)]
     pub p2: Option<InputValue>,
+    #[serde(default)]
     pub p3: Option<InputValue>,
+    #[serde(default)]
     pub p4: Option<InputValue>,
+    #[serde(default)]
     pub snap: bool,
+    #[serde(default)]
     pub assert: Option<String>,
 
-    // NEW: Debug action invocation
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub action: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub action_params: Option<HashMap<String, ActionParamValue>>,
 }
 ```
 
 ### Executor Changes
 
-In `runtime/executor.rs`, before applying inputs for a frame:
+Execution order is implemented in `core/src/replay/runtime/headless.rs`:
 
 ```rust
-fn execute_frame(&mut self, frame: u64) -> Result<()> {
-    // 1. Check for debug action invocation
-    if let Some(action_name) = self.get_action_for_frame(frame) {
-        self.invoke_debug_action(action_name)?;
-    }
-
-    // 2. Apply player inputs (existing code)
-    self.apply_inputs(frame)?;
-
-    // 3. Run game tick
-    self.console.tick()?;
-
-    // 4. Evaluate assertions and snapshots (existing code)
-    self.evaluate_frame(frame)?;
-
-    Ok(())
+let actions = self.executor.current_actions();
+if !actions.is_empty() {
+    backend.execute_actions(actions.as_slice())?;
 }
 
-fn invoke_debug_action(&mut self, action: &CompiledAction) -> Result<()> {
-    // Look up registered action by name
-    let registry = self.console.debug_registry();
-    let registered = registry.actions
-        .iter()
-        .find(|a| a.name == action.name)
-        .ok_or_else(|| anyhow!("Unknown debug action: {}", action.name))?;
+let inputs = self.executor.current_inputs();
+backend.apply_inputs(inputs)?;
 
-    // Build parameter values (use script values, fall back to defaults)
-    let mut params = Vec::new();
-    for param_def in &registered.params {
-        let value = action.params
-            .get(&param_def.name)
-            .cloned()
-            .unwrap_or(param_def.default.clone());
-        params.push(value);
-    }
+backend.update()?;
 
-    // Call the WASM export
-    self.wasm.call_action(&registered.func_name, &params)?;
+// (optional) snapshots + assertions...
 
-    Ok(())
-}
+self.executor.advance_frame();
 ```
+
+The per-frame query helpers live in `core/src/replay/runtime/executor/mod.rs` (`current_actions`, `current_inputs`, `needs_snapshot`, `current_assertions`).
 
 ### Compiled Script Changes
 
-Add action tracking to `CompiledScript`:
+Implemented in `core/src/replay/script/compiler.rs`:
 
 ```rust
 #[derive(Debug, Clone)]
@@ -289,47 +268,13 @@ assert = "$game_state != CRASHED"
 snap = true
 ```
 
-## Integration with zx-dev Plugin
+## Tooling Guidance
 
-The zx-dev plugin's debugging skill should:
+When writing or generating replay scripts, prefer debug actions over long input sequences:
 
-1. **Query available actions** - Read the game's registered debug actions
-2. **Generate targeted scripts** - Use actions to set up specific test scenarios
-3. **Combine with assertions** - Verify expected behavior after action invocation
-4. **Minimize input sequences** - Use actions to skip irrelevant gameplay
-
-### Plugin Knowledge Updates
-
-Add to the debugging skill:
-
-```markdown
-## Debug Actions in Replay Scripts
-
-When creating test scripts, prefer debug actions over long input sequences:
-
-**Instead of:**
-- Recording 5 minutes of menu navigation
-- Playing through tutorial levels
-- Manually positioning enemies
-
-**Use:**
-- `action = "Load Level"` to skip to specific levels
-- `action = "Set Player Position"` to place player
-- `action = "Spawn Enemy"` to create test scenarios
-
-This makes scripts:
-- Faster to execute
-- More focused on the bug
-- Less brittle to unrelated changes
-```
-
-## Implementation Order
-
-1. **Parser extension** - Add `action`/`action_params` to `FrameEntry`
-2. **Compiler extension** - Track actions in `CompiledScript`
-3. **Executor extension** - Invoke actions before frame inputs
-4. **WASM bridge** - Add `call_action()` to WASM engine
-5. **Plugin update** - Teach zx-dev about action-based scripts
+- Use `action = "Load Level"` to skip menus/tutorials
+- Use `action = "Set Player Position"`/`"Spawn Enemy"` to construct test scenarios
+- Combine actions with `snap = true` + `assert = "..."` to make failures obvious and diffable
 
 ## Compatibility
 
@@ -338,9 +283,9 @@ This makes scripts:
 - Games without debug actions can still use input-only scripts
 - Binary format (`.ncrp`) does not include actions (input-only)
 
-## Open Questions
+## Current Behavior (Implemented)
 
-1. **Action timing** - Should actions be invoked at start of frame, or before first input?
-2. **Multiple actions per frame** - Allow array of actions? Or one per frame entry?
-3. **Action recording** - Should the recorder capture manual debug action invocations?
-4. **Error handling** - What happens if an action fails mid-script?
+- Invocation timing: actions run **before** inputs for the same frame in `core/src/replay/runtime/headless.rs`.
+- Multiple actions per frame: supported by emitting multiple `[[frames]]` entries with the same `f`.
+- Backend hook: actions are routed through `HeadlessBackend::execute_actions` (default no-op).
+- Recording: the replay recorder currently captures inputs only (no debug actions).

@@ -34,7 +34,7 @@ game.nczx (binary file, max 16MB)
 ├── Magic bytes: "NCZX" (4 bytes)
 └── ZXRom (bitcode-encoded):
     ├── version: u32
-    ├── metadata: ZMetadata
+    ├── metadata: ZXMetadata
     ├── code: Vec<u8> (WASM bytes, max 4MB)
     ├── data_pack: Option<ZXDataPack> (bundled assets)
     ├── thumbnail: Option<Vec<u8>> (256x256 PNG)
@@ -55,7 +55,7 @@ pub struct ZXRom {
     pub version: u32,
 
     /// Game metadata
-    pub metadata: ZMetadata,
+    pub metadata: ZXMetadata,
 
     /// Compiled WASM code (max 4MB)
     pub code: Vec<u8>,
@@ -72,10 +72,10 @@ pub struct ZXRom {
 }
 ```
 
-### ZMetadata Structure
+### ZXMetadata Structure
 
 ```rust
-pub struct ZMetadata {
+pub struct ZXMetadata {
     // Core game info
     /// Game slug (e.g., "platformer")
     pub id: String,
@@ -106,7 +106,7 @@ pub struct ZMetadata {
     /// ISO 8601 timestamp when ROM was created
     pub created_at: String,
 
-    /// nether-cli version that created this ROM
+    /// Tool version that created this ROM (e.g., nether-cli/xtask)
     pub tool_version: String,
 
     // Z-specific settings
@@ -118,6 +118,9 @@ pub struct ZMetadata {
 
     /// Target FPS
     pub target_fps: Option<u32>,
+
+    /// Netplay metadata for the NCHS protocol (tick rate, max players, ROM hash)
+    pub netplay: NetplayMetadata,
 }
 ```
 
@@ -131,13 +134,14 @@ Games can bundle pre-processed assets directly in the ROM for efficient loading.
 
 ```rust
 pub struct ZXDataPack {
-    pub textures: Vec<PackedTexture>,      // GPU-ready textures
+    pub textures: Vec<PackedTexture>,      // GPU-ready textures (RGBA8/BC7/BC5)
     pub meshes: Vec<PackedMesh>,           // GPU-ready meshes
     pub skeletons: Vec<PackedSkeleton>,    // Inverse bind matrices
     pub keyframes: Vec<PackedKeyframes>,   // Animation clips
     pub fonts: Vec<PackedFont>,            // Bitmap font atlases
     pub sounds: Vec<PackedSound>,          // PCM audio data
     pub data: Vec<PackedData>,             // Raw opaque data
+    pub trackers: Vec<PackedTracker>,      // XM tracker modules
 }
 ```
 
@@ -148,30 +152,32 @@ pub struct PackedTexture {
     pub id: String,             // Asset ID
     pub width: u16,             // Max 65535 pixels
     pub height: u16,            // Max 65535 pixels
-    pub format: TextureFormat,  // RGBA8 or BC7
+    pub format: TextureFormat,  // RGBA8, BC7, or BC5
     pub data: Vec<u8>,          // Raw pixel/block data
 }
 
 pub enum TextureFormat {
     Rgba8,  // Uncompressed: 4 bytes/pixel
     Bc7,    // Compressed: 16 bytes/4x4 block (~4x smaller)
+    Bc5,    // Compressed (RG): 16 bytes/4x4 block (normal maps)
 }
 ```
 
-**Compression Selection (automated by nether-cli):**
-- Render Mode 0 (Lambert): RGBA8 (pixel-perfect, full alpha)
-- Render Modes 1-3 (Matcap/PBR/Hybrid): BC7 (4x compression, stipple transparency)
+**Compression Selection (nether-cli `nether pack`):**
+- `compress_textures = false`: `Rgba8` for all textures (pixel-perfect, full alpha)
+- `compress_textures = true`: `Bc7` for all textures (4× compression, stipple transparency)
+- `Bc5` is reserved for normal maps (2-channel RG; Z reconstructed in shader)
 
 **Size calculation:**
 - RGBA8: `width * height * 4` bytes
-- BC7: `((width+3)/4) * ((height+3)/4) * 16` bytes
+- BC7/BC5: `((width+3)/4) * ((height+3)/4) * 16` bytes
 
 ### Meshes (PackedMesh)
 
 ```rust
 pub struct PackedMesh {
     pub id: String,           // Asset ID
-    pub format: u8,           // Vertex format flags (0-15)
+    pub format: u8,           // Vertex format flags (0-31)
     pub vertex_count: u32,    // Number of vertices
     pub index_count: u32,     // Number of indices
     pub vertex_data: Vec<u8>, // Packed GPU-ready vertices
@@ -179,22 +185,30 @@ pub struct PackedMesh {
 }
 ```
 
-**Vertex Format Flags (bitwise):**
-| Bit | Flag | Adds |
-|-----|------|------|
-| 0 (0x01) | UV | 8 bytes (2x f32) |
-| 1 (0x02) | Color | 4 bytes (RGBA u8) |
-| 2 (0x04) | Normal | 12 bytes (3x f32) |
-| 3 (0x08) | Skinned | 8 bytes (4x u8 indices + 4x u8 weights) |
+**Vertex format flags (bitmask):**
 
-**Base vertex stride:** 12 bytes (position: 3x f32)
+Flags are defined in `zx-common/src/packing.rs`. `vertex_data` is written in the **packed GPU layout**; compute stride with `zx_common::vertex_stride_packed(format)`.
 
-**Examples:**
-- Format 0: 12 bytes (position only)
-- Format 1: 20 bytes (position + UV)
-- Format 3: 24 bytes (position + UV + color)
-- Format 7: 36 bytes (position + UV + color + normal)
-- Format 15: 44 bytes (all features)
+| Bit | Flag | Packed representation | Adds |
+|-----|------|------------------------|------|
+| 0 (0x01) | UV | `unorm16x2` | +4 bytes |
+| 1 (0x02) | Color | `unorm8x4` | +4 bytes |
+| 2 (0x04) | Normal | octahedral `u32` | +4 bytes |
+| 3 (0x08) | Skinned | `u8x4` indices + `unorm8x4` weights | +8 bytes |
+| 4 (0x10) | Tangent | octahedral `u32` + sign bit | +4 bytes |
+
+**Base packed stride:** 8 bytes (position: `f16x4`)
+
+**Notes:**
+- `TANGENT` requires `NORMAL` (tangent-space normal mapping).
+- The human-readable “format N” values are just bitwise combinations (0–31).
+
+**Examples (packed stride):**
+- Format 0: 8 bytes (position only)
+- Format 1: 12 bytes (position + UV)
+- Format 7: 20 bytes (position + UV + color + normal)
+- Format 15: 28 bytes (position + UV + color + normal + skinned)
+- Format 31: 32 bytes (all flags)
 
 **Binary File Format (.nczxmesh):**
 ```
@@ -205,6 +219,7 @@ Header (12 bytes):
   0x09: padding (3 bytes)
 
 Data:
+  stride = zx_common::vertex_stride_packed(format)
   vertex_count * stride bytes: vertex data
   index_count * 2 bytes: u16 indices (LE)
 ```
@@ -325,6 +340,8 @@ Used for level data, configuration, dialogue, or any custom binary format.
 
 ## Asset File Extensions
 
+These are the **standalone exported** ZX asset formats (see `nethercore_shared::ZX_ROM_FORMAT` and `tools/nether-export/`). Most projects will reference source assets (PNG/GLB/WAV/XM) in `nether.toml`, and `nether pack` will bundle them into the `.nczx` ROM.
+
 | Asset Type | Extension | Format |
 |------------|-----------|--------|
 | ROM | `.nczx` | Bitcode |
@@ -332,7 +349,7 @@ Used for level data, configuration, dialogue, or any custom binary format.
 | Texture | `.nczxtex` | POD binary |
 | Sound | `.nczxsnd` | WAV (parsed to PCM) |
 | Skeleton | `.nczxskel` | POD binary |
-| Animation | `.nczxanim` | POD binary |
+| Keyframes/Animation | `.nczxanim` | POD binary |
 
 ---
 
@@ -352,12 +369,12 @@ Used for level data, configuration, dialogue, or any custom binary format.
 ### WASM Code Validation
 - Code must be at least 4 bytes
 - Must start with WASM magic bytes: `\0asm` (hex: `00 61 73 6D`)
-- Required exports: `init`, `update`, `render`
+- Note: `init`/`update`/`render` exports are optional at load time (missing exports are treated as no-ops), but real games should provide at least `update()` and `render()`.
+- Note: rollback requires a `memory` export; without it, state snapshotting will fail at runtime.
 
 ### Console Settings Validation
-- **render_mode**: Must be 0-3 if specified
-- **default_resolution**: Parsed at runtime
-- **target_fps**: Any positive integer
+- `nether-cli` validates `nether.toml` at build/pack time (e.g., `render_mode` range, `tick_rate` allowed values, `max_players` range).
+- `zx-common::ZXRom::validate()` currently only validates required strings and WASM magic bytes; optional console settings are not range-checked when parsing a ROM.
 
 ---
 
@@ -374,20 +391,41 @@ This reads `nether.toml` in your project and creates the ROM with all assets bun
 ### nether.toml Example
 
 ```toml
-[package]
+[game]
 id = "my-game"
 title = "My Awesome Game"
 author = "YourName"
 version = "1.0.0"
 description = "A fun game!"
-
-[package.tags]
 tags = ["platformer", "action"]
 
-[assets]
-textures = "assets/textures"
-meshes = "assets/meshes"
-sounds = "assets/sounds"
+# ZX-only rendering settings (defaults shown)
+render_mode = 0         # 0=Lambert, 1=Matcap, 2=MR-Blinn-Phong, 3=Blinn-Phong
+compress_textures = false
+
+# Netplay-critical config (baked into ROM metadata)
+tick_rate = 60          # 30, 60, or 120
+max_players = 4         # 1-4
+
+[netplay]
+enabled = true
+
+[build]
+# Optional: override build command and/or WASM output path
+# script = "cargo build --target wasm32-unknown-unknown --release"
+# wasm = "target/wasm32-unknown-unknown/release/my_game.wasm"
+
+[[assets.textures]]
+id = "player"
+path = "assets/textures/player.png"
+
+[[assets.meshes]]
+id = "player_mesh"
+path = "assets/meshes/player.glb"
+
+[[assets.sounds]]
+id = "jump"
+path = "assets/sounds/jump.wav"
 ```
 
 ## Inspecting ROMs
@@ -483,12 +521,12 @@ Large game with assets:
 | Component | Location |
 |-----------|----------|
 | ROM Format Constants | `shared/src/rom_format.rs` |
-| ZXRom Struct | `zx-common/src/formats/z_rom.rs` |
-| ZXDataPack Struct | `zx-common/src/formats/z_data_pack.rs` |
+| ZXRom Struct | `zx-common/src/formats/zx_rom.rs` |
+| ZXDataPack Struct | `zx-common/src/formats/zx_data_pack/mod.rs` |
 | Mesh Format | `zx-common/src/formats/mesh.rs` |
 | Skeleton Format | `zx-common/src/formats/skeleton.rs` |
-| Animation Format | `zx-common/src/formats/animation.rs` |
-| Build Process | `tools/nether-cli/src/pack.rs` |
+| Animation/Keyframes Format | `zx-common/src/formats/animation/` |
+| Build Process | `tools/nether-cli/src/pack/mod.rs` |
 
 ---
 
