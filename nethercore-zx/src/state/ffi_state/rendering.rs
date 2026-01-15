@@ -7,7 +7,7 @@ impl ZXFFIState {
     /// Update sky colors in current environment state (backwards compatibility)
     ///
     /// Both colors are 0xRRGGBBAA format.
-    /// Maps to env_gradient_set() internally for Multi-Environment v3 compatibility.
+    /// Maps to env_gradient_set() internally for Multi-Environment v4 compatibility.
     /// Ground colors are derived as darker versions of sky colors.
     pub fn update_sky_colors(&mut self, horizon_rgba: u32, zenith_rgba: u32) {
         use crate::graphics::{blend_mode, env_mode};
@@ -123,7 +123,7 @@ impl ZXFFIState {
         // Sync animation state before checking (Animation System v2)
         self.sync_animation_state();
 
-        // Sync environment state (Multi-Environment v3)
+        // Sync environment state (Multi-Environment v4)
         let env_idx = self.add_environment_state();
         if self.current_shading_state.environment_index != env_idx.0 {
             self.current_shading_state.environment_index = env_idx.0;

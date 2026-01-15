@@ -665,13 +665,20 @@ NCZX_IMPORT void matcap_set(uint32_t slot, uint32_t texture);
 /** * `sky_horizon` — Sky color at horizon level (0xRRGGBBAA) */
 /** * `ground_horizon` — Ground color at horizon level (0xRRGGBBAA) */
 /** * `nadir` — Color directly below (0xRRGGBBAA) */
-/** * `rotation` — Rotation around Y axis in radians */
+/** * `rotation` — Sun azimuth around Y axis in radians (0 = +Z, π/2 = +X) */
 /** * `shift` — Horizon vertical shift (-1.0 to 1.0, 0.0 = equator) */
+/** * `sun_elevation` — Sun elevation in radians (0 = horizon, π/2 = zenith) */
+/** * `sun_disk` — Sun disc size (0-255) */
+/** * `sun_halo` — Sun halo size (0-255) */
+/** * `sun_intensity` — Sun intensity (0 disables sun) */
+/** * `horizon_haze` — Haze near the horizon (0-255) */
+/** * `sun_warmth` — Sun color warmth (0 = neutral/white, 255 = warm/orange) */
+/** * `cloudiness` — Stylized cloud bands (0 disables, 255 = strongest) */
 /**  */
 /** The gradient interpolates: zenith → sky_horizon (Y > 0), sky_horizon → ground_horizon (at Y = 0 + shift), ground_horizon → nadir (Y < 0). */
 /**  */
 /** You can configure the same mode on both layers with different parameters for creative effects. */
-NCZX_IMPORT void env_gradient(uint32_t layer, uint32_t zenith, uint32_t sky_horizon, uint32_t ground_horizon, uint32_t nadir, float rotation, float shift);
+NCZX_IMPORT void env_gradient(uint32_t layer, uint32_t zenith, uint32_t sky_horizon, uint32_t ground_horizon, uint32_t nadir, float rotation, float shift, float sun_elevation, uint32_t sun_disk, uint32_t sun_halo, uint32_t sun_intensity, uint32_t horizon_haze, uint32_t sun_warmth, uint32_t cloudiness);
 
 /** Configure scatter environment (Mode 1: stars, rain, warp). */
 /**  */

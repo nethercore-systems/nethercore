@@ -88,7 +88,7 @@ impl ZXFFIState {
         self.shading_pool.clear();
         self.shading_state_dirty = true; // Mark dirty so first draw creates state 0
 
-        // Reset environment state pool for next frame (Multi-Environment v3)
+        // Reset environment state pool for next frame (Multi-Environment v4)
         self.environment_pool.clear();
         self.environment_dirty = true; // Mark dirty so first draw creates environment 0
 

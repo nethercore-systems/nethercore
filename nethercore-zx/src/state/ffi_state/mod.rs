@@ -146,7 +146,7 @@ pub struct ZXFFIState {
     pub current_shading_state: crate::graphics::PackedUnifiedShadingState,
     pub shading_state_dirty: bool,
 
-    // Environment state system (Multi-Environment v3)
+    // Environment state system (Multi-Environment v4)
     // Pool of unique environment states (deduplicated)
     pub environment_pool:
         StatePool<crate::graphics::PackedEnvironmentState, crate::graphics::EnvironmentIndex>,
@@ -237,7 +237,7 @@ impl Default for ZXFFIState {
             shading_pool: StatePool::new("Shading state", 65536),
             current_shading_state: crate::graphics::PackedUnifiedShadingState::default(),
             shading_state_dirty: true, // Start dirty so first draw creates state 0
-            // Environment state system (Multi-Environment v3)
+            // Environment state system (Multi-Environment v4)
             environment_pool: StatePool::new("Environment state", 65536),
             current_environment_state: crate::graphics::PackedEnvironmentState::default_gradient(),
             environment_dirty: true, // Start dirty so first draw creates environment 0

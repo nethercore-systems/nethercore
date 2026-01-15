@@ -119,7 +119,7 @@ pub fn register_zx_ffi(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     // 2D drawing (screen space)
     draw_2d::register(linker)?;
 
-    // Environment system (Multi-Environment v3)
+    // Environment system (Multi-Environment v4)
     // Includes matcap_set and draw_env
     environment::register(linker)?;
 

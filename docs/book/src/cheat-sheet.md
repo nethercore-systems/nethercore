@@ -640,7 +640,7 @@ light_range(index: u32, range: f32) void
 {{#tab name="Rust"}}
 ```rust
 // 8 Environment Modes (layer: 0=base, 1=overlay)
-env_gradient(layer, zenith, sky_h, ground_h, nadir, rot, shift)  // Mode 0
+env_gradient(layer, zenith, sky_h, ground_h, nadir, azim, shift, elev, disk, halo, intensity, haze, warmth, cloudiness)  // Mode 0
 env_scatter(layer, variant, density, size, glow, streak, c1, c2, parallax, psize, phase)  // Mode 1
 env_lines(layer, variant, type, thick, spacing, fade, c_prim, c_accent, every, phase)  // Mode 2
 env_silhouette(layer, jagged, layers, c_near, c_far, sky_z, sky_h, parallax, seed)  // Mode 3
@@ -659,7 +659,7 @@ matcap_set(slot, texture)     // Slot 1-3 (Mode 1 only)
 {{#tab name="C/C++"}}
 ```c
 // 8 Environment Modes (layer: 0=base, 1=overlay)
-void env_gradient(u32 layer, u32 zenith, u32 sky_h, u32 ground_h, u32 nadir, f32 rot, f32 shift);  // Mode 0
+void env_gradient(u32 layer, u32 zenith, u32 sky_h, u32 ground_h, u32 nadir, f32 azim, f32 shift, f32 elev, u32 disk, u32 halo, u32 intensity, u32 haze, u32 warmth, u32 cloudiness);  // Mode 0
 void env_scatter(u32 layer, u32 variant, u32 density, u32 size, u32 glow, u32 streak, u32 c1, u32 c2, u32 parallax, u32 psize, u32 phase);  // Mode 1
 void env_lines(u32 layer, u32 variant, u32 type, u32 thick, f32 spacing, f32 fade, u32 c_prim, u32 c_accent, u32 every, u32 phase);  // Mode 2
 void env_silhouette(u32 layer, u32 jagged, u32 layers, u32 c_near, u32 c_far, u32 sky_z, u32 sky_h, u32 parallax, u32 seed);  // Mode 3
@@ -678,7 +678,7 @@ void matcap_set(uint32_t slot, uint32_t texture); // Slot 1-3 (Mode 1 only)
 {{#tab name="Zig"}}
 ```zig
 // 8 Environment Modes (layer: 0=base, 1=overlay)
-env_gradient(layer: u32, zenith: u32, sky_h: u32, ground_h: u32, nadir: u32, rot: f32, shift: f32) void  // Mode 0
+env_gradient(layer: u32, zenith: u32, sky_h: u32, ground_h: u32, nadir: u32, azim: f32, shift: f32, elev: f32, disk: u32, halo: u32, intensity: u32, haze: u32, warmth: u32, cloudiness: u32) void  // Mode 0
 env_scatter(layer: u32, variant: u32, density: u32, size: u32, glow: u32, streak: u32, c1: u32, c2: u32, parallax: u32, psize: u32, phase: u32) void  // Mode 1
 env_lines(layer: u32, variant: u32, type: u32, thick: u32, spacing: f32, fade: f32, c_prim: u32, c_accent: u32, every: u32, phase: u32) void  // Mode 2
 env_silhouette(layer: u32, jagged: u32, layers: u32, c_near: u32, c_far: u32, sky_z: u32, sky_h: u32, parallax: u32, seed: u32) void  // Mode 3

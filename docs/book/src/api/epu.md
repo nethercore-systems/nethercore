@@ -4,21 +4,30 @@ The Environment Processing Unit is Nethercore ZX's procedural background renderi
 
 ## Overview
 
-Multi-Environment v3 provides:
+Multi-Environment v4 provides:
 - **8 Environment Modes** — Gradient, Scatter, Lines, Silhouette, Rectangles, Room, Curtains, Rings
 - **Dual-Layer System** — Configure base (layer 0) and overlay (layer 1) independently
 - **Same-Mode Layering** — Use the same mode with different parameters on both layers
 - **Blend Modes** — Alpha, Add, Multiply, Screen blending for creative effects
-- **Animated Parameters** — Phase parameters for seamless looping animations
-- **Parallax Depth** — Multiple depth layers for pseudo-3D effects
+- **Animated Parameters** — Phase parameters for seamless looping animations (Scatter, Lines, Rectangles, Curtains, Rings)
+- **Parallax Depth** — Multiple depth layers for pseudo-3D effects (Silhouette, Curtains)
 
 All environments are rendered by calling `draw_env()` first in your `render()` function.
 
 ---
 
-## Mode 0: Gradient
+## Conventions
 
-Creates a 4-color gradient background with vertical blending.
+- `layer` is always `0` (base) or `1` (overlay). Each `env_*()` call sets the mode for that layer.
+- Colors are usually `0xRRGGBBAA`. For parameters documented as `0xRRGGBB00`, the low byte is reserved (ignored/overwritten); use `00` for clarity.
+- Many integer parameters are packed to 8 bits (or fewer). Values outside the documented range may be truncated/clamped.
+- `phase` is a 16-bit wrapping value (0–65535). Advance it with `wrapping_add()` for seamless looping.
+
+---
+
+## Mode 0: Gradient (Featured Sky)
+
+Creates a 4-color sky/ground gradient with **featured sky** controls (sun disc + halo, horizon haze, stylized cloud bands).
 
 ### env_gradient
 
@@ -34,22 +43,36 @@ fn env_gradient(
     sky_horizon: u32,    // Sky color at horizon level (0xRRGGBBAA)
     ground_horizon: u32, // Ground color at horizon level (0xRRGGBBAA)
     nadir: u32,          // Color directly below (0xRRGGBBAA)
-    rotation: f32,       // Rotation around Y axis in radians
-    shift: f32           // Horizon vertical shift (-1.0 to 1.0)
+    rotation: f32,       // Sun azimuth around Y axis in radians (0 = +Z, π/2 = +X)
+    shift: f32,          // Horizon vertical shift (-1.0 to 1.0)
+    sun_elevation: f32,  // Sun elevation in radians (0 = horizon, π/2 = zenith)
+    sun_disk: u32,       // 0-255
+    sun_halo: u32,       // 0-255
+    sun_intensity: u32,  // 0-255 (0 disables sun)
+    horizon_haze: u32,   // 0-255
+    sun_warmth: u32,     // 0-255
+    cloudiness: u32      // 0-255
 )
 ```
 {{#endtab}}
 
 {{#tab name="C/C++"}}
 ```c
-void env_gradient(
+NCZX_IMPORT void env_gradient(
     uint32_t layer,
     uint32_t zenith,
     uint32_t sky_horizon,
     uint32_t ground_horizon,
     uint32_t nadir,
     float rotation,
-    float shift
+    float shift,
+    float sun_elevation,
+    uint32_t sun_disk,
+    uint32_t sun_halo,
+    uint32_t sun_intensity,
+    uint32_t horizon_haze,
+    uint32_t sun_warmth,
+    uint32_t cloudiness
 );
 ```
 {{#endtab}}
@@ -63,7 +86,14 @@ pub extern fn env_gradient(
     ground_horizon: u32,
     nadir: u32,
     rotation: f32,
-    shift: f32
+    shift: f32,
+    sun_elevation: f32,
+    sun_disk: u32,
+    sun_halo: u32,
+    sun_intensity: u32,
+    horizon_haze: u32,
+    sun_warmth: u32,
+    cloudiness: u32
 ) void;
 ```
 {{#endtab}}
@@ -79,8 +109,18 @@ pub extern fn env_gradient(
 | sky_horizon | `u32` | Sky color at horizon level |
 | ground_horizon | `u32` | Ground color at horizon level |
 | nadir | `u32` | Color directly below |
-| rotation | `f32` | Rotation around Y axis in radians |
+| rotation | `f32` | Sun azimuth in radians (0 = +Z, π/2 = +X) |
 | shift | `f32` | Horizon vertical shift (-1.0 to 1.0, 0.0 = equator) |
+| sun_elevation | `f32` | Sun elevation in radians (0 = horizon, π/2 = zenith) |
+| sun_disk | `u32` | Sun disc size (0–255) |
+| sun_halo | `u32` | Sun halo size (0–255) |
+| sun_intensity | `u32` | Sun intensity (0 disables sun) |
+| horizon_haze | `u32` | Haze near the horizon (0–255) |
+| sun_warmth | `u32` | Sun color warmth (0 = neutral/white, 255 = warm/orange) |
+| cloudiness | `u32` | Stylized cloud bands (0 disables, 255 = strongest) |
+
+**Notes:**
+- For a pure gradient (no featured sky), set `sun_intensity = 0`, `horizon_haze = 0`, and `cloudiness = 0`.
 
 **Example:**
 
@@ -89,18 +129,29 @@ pub extern fn env_gradient(
 {{#tab name="Rust"}}
 ```rust
 fn render() {
-    // Blue day sky on base layer
-    env_gradient(
-        0,          // Base layer
-        0x191970FF, // Midnight blue zenith
-        0x87CEEBFF, // Sky blue horizon
-        0x228B22FF, // Forest green ground horizon
-        0x2F4F4FFF, // Dark slate nadir
-        0.0,        // No rotation
-        0.0         // Horizon at equator
-    );
+    unsafe {
+        const DEG2RAD: f32 = 0.0174532925;
 
-    draw_env();
+        // Blue day sky on base layer
+        env_gradient(
+            0,          // Base layer
+            0x191970FF, // Midnight blue zenith
+            0x87CEEBFF, // Sky blue horizon
+            0x228B22FF, // Forest green ground horizon
+            0x2F4F4FFF, // Dark slate nadir
+            35.0 * DEG2RAD, // Sun azimuth
+            0.0,            // Horizon at equator
+            35.0 * DEG2RAD, // Sun elevation
+            24,             // Sun disk
+            120,            // Sun halo
+            90,             // Sun intensity
+            60,             // Horizon haze
+            40,             // Sun warmth
+            40              // Cloudiness
+        );
+
+        draw_env();
+    }
 
     // Draw your scene...
 }
@@ -109,16 +160,25 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-void render() {
-    // Blue day sky
+NCZX_EXPORT void render(void) {
+    const float DEG2RAD = 0.0174532925f;
+
+    // Blue day sky on base layer
     env_gradient(
         0,          // Layer 0 (base)
         0x191970FF, // Midnight blue zenith
         0x87CEEBFF, // Sky blue horizon
         0x228B22FF, // Forest green ground horizon
         0x2F4F4FFF, // Dark slate nadir
-        0.0f,       // No rotation
-        0.0f        // Horizon at equator
+        35.0f * DEG2RAD, // Sun azimuth
+        0.0f,            // Horizon at equator
+        35.0f * DEG2RAD, // Sun elevation
+        24u,             // Sun disk
+        120u,            // Sun halo
+        90u,             // Sun intensity
+        60u,             // Horizon haze
+        40u,             // Sun warmth
+        40u              // Cloudiness
     );
 
     draw_env();
@@ -131,6 +191,8 @@ void render() {
 {{#tab name="Zig"}}
 ```zig
 export fn render() void {
+    const DEG2RAD: f32 = 0.0174532925;
+
     // Blue day sky
     env_gradient(
         0,          // Layer 0 (base)
@@ -138,8 +200,15 @@ export fn render() void {
         0x87CEEBFF, // Sky blue horizon
         0x228B22FF, // Forest green ground horizon
         0x2F4F4FFF, // Dark slate nadir
-        0.0,        // No rotation
-        0.0         // Horizon at equator
+        35.0 * DEG2RAD, // Sun azimuth
+        0.0,            // Horizon at equator
+        35.0 * DEG2RAD, // Sun elevation
+        24,             // Sun disk
+        120,            // Sun halo
+        90,             // Sun intensity
+        60,             // Horizon haze
+        40,             // Sun warmth
+        40              // Cloudiness
     );
 
     draw_env();
@@ -154,17 +223,19 @@ export fn render() void {
 ### Presets
 
 ```rust
-// Blue Day Sky
-env_gradient(0, 0x191970FF, 0x87CEEBFF, 0x228B22FF, 0x2F4F4FFF, 0.0, 0.0);
+const DEG2RAD: f32 = 0.0174532925;
 
-// Sunset
-env_gradient(0, 0x4A00E0FF, 0xFF6B6BFF, 0x8B4513FF, 0x2F2F2FFF, 0.0, 0.1);
+// Day (featured sky)
+env_gradient(0, 0x2a4aa8ff, 0x8ec9ffff, 0x3b2a20ff, 0x120b08ff, 35.0 * DEG2RAD, 0.0, 35.0 * DEG2RAD, 24, 120, 90, 60, 40, 40);
 
-// Underwater
-env_gradient(0, 0x001a33FF, 0x003d5cFF, 0x005580FF, 0x000d1aFF, 0.0, -0.3);
+// Sunset (warm, hazy)
+env_gradient(0, 0x1c0a3fff, 0xff7a5cff, 0x3b2a20ff, 0x0b0610ff, 95.0 * DEG2RAD, 0.08, 15.0 * DEG2RAD, 32, 160, 120, 140, 220, 120);
 
-// Space/Starfield
-env_gradient(0, 0x000000FF, 0x0a0a1aFF, 0x0a0a1aFF, 0x000000FF, 0.0, 0.0);
+// Stormy (heavy bands)
+env_gradient(0, 0x0e1a2fff, 0x3a5874ff, 0x1f2326ff, 0x050608ff, 10.0 * DEG2RAD, -0.02, 20.0 * DEG2RAD, 12, 220, 80, 200, 16, 220);
+
+// Alien (stylized, saturated)
+env_gradient(0, 0x2a004cff, 0x00f0ffff, 0x003820ff, 0x12001aff, 210.0 * DEG2RAD, 0.05, 30.0 * DEG2RAD, 28, 200, 110, 64, 180, 160);
 ```
 
 ---
@@ -182,6 +253,7 @@ Creates procedural particle fields (stars, rain, speed lines, warp effects).
 {{#tab name="Rust"}}
 ```rust
 fn env_scatter(
+    layer: u32,             // 0 = base layer, 1 = overlay layer
     variant: u32,           // 0=Stars, 1=Vertical, 2=Horizontal, 3=Warp
     density: u32,           // 0-255
     size: u32,              // 0-255
@@ -198,7 +270,8 @@ fn env_scatter(
 
 {{#tab name="C/C++"}}
 ```c
-void env_scatter(
+NCZX_IMPORT void env_scatter(
+    uint32_t layer,
     uint32_t variant,
     uint32_t density,
     uint32_t size,
@@ -216,6 +289,7 @@ void env_scatter(
 {{#tab name="Zig"}}
 ```zig
 pub extern fn env_scatter(
+    layer: u32,
     variant: u32,
     density: u32,
     size: u32,
@@ -238,6 +312,22 @@ pub extern fn env_scatter(
 - **2: Horizontal** — Speed lines for motion blur
 - **3: Warp** — Radial expansion from center (hyperspace)
 
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| layer | `u32` | Target layer: 0 = base, 1 = overlay |
+| variant | `u32` | Scatter type (0–3), see variants above |
+| density | `u32` | Particle density (0–255) |
+| size | `u32` | Particle size (0–255) |
+| glow | `u32` | Glow/bloom intensity (0–255) |
+| streak_length | `u32` | Streak elongation (0–63); only used for Vertical/Horizontal variants |
+| color_primary | `u32` | Primary particle color (`0xRRGGBB00`) |
+| color_secondary | `u32` | Secondary particle color (`0xRRGGBB00`) |
+| parallax_rate | `u32` | Reserved for parallax depth (currently no visible effect) |
+| parallax_size | `u32` | Reserved for depth-based size variation (currently no visible effect) |
+| phase | `u32` | Animation phase (0–65535, wraps) |
+
 **Animation Example:**
 
 {{#tabs global="lang"}}
@@ -257,6 +347,7 @@ fn render() {
     unsafe {
         // Starfield
         env_scatter(
+            0,              // Layer 0 (base)
             0,              // Stars variant
             200,            // High density
             2,              // Small size
@@ -264,8 +355,8 @@ fn render() {
             0,              // No streaks
             0xFFFFFF00,     // White primary
             0xAAAAFF00,     // Blue-white secondary (twinkle)
-            128,            // Moderate parallax
-            64,             // Size depth variation
+            0,              // Reserved parallax_rate (currently no effect)
+            0,              // Reserved parallax_size (currently no effect)
             STAR_PHASE      // Animated twinkle
         );
 
@@ -279,14 +370,15 @@ fn render() {
 ```c
 static uint32_t star_phase = 0;
 
-void update() {
+NCZX_EXPORT void update(void) {
     // Animate twinkle
     star_phase += (uint32_t)(delta_time() * 0.1f * 65535.0f);
 }
 
-void render() {
+NCZX_EXPORT void render(void) {
     // Starfield
     env_scatter(
+        0,              // Layer 0 (base)
         0,              // Stars variant
         200,            // High density
         2,              // Small size
@@ -294,8 +386,8 @@ void render() {
         0,              // No streaks
         0xFFFFFF00,     // White primary
         0xAAAAFF00,     // Blue-white secondary (twinkle)
-        128,            // Moderate parallax
-        64,             // Size depth variation
+        0,              // Reserved parallax_rate (currently no effect)
+        0,              // Reserved parallax_size (currently no effect)
         star_phase      // Animated twinkle
     );
 
@@ -316,6 +408,7 @@ export fn update() void {
 export fn render() void {
     // Starfield
     env_scatter(
+        0,              // Layer 0 (base)
         0,              // Stars variant
         200,            // High density
         2,              // Small size
@@ -323,8 +416,8 @@ export fn render() void {
         0,              // No streaks
         0xFFFFFF00,     // White primary
         0xAAAAFF00,     // Blue-white secondary (twinkle)
-        128,            // Moderate parallax
-        64,             // Size depth variation
+        0,              // Reserved parallax_rate (currently no effect)
+        0,              // Reserved parallax_size (currently no effect)
         star_phase      // Animated twinkle
     );
 
@@ -350,6 +443,7 @@ Creates infinite procedural grids (synthwave floors, racing tracks, holographic 
 {{#tab name="Rust"}}
 ```rust
 fn env_lines(
+    layer: u32,         // 0 = base layer, 1 = overlay layer
     variant: u32,       // 0=Floor, 1=Ceiling, 2=Sphere
     line_type: u32,     // 0=Horizontal, 1=Vertical, 2=Grid
     thickness: u32,     // 0-255
@@ -365,7 +459,8 @@ fn env_lines(
 
 {{#tab name="C/C++"}}
 ```c
-void env_lines(
+NCZX_IMPORT void env_lines(
+    uint32_t layer,
     uint32_t variant,
     uint32_t line_type,
     uint32_t thickness,
@@ -382,6 +477,7 @@ void env_lines(
 {{#tab name="Zig"}}
 ```zig
 pub extern fn env_lines(
+    layer: u32,
     variant: u32,
     line_type: u32,
     thickness: u32,
@@ -396,6 +492,31 @@ pub extern fn env_lines(
 {{#endtab}}
 
 {{#endtabs}}
+
+**Variants:**
+- **0: Floor** — Infinite grid “below” the camera
+- **1: Ceiling** — Infinite grid “above” the camera
+- **2: Sphere** — Spherical grid around the camera
+
+**Line Types:**
+- **0: Horizontal** — Only horizontal lines
+- **1: Vertical** — Only vertical lines
+- **2: Grid** — Horizontal + vertical
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| layer | `u32` | Target layer: 0 = base, 1 = overlay |
+| variant | `u32` | Surface type (0–2), see variants above |
+| line_type | `u32` | Line pattern type (0–2), see line types above |
+| thickness | `u32` | Line thickness (0–255) |
+| spacing | `f32` | Distance between lines (world units) |
+| fade_distance | `f32` | Distance where lines start fading (world units) |
+| color_primary | `u32` | Primary line color (`0xRRGGBBAA`) |
+| color_accent | `u32` | Accent line color (`0xRRGGBBAA`) |
+| accent_every | `u32` | Every Nth line uses `color_accent` |
+| phase | `u32` | Scroll phase (0–65535, wraps) |
 
 **Example: Synthwave Grid**
 
@@ -416,6 +537,7 @@ fn render() {
     unsafe {
         // Floor grid
         env_lines(
+            0,              // Layer 0 (base)
             0,              // Floor variant
             2,              // Grid pattern
             2,              // Medium thickness
@@ -437,12 +559,13 @@ fn render() {
 ```c
 static uint32_t grid_phase = 0;
 
-void update() {
+NCZX_EXPORT void update(void) {
     grid_phase += (uint32_t)(delta_time() * 2.0f * 65535.0f);
 }
 
-void render() {
+NCZX_EXPORT void render(void) {
     env_lines(
+        0,              // Layer 0 (base)
         0,              // Floor variant
         2,              // Grid pattern
         2,              // Medium thickness
@@ -469,6 +592,7 @@ export fn update() void {
 
 export fn render() void {
     env_lines(
+        0,              // Layer 0 (base)
         0,              // Floor variant
         2,              // Grid pattern
         2,              // Medium thickness
@@ -502,6 +626,7 @@ Creates layered terrain silhouettes with procedural noise (mountains, cityscapes
 {{#tab name="Rust"}}
 ```rust
 fn env_silhouette(
+    layer: u32,         // 0 = base layer, 1 = overlay layer
     jaggedness: u32,    // 0-255 terrain roughness
     layer_count: u32,   // 1-3 depth layers
     color_near: u32,    // 0xRRGGBBAA
@@ -516,7 +641,8 @@ fn env_silhouette(
 
 {{#tab name="C/C++"}}
 ```c
-void env_silhouette(
+NCZX_IMPORT void env_silhouette(
+    uint32_t layer,
     uint32_t jaggedness,
     uint32_t layer_count,
     uint32_t color_near,
@@ -532,6 +658,7 @@ void env_silhouette(
 {{#tab name="Zig"}}
 ```zig
 pub extern fn env_silhouette(
+    layer: u32,
     jaggedness: u32,
     layer_count: u32,
     color_near: u32,
@@ -546,6 +673,20 @@ pub extern fn env_silhouette(
 
 {{#endtabs}}
 
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| layer | `u32` | Target layer: 0 = base, 1 = overlay |
+| jaggedness | `u32` | Terrain roughness (0–255) |
+| layer_count | `u32` | Depth layers (1–3) |
+| color_near | `u32` | Nearest silhouette color (`0xRRGGBBAA`) |
+| color_far | `u32` | Farthest silhouette color (`0xRRGGBBAA`) |
+| sky_zenith | `u32` | Sky zenith color behind silhouettes (`0xRRGGBBAA`) |
+| sky_horizon | `u32` | Sky horizon color behind silhouettes (`0xRRGGBBAA`) |
+| parallax_rate | `u32` | Layer separation amount (0–255) |
+| seed | `u32` | Deterministic seed for terrain shape |
+
 **Example: Mountain Range**
 
 {{#tabs global="lang"}}
@@ -553,26 +694,30 @@ pub extern fn env_silhouette(
 {{#tab name="Rust"}}
 ```rust
 fn render() {
-    env_silhouette(
-        200,            // Jagged peaks
-        3,              // 3 depth layers
-        0x1a1a2eFF,     // Dark blue near
-        0x4d4d66FF,     // Gray-blue far
-        0xFF9966FF,     // Orange zenith
-        0xFFCC99FF,     // Light orange horizon
-        128,            // Moderate parallax
-        42              // Seed
-    );
+    unsafe {
+        env_silhouette(
+            0,              // Layer 0 (base)
+            200,            // Jagged peaks
+            3,              // 3 depth layers
+            0x1a1a2eFF,     // Dark blue near
+            0x4d4d66FF,     // Gray-blue far
+            0xFF9966FF,     // Orange zenith
+            0xFFCC99FF,     // Light orange horizon
+            128,            // Moderate parallax
+            42              // Seed
+        );
 
-    draw_env();
+        draw_env();
+    }
 }
 ```
 {{#endtab}}
 
 {{#tab name="C/C++"}}
 ```c
-void render() {
+NCZX_EXPORT void render(void) {
     env_silhouette(
+        0,              // Layer 0 (base)
         200,            // Jagged peaks
         3,              // 3 depth layers
         0x1a1a2eFF,     // Dark blue near
@@ -592,6 +737,7 @@ void render() {
 ```zig
 export fn render() void {
     env_silhouette(
+        0,              // Layer 0 (base)
         200,            // Jagged peaks
         3,              // 3 depth layers
         0x1a1a2eFF,     // Dark blue near
@@ -624,6 +770,7 @@ Creates rectangular light sources (city windows, control panels, screens).
 {{#tab name="Rust"}}
 ```rust
 fn env_rectangles(
+    layer: u32,            // 0 = base layer, 1 = overlay layer
     variant: u32,          // 0=Scatter, 1=Buildings, 2=Bands, 3=Panels
     density: u32,          // 0-255
     lit_ratio: u32,        // 0-255 percentage lit
@@ -640,7 +787,8 @@ fn env_rectangles(
 
 {{#tab name="C/C++"}}
 ```c
-void env_rectangles(
+NCZX_IMPORT void env_rectangles(
+    uint32_t layer,
     uint32_t variant,
     uint32_t density,
     uint32_t lit_ratio,
@@ -658,6 +806,7 @@ void env_rectangles(
 {{#tab name="Zig"}}
 ```zig
 pub extern fn env_rectangles(
+    layer: u32,
     variant: u32,
     density: u32,
     lit_ratio: u32,
@@ -674,6 +823,22 @@ pub extern fn env_rectangles(
 
 {{#endtabs}}
 
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| layer | `u32` | Target layer: 0 = base, 1 = overlay |
+| variant | `u32` | Pattern type (0–3): Scatter, Buildings, Bands, Panels |
+| density | `u32` | Rectangle density (0–255) |
+| lit_ratio | `u32` | Percentage of rectangles lit (0–255, ~128 ≈ 50%) |
+| size_min | `u32` | Minimum rectangle size (0–63) |
+| size_max | `u32` | Maximum rectangle size (0–63) |
+| aspect | `u32` | Aspect bias (0–3) |
+| color_primary | `u32` | Primary rectangle color (`0xRRGGBBAA`) |
+| color_variation | `u32` | Variation color (`0xRRGGBBAA`) |
+| parallax_rate | `u32` | Reserved for depth/parallax (currently no visible effect) |
+| phase | `u32` | Flicker phase (0–65535, wraps) |
+
 **Example: Cyberpunk City**
 
 {{#tabs global="lang"}}
@@ -681,28 +846,32 @@ pub extern fn env_rectangles(
 {{#tab name="Rust"}}
 ```rust
 fn render() {
-    env_rectangles(
-        1,              // Buildings variant
-        180,            // High density
-        160,            // ~63% lit
-        8,              // Min size
-        24,             // Max size
-        2,              // Tall aspect ratio
-        0xFF00FFAA,     // Magenta primary
-        0x00FFFF80,     // Cyan variation
-        100,            // Moderate parallax
-        0               // Static (no flicker)
-    );
+    unsafe {
+        env_rectangles(
+            0,              // Layer 0 (base)
+            1,              // Buildings variant
+            180,            // High density
+            160,            // ~63% lit
+            8,              // Min size
+            24,             // Max size
+            2,              // Tall aspect ratio
+            0xFF00FFAA,     // Magenta primary
+            0x00FFFF80,     // Cyan variation
+            100,            // Reserved parallax (currently no effect)
+            0               // Static (no flicker)
+        );
 
-    draw_env();
+        draw_env();
+    }
 }
 ```
 {{#endtab}}
 
 {{#tab name="C/C++"}}
 ```c
-void render() {
+NCZX_EXPORT void render(void) {
     env_rectangles(
+        0,              // Layer 0 (base)
         1,              // Buildings variant
         180,            // High density
         160,            // ~63% lit
@@ -711,7 +880,7 @@ void render() {
         2,              // Tall aspect ratio
         0xFF00FFAA,     // Magenta primary
         0x00FFFF80,     // Cyan variation
-        100,            // Moderate parallax
+        100,            // Reserved parallax (currently no effect)
         0               // Static (no flicker)
     );
 
@@ -724,6 +893,7 @@ void render() {
 ```zig
 export fn render() void {
     env_rectangles(
+        0,              // Layer 0 (base)
         1,              // Buildings variant
         180,            // High density
         160,            // ~63% lit
@@ -732,7 +902,7 @@ export fn render() void {
         2,              // Tall aspect ratio
         0xFF00FFAA,     // Magenta primary
         0x00FFFF80,     // Cyan variation
-        100,            // Moderate parallax
+        100,            // Reserved parallax (currently no effect)
         0               // Static (no flicker)
     );
 
@@ -758,6 +928,7 @@ Creates interior 3D box environments with directional lighting.
 {{#tab name="Rust"}}
 ```rust
 fn env_room(
+    layer: u32,          // 0 = base layer, 1 = overlay layer
     color_ceiling: u32,  // 0xRRGGBB00
     color_floor: u32,    // 0xRRGGBB00
     color_walls: u32,    // 0xRRGGBB00
@@ -778,7 +949,8 @@ fn env_room(
 
 {{#tab name="C/C++"}}
 ```c
-void env_room(
+NCZX_IMPORT void env_room(
+    uint32_t layer,
     uint32_t color_ceiling,
     uint32_t color_floor,
     uint32_t color_walls,
@@ -800,6 +972,7 @@ void env_room(
 {{#tab name="Zig"}}
 ```zig
 pub extern fn env_room(
+    layer: u32,
     color_ceiling: u32,
     color_floor: u32,
     color_walls: u32,
@@ -820,6 +993,22 @@ pub extern fn env_room(
 
 {{#endtabs}}
 
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| layer | `u32` | Target layer: 0 = base, 1 = overlay |
+| color_ceiling | `u32` | Ceiling color (`0xRRGGBB00`; alpha byte is overwritten internally) |
+| color_floor | `u32` | Floor color (`0xRRGGBB00`; alpha byte is overwritten internally) |
+| color_walls | `u32` | Wall color (`0xRRGGBB00`; alpha byte is overwritten internally) |
+| panel_size | `f32` | Panel grid size (world units) |
+| panel_gap | `u32` | Panel gap thickness (0–255) |
+| light_dir_x, light_dir_y, light_dir_z | `f32` | Reserved for room light direction (currently no visible effect) |
+| light_intensity | `u32` | Directional light intensity (0–255) |
+| corner_darken | `u32` | Corner darkening amount (0–255) |
+| room_scale | `f32` | Room half-extent scale |
+| viewer_x, viewer_y, viewer_z | `i32` | Viewer position packed as snorm8 (-128..127 ≈ -1..1) |
+
 **Example: Hangar**
 
 {{#tabs global="lang"}}
@@ -827,38 +1016,42 @@ pub extern fn env_room(
 {{#tab name="Rust"}}
 ```rust
 fn render() {
-    env_room(
-        0x666666FF,     // Gray ceiling
-        0x333333FF,     // Dark gray floor
-        0x4d4d4dFF,     // Medium gray walls
-        4.0,            // 4-unit panels
-        8,              // Panel gaps
-        0.3,            // Light from upper right
-        -0.7,
-        0.5,
-        180,            // Bright lighting
-        100,            // Moderate corner darkening
-        20.0,           // Large room
-        0,              // Centered viewer
-        0,
-        0
-    );
+    unsafe {
+        env_room(
+            0,              // Layer 0 (base)
+            0x66666600,     // Gray ceiling
+            0x33333300,     // Dark gray floor
+            0x4d4d4d00,     // Medium gray walls
+            4.0,            // 4-unit panels
+            8,              // Panel gaps
+            0.3,            // Reserved light_dir (currently no effect)
+            -0.7,
+            0.5,
+            180,            // Bright lighting
+            100,            // Moderate corner darkening
+            20.0,           // Large room
+            0,              // Centered viewer
+            0,
+            0
+        );
 
-    draw_env();
+        draw_env();
+    }
 }
 ```
 {{#endtab}}
 
 {{#tab name="C/C++"}}
 ```c
-void render() {
+NCZX_EXPORT void render(void) {
     env_room(
-        0x666666FF,     // Gray ceiling
-        0x333333FF,     // Dark gray floor
-        0x4d4d4dFF,     // Medium gray walls
+        0,              // Layer 0 (base)
+        0x66666600,     // Gray ceiling
+        0x33333300,     // Dark gray floor
+        0x4d4d4d00,     // Medium gray walls
         4.0f,           // 4-unit panels
         8,              // Panel gaps
-        0.3f,           // Light from upper right
+        0.3f,           // Reserved light_dir (currently no effect)
         -0.7f,
         0.5f,
         180,            // Bright lighting
@@ -878,12 +1071,13 @@ void render() {
 ```zig
 export fn render() void {
     env_room(
-        0x666666FF,     // Gray ceiling
-        0x333333FF,     // Dark gray floor
-        0x4d4d4dFF,     // Medium gray walls
+        0,              // Layer 0 (base)
+        0x66666600,     // Gray ceiling
+        0x33333300,     // Dark gray floor
+        0x4d4d4d00,     // Medium gray walls
         4.0,            // 4-unit panels
         8,              // Panel gaps
-        0.3,            // Light from upper right
+        0.3,            // Reserved light_dir (currently no effect)
         -0.7,
         0.5,
         180,            // Bright lighting
@@ -916,6 +1110,7 @@ Creates vertical structures (pillars, trees, neon strips).
 {{#tab name="Rust"}}
 ```rust
 fn env_curtains(
+    layer: u32,        // 0 = base layer, 1 = overlay layer
     layer_count: u32,   // 1-3
     density: u32,       // 0-255
     height_min: u32,    // 0-63
@@ -934,7 +1129,8 @@ fn env_curtains(
 
 {{#tab name="C/C++"}}
 ```c
-void env_curtains(
+NCZX_IMPORT void env_curtains(
+    uint32_t layer,
     uint32_t layer_count,
     uint32_t density,
     uint32_t height_min,
@@ -954,6 +1150,7 @@ void env_curtains(
 {{#tab name="Zig"}}
 ```zig
 pub extern fn env_curtains(
+    layer: u32,
     layer_count: u32,
     density: u32,
     height_min: u32,
@@ -972,6 +1169,24 @@ pub extern fn env_curtains(
 
 {{#endtabs}}
 
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| layer | `u32` | Target layer: 0 = base, 1 = overlay |
+| layer_count | `u32` | Depth layers (1–3) |
+| density | `u32` | Structure density (0–255) |
+| height_min | `u32` | Minimum height (0–63) |
+| height_max | `u32` | Maximum height (0–63) |
+| width | `u32` | Structure width (0–31) |
+| spacing | `u32` | Gap between structures (0–31) |
+| waviness | `u32` | Wobble/organic motion (0–255) |
+| color_near | `u32` | Near color (`0xRRGGBBAA`) |
+| color_far | `u32` | Far color (`0xRRGGBBAA`) |
+| glow | `u32` | Glow intensity (0–255) |
+| parallax_rate | `u32` | Depth separation amount (0–255) |
+| phase | `u32` | Horizontal scroll phase (0–65535, wraps) |
+
 **Example: Neon Pillars**
 
 {{#tabs global="lang"}}
@@ -979,30 +1194,34 @@ pub extern fn env_curtains(
 {{#tab name="Rust"}}
 ```rust
 fn render() {
-    env_curtains(
-        2,              // 2 depth layers
-        30,             // Sparse density
-        40,             // Min height
-        60,             // Max height
-        4,              // Narrow width
-        12,             // Wide spacing
-        30,             // Some waviness
-        0xFF00FFFF,     // Magenta near
-        0x8800AAFF,     // Dark magenta far
-        200,            // High glow
-        120,            // Strong parallax
-        0               // Static
-    );
+    unsafe {
+        env_curtains(
+            0,              // Layer 0 (base)
+            2,              // 2 depth layers
+            30,             // Sparse density
+            40,             // Min height
+            60,             // Max height
+            4,              // Narrow width
+            12,             // Wide spacing
+            30,             // Some waviness
+            0xFF00FFFF,     // Magenta near
+            0x8800AAFF,     // Dark magenta far
+            200,            // High glow
+            120,            // Strong parallax
+            0               // Static
+        );
 
-    draw_env();
+        draw_env();
+    }
 }
 ```
 {{#endtab}}
 
 {{#tab name="C/C++"}}
 ```c
-void render() {
+NCZX_EXPORT void render(void) {
     env_curtains(
+        0,              // Layer 0 (base)
         2,              // 2 depth layers
         30,             // Sparse density
         40,             // Min height
@@ -1026,6 +1245,7 @@ void render() {
 ```zig
 export fn render() void {
     env_curtains(
+        0,              // Layer 0 (base)
         2,              // 2 depth layers
         30,             // Sparse density
         40,             // Min height
@@ -1062,6 +1282,7 @@ Creates concentric rings (portals, tunnels, vortex effects).
 {{#tab name="Rust"}}
 ```rust
 fn env_rings(
+    layer: u32,          // 0 = base layer, 1 = overlay layer
     ring_count: u32,     // 1-255
     thickness: u32,      // 0-255
     color_a: u32,        // 0xRRGGBBAA
@@ -1079,7 +1300,8 @@ fn env_rings(
 
 {{#tab name="C/C++"}}
 ```c
-void env_rings(
+NCZX_IMPORT void env_rings(
+    uint32_t layer,
     uint32_t ring_count,
     uint32_t thickness,
     uint32_t color_a,
@@ -1098,6 +1320,7 @@ void env_rings(
 {{#tab name="Zig"}}
 ```zig
 pub extern fn env_rings(
+    layer: u32,
     ring_count: u32,
     thickness: u32,
     color_a: u32,
@@ -1114,6 +1337,21 @@ pub extern fn env_rings(
 {{#endtab}}
 
 {{#endtabs}}
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| layer | `u32` | Target layer: 0 = base, 1 = overlay |
+| ring_count | `u32` | Number of rings (1–255) |
+| thickness | `u32` | Ring thickness (0–255) |
+| color_a | `u32` | Alternating ring color A (`0xRRGGBBAA`) |
+| color_b | `u32` | Alternating ring color B (`0xRRGGBBAA`) |
+| center_color | `u32` | Center glow color (`0xRRGGBBAA`) |
+| center_falloff | `u32` | Center falloff amount (0–255) |
+| spiral_twist | `f32` | Spiral twist in degrees (0 = concentric) |
+| axis_x, axis_y, axis_z | `f32` | Ring axis direction (normalized) |
+| phase | `u32` | Rotation phase (0–65535, wraps) |
 
 **Example: Portal**
 
@@ -1133,6 +1371,7 @@ fn update() {
 fn render() {
     unsafe {
         env_rings(
+            0,              // Layer 0 (base)
             32,             // Many rings
             3,              // Thin rings
             0xFF00FFFF,     // Magenta
@@ -1156,12 +1395,13 @@ fn render() {
 ```c
 static uint32_t portal_phase = 0;
 
-void update() {
+NCZX_EXPORT void update(void) {
     portal_phase += (uint32_t)(delta_time() * 2.0f * 65535.0f);
 }
 
-void render() {
+NCZX_EXPORT void render(void) {
     env_rings(
+        0,              // Layer 0 (base)
         32,             // Many rings
         3,              // Thin rings
         0xFF00FFFF,     // Magenta
@@ -1190,6 +1430,7 @@ export fn update() void {
 
 export fn render() void {
     env_rings(
+        0,              // Layer 0 (base)
         32,             // Many rings
         3,              // Thin rings
         0xFF00FFFF,     // Magenta
@@ -1238,7 +1479,7 @@ fn env_blend(mode: u32)
 
 {{#tab name="C/C++"}}
 ```c
-void env_blend(uint32_t mode);
+NCZX_IMPORT void env_blend(uint32_t mode);
 ```
 {{#endtab}}
 
@@ -1263,28 +1504,45 @@ pub extern fn env_blend(mode: u32) void;
 {{#tab name="Rust"}}
 ```rust
 fn render() {
-    // Layer 0: dark gradient base
-    env_gradient(0, 0x000000FF, 0x0a0a1aFF, 0x0a0a1aFF, 0x000000FF, 0.0, 0.0);
+    unsafe {
+        // Layer 0: dark gradient base
+        env_gradient(
+            0,
+            0x000000FF,
+            0x0a0a1aFF,
+            0x0a0a1aFF,
+            0x000000FF,
+            0.0, // sun azimuth
+            0.0, // horizon shift
+            0.0, // sun elevation
+            0,   // sun disk
+            0,   // sun halo
+            0,   // sun intensity (disabled)
+            0,   // horizon haze
+            0,   // sun warmth
+            0,   // cloudiness
+        );
 
-    // Layer 1: twinkling stars overlay
-    env_scatter(1, 0, 200, 2, 1, 0, 0xFFFFFF00, 0xAAAAFF00, 128, 64, 0);
+        // Layer 1: twinkling stars overlay
+        env_scatter(1, 0, 200, 2, 1, 0, 0xFFFFFF00, 0xAAAAFF00, 0, 0, 0);
 
-    // Use additive blending for glowing stars
-    env_blend(1);  // Additive
+        // Use additive blending for glowing stars
+        env_blend(1); // Additive
 
-    draw_env();
+        draw_env();
+    }
 }
 ```
 {{#endtab}}
 
 {{#tab name="C/C++"}}
 ```c
-void render() {
+NCZX_EXPORT void render(void) {
     // Layer 0: dark gradient base
-    env_gradient(0, 0x000000FF, 0x0a0a1aFF, 0x0a0a1aFF, 0x000000FF, 0.0f, 0.0f);
+    env_gradient(0, 0x000000FF, 0x0a0a1aFF, 0x0a0a1aFF, 0x000000FF, 0.0f, 0.0f, 0.0f, 0u, 0u, 0u, 0u, 0u, 0u);
 
     // Layer 1: twinkling stars overlay
-    env_scatter(1, 0, 200, 2, 1, 0, 0xFFFFFF00, 0xAAAAFF00, 128, 64, 0);
+    env_scatter(1, 0, 200, 2, 1, 0, 0xFFFFFF00, 0xAAAAFF00, 0, 0, 0);
 
     // Use additive blending for glowing stars
     env_blend(1);  // Additive
@@ -1298,10 +1556,10 @@ void render() {
 ```zig
 export fn render() void {
     // Layer 0: dark gradient base
-    env_gradient(0, 0x000000FF, 0x0a0a1aFF, 0x0a0a1aFF, 0x000000FF, 0.0, 0.0);
+    env_gradient(0, 0x000000FF, 0x0a0a1aFF, 0x0a0a1aFF, 0x000000FF, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0);
 
     // Layer 1: twinkling stars overlay
-    env_scatter(1, 0, 200, 2, 1, 0, 0xFFFFFF00, 0xAAAAFF00, 128, 64, 0);
+    env_scatter(1, 0, 200, 2, 1, 0, 0xFFFFFF00, 0xAAAAFF00, 0, 0, 0);
 
     // Use additive blending for glowing stars
     env_blend(1);  // Additive
@@ -1312,8 +1570,6 @@ export fn render() void {
 {{#endtab}}
 
 {{#endtabs}}
-
----
 
 ## Rendering the Environment
 
@@ -1331,7 +1587,7 @@ fn draw_env()
 
 {{#tab name="C/C++"}}
 ```c
-void draw_env(void);
+NCZX_IMPORT void draw_env(void);
 ```
 {{#endtab}}
 
@@ -1361,7 +1617,7 @@ fn matcap_set(slot: u32, texture: u32)
 
 {{#tab name="C/C++"}}
 ```c
-void matcap_set(uint32_t slot, uint32_t texture);
+NCZX_IMPORT void matcap_set(uint32_t slot, uint32_t texture);
 ```
 {{#endtab}}
 

@@ -4,7 +4,7 @@
 //! - FFI declarations
 //! - Debug camera controls
 //! - Debug sky controls (legacy)
-//! - Debug environment controls (Multi-Environment v3)
+//! - Debug environment controls (Multi-Environment v4)
 //! - Color utilities
 //! - Shape management
 //! - Texture utilities

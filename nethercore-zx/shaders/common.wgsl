@@ -16,7 +16,7 @@
 // - Binding 0-1: Transforms (unified_transforms, mvp_shading_indices)
 // - Binding 2: Shading (shading_states)
 // - Binding 3: Animation (unified_animation)
-// - Binding 4: Environment (environment_states) - Multi-Environment v3
+// - Binding 4: Environment (environment_states) - Multi-Environment v4
 // - Binding 5: Quad rendering (quad_instances)
 
 // Binding 0: unified_transforms - all mat4x4 matrices [models | views | projs]
@@ -65,17 +65,18 @@ struct BoneMatrix3x4 {
 @group(0) @binding(3) var<storage, read> unified_animation: array<BoneMatrix3x4>;
 
 // ============================================================================
-// ENVIRONMENT SYSTEM (Multi-Environment v3)
+// ENVIRONMENT SYSTEM (Multi-Environment v4)
 // ============================================================================
 // Procedural environment rendering with layering and blend modes.
 // 8 modes: Gradient, Scatter, Lines, Silhouette, Rectangles, Room, Curtains, Rings
 
-// Packed environment state (48 bytes)
+// Packed environment state (64 bytes)
 // Header: base_mode(3) + overlay_mode(3) + blend_mode(2) + reserved(24)
-// Data: base[0..5], overlay[5..10], shared[10]
+// Data: base[0..7], overlay[7..14]
 struct PackedEnvironmentState {
     header: u32,
-    data: array<u32, 11>,
+    _pad: u32,
+    data: array<u32, 14>,
 }
 
 // Environment mode constants
@@ -279,6 +280,30 @@ fn unpack_octahedral(packed: u32) -> vec3<f32> {
     return normalize(dir);
 }
 
+// Unpack 16-bit octahedral (2x snorm8) to direction vector
+fn unpack_octahedral_u16(packed: u32) -> vec3<f32> {
+    // Extract snorm8 components with sign extension
+    let u_i8 = bitcast<i32>((packed & 0xFFu) << 24u) >> 24;
+    let v_i8 = bitcast<i32>(((packed >> 8u) & 0xFFu) << 24u) >> 24;
+
+    let u = f32(u_i8) / 127.0;
+    let v = f32(v_i8) / 127.0;
+
+    // Reconstruct 3D direction (same as unpack_octahedral but lower precision input)
+    var dir: vec3<f32>;
+    dir.x = u;
+    dir.y = v;
+    dir.z = 1.0 - abs(u) - abs(v);
+
+    if (dir.z < 0.0) {
+        let old_x = dir.x;
+        dir.x = (1.0 - abs(dir.y)) * select(-1.0, 1.0, old_x >= 0.0);
+        dir.y = (1.0 - abs(old_x)) * select(-1.0, 1.0, dir.y >= 0.0);
+    }
+
+    return normalize(dir);
+}
+
 // ============================================================================
 // Tangent Unpacking and TBN Matrix Construction (Normal Mapping)
 // ============================================================================
@@ -360,59 +385,8 @@ fn sample_normal_map(tex: texture_2d<f32>, uv: vec2<f32>, tbn: mat3x3<f32>, flag
 }
 
 // ============================================================================
-// Environment Sampling (Multi-Environment v3)
+// Environment Sampling (Multi-Environment v4)
 // ============================================================================
-
-// Sample gradient environment (Mode 0)
-// data[0]: zenith color (RGBA8)
-// data[1]: sky_horizon color (RGBA8)
-// data[2]: ground_horizon color (RGBA8)
-// data[3]: nadir color (RGBA8)
-// data[4]: rotation (f16) + shift (f16) packed
-fn sample_gradient(data: array<u32, 11>, offset: u32, direction: vec3<f32>) -> vec4<f32> {
-    let zenith = unpack_rgba8(data[offset]);
-    let sky_horizon = unpack_rgba8(data[offset + 1u]);
-    let ground_horizon = unpack_rgba8(data[offset + 2u]);
-    let nadir = unpack_rgba8(data[offset + 3u]);
-    let rotation_shift = unpack2x16float(data[offset + 4u]);
-    let rotation = rotation_shift.x;
-    let shift = rotation_shift.y;
-
-    // Apply Y-axis rotation to direction
-    let cos_r = cos(rotation);
-    let sin_r = sin(rotation);
-    let rotated_dir = vec3<f32>(
-        direction.x * cos_r + direction.z * sin_r,
-        direction.y,
-        -direction.x * sin_r + direction.z * cos_r
-    );
-
-    // Calculate blend factor with shift applied
-    let y = clamp(rotated_dir.y + shift, -1.0, 1.0);
-
-    // Smooth 4-color gradient: nadir (-1) -> ground_horizon (-0.1) -> sky_horizon (0.1) -> zenith (1)
-    // Small horizon band for smooth ground/sky transition
-    var result: vec4<f32>;
-
-    if (y < -0.1) {
-        // Below horizon: nadir to ground_horizon
-        // Map [-1, -0.1] → [0, 1]
-        let t = (y + 1.0) / 0.9;
-        result = mix(nadir, ground_horizon, t);
-    } else if (y < 0.1) {
-        // Horizon band: ground_horizon to sky_horizon
-        // Map [-0.1, 0.1] → [0, 1]
-        let t = (y + 0.1) / 0.2;
-        result = mix(ground_horizon, sky_horizon, t);
-    } else {
-        // Above horizon: sky_horizon to zenith
-        // Map [0.1, 1] → [0, 1]
-        let t = (y - 0.1) / 0.9;
-        result = mix(sky_horizon, zenith, t);
-    }
-
-    return result;
-}
 
 // ============================================================================
 // Hash Functions (for procedural randomness)
@@ -440,6 +414,141 @@ fn hash31(p: vec3<f32>) -> f32 {
     return fract((p3.x + p3.y) * p3.z);
 }
 
+// Cheap triangle wave in [0,1]
+fn triwave(x: f32) -> f32 {
+    return abs(fract(x) - 0.5) * 2.0;
+}
+
+// 2D value noise (bilinear), stable and cheap (uses hash21)
+fn value_noise2(uv: vec2<f32>) -> f32 {
+    let i = floor(uv);
+    let f = fract(uv);
+    let u = f * f * (3.0 - 2.0 * f);
+
+    let ix = i32(i.x);
+    let iy = i32(i.y);
+
+    let a = hash21(vec2<u32>(u32(ix + 1024) & 0xFFFFu, u32(iy + 1024) & 0xFFFFu));
+    let b = hash21(vec2<u32>(u32(ix + 1025) & 0xFFFFu, u32(iy + 1024) & 0xFFFFu));
+    let c = hash21(vec2<u32>(u32(ix + 1024) & 0xFFFFu, u32(iy + 1025) & 0xFFFFu));
+    let d = hash21(vec2<u32>(u32(ix + 1025) & 0xFFFFu, u32(iy + 1025) & 0xFFFFu));
+
+    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+
+// Sample gradient environment (Mode 0)
+// data[0]: zenith color (RGBA8)
+// data[1]: sky_horizon color (RGBA8)
+// data[2]: ground_horizon color (RGBA8)
+// data[3]: nadir color (RGBA8)
+// data[4]: rotation (f16, reserved) + shift (f16) packed
+// data[5]: ext0 (u32): sun_dir_oct16(16) + sun_disk(8) + sun_halo(8)
+// data[6]: ext1 (u32): sun_intensity(8) + horizon_haze(8) + sun_warmth(8) + cloudiness(8)
+fn sample_gradient(data: array<u32, 14>, offset: u32, direction: vec3<f32>) -> vec4<f32> {
+    let zenith = unpack_rgba8(data[offset]);
+    let sky_horizon = unpack_rgba8(data[offset + 1u]);
+    let ground_horizon = unpack_rgba8(data[offset + 2u]);
+    let nadir = unpack_rgba8(data[offset + 3u]);
+    let rotation_shift = unpack2x16float(data[offset + 4u]);
+    let shift = rotation_shift.y;
+
+    let ext0 = data[offset + 5u];
+    let ext1 = data[offset + 6u];
+    let cloudiness = f32((ext1 >> 24u) & 0xFFu) / 255.0;
+
+    let dir = normalize(direction);
+
+    // Calculate blend factor with shift applied
+    let y = clamp(dir.y + shift, -1.0, 1.0);
+
+    // Smooth 4-color gradient: nadir (-1) -> ground_horizon (-0.1) -> sky_horizon (0.1) -> zenith (1)
+    // Small horizon band for smooth ground/sky transition
+    var result: vec4<f32>;
+
+    if (y < -0.1) {
+        // Below horizon: nadir to ground_horizon
+        // Map [-1, -0.1] → [0, 1]
+        let t = (y + 1.0) / 0.9;
+        result = mix(nadir, ground_horizon, t);
+    } else if (y < 0.1) {
+        // Horizon band: ground_horizon to sky_horizon
+        // Map [-0.1, 0.1] → [0, 1]
+        let t = (y + 0.1) / 0.2;
+        result = mix(ground_horizon, sky_horizon, t);
+    } else {
+        // Above horizon: sky_horizon to zenith
+        // Map [0.1, 1] → [0, 1]
+        let t = (y - 0.1) / 0.9;
+        result = mix(sky_horizon, zenith, t);
+    }
+
+    let base_alpha = result.a;
+    var rgb = result.rgb;
+
+    // Horizon haze: gently pull sky/ground toward their respective horizon colors near y ~= 0.
+    let horizon_haze = f32((ext1 >> 8u) & 0xFFu) / 255.0;
+    if (horizon_haze > 0.0) {
+        let h = 1.0 - abs(y); // 1 at horizon, 0 at poles
+        let haze_amount = horizon_haze * (h * h);
+        let haze_color = select(ground_horizon.rgb, sky_horizon.rgb, y >= 0.0);
+        rgb = mix(rgb, haze_color, haze_amount);
+    }
+
+    // Cloudiness / stylized bands (sky only): layered horizontal bands with soft noise warping.
+    if (cloudiness > 0.0) {
+        let sky_mask = smoothstep(0.0, 0.15, y); // fade in above horizon
+
+        // Low-frequency noise in XZ, used to warp bands so they feel "cloudy".
+        let uv = dir.xz * 4.0;
+        let n0 = value_noise2(uv);
+        let n1 = value_noise2(uv * 2.0 + vec2<f32>(10.0, 20.0));
+        let n = mix(n0, n1, 0.5);
+
+        let warp = (n - 0.5) * cloudiness * 0.6;
+        let freq = mix(1.5, 10.0, cloudiness);
+        let coord = (y * 0.5 + 0.5) * freq + warp;
+
+        let band = 1.0 - triwave(coord);              // peaks at band centers
+        let band_soft = smoothstep(0.25, 1.0, band);  // soften edges
+        let band_amount = cloudiness * band_soft * sky_mask;
+
+        // Tint bands using existing sky colors (keeps palettes art-directable)
+        let band_color = mix(sky_horizon.rgb, zenith.rgb, 0.65);
+        rgb = mix(rgb, band_color, band_amount * 0.6);
+    }
+
+    // Sun disc + halo (featured sky). World-space direction is supplied via env_gradient packing.
+    let sun_intensity = f32(ext1 & 0xFFu) / 255.0 * 8.0;
+    if (sun_intensity > 0.0) {
+        let sun_dir = unpack_octahedral_u16(ext0 & 0xFFFFu);
+        let sun_disk = f32((ext0 >> 16u) & 0xFFu) / 255.0;
+        let sun_halo = f32((ext0 >> 24u) & 0xFFu) / 255.0;
+
+        let warmth = f32((ext1 >> 16u) & 0xFFu) / 255.0;
+        let sun_color = mix(vec3<f32>(1.0, 0.98, 0.9), vec3<f32>(1.0, 0.6, 0.2), warmth);
+
+        let dot_sun = clamp(dot(dir, sun_dir), -1.0, 1.0);
+        let sun_dist = 1.0 - dot_sun; // 0 at center
+        let aa = fwidth(sun_dist) + 1e-6;
+
+        let disk_r = mix(0.0005, 0.02, sun_disk);
+        let halo_r = mix(disk_r * 2.0, 0.25, sun_halo);
+
+        let disk = 1.0 - smoothstep(disk_r, disk_r + aa, sun_dist);
+        let halo = 1.0 - smoothstep(disk_r, halo_r + aa, sun_dist);
+        let halo_only = max(halo - disk, 0.0);
+
+        rgb = rgb + sun_color * (sun_intensity * disk);
+        rgb = rgb + sun_color * (sun_intensity * 0.25 * halo_only);
+    }
+
+    // Subtle world-locked dither to reduce banding in large gradients
+    let dither = (hash31(dir * 512.0) - 0.5) * (1.0 / 255.0);
+    rgb = rgb + vec3<f32>(dither);
+
+    return vec4<f32>(rgb, base_alpha);
+}
+
 // ============================================================================
 // Mode 1: Scatter - Cellular noise particle field
 // ============================================================================
@@ -447,7 +556,7 @@ fn hash31(p: vec3<f32>) -> f32 {
 // data[1]: color_primary RGB (bits 31-8) + parallax_rate (bits 7-0)
 // data[2]: color_secondary RGB (bits 31-8) + parallax_size (bits 7-0)
 // data[3]: phase(16) + layer_count(2) + reserved(14)
-fn sample_scatter(data: array<u32, 11>, offset: u32, direction: vec3<f32>) -> vec4<f32> {
+fn sample_scatter(data: array<u32, 14>, offset: u32, direction: vec3<f32>) -> vec4<f32> {
     // Unpack parameters
     let d0 = data[offset];
     let variant = d0 & 0x3u;
@@ -576,7 +685,7 @@ fn sample_scatter(data: array<u32, 11>, offset: u32, direction: vec3<f32>) -> ve
 // data[2]: color_primary (RGBA8)
 // data[3]: color_accent (RGBA8)
 // data[4]: phase(u16) + reserved(16)
-fn sample_lines(data: array<u32, 11>, offset: u32, direction: vec3<f32>) -> vec4<f32> {
+fn sample_lines(data: array<u32, 14>, offset: u32, direction: vec3<f32>) -> vec4<f32> {
     // Unpack parameters
     let d0 = data[offset];
     let variant = d0 & 0x3u;           // 0=Floor, 1=Ceiling, 2=Sphere
@@ -674,7 +783,7 @@ fn sample_lines(data: array<u32, 11>, offset: u32, direction: vec3<f32>) -> vec4
 // data[2]: color_far (RGBA8)
 // data[3]: sky_zenith (RGBA8)
 // data[4]: sky_horizon (RGBA8)
-// data[10]: seed stored in upper 16 bits (base) or lower 16 bits (overlay)
+// data[5]: seed (u32)
 
 // Looping value noise for smooth terrain generation
 fn looping_value_noise(t: f32, period: u32, seed: u32) -> f32 {
@@ -690,7 +799,7 @@ fn looping_value_noise(t: f32, period: u32, seed: u32) -> f32 {
     return mix(a, b, smooth_t);
 }
 
-fn sample_silhouette(data: array<u32, 11>, offset: u32, direction: vec3<f32>) -> vec4<f32> {
+fn sample_silhouette(data: array<u32, 14>, offset: u32, direction: vec3<f32>) -> vec4<f32> {
     // Unpack parameters
     let d0 = data[offset];
     let jaggedness = f32(d0 & 0xFFu) / 255.0;
@@ -702,13 +811,7 @@ fn sample_silhouette(data: array<u32, 11>, offset: u32, direction: vec3<f32>) ->
     let sky_zenith = unpack_rgba8(data[offset + 3u]);
     let sky_horizon = unpack_rgba8(data[offset + 4u]);
 
-    // Extract seed from shared data[10]
-    var seed: u32;
-    if (offset == 0u) {
-        seed = (data[10] >> 16u) & 0xFFFFu;
-    } else {
-        seed = data[10] & 0xFFFFu;
-    }
+    let seed = data[offset + 5u];
 
     let dir = normalize(direction);
 
@@ -768,7 +871,7 @@ fn sample_silhouette(data: array<u32, 11>, offset: u32, direction: vec3<f32>) ->
 // data[1]: color_primary (RGBA8)
 // data[2]: color_variation (RGBA8)
 // data[3]: parallax_rate(8) + reserved(8) + phase(16)
-fn sample_rectangles(data: array<u32, 11>, offset: u32, direction: vec3<f32>) -> vec4<f32> {
+fn sample_rectangles(data: array<u32, 14>, offset: u32, direction: vec3<f32>) -> vec4<f32> {
     // Unpack parameters
     let d0 = data[offset];
     let variant = d0 & 0x3u;
@@ -905,8 +1008,8 @@ fn sample_rectangles(data: array<u32, 11>, offset: u32, direction: vec3<f32>) ->
 // data[2]: color_walls_RGB(24) + viewer_z_snorm8(8)
 // data[3]: panel_size(f16) + panel_gap(8) + corner_darken(8)
 // data[4]: light_dir_oct(16) + light_intensity(8) + room_scale(8)
-// Note: Does NOT use data[10] - can safely layer with other modes
-fn sample_room(data: array<u32, 11>, offset: u32, direction: vec3<f32>) -> vec4<f32> {
+// Note: Does NOT use data[5..6] - can safely layer with other modes
+fn sample_room(data: array<u32, 14>, offset: u32, direction: vec3<f32>) -> vec4<f32> {
     // Unpack colors (RGB only, alpha byte contains viewer position)
     let color_ceiling = vec4<f32>(unpack_rgb8(data[offset]), 1.0);
     let color_floor = vec4<f32>(unpack_rgb8(data[offset + 1u]), 1.0);
@@ -1004,7 +1107,7 @@ fn sample_room(data: array<u32, 11>, offset: u32, direction: vec3<f32>) -> vec4<
 // data[2]: color_near (RGBA8)
 // data[3]: color_far (RGBA8)
 // data[4]: phase(u16) + reserved(16)
-fn sample_curtains(data: array<u32, 11>, offset: u32, direction: vec3<f32>) -> vec4<f32> {
+fn sample_curtains(data: array<u32, 14>, offset: u32, direction: vec3<f32>) -> vec4<f32> {
     // Unpack parameters
     let d0 = data[offset];
     let layer_count = (d0 & 0x3u) + 1u;
@@ -1106,33 +1209,9 @@ fn sample_curtains(data: array<u32, 11>, offset: u32, direction: vec3<f32>) -> v
 // data[2]: color_b (RGBA8)
 // data[3]: center_color (RGBA8)
 // data[4]: spiral_twist(f16, bits 0-15) + axis_oct16(16, bits 16-31)
-// data[10]: phase stored in upper 16 bits (base) or lower 16 bits (overlay)
+// data[5]: phase stored in low 16 bits (u16)
 
-// Unpack 16-bit octahedral (2x snorm8) to direction vector
-fn unpack_octahedral_u16(packed: u32) -> vec3<f32> {
-    // Extract snorm8 components with sign extension
-    let u_i8 = bitcast<i32>((packed & 0xFFu) << 24u) >> 24;
-    let v_i8 = bitcast<i32>(((packed >> 8u) & 0xFFu) << 24u) >> 24;
-
-    let u = f32(u_i8) / 127.0;
-    let v = f32(v_i8) / 127.0;
-
-    // Reconstruct 3D direction (same as unpack_octahedral but lower precision input)
-    var dir: vec3<f32>;
-    dir.x = u;
-    dir.y = v;
-    dir.z = 1.0 - abs(u) - abs(v);
-
-    if (dir.z < 0.0) {
-        let old_x = dir.x;
-        dir.x = (1.0 - abs(dir.y)) * select(-1.0, 1.0, old_x >= 0.0);
-        dir.y = (1.0 - abs(old_x)) * select(-1.0, 1.0, dir.y >= 0.0);
-    }
-
-    return normalize(dir);
-}
-
-fn sample_rings(data: array<u32, 11>, offset: u32, direction: vec3<f32>) -> vec4<f32> {
+fn sample_rings(data: array<u32, 14>, offset: u32, direction: vec3<f32>) -> vec4<f32> {
     // Unpack parameters
     let d0 = data[offset];
     let ring_count = max(1u, d0 & 0xFFu);
@@ -1146,13 +1225,7 @@ fn sample_rings(data: array<u32, 11>, offset: u32, direction: vec3<f32>) -> vec4
     let d4 = data[offset + 4u];
     let spiral_twist = unpack2x16float(d4).x; // degrees
 
-    // Extract phase from shared data[10]
-    var phase: f32;
-    if (offset == 0u) {
-        phase = f32((data[10] >> 16u) & 0xFFFFu) / 65535.0;
-    } else {
-        phase = f32(data[10] & 0xFFFFu) / 65535.0;
-    }
+    let phase = f32(data[offset + 5u] & 0xFFFFu) / 65535.0;
 
     // Unpack axis from 16-bit octahedral (2x snorm8) in upper 16 bits of d4
     let axis_oct16 = (d4 >> 16u) & 0xFFFFu;
@@ -1209,7 +1282,7 @@ fn sample_rings(data: array<u32, 11>, offset: u32, direction: vec3<f32>) -> vec4
 }
 
 // Sample a single environment mode
-fn sample_mode(mode: u32, data: array<u32, 11>, offset: u32, direction: vec3<f32>) -> vec4<f32> {
+fn sample_mode(mode: u32, data: array<u32, 14>, offset: u32, direction: vec3<f32>) -> vec4<f32> {
     switch (mode) {
         case 0u: { return sample_gradient(data, offset, direction); }
         case 1u: { return sample_scatter(data, offset, direction); }
@@ -1251,7 +1324,7 @@ fn sample_environment(env_index: u32, direction: vec3<f32>) -> vec4<f32> {
         return base_color;
     }
 
-    let overlay_color = sample_mode(overlay_mode, env.data, 5u, direction);
+    let overlay_color = sample_mode(overlay_mode, env.data, 7u, direction);
     return blend_layers(base_color, overlay_color, blend_mode);
 }
 

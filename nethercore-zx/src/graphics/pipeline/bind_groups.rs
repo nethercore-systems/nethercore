@@ -8,7 +8,7 @@
 /// - Binding 0-1: Transforms (unified_transforms, mvp_indices)
 /// - Binding 2: Shading (shading_states)
 /// - Binding 3: Animation (unified_animation)
-/// - Binding 4: Environment (environment_states) - Multi-Environment v3
+/// - Binding 4: Environment (environment_states) - Multi-Environment v4
 /// - Binding 5: Quad rendering (quad_instances)
 ///
 /// CPU pre-computes absolute indices into unified_transforms (no frame_offsets needed).
@@ -77,7 +77,7 @@ pub(crate) fn create_frame_bind_group_layout(
             count: None,
         },
         // =====================================================================
-        // ENVIRONMENT (binding 4) - Multi-Environment v3
+        // ENVIRONMENT (binding 4) - Multi-Environment v4
         // =====================================================================
 
         // Binding 4: environment_states - per-frame array of PackedEnvironmentState

@@ -7,7 +7,7 @@ mod tests {
     #[test]
     fn test_packed_sizes() {
         assert_eq!(std::mem::size_of::<PackedLight>(), 12); // 12 bytes for point light support
-        assert_eq!(std::mem::size_of::<PackedEnvironmentState>(), 48); // 4 (header) + 44 (data)
+        assert_eq!(std::mem::size_of::<PackedEnvironmentState>(), 64); // 8 (header+pad) + 56 (data)
         assert_eq!(std::mem::size_of::<PackedUnifiedShadingState>(), 80); // 16 (header) + 48 (lights) + 16 (animation/env)
     }
 

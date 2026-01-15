@@ -71,7 +71,7 @@ pub struct ZXGraphics {
     pub(super) shading_state_buffer: wgpu::Buffer,
     pub(super) shading_state_capacity: usize,
 
-    // Environment state storage buffer (Multi-Environment v3)
+    // Environment state storage buffer (Multi-Environment v4)
     // @binding(4) - per-frame array of PackedEnvironmentState
     pub(super) environment_states_buffer: wgpu::Buffer,
     pub(super) environment_states_capacity: usize,

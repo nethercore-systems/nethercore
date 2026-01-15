@@ -164,7 +164,7 @@ impl ZXGraphics {
             self.queue.write_buffer(&self.shading_state_buffer, 0, data);
         }
 
-        // 2b. Upload environment states (Multi-Environment v3)
+        // 2b. Upload environment states (Multi-Environment v4)
         if !z_state.environment_pool.is_empty() {
             self.ensure_environment_states_buffer_capacity(z_state.environment_pool.len());
             let data = bytemuck::cast_slice(z_state.environment_pool.as_slice());
@@ -300,7 +300,7 @@ impl ZXGraphics {
                     // 0-1: Transforms (unified_transforms, mvp_indices)
                     // 2: Shading (shading_states)
                     // 3: Animation (unified_animation)
-                    // 4: Environment (environment_states) - Multi-Environment v3
+                    // 4: Environment (environment_states) - Multi-Environment v4
                     // 5: Quad rendering (quad_instances)
                     let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                         label: Some("Frame Bind Group (Unified)"),
@@ -360,7 +360,7 @@ impl ZXGraphics {
                 // 0-1: Transforms (unified_transforms, mvp_indices)
                 // 2: Shading (shading_states)
                 // 3: Animation (unified_animation)
-                // 4: Environment (environment_states) - Multi-Environment v3
+                // 4: Environment (environment_states) - Multi-Environment v4
                 // 5: Quad rendering (quad_instances)
                 let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some("Frame Bind Group (Unified)"),

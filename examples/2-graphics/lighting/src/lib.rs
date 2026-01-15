@@ -307,8 +307,15 @@ pub extern "C" fn render() {
             0x99BFD9FF,   // Sky horizon: light blue
             0x99BFD9FF,   // Ground horizon: light blue
             0x2A2A2AFF,   // Nadir: dark
-            0.0,          // rotation
-            0.0           // shift
+            0.0,          // sun azimuth
+            0.0,          // horizon shift
+            0.0,          // sun elevation
+            0,            // sun disk
+            0,            // sun halo
+            0,            // sun intensity (disabled)
+            0,            // horizon haze
+            0,            // sun warmth
+            0             // cloudiness
         );
         light_set(0, -0.7, -0.2, -0.7);  // Direction: rays from sun near horizon
         light_color(0, 0xFFFAF0FF);      // Color: warm white

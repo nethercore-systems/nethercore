@@ -5,12 +5,20 @@
 
 use wasmtime::Caller;
 
+use glam::Vec3;
+use zx_common::pack_octahedral_u16;
+
 use crate::ffi::ZXGameContext;
 use crate::graphics::env_mode;
 use crate::graphics::unified_shading_state::{
     CurtainsConfig, GradientConfig, LinesConfig, RectanglesConfig, RingsConfig, RoomConfig,
-    ScatterConfig, SilhouetteConfig,
+    ScatterConfig, SilhouetteConfig, ENV_OVERLAY_OFFSET,
 };
+
+#[inline]
+fn layer_offset_words(layer: u32) -> usize {
+    if layer == 0 { 0 } else { ENV_OVERLAY_OFFSET }
+}
 
 /// Configure gradient environment (Mode 0)
 ///
@@ -20,8 +28,15 @@ use crate::graphics::unified_shading_state::{
 /// * `sky_horizon` — Sky color at horizon level (0xRRGGBBAA)
 /// * `ground_horizon` — Ground color at horizon level (0xRRGGBBAA)
 /// * `nadir` — Color directly below (0xRRGGBBAA)
-/// * `rotation` — Rotation around Y axis in radians (for non-symmetric gradients)
+/// * `rotation` — Sun azimuth around Y axis in radians (0 = +Z, π/2 = +X)
 /// * `shift` — Horizon vertical shift (-1.0 to 1.0, 0.0 = equator)
+/// * `sun_elevation` — Sun elevation in radians (0 = horizon, π/2 = zenith)
+/// * `sun_disk` — Sun disc size (0-255)
+/// * `sun_halo` — Sun halo size (0-255)
+/// * `sun_intensity` — Sun intensity (0 disables sun)
+/// * `horizon_haze` — Haze near the horizon (0-255)
+/// * `sun_warmth` — Sun color warmth (0 = neutral/white, 255 = warm/orange)
+/// * `cloudiness` — Stylized cloud bands (0 disables, 255 = strongest)
 ///
 /// Sets the 4-color gradient for environment rendering. The gradient interpolates:
 /// - zenith → sky_horizon (Y > 0)
@@ -35,8 +50,8 @@ use crate::graphics::unified_shading_state::{
 /// ```
 ///
 /// **Examples:**
-/// - Blue sky: `env_gradient(0, 0x191970FF, 0x87CEEBFF, 0x228B22FF, 0x2F4F4FFF, 0.0, 0.0)`
-/// - Sunset: `env_gradient(0, 0x4A00E0FF, 0xFF6B6BFF, 0x8B4513FF, 0x2F2F2FFF, 0.0, 0.1)`
+/// - Blue sky: `env_gradient(0, 0x191970FF, 0x87CEEBFF, 0x228B22FF, 0x2F4F4FFF, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0)`
+/// - Sunset: `env_gradient(0, 0x4A00E0FF, 0xFF6B6BFF, 0x8B4513FF, 0x2F2F2FFF, 0.0, 0.1, 0.0, 0, 0, 0, 0, 0, 0)`
 pub(crate) fn env_gradient(
     mut caller: Caller<'_, ZXGameContext>,
     layer: u32,
@@ -46,14 +61,22 @@ pub(crate) fn env_gradient(
     nadir: u32,
     rotation: f32,
     shift: f32,
+    sun_elevation: f32,
+    sun_disk: u32,
+    sun_halo: u32,
+    sun_intensity: u32,
+    horizon_haze: u32,
+    sun_warmth: u32,
+    cloudiness: u32,
 ) {
     let state = &mut caller.data_mut().ffi;
+    let offset = layer_offset_words(layer);
 
     // Pack gradient into specified layer (0 = base, 1 = overlay)
     state
         .current_environment_state
         .pack_gradient(GradientConfig {
-            offset: layer as usize,
+            offset,
             zenith,
             sky_horizon,
             ground_horizon,
@@ -61,6 +84,24 @@ pub(crate) fn env_gradient(
             rotation,
             shift,
         });
+
+    // Pack featured-sky controls into the per-layer extension words (w5/w6).
+    // rotation: sun azimuth (0 = +Z), sun_elevation: 0 = horizon, π/2 = zenith.
+    let (sin_az, cos_az) = rotation.sin_cos();
+    let (sin_el, cos_el) = sun_elevation.sin_cos();
+    let sun_dir = Vec3::new(cos_el * sin_az, sin_el, cos_el * cos_az).normalize_or_zero();
+
+    let sun_oct16 = pack_octahedral_u16(sun_dir) as u32;
+    let w5 = (sun_oct16 & 0xFFFF)
+        | ((sun_disk & 0xFF) << 16)
+        | ((sun_halo & 0xFF) << 24);
+    let w6 = (sun_intensity & 0xFF)
+        | ((horizon_haze & 0xFF) << 8)
+        | ((sun_warmth & 0xFF) << 16)
+        | ((cloudiness & 0xFF) << 24);
+
+    state.current_environment_state.data[offset + 5] = w5;
+    state.current_environment_state.data[offset + 6] = w6;
 
     // Set mode for the specified layer
     if layer == 0 {
@@ -124,7 +165,7 @@ pub(crate) fn env_scatter(
 
     // Pack scatter into specified layer
     state.current_environment_state.pack_scatter(ScatterConfig {
-        offset: layer as usize,
+        offset: layer_offset_words(layer),
         variant,
         density,
         size,
@@ -191,7 +232,7 @@ pub(crate) fn env_lines(
 
     // Pack lines into specified layer
     state.current_environment_state.pack_lines(LinesConfig {
-        offset: layer as usize,
+        offset: layer_offset_words(layer),
         variant,
         line_type,
         thickness,
@@ -254,7 +295,7 @@ pub(crate) fn env_silhouette(
     state
         .current_environment_state
         .pack_silhouette(SilhouetteConfig {
-            offset: layer as usize,
+            offset: layer_offset_words(layer),
             jaggedness,
             layer_count,
             color_near,
@@ -323,7 +364,7 @@ pub(crate) fn env_rectangles(
     state
         .current_environment_state
         .pack_rectangles(RectanglesConfig {
-            offset: layer as usize,
+            offset: layer_offset_words(layer),
             variant,
             density,
             lit_ratio,
@@ -397,7 +438,7 @@ pub(crate) fn env_room(
     let state = &mut caller.data_mut().ffi;
 
     state.current_environment_state.pack_room(RoomConfig {
-        offset: layer as usize,
+        offset: layer_offset_words(layer),
         color_ceiling,
         color_floor,
         color_walls,
@@ -473,7 +514,7 @@ pub(crate) fn env_curtains(
     state
         .current_environment_state
         .pack_curtains(CurtainsConfig {
-            offset: layer as usize,
+            offset: layer_offset_words(layer),
             layer_count,
             density,
             height_min,
@@ -540,7 +581,7 @@ pub(crate) fn env_rings(
 
     // Pack rings into specified layer
     state.current_environment_state.pack_rings(RingsConfig {
-        offset: layer as usize,
+        offset: layer_offset_words(layer),
         ring_count,
         thickness,
         color_a,

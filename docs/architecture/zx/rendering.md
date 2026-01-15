@@ -572,7 +572,8 @@ The EPU supports two independent environment layers (base and overlay) that can 
 ```rust
 // Configure base layer (layer 0)
 fn env_gradient(layer: u32, zenith: u32, sky_horizon: u32, ground_horizon: u32,
-                nadir: u32, rotation: f32, shift: f32)
+                nadir: u32, azim: f32, shift: f32, elev: f32,
+                disk: u32, halo: u32, intensity: u32, haze: u32, warmth: u32, cloudiness: u32)
 
 // Configure overlay layer (layer 1) with a different mode
 fn env_scatter(layer: u32, variant: u32, density: u32, ...)

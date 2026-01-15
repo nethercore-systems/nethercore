@@ -75,7 +75,7 @@ impl ZXGraphics {
         self.shading_state_capacity = new_capacity;
     }
 
-    /// Ensure environment state buffer has sufficient capacity (Multi-Environment v3)
+    /// Ensure environment state buffer has sufficient capacity (Multi-Environment v4)
     pub(super) fn ensure_environment_states_buffer_capacity(&mut self, count: usize) {
         if count <= self.environment_states_capacity {
             return;

@@ -25,7 +25,7 @@
 //!
 //! #[no_mangle]
 //! pub extern "C" fn render() {
-//!     draw_sky();
+//!     draw_env();
 //!     // Draw your scene
 //! }
 //! ```
@@ -173,18 +173,42 @@ extern "C" {
 
     /// Push a custom view matrix (16 floats, column-major order).
     pub fn push_view_matrix(
-        m0: f32, m1: f32, m2: f32, m3: f32,
-        m4: f32, m5: f32, m6: f32, m7: f32,
-        m8: f32, m9: f32, m10: f32, m11: f32,
-        m12: f32, m13: f32, m14: f32, m15: f32,
+        m0: f32,
+        m1: f32,
+        m2: f32,
+        m3: f32,
+        m4: f32,
+        m5: f32,
+        m6: f32,
+        m7: f32,
+        m8: f32,
+        m9: f32,
+        m10: f32,
+        m11: f32,
+        m12: f32,
+        m13: f32,
+        m14: f32,
+        m15: f32,
     );
 
     /// Push a custom projection matrix (16 floats, column-major order).
     pub fn push_projection_matrix(
-        m0: f32, m1: f32, m2: f32, m3: f32,
-        m4: f32, m5: f32, m6: f32, m7: f32,
-        m8: f32, m9: f32, m10: f32, m11: f32,
-        m12: f32, m13: f32, m14: f32, m15: f32,
+        m0: f32,
+        m1: f32,
+        m2: f32,
+        m3: f32,
+        m4: f32,
+        m5: f32,
+        m6: f32,
+        m7: f32,
+        m8: f32,
+        m9: f32,
+        m10: f32,
+        m11: f32,
+        m12: f32,
+        m13: f32,
+        m14: f32,
+        m15: f32,
     );
 
     // =========================================================================
@@ -602,7 +626,12 @@ extern "C" {
     /// * `major_radius` — Distance from center to tube center
     /// * `minor_radius` — Tube radius
     /// * `major_segments`, `minor_segments` — Segment counts (3-256)
-    pub fn torus(major_radius: f32, minor_radius: f32, major_segments: u32, minor_segments: u32) -> u32;
+    pub fn torus(
+        major_radius: f32,
+        minor_radius: f32,
+        major_segments: u32,
+        minor_segments: u32,
+    ) -> u32;
 
     /// Generate a capsule (pill shape) mesh. **Init-only.**
     ///
@@ -628,7 +657,12 @@ extern "C" {
     pub fn cylinder_uv(radius_bottom: f32, radius_top: f32, height: f32, segments: u32) -> u32;
 
     /// Generate a torus mesh with wrapped UV mapping. **Init-only.**
-    pub fn torus_uv(major_radius: f32, minor_radius: f32, major_segments: u32, minor_segments: u32) -> u32;
+    pub fn torus_uv(
+        major_radius: f32,
+        minor_radius: f32,
+        major_segments: u32,
+        minor_segments: u32,
+    ) -> u32;
 
     /// Generate a capsule mesh with hybrid UV mapping. **Init-only.**
     pub fn capsule_uv(radius: f32, height: f32, segments: u32, rings: u32) -> u32;
@@ -644,7 +678,8 @@ extern "C" {
     /// Generate a plane mesh with tangent data for normal mapping. **Init-only.**
     ///
     /// Tangent points along +X, bitangent along +Z, normal along +Y.
-    pub fn plane_tangent(size_x: f32, size_z: f32, subdivisions_x: u32, subdivisions_z: u32) -> u32;
+    pub fn plane_tangent(size_x: f32, size_z: f32, subdivisions_x: u32, subdivisions_z: u32)
+        -> u32;
 
     /// Generate a cube mesh with tangent data for normal mapping. **Init-only.**
     ///
@@ -654,7 +689,12 @@ extern "C" {
     /// Generate a torus mesh with tangent data for normal mapping. **Init-only.**
     ///
     /// Tangent follows the major circle direction.
-    pub fn torus_tangent(major_radius: f32, minor_radius: f32, major_segments: u32, minor_segments: u32) -> u32;
+    pub fn torus_tangent(
+        major_radius: f32,
+        minor_radius: f32,
+        major_segments: u32,
+        minor_segments: u32,
+    ) -> u32;
 
     // =========================================================================
     // Immediate Mode 3D Drawing
@@ -702,8 +742,12 @@ extern "C" {
     /// * `src_x`, `src_y`, `src_w`, `src_h` — UV region (0.0-1.0)
     /// * `mode` — 1=spherical, 2=cylindrical Y, 3=cylindrical X, 4=cylindrical Z
     pub fn draw_billboard_region(
-        w: f32, h: f32,
-        src_x: f32, src_y: f32, src_w: f32, src_h: f32,
+        w: f32,
+        h: f32,
+        src_x: f32,
+        src_y: f32,
+        src_w: f32,
+        src_h: f32,
         mode: u32,
     );
 
@@ -723,8 +767,14 @@ extern "C" {
     /// # Arguments
     /// * `src_x`, `src_y`, `src_w`, `src_h` — UV region (0.0-1.0)
     pub fn draw_sprite_region(
-        x: f32, y: f32, w: f32, h: f32,
-        src_x: f32, src_y: f32, src_w: f32, src_h: f32,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        src_x: f32,
+        src_y: f32,
+        src_w: f32,
+        src_h: f32,
     );
 
     /// Draw a sprite with full control (rotation, origin, UV region).
@@ -733,9 +783,17 @@ extern "C" {
     /// * `origin_x`, `origin_y` — Rotation pivot point (in pixels from sprite top-left)
     /// * `angle_deg` — Rotation angle in degrees (clockwise)
     pub fn draw_sprite_ex(
-        x: f32, y: f32, w: f32, h: f32,
-        src_x: f32, src_y: f32, src_w: f32, src_h: f32,
-        origin_x: f32, origin_y: f32, angle_deg: f32,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        src_x: f32,
+        src_y: f32,
+        src_w: f32,
+        src_h: f32,
+        origin_x: f32,
+        origin_y: f32,
+        angle_deg: f32,
     );
 
     /// Draw a solid color rectangle.
@@ -836,7 +894,7 @@ extern "C" {
     pub fn matcap_set(slot: u32, texture: u32);
 
     // =========================================================================
-    // Environment Processing Unit (EPU) — Multi-Environment v3
+    // Environment Processing Unit (EPU) — Multi-Environment v4
     // =========================================================================
 
     /// Configure gradient environment (Mode 0).
@@ -849,13 +907,35 @@ extern "C" {
     /// * `sky_horizon` — Sky color at horizon level (0xRRGGBBAA)
     /// * `ground_horizon` — Ground color at horizon level (0xRRGGBBAA)
     /// * `nadir` — Color directly below (0xRRGGBBAA)
-    /// * `rotation` — Rotation around Y axis in radians
+    /// * `rotation` — Sun azimuth around Y axis in radians (0 = +Z, π/2 = +X)
     /// * `shift` — Horizon vertical shift (-1.0 to 1.0, 0.0 = equator)
+    /// * `sun_elevation` — Sun elevation in radians (0 = horizon, π/2 = zenith)
+    /// * `sun_disk` — Sun disc size (0-255)
+    /// * `sun_halo` — Sun halo size (0-255)
+    /// * `sun_intensity` — Sun intensity (0 disables sun)
+    /// * `horizon_haze` — Haze near the horizon (0-255)
+    /// * `sun_warmth` — Sun color warmth (0 = neutral/white, 255 = warm/orange)
+    /// * `cloudiness` — Stylized cloud bands (0 disables, 255 = strongest)
     ///
     /// The gradient interpolates: zenith → sky_horizon (Y > 0), sky_horizon → ground_horizon (at Y = 0 + shift), ground_horizon → nadir (Y < 0).
     ///
     /// You can configure the same mode on both layers with different parameters for creative effects.
-    pub fn env_gradient(layer: u32, zenith: u32, sky_horizon: u32, ground_horizon: u32, nadir: u32, rotation: f32, shift: f32);
+    pub fn env_gradient(
+        layer: u32,
+        zenith: u32,
+        sky_horizon: u32,
+        ground_horizon: u32,
+        nadir: u32,
+        rotation: f32,
+        shift: f32,
+        sun_elevation: f32,
+        sun_disk: u32,
+        sun_halo: u32,
+        sun_intensity: u32,
+        horizon_haze: u32,
+        sun_warmth: u32,
+        cloudiness: u32,
+    );
 
     /// Configure scatter environment (Mode 1: stars, rain, warp).
     ///
@@ -873,9 +953,19 @@ extern "C" {
     /// * `parallax_rate` — Layer separation amount (0-255)
     /// * `parallax_size` — Size variation with depth (0-255)
     /// * `phase` — Animation phase (0-65535, wraps for seamless looping)
-    pub fn env_scatter(layer: u32, variant: u32, density: u32, size: u32, glow: u32, streak_length: u32,
-                       color_primary: u32, color_secondary: u32, parallax_rate: u32,
-                       parallax_size: u32, phase: u32);
+    pub fn env_scatter(
+        layer: u32,
+        variant: u32,
+        density: u32,
+        size: u32,
+        glow: u32,
+        streak_length: u32,
+        color_primary: u32,
+        color_secondary: u32,
+        parallax_rate: u32,
+        parallax_size: u32,
+        phase: u32,
+    );
 
     /// Configure lines environment (Mode 2: synthwave grid, racing track).
     ///
@@ -892,8 +982,18 @@ extern "C" {
     /// * `color_accent` — Accent line color (0xRRGGBBAA)
     /// * `accent_every` — Make every Nth line use accent color
     /// * `phase` — Scroll phase (0-65535, wraps for seamless looping)
-    pub fn env_lines(layer: u32, variant: u32, line_type: u32, thickness: u32, spacing: f32, fade_distance: f32,
-                     color_primary: u32, color_accent: u32, accent_every: u32, phase: u32);
+    pub fn env_lines(
+        layer: u32,
+        variant: u32,
+        line_type: u32,
+        thickness: u32,
+        spacing: f32,
+        fade_distance: f32,
+        color_primary: u32,
+        color_accent: u32,
+        accent_every: u32,
+        phase: u32,
+    );
 
     /// Configure silhouette environment (Mode 3: mountains, cityscape).
     ///
@@ -909,8 +1009,17 @@ extern "C" {
     /// * `sky_horizon` — Sky color at horizon behind silhouettes (0xRRGGBBAA)
     /// * `parallax_rate` — Layer separation amount (0-255)
     /// * `seed` — Noise seed for terrain shape
-    pub fn env_silhouette(layer: u32, jaggedness: u32, layer_count: u32, color_near: u32, color_far: u32,
-                          sky_zenith: u32, sky_horizon: u32, parallax_rate: u32, seed: u32);
+    pub fn env_silhouette(
+        layer: u32,
+        jaggedness: u32,
+        layer_count: u32,
+        color_near: u32,
+        color_far: u32,
+        sky_zenith: u32,
+        sky_horizon: u32,
+        parallax_rate: u32,
+        seed: u32,
+    );
 
     /// Configure rectangles environment (Mode 4: city windows, control panels).
     ///
@@ -928,8 +1037,19 @@ extern "C" {
     /// * `color_variation` — Color variation for variety (0xRRGGBBAA)
     /// * `parallax_rate` — Layer separation (0-255)
     /// * `phase` — Flicker phase (0-65535, wraps for seamless animation)
-    pub fn env_rectangles(layer: u32, variant: u32, density: u32, lit_ratio: u32, size_min: u32, size_max: u32,
-                          aspect: u32, color_primary: u32, color_variation: u32, parallax_rate: u32, phase: u32);
+    pub fn env_rectangles(
+        layer: u32,
+        variant: u32,
+        density: u32,
+        lit_ratio: u32,
+        size_min: u32,
+        size_max: u32,
+        aspect: u32,
+        color_primary: u32,
+        color_variation: u32,
+        parallax_rate: u32,
+        phase: u32,
+    );
 
     /// Configure room environment (Mode 5: interior spaces).
     ///
@@ -947,9 +1067,23 @@ extern "C" {
     /// * `corner_darken` — Corner/edge darkening amount (0-255)
     /// * `room_scale` — Room size multiplier
     /// * `viewer_x`, `viewer_y`, `viewer_z` — Viewer position in room (-128 to 127 = -1.0 to 1.0)
-    pub fn env_room(layer: u32, color_ceiling: u32, color_floor: u32, color_walls: u32, panel_size: f32, panel_gap: u32,
-                    light_dir_x: f32, light_dir_y: f32, light_dir_z: f32, light_intensity: u32,
-                    corner_darken: u32, room_scale: f32, viewer_x: i32, viewer_y: i32, viewer_z: i32);
+    pub fn env_room(
+        layer: u32,
+        color_ceiling: u32,
+        color_floor: u32,
+        color_walls: u32,
+        panel_size: f32,
+        panel_gap: u32,
+        light_dir_x: f32,
+        light_dir_y: f32,
+        light_dir_z: f32,
+        light_intensity: u32,
+        corner_darken: u32,
+        room_scale: f32,
+        viewer_x: i32,
+        viewer_y: i32,
+        viewer_z: i32,
+    );
 
     /// Configure curtains environment (Mode 6: pillars, trees, vertical structures).
     ///
@@ -969,9 +1103,21 @@ extern "C" {
     /// * `glow` — Neon/magical glow intensity (0-255)
     /// * `parallax_rate` — Layer separation (0-255)
     /// * `phase` — Horizontal scroll phase (0-65535, wraps for seamless)
-    pub fn env_curtains(layer: u32, layer_count: u32, density: u32, height_min: u32, height_max: u32,
-                        width: u32, spacing: u32, waviness: u32, color_near: u32, color_far: u32,
-                        glow: u32, parallax_rate: u32, phase: u32);
+    pub fn env_curtains(
+        layer: u32,
+        layer_count: u32,
+        density: u32,
+        height_min: u32,
+        height_max: u32,
+        width: u32,
+        spacing: u32,
+        waviness: u32,
+        color_near: u32,
+        color_far: u32,
+        glow: u32,
+        parallax_rate: u32,
+        phase: u32,
+    );
 
     /// Configure rings environment (Mode 7: portals, tunnels, vortex).
     ///
@@ -988,9 +1134,20 @@ extern "C" {
     /// * `spiral_twist` — Spiral rotation in degrees (0=concentric)
     /// * `axis_x`, `axis_y`, `axis_z` — Ring axis direction (normalized)
     /// * `phase` — Rotation phase (0-65535 = 0°-360°, wraps for seamless)
-    pub fn env_rings(layer: u32, ring_count: u32, thickness: u32, color_a: u32, color_b: u32,
-                     center_color: u32, center_falloff: u32, spiral_twist: f32,
-                     axis_x: f32, axis_y: f32, axis_z: f32, phase: u32);
+    pub fn env_rings(
+        layer: u32,
+        ring_count: u32,
+        thickness: u32,
+        color_a: u32,
+        color_b: u32,
+        center_color: u32,
+        center_falloff: u32,
+        spiral_twist: f32,
+        axis_x: f32,
+        axis_y: f32,
+        axis_z: f32,
+        phase: u32,
+    );
 
     /// Set the blend mode for combining base and overlay layers.
     ///
@@ -1585,15 +1742,45 @@ extern "C" {
     // --- Range-Constrained Registration (Slider UI) ---
 
     /// Register an i32 with min/max range constraints.
-    pub fn debug_register_i32_range(name_ptr: *const u8, name_len: u32, ptr: *const u8, min: i32, max: i32);
+    pub fn debug_register_i32_range(
+        name_ptr: *const u8,
+        name_len: u32,
+        ptr: *const u8,
+        min: i32,
+        max: i32,
+    );
     /// Register an f32 with min/max range constraints.
-    pub fn debug_register_f32_range(name_ptr: *const u8, name_len: u32, ptr: *const u8, min: f32, max: f32);
+    pub fn debug_register_f32_range(
+        name_ptr: *const u8,
+        name_len: u32,
+        ptr: *const u8,
+        min: f32,
+        max: f32,
+    );
     /// Register a u8 with min/max range constraints.
-    pub fn debug_register_u8_range(name_ptr: *const u8, name_len: u32, ptr: *const u8, min: u32, max: u32);
+    pub fn debug_register_u8_range(
+        name_ptr: *const u8,
+        name_len: u32,
+        ptr: *const u8,
+        min: u32,
+        max: u32,
+    );
     /// Register a u16 with min/max range constraints.
-    pub fn debug_register_u16_range(name_ptr: *const u8, name_len: u32, ptr: *const u8, min: u32, max: u32);
+    pub fn debug_register_u16_range(
+        name_ptr: *const u8,
+        name_len: u32,
+        ptr: *const u8,
+        min: u32,
+        max: u32,
+    );
     /// Register an i16 with min/max range constraints.
-    pub fn debug_register_i16_range(name_ptr: *const u8, name_len: u32, ptr: *const u8, min: i32, max: i32);
+    pub fn debug_register_i16_range(
+        name_ptr: *const u8,
+        name_len: u32,
+        ptr: *const u8,
+        min: i32,
+        max: i32,
+    );
 
     // --- Compound Type Registration (Editable) ---
 
@@ -1662,7 +1849,12 @@ extern "C" {
     /// - `name_len`: Length of button label
     /// - `func_name_ptr`: Pointer to WASM function name string
     /// - `func_name_len`: Length of function name
-    pub fn debug_register_action(name_ptr: *const u8, name_len: u32, func_name_ptr: *const u8, func_name_len: u32);
+    pub fn debug_register_action(
+        name_ptr: *const u8,
+        name_len: u32,
+        func_name_ptr: *const u8,
+        func_name_len: u32,
+    );
 
     /// Begin building an action with parameters.
     ///
@@ -1673,7 +1865,12 @@ extern "C" {
     /// - `name_len`: Length of button label
     /// - `func_name_ptr`: Pointer to WASM function name string
     /// - `func_name_len`: Length of function name
-    pub fn debug_action_begin(name_ptr: *const u8, name_len: u32, func_name_ptr: *const u8, func_name_len: u32);
+    pub fn debug_action_begin(
+        name_ptr: *const u8,
+        name_len: u32,
+        func_name_ptr: *const u8,
+        func_name_len: u32,
+    );
 
     /// Add an i32 parameter to the pending action.
     ///
@@ -1936,29 +2133,45 @@ pub fn rom_data_len_str(id: &str) -> u32 {
 /// ```
 #[inline]
 pub unsafe fn debug_f32(name: &str, ptr: &f32) {
-    debug_register_f32(name.as_ptr(), name.len() as u32, ptr as *const f32 as *const u8);
+    debug_register_f32(
+        name.as_ptr(),
+        name.len() as u32,
+        ptr as *const f32 as *const u8,
+    );
 }
 
 /// Helper to register an i32 debug value by string literal.
 #[inline]
 pub unsafe fn debug_i32(name: &str, ptr: &i32) {
-    debug_register_i32(name.as_ptr(), name.len() as u32, ptr as *const i32 as *const u8);
+    debug_register_i32(
+        name.as_ptr(),
+        name.len() as u32,
+        ptr as *const i32 as *const u8,
+    );
 }
 
 /// Helper to register a bool debug value by string literal.
 #[inline]
 pub unsafe fn debug_bool(name: &str, ptr: &bool) {
-    debug_register_bool(name.as_ptr(), name.len() as u32, ptr as *const bool as *const u8);
+    debug_register_bool(
+        name.as_ptr(),
+        name.len() as u32,
+        ptr as *const bool as *const u8,
+    );
 }
 
 /// Helper to begin a debug group by string literal.
 #[inline]
 pub fn debug_group(name: &str) {
-    unsafe { debug_group_begin(name.as_ptr(), name.len() as u32); }
+    unsafe {
+        debug_group_begin(name.as_ptr(), name.len() as u32);
+    }
 }
 
 /// Helper to end the current debug group.
 #[inline]
 pub fn debug_group_close() {
-    unsafe { debug_group_end(); }
+    unsafe {
+        debug_group_end();
+    }
 }

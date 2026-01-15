@@ -204,7 +204,22 @@ pub extern "C" fn render() {
 
         // Configure and draw environment
         // Use gradient with 2-color sky (zenith -> horizon for sky, horizon -> darker for ground)
-        env_gradient(0, ZENITH_COLOR, HORIZON_COLOR, HORIZON_COLOR, 0x2A2A2AFF, 0.0, 0.0);
+        env_gradient(
+            0,
+            ZENITH_COLOR,
+            HORIZON_COLOR,
+            HORIZON_COLOR,
+            0x2A2A2AFF,
+            0.0, // sun azimuth
+            0.0, // horizon shift
+            0.0, // sun elevation
+            0,   // sun disk
+            0,   // sun halo
+            0,   // sun intensity (disabled)
+            0,   // horizon haze
+            0,   // sun warmth
+            0,   // cloudiness
+        );
         light_set(0, SUN_DIR_X, SUN_DIR_Y, SUN_DIR_Z);
         light_color(0, SUN_COLOR);
         light_intensity(0, 1.0);

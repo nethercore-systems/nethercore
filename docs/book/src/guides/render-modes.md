@@ -507,8 +507,15 @@ fn init() {
         0xB2D8F2FF,  // sky horizon
         0xB2D8F2FF,  // ground horizon
         0x3366B2FF,  // nadir (bottom)
-        0.0,         // rotation
-        0.0          // shift
+        0.0,         // sun azimuth
+        0.0,         // horizon shift
+        0.0,         // sun elevation
+        0,           // sun disk
+        0,           // sun halo
+        0,           // sun intensity (disabled)
+        0,           // horizon haze
+        0,           // sun warmth
+        0            // cloudiness
     );
 }
 
@@ -544,8 +551,15 @@ NCZX_EXPORT void init(void) {
         0xB2D8F2FF,  // sky horizon
         0xB2D8F2FF,  // ground horizon
         0x3366B2FF,  // nadir (bottom)
-        0.0f,        // rotation
-        0.0f         // shift
+        0.0f,        // sun azimuth
+        0.0f,        // horizon shift
+        0.0f,        // sun elevation
+        0u,          // sun disk
+        0u,          // sun halo
+        0u,          // sun intensity (disabled)
+        0u,          // horizon haze
+        0u,          // sun warmth
+        0u           // cloudiness
     );
 }
 
@@ -581,8 +595,15 @@ export fn init() void {
         0xB2D8F2FF,  // sky horizon
         0xB2D8F2FF,  // ground horizon
         0x3366B2FF,  // nadir (bottom)
-        0.0,         // rotation
-        0.0          // shift
+        0.0,         // sun azimuth
+        0.0,         // horizon shift
+        0.0,         // sun elevation
+        0,           // sun disk
+        0,           // sun halo
+        0,           // sun intensity (disabled)
+        0,           // horizon haze
+        0,           // sun warmth
+        0            // cloudiness
     );
 }
 

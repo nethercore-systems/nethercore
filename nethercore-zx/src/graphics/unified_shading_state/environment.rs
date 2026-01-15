@@ -5,10 +5,10 @@ use super::quantization::{pack_f16, pack_f16x2};
 use zx_common::{pack_octahedral_u16, pack_octahedral_u32};
 
 // ============================================================================
-// Environment System (Multi-Environment v3)
+// Environment System (Multi-Environment v4)
 // ============================================================================
 
-/// Environment configuration (48 bytes, POD, hashable)
+/// Environment configuration (64 bytes, POD, hashable)
 /// Supports 8 procedural modes with layering and blend modes.
 ///
 /// # Header Layout (bits)
@@ -18,21 +18,27 @@ use zx_common::{pack_octahedral_u16, pack_octahedral_u32};
 /// - 8-31:  reserved
 ///
 /// # Data Layout
-/// - data[0..5]:  Base mode parameters (20 bytes)
-/// - data[5..10]: Overlay mode parameters (20 bytes)
-/// - data[10]:    Shared/overflow (4 bytes)
+/// - data[0..7]:   Base layer parameters (28 bytes)
+/// - data[7..14]:  Overlay layer parameters (28 bytes)
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Pod, Zeroable)]
 pub struct PackedEnvironmentState {
     /// Header: base_mode(3) + overlay_mode(3) + blend_mode(2) + reserved(24)
     pub header: u32,
-    /// Mode parameters: base[0..5], overlay[5..10], shared[10]
-    pub data: [u32; 11],
+    /// Padding (reserved for future flags; keeps the struct 16-byte aligned)
+    pub _pad: u32,
+    /// Mode parameters: base[0..7], overlay[7..14]
+    pub data: [u32; 14],
 }
 
 // Compile-time size verification
-const _: () = assert!(core::mem::size_of::<PackedEnvironmentState>() == 48);
+const _: () = assert!(core::mem::size_of::<PackedEnvironmentState>() == 64);
 const _: () = assert!(core::mem::align_of::<PackedEnvironmentState>() >= 4);
+
+/// Number of packed `u32` words per layer payload.
+pub const ENV_LAYER_WORDS: usize = 7;
+/// Packed `u32` word offset for the overlay layer payload.
+pub const ENV_OVERLAY_OFFSET: usize = ENV_LAYER_WORDS;
 
 /// Environment mode constants
 pub mod env_mode {
@@ -214,7 +220,7 @@ impl PackedEnvironmentState {
         self.header = (self.header & !(0x3 << 6)) | ((mode & 0x3) << 6);
     }
 
-    /// Pack gradient parameters into data[offset..offset+5]
+    /// Pack gradient parameters into data[offset..offset+7]
     /// Mode 0: Gradient - 4-color sky/ground gradient
     pub fn pack_gradient(&mut self, config: GradientConfig) {
         let GradientConfig {
@@ -231,6 +237,8 @@ impl PackedEnvironmentState {
         self.data[offset + 2] = ground_horizon;
         self.data[offset + 3] = nadir;
         self.data[offset + 4] = pack_f16x2(rotation, shift);
+        self.data[offset + 5] = 0;
+        self.data[offset + 6] = 0;
     }
 
     /// Create a default gradient environment (blue sky)
@@ -252,7 +260,7 @@ impl PackedEnvironmentState {
         env
     }
 
-    /// Pack scatter parameters into data[offset..offset+5]
+    /// Pack scatter parameters into data[offset..offset+7]
     /// Mode 1: Scatter - Cellular noise particle field with parallax layers
     ///
     /// # Data Layout
@@ -294,9 +302,11 @@ impl PackedEnvironmentState {
 
         // data[4]: reserved
         self.data[offset + 4] = 0;
+        self.data[offset + 5] = 0;
+        self.data[offset + 6] = 0;
     }
 
-    /// Pack lines parameters into data[offset..offset+5]
+    /// Pack lines parameters into data[offset..offset+7]
     /// Mode 2: Lines - Infinite grid lines projected onto a plane
     ///
     /// # Data Layout
@@ -335,9 +345,11 @@ impl PackedEnvironmentState {
 
         // data[4]: phase(u16) + reserved(16)
         self.data[offset + 4] = phase & 0xFFFF;
+        self.data[offset + 5] = 0;
+        self.data[offset + 6] = 0;
     }
 
-    /// Pack silhouette parameters into data[offset..offset+5]
+    /// Pack silhouette parameters into data[offset..offset+7]
     /// Mode 3: Silhouette - Layered terrain silhouettes with parallax
     ///
     /// # Data Layout
@@ -345,7 +357,8 @@ impl PackedEnvironmentState {
     /// - data[1]: color_near (RGBA8)
     /// - data[2]: color_far (RGBA8)
     /// - data[3]: sky_zenith (RGBA8)
-    /// - data[4]: sky_horizon (RGBA8) - seed stored in shared data[10]
+    /// - data[4]: sky_horizon (RGBA8)
+    /// - data[5]: seed (u32)
     pub fn pack_silhouette(&mut self, config: SilhouetteConfig) {
         let SilhouetteConfig {
             offset,
@@ -375,15 +388,12 @@ impl PackedEnvironmentState {
         // data[4]: sky_horizon (RGBA8)
         self.data[offset + 4] = sky_horizon;
 
-        // Store seed in shared data[10]
-        if offset == 0 {
-            self.data[10] = (self.data[10] & 0x0000FFFF) | ((seed & 0xFFFF) << 16);
-        } else {
-            self.data[10] = (self.data[10] & 0xFFFF0000) | (seed & 0xFFFF);
-        }
+        // data[5]: seed (full u32; previously limited to a shared 16-bit lane)
+        self.data[offset + 5] = seed;
+        self.data[offset + 6] = 0;
     }
 
-    /// Pack rectangles parameters into data[offset..offset+5]
+    /// Pack rectangles parameters into data[offset..offset+7]
     /// Mode 4: Rectangles - Rectangular light sources (windows, screens, panels)
     ///
     /// # Data Layout
@@ -425,9 +435,11 @@ impl PackedEnvironmentState {
 
         // data[4]: reserved
         self.data[offset + 4] = 0;
+        self.data[offset + 5] = 0;
+        self.data[offset + 6] = 0;
     }
 
-    /// Pack room parameters into data[offset..offset+5]
+    /// Pack room parameters into data[offset..offset+7]
     /// Mode 5: Room - Interior of a 3D box with directional lighting
     ///
     /// # Data Layout (viewer packed into color alpha bytes - rooms are opaque)
@@ -438,7 +450,7 @@ impl PackedEnvironmentState {
     /// - data[3]: panel_size(f16) + panel_gap(8) + corner_darken(8)
     /// - data[4]: light_dir_oct(16) + light_intensity(8) + room_scale(8)
     ///
-    /// Note: Does NOT use shared data[10] - can safely layer with other modes
+    /// Note: Does NOT use per-layer extension words - can safely layer with other modes
     pub fn pack_room(&mut self, config: RoomConfig) {
         let RoomConfig {
             offset,
@@ -479,9 +491,11 @@ impl PackedEnvironmentState {
         let room_scale_packed = ((room_scale.clamp(0.1, 25.5) * 10.0) as u32) & 0xFF;
         self.data[offset + 4] =
             (light_oct & 0xFFFF) | ((light_intensity & 0xFF) << 16) | (room_scale_packed << 24);
+        self.data[offset + 5] = 0;
+        self.data[offset + 6] = 0;
     }
 
-    /// Pack curtains parameters into data[offset..offset+5]
+    /// Pack curtains parameters into data[offset..offset+7]
     /// Mode 6: Curtains - Vertical structures (pillars, trees) around viewer
     ///
     /// # Data Layout
@@ -526,9 +540,11 @@ impl PackedEnvironmentState {
 
         // data[4]: phase(u16) + reserved(16)
         self.data[offset + 4] = phase & 0xFFFF;
+        self.data[offset + 5] = 0;
+        self.data[offset + 6] = 0;
     }
 
-    /// Pack rings parameters into data[offset..offset+5]
+    /// Pack rings parameters into data[offset..offset+7]
     /// Mode 7: Rings - Concentric rings around focal direction (tunnel/portal/vortex)
     ///
     /// # Data Layout
@@ -538,8 +554,7 @@ impl PackedEnvironmentState {
     /// - data[2]: color_b (RGBA8)
     /// - data[3]: center_color (RGBA8)
     /// - data[4]: spiral_twist(f16) + axis_oct(16)
-    ///
-    /// Note: phase is stored in shared data[10] upper 16 bits
+    /// - data[5]: phase (u16 stored in low 16 bits)
     pub fn pack_rings(&mut self, config: RingsConfig) {
         let RingsConfig {
             offset,
@@ -572,15 +587,9 @@ impl PackedEnvironmentState {
         let twist_bits = pack_f16(spiral_twist) as u32;
         self.data[offset + 4] = twist_bits | (axis_oct << 16);
 
-        // Store phase in shared data[10] - upper 16 bits for rings
-        // Note: Only works when rings is base mode (offset=0) or we use a different storage
-        // For now, store in data[10] which is shared
-        if offset == 0 {
-            self.data[10] = (self.data[10] & 0x0000FFFF) | ((phase & 0xFFFF) << 16);
-        } else {
-            // For overlay at offset 5, store phase in data[10] lower 16 bits
-            self.data[10] = (self.data[10] & 0xFFFF0000) | (phase & 0xFFFF);
-        }
+        // data[5]: phase (previously stored in a shared 16-bit lane)
+        self.data[offset + 5] = phase & 0xFFFF;
+        self.data[offset + 6] = 0;
     }
 }
 

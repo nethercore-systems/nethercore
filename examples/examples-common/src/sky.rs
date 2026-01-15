@@ -77,7 +77,22 @@ impl DebugSky {
     pub fn apply_and_draw(&self) {
         unsafe {
             // Use env_gradient for 2-color sky (zenith -> horizon for sky, horizon -> same for ground)
-            env_gradient(0, self.zenith, self.horizon, self.horizon, self.zenith, 0.0, 0.0);
+            env_gradient(
+                0,
+                self.zenith,
+                self.horizon,
+                self.horizon,
+                self.zenith,
+                0.0, // sun azimuth
+                0.0, // horizon shift
+                0.0, // sun elevation
+                0,   // sun disk
+                0,   // sun halo
+                0,   // sun intensity (disabled)
+                0,   // horizon haze
+                0,   // sun warmth
+                0,   // cloudiness
+            );
             // Use new lighting API
             light_set(0, self.sun_dir_x, self.sun_dir_y, self.sun_dir_z);
             light_color(0, self.sun_color);
@@ -90,7 +105,22 @@ impl DebugSky {
     pub fn apply(&self) {
         unsafe {
             // Use env_gradient for 2-color sky (zenith -> horizon for sky, horizon -> same for ground)
-            env_gradient(0, self.zenith, self.horizon, self.horizon, self.zenith, 0.0, 0.0);
+            env_gradient(
+                0,
+                self.zenith,
+                self.horizon,
+                self.horizon,
+                self.zenith,
+                0.0, // sun azimuth
+                0.0, // horizon shift
+                0.0, // sun elevation
+                0,   // sun disk
+                0,   // sun halo
+                0,   // sun intensity (disabled)
+                0,   // horizon haze
+                0,   // sun warmth
+                0,   // cloudiness
+            );
             // Use new lighting API
             light_set(0, self.sun_dir_x, self.sun_dir_y, self.sun_dir_z);
             light_color(0, self.sun_color);

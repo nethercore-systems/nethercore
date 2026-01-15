@@ -63,7 +63,7 @@ pub use unified_shading_state::{
     FLAG_USE_UNIFORM_ROUGHNESS,
     FLAG_USE_UNIFORM_SPECULAR,
     LightType,
-    // Multi-Environment v3
+    // Multi-Environment v4
     PackedEnvironmentState,
     PackedLight,
     PackedUnifiedShadingState,

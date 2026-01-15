@@ -652,13 +652,20 @@ pub extern "C" fn matcap_set(slot: u32, texture: u32) void;
 /// * `sky_horizon` — Sky color at horizon level (0xRRGGBBAA)
 /// * `ground_horizon` — Ground color at horizon level (0xRRGGBBAA)
 /// * `nadir` — Color directly below (0xRRGGBBAA)
-/// * `rotation` — Rotation around Y axis in radians
+/// * `rotation` — Sun azimuth around Y axis in radians (0 = +Z, π/2 = +X)
 /// * `shift` — Horizon vertical shift (-1.0 to 1.0, 0.0 = equator)
+/// * `sun_elevation` — Sun elevation in radians (0 = horizon, π/2 = zenith)
+/// * `sun_disk` — Sun disc size (0-255)
+/// * `sun_halo` — Sun halo size (0-255)
+/// * `sun_intensity` — Sun intensity (0 disables sun)
+/// * `horizon_haze` — Haze near the horizon (0-255)
+/// * `sun_warmth` — Sun color warmth (0 = neutral/white, 255 = warm/orange)
+/// * `cloudiness` — Stylized cloud bands (0 disables, 255 = strongest)
 /// 
 /// The gradient interpolates: zenith → sky_horizon (Y > 0), sky_horizon → ground_horizon (at Y = 0 + shift), ground_horizon → nadir (Y < 0).
 /// 
 /// You can configure the same mode on both layers with different parameters for creative effects.
-pub extern "C" fn env_gradient(layer: u32, zenith: u32, sky_horizon: u32, ground_horizon: u32, nadir: u32, rotation: f32, shift: f32) void;
+pub extern "C" fn env_gradient(layer: u32, zenith: u32, sky_horizon: u32, ground_horizon: u32, nadir: u32, rotation: f32, shift: f32, sun_elevation: f32, sun_disk: u32, sun_halo: u32, sun_intensity: u32, horizon_haze: u32, sun_warmth: u32, cloudiness: u32) void;
 
 /// Configure scatter environment (Mode 1: stars, rain, warp).
 /// 

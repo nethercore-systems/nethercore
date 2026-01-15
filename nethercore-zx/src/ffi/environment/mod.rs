@@ -1,4 +1,4 @@
-//! Environment system FFI functions (Multi-Environment v3)
+//! Environment system FFI functions (Multi-Environment v4)
 //!
 //! Functions for setting procedural environment rendering parameters.
 //! Environments support 8 modes with layering (base + overlay) and blend modes.

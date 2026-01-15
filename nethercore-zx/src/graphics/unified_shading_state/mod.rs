@@ -24,7 +24,7 @@ mod tests;
 pub use environment::{
     blend_mode, env_mode, CurtainsConfig, EnvironmentIndex, GradientConfig, LinesConfig,
     PackedEnvironmentState, RectanglesConfig, RingsConfig, RoomConfig, ScatterConfig,
-    SilhouetteConfig,
+    SilhouetteConfig, ENV_LAYER_WORDS, ENV_OVERLAY_OFFSET,
 };
 
 pub use light::{LightType, PackedLight};

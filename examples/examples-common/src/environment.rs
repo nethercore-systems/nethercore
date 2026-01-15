@@ -1,7 +1,7 @@
 //! Debug Environment - Environment controls with debug integration
 //!
 //! Provides procedural environment configuration with debug inspector integration.
-//! Part of Multi-Environment v3 system.
+//! Part of Multi-Environment v4 system.
 
 use crate::ffi::*;
 
@@ -387,7 +387,7 @@ impl RingsParams {
     }
 }
 
-/// Environment state for debug control (Multi-Environment v3)
+/// Environment state for debug control (Multi-Environment v4)
 #[derive(Clone, Copy)]
 pub struct DebugEnvironment {
     /// Base layer mode (0-7)
@@ -593,6 +593,13 @@ impl DebugEnvironment {
                         self.gradient.nadir,
                         self.gradient.rotation,
                         self.gradient.shift,
+                        0.0, // sun elevation
+                        0,   // sun disk
+                        0,   // sun halo
+                        0,   // sun intensity (disabled)
+                        0,   // horizon haze
+                        0,   // sun warmth
+                        0,   // cloudiness
                     );
                 }
                 1 => {
@@ -653,6 +660,13 @@ impl DebugEnvironment {
                         self.gradient.nadir,
                         self.gradient.rotation,
                         self.gradient.shift,
+                        0.0, // sun elevation
+                        0,   // sun disk
+                        0,   // sun halo
+                        0,   // sun intensity (disabled)
+                        0,   // horizon haze
+                        0,   // sun warmth
+                        0,   // cloudiness
                     );
                 }
             }

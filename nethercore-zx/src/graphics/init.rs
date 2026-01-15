@@ -199,8 +199,8 @@ impl ZXGraphics {
             mapped_at_creation: false,
         });
 
-        // Create environment state buffer (Multi-Environment v3)
-        // Per-frame array of PackedEnvironmentState (48 bytes each)
+        // Create environment state buffer (Multi-Environment v4)
+        // Per-frame array of PackedEnvironmentState (64 bytes each)
         let environment_states_capacity = 256;
         let environment_states_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Environment States"),

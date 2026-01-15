@@ -1,6 +1,6 @@
 // Sky rendering shader template
 // Prepended with common.wgsl by build.rs
-// Renders a fullscreen procedural environment using Multi-Environment v3
+// Renders a fullscreen procedural environment using Multi-Environment v4
 
 // ============================================================================
 // Vertex and Fragment Shaders
@@ -44,7 +44,7 @@ fn vs(@builtin(vertex_index) vertex_index: u32, @builtin(instance_index) instanc
 
 @fragment
 fn fs(in: SkyVertexOut) -> @location(0) vec4<f32> {
-    // Get environment index from shading state (Multi-Environment v3)
+    // Get environment index from shading state (Multi-Environment v4)
     let shading = shading_states[in.shading_state_index];
     let env_index = shading.environment_index;
 
@@ -70,7 +70,7 @@ fn fs(in: SkyVertexOut) -> @location(0) vec4<f32> {
     // Transform to world space
     let view_ray = cam_right * view_ray_cam.x + cam_up * view_ray_cam.y + cam_back * view_ray_cam.z;
 
-    // Sample environment (Multi-Environment v3)
+    // Sample environment (Multi-Environment v4)
     let env_color = sample_environment(env_index, normalize(view_ray));
 
     return env_color;

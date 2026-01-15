@@ -69,7 +69,7 @@ pub(crate) fn matcap_set(mut caller: Caller<'_, ZXGameContext>, slot: u32, textu
 /// ```rust,ignore
 /// fn render() {
 ///     // Configure environment (e.g., gradient on base layer)
-///     env_gradient(0, 0x191970FF, 0x87CEEBFF, 0x228B22FF, 0x2F4F4FFF, 0.0, 0.0);
+///     env_gradient(0, 0x191970FF, 0x87CEEBFF, 0x228B22FF, 0x2F4F4FFF, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0);
 ///
 ///     // Draw environment first (before geometry)
 ///     draw_env();
