@@ -10,7 +10,7 @@ use super::super::config::{NethercoreConfig, SessionConfig};
 use super::super::events::PlayerNetworkStats;
 use super::super::player::{MAX_PLAYERS, PlayerSessionConfig};
 use super::super::state::RollbackStateManager;
-use super::session::RollbackSession;
+use super::rollback_session::RollbackSession;
 use super::types::{SessionInner, SessionType};
 
 impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>

@@ -1,6 +1,6 @@
 //! Tests for InputManager
 
-use super::super::{InputConfig, KeyboardMapping};
+use super::super::{InputConfig, KeyboardMapping, KeyboardsConfig};
 use super::InputManager;
 use crate::app::input::keycode_serde::{keycode_to_string, string_to_keycode};
 use winit::keyboard::KeyCode;
@@ -106,15 +106,17 @@ fn test_input_config_roundtrip() {
     // Serialize to TOML
     let toml_str = toml::to_string(&config).expect("serialize");
 
-    // Should contain keyboard section with human-readable keys
-    assert!(toml_str.contains("[keyboard]"));
+    // Should contain keyboards section
+    assert!(toml_str.contains("keyboards"));
 
     // Deserialize back
     let config2: InputConfig = toml::from_str(&toml_str).expect("deserialize");
 
-    // Verify keyboard mapping preserved
-    assert_eq!(config.keyboard.dpad_up, config2.keyboard.dpad_up);
-    assert_eq!(config.keyboard.button_a, config2.keyboard.button_a);
+    // Verify keyboard mapping preserved for player 0
+    let kb0 = config.keyboards.get(0).unwrap();
+    let kb0_2 = config2.keyboards.get(0).unwrap();
+    assert_eq!(kb0.dpad_up, kb0_2.dpad_up);
+    assert_eq!(kb0.button_a, kb0_2.button_a);
     assert_eq!(config.stick_deadzone, config2.stick_deadzone);
     assert_eq!(config.trigger_deadzone, config2.trigger_deadzone);
 }
@@ -334,20 +336,20 @@ fn test_keyboard_input_dpad() {
     let mut manager = InputManager::new(InputConfig::default());
 
     // Initially all buttons are not pressed
-    let input = manager.read_keyboard_input();
+    let input = manager.read_keyboard_input_for_player(0).unwrap();
     assert!(!input.dpad_up);
     assert!(!input.dpad_down);
 
     // Press up arrow
     manager.update_keyboard(KeyCode::ArrowUp, true);
-    let input = manager.read_keyboard_input();
+    let input = manager.read_keyboard_input_for_player(0).unwrap();
     assert!(input.dpad_up);
     assert!(!input.dpad_down);
 
     // Release up, press down
     manager.update_keyboard(KeyCode::ArrowUp, false);
     manager.update_keyboard(KeyCode::ArrowDown, true);
-    let input = manager.read_keyboard_input();
+    let input = manager.read_keyboard_input_for_player(0).unwrap();
     assert!(!input.dpad_up);
     assert!(input.dpad_down);
 }
@@ -362,7 +364,7 @@ fn test_keyboard_input_face_buttons() {
     manager.update_keyboard(KeyCode::KeyC, true); // X
     manager.update_keyboard(KeyCode::KeyV, true); // Y
 
-    let input = manager.read_keyboard_input();
+    let input = manager.read_keyboard_input_for_player(0).unwrap();
     assert!(input.button_a);
     assert!(input.button_b);
     assert!(input.button_x);
@@ -376,7 +378,7 @@ fn test_keyboard_input_start_select() {
     manager.update_keyboard(KeyCode::Enter, true);
     manager.update_keyboard(KeyCode::ShiftLeft, true);
 
-    let input = manager.read_keyboard_input();
+    let input = manager.read_keyboard_input_for_player(0).unwrap();
     assert!(input.start);
     assert!(input.select);
 }
@@ -386,7 +388,7 @@ fn test_keyboard_analog_is_zero_when_no_keys_pressed() {
     let manager = InputManager::new(InputConfig::default());
 
     // When no axis keys are pressed, analog values should be zero
-    let input = manager.read_keyboard_input();
+    let input = manager.read_keyboard_input_for_player(0).unwrap();
     assert_eq!(input.left_stick_x, 0.0);
     assert_eq!(input.left_stick_y, 0.0);
     assert_eq!(input.right_stick_x, 0.0);
@@ -401,31 +403,31 @@ fn test_keyboard_axis_left_stick() {
 
     // Press W for up - should give positive Y
     manager.update_keyboard(KeyCode::KeyW, true);
-    let input = manager.read_keyboard_input();
+    let input = manager.read_keyboard_input_for_player(0).unwrap();
     assert_eq!(input.left_stick_y, 1.0);
     assert_eq!(input.left_stick_x, 0.0);
 
     // Release W, press S for down - should give negative Y
     manager.update_keyboard(KeyCode::KeyW, false);
     manager.update_keyboard(KeyCode::KeyS, true);
-    let input = manager.read_keyboard_input();
+    let input = manager.read_keyboard_input_for_player(0).unwrap();
     assert_eq!(input.left_stick_y, -1.0);
 
     // Press both W and S - should cancel out to 0
     manager.update_keyboard(KeyCode::KeyW, true);
-    let input = manager.read_keyboard_input();
+    let input = manager.read_keyboard_input_for_player(0).unwrap();
     assert_eq!(input.left_stick_y, 0.0);
 
     // Test X axis with A/D
     manager.update_keyboard(KeyCode::KeyW, false);
     manager.update_keyboard(KeyCode::KeyS, false);
     manager.update_keyboard(KeyCode::KeyA, true);
-    let input = manager.read_keyboard_input();
+    let input = manager.read_keyboard_input_for_player(0).unwrap();
     assert_eq!(input.left_stick_x, -1.0);
 
     manager.update_keyboard(KeyCode::KeyA, false);
     manager.update_keyboard(KeyCode::KeyD, true);
-    let input = manager.read_keyboard_input();
+    let input = manager.read_keyboard_input_for_player(0).unwrap();
     assert_eq!(input.left_stick_x, 1.0);
 }
 
@@ -435,12 +437,12 @@ fn test_keyboard_axis_right_stick() {
 
     // Press I for up - should give positive Y
     manager.update_keyboard(KeyCode::KeyI, true);
-    let input = manager.read_keyboard_input();
+    let input = manager.read_keyboard_input_for_player(0).unwrap();
     assert_eq!(input.right_stick_y, 1.0);
 
     // Press J for left - should give negative X
     manager.update_keyboard(KeyCode::KeyJ, true);
-    let input = manager.read_keyboard_input();
+    let input = manager.read_keyboard_input_for_player(0).unwrap();
     assert_eq!(input.right_stick_x, -1.0);
     assert_eq!(input.right_stick_y, 1.0);
 }
@@ -451,19 +453,19 @@ fn test_keyboard_triggers() {
 
     // Press U for left trigger
     manager.update_keyboard(KeyCode::KeyU, true);
-    let input = manager.read_keyboard_input();
+    let input = manager.read_keyboard_input_for_player(0).unwrap();
     assert_eq!(input.left_trigger, 1.0);
     assert_eq!(input.right_trigger, 0.0);
 
     // Press O for right trigger
     manager.update_keyboard(KeyCode::KeyO, true);
-    let input = manager.read_keyboard_input();
+    let input = manager.read_keyboard_input_for_player(0).unwrap();
     assert_eq!(input.left_trigger, 1.0);
     assert_eq!(input.right_trigger, 1.0);
 
     // Release left trigger
     manager.update_keyboard(KeyCode::KeyU, false);
-    let input = manager.read_keyboard_input();
+    let input = manager.read_keyboard_input_for_player(0).unwrap();
     assert_eq!(input.left_trigger, 0.0);
     assert_eq!(input.right_trigger, 1.0);
 }
@@ -494,10 +496,17 @@ fn test_keyboard_custom_mapping() {
         right_stick_right: KeyCode::ArrowRight,
         left_trigger: KeyCode::KeyQ,
         right_trigger: KeyCode::KeyE,
+        left_stick_button: KeyCode::KeyR,
+        right_stick_button: KeyCode::KeyY,
     };
 
     let config = InputConfig {
-        keyboard: custom_mapping,
+        keyboards: KeyboardsConfig {
+            p1: Some(custom_mapping),
+            p2: None,
+            p3: None,
+            p4: None,
+        },
         ..Default::default()
     };
 
@@ -505,12 +514,12 @@ fn test_keyboard_custom_mapping() {
 
     // Default D-pad keys (arrow keys) should NOT work for D-pad
     manager.update_keyboard(KeyCode::ArrowUp, true);
-    let input = manager.read_keyboard_input();
+    let input = manager.read_keyboard_input_for_player(0).unwrap();
     assert!(!input.dpad_up);
 
     // Custom keys SHOULD work
     manager.update_keyboard(KeyCode::KeyW, true);
-    let input = manager.read_keyboard_input();
+    let input = manager.read_keyboard_input_for_player(0).unwrap();
     assert!(input.dpad_up);
 }
 
@@ -595,4 +604,241 @@ fn test_keycode_roundtrip_all_supported() {
             str_repr
         );
     }
+}
+
+// === Multi-Player Keyboard Tests ===
+
+#[test]
+fn test_keyboards_config_default() {
+    let config = KeyboardsConfig::default();
+
+    // P1 should be enabled by default
+    assert!(config.is_enabled(0));
+    assert!(config.get(0).is_some());
+
+    // P2-P4 should be disabled by default
+    assert!(!config.is_enabled(1));
+    assert!(!config.is_enabled(2));
+    assert!(!config.is_enabled(3));
+    assert!(config.get(1).is_none());
+    assert!(config.get(2).is_none());
+    assert!(config.get(3).is_none());
+}
+
+#[test]
+fn test_keyboards_config_get_set() {
+    let mut config = KeyboardsConfig::default();
+
+    // Enable P2 with custom mapping
+    let custom = KeyboardMapping {
+        dpad_up: KeyCode::KeyW,
+        ..Default::default()
+    };
+    config.set(1, Some(custom.clone()));
+
+    assert!(config.is_enabled(1));
+    assert_eq!(config.get(1).unwrap().dpad_up, KeyCode::KeyW);
+
+    // Disable P2
+    config.set(1, None);
+    assert!(!config.is_enabled(1));
+    assert!(config.get(1).is_none());
+}
+
+#[test]
+fn test_keyboards_config_iter_enabled() {
+    let mut config = KeyboardsConfig::default();
+
+    // Enable P3
+    config.set(2, Some(KeyboardMapping::default()));
+
+    let enabled: Vec<usize> = config.iter_enabled().map(|(i, _)| i).collect();
+
+    // Should have P1 (0) and P3 (2) enabled
+    assert_eq!(enabled.len(), 2);
+    assert!(enabled.contains(&0));
+    assert!(enabled.contains(&2));
+}
+
+#[test]
+fn test_keyboards_config_out_of_range() {
+    let config = KeyboardsConfig::default();
+
+    // Out of range should return None
+    assert!(config.get(4).is_none());
+    assert!(config.get(100).is_none());
+    assert!(!config.is_enabled(4));
+}
+
+#[test]
+fn test_multi_keyboard_player_isolation() {
+    // P1 uses arrow keys, P2 uses WASD for d-pad
+    let p1_mapping = KeyboardMapping::default(); // Arrow keys for d-pad
+    let p2_mapping = KeyboardMapping {
+        dpad_up: KeyCode::KeyW,
+        dpad_down: KeyCode::KeyS,
+        dpad_left: KeyCode::KeyA,
+        dpad_right: KeyCode::KeyD,
+        ..Default::default()
+    };
+
+    let config = InputConfig {
+        keyboards: KeyboardsConfig {
+            p1: Some(p1_mapping),
+            p2: Some(p2_mapping),
+            p3: None,
+            p4: None,
+        },
+        ..Default::default()
+    };
+
+    let mut manager = InputManager::new(config);
+
+    // Press P1's key (ArrowUp)
+    manager.update_keyboard(KeyCode::ArrowUp, true);
+
+    // P1 should see dpad_up pressed
+    let p1_input = manager.read_keyboard_input_for_player(0).unwrap();
+    assert!(p1_input.dpad_up);
+
+    // P2 should NOT see dpad_up pressed (they use W)
+    let p2_input = manager.read_keyboard_input_for_player(1).unwrap();
+    assert!(!p2_input.dpad_up);
+
+    // Press P2's key (W)
+    manager.update_keyboard(KeyCode::KeyW, true);
+
+    // Now P2 should see dpad_up pressed
+    let p2_input = manager.read_keyboard_input_for_player(1).unwrap();
+    assert!(p2_input.dpad_up);
+
+    // P1 still sees their dpad_up (from ArrowUp)
+    let p1_input = manager.read_keyboard_input_for_player(0).unwrap();
+    assert!(p1_input.dpad_up);
+}
+
+#[test]
+fn test_disabled_keyboard_returns_none() {
+    let config = InputConfig::default(); // Only P1 enabled
+
+    let manager = InputManager::new(config);
+
+    // P1 should return Some
+    assert!(manager.read_keyboard_input_for_player(0).is_some());
+
+    // P2-P4 should return None (disabled)
+    assert!(manager.read_keyboard_input_for_player(1).is_none());
+    assert!(manager.read_keyboard_input_for_player(2).is_none());
+    assert!(manager.read_keyboard_input_for_player(3).is_none());
+
+    // Out of range should also return None
+    assert!(manager.read_keyboard_input_for_player(4).is_none());
+}
+
+#[test]
+fn test_merge_inputs_buttons_or() {
+    use super::merge_inputs;
+    use crate::console::RawInput;
+
+    let a = RawInput {
+        button_a: true,
+        button_b: false,
+        dpad_up: true,
+        ..Default::default()
+    };
+
+    let b = RawInput {
+        button_a: false,
+        button_b: true,
+        dpad_up: false,
+        dpad_down: true,
+        ..Default::default()
+    };
+
+    let merged = merge_inputs(a, b);
+
+    // OR logic: true if either is true
+    assert!(merged.button_a); // a=true, b=false -> true
+    assert!(merged.button_b); // a=false, b=true -> true
+    assert!(merged.dpad_up); // a=true, b=false -> true
+    assert!(merged.dpad_down); // a=false, b=true -> true
+    assert!(!merged.button_x); // both false -> false
+}
+
+#[test]
+fn test_merge_inputs_analog_max_abs() {
+    use super::merge_inputs;
+    use crate::console::RawInput;
+
+    let a = RawInput {
+        left_stick_x: 0.5,
+        left_stick_y: -0.8,
+        left_trigger: 0.3,
+        ..Default::default()
+    };
+
+    let b = RawInput {
+        left_stick_x: -0.7,
+        left_stick_y: 0.3,
+        left_trigger: 0.9,
+        ..Default::default()
+    };
+
+    let merged = merge_inputs(a, b);
+
+    // Max absolute value wins
+    assert_eq!(merged.left_stick_x, -0.7); // |-0.7| > |0.5|
+    assert_eq!(merged.left_stick_y, -0.8); // |-0.8| > |0.3|
+    assert_eq!(merged.left_trigger, 0.9); // max of 0.3, 0.9
+}
+
+#[test]
+fn test_keyboards_config_toml_roundtrip() {
+    let mut config = KeyboardsConfig::default();
+
+    // Enable P2 with custom mapping
+    config.set(
+        1,
+        Some(KeyboardMapping {
+            dpad_up: KeyCode::KeyW,
+            ..Default::default()
+        }),
+    );
+
+    // Serialize
+    let toml_str = toml::to_string(&config).expect("serialize");
+
+    // Should contain p1 section (enabled by default)
+    assert!(toml_str.contains("[p1]"));
+
+    // Should contain p2 section (we enabled it)
+    assert!(toml_str.contains("[p2]"));
+
+    // Should NOT contain p3/p4 (disabled, skip_serializing_if)
+    assert!(!toml_str.contains("[p3]"));
+    assert!(!toml_str.contains("[p4]"));
+
+    // Deserialize back
+    let config2: KeyboardsConfig = toml::from_str(&toml_str).expect("deserialize");
+
+    assert!(config2.is_enabled(0));
+    assert!(config2.is_enabled(1));
+    assert!(!config2.is_enabled(2));
+    assert!(!config2.is_enabled(3));
+    assert_eq!(config2.get(1).unwrap().dpad_up, KeyCode::KeyW);
+}
+
+#[test]
+fn test_all_keys_returns_all_bindings() {
+    let mapping = KeyboardMapping::default();
+    let keys = mapping.all_keys();
+
+    // Should have 24 keys (all the bindings)
+    assert_eq!(keys.len(), 24);
+
+    // Should include some expected keys
+    assert!(keys.contains(&KeyCode::ArrowUp)); // dpad_up
+    assert!(keys.contains(&KeyCode::KeyZ)); // button_a
+    assert!(keys.contains(&KeyCode::KeyW)); // left_stick_up
+    assert!(keys.contains(&KeyCode::Enter)); // start
 }

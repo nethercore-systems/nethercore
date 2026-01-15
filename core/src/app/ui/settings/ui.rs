@@ -23,6 +23,8 @@ pub struct SharedSettingsUi {
     waiting_for_key: Option<WaitingFor>,
     /// Temporary config for editing (not saved until "Apply" is clicked)
     temp_config: Config,
+    /// Currently selected player for keyboard configuration (0-3)
+    selected_player: usize,
 }
 
 impl SharedSettingsUi {
@@ -33,6 +35,7 @@ impl SharedSettingsUi {
             selected_tab: SettingsTab::Video,
             waiting_for_key: None,
             temp_config: config.clone(),
+            selected_player: 0,
         }
     }
 
@@ -61,13 +64,17 @@ impl SharedSettingsUi {
                 return true; // Consumed the key
             }
 
-            // Set the new key binding
+            // Set the new key binding for the specified player
             match waiting {
-                WaitingFor::Button(button) => {
-                    button.set_key(&mut self.temp_config.input.keyboard, key);
+                WaitingFor::Button(player, button) => {
+                    if let Some(mapping) = self.temp_config.input.keyboards.get_mut(player) {
+                        button.set_key(mapping, key);
+                    }
                 }
-                WaitingFor::Axis(axis) => {
-                    axis.set_key(&mut self.temp_config.input.keyboard, key);
+                WaitingFor::Axis(player, axis) => {
+                    if let Some(mapping) = self.temp_config.input.keyboards.get_mut(player) {
+                        axis.set_key(mapping, key);
+                    }
                 }
             }
             self.waiting_for_key = None;
@@ -273,6 +280,70 @@ impl SharedSettingsUi {
         ui.heading("Keyboard Controls");
         ui.add_space(5.0);
 
+        // Player selector tabs
+        ui.horizontal(|ui| {
+            ui.label("Player:");
+            for i in 0..4 {
+                let label = format!("P{}", i + 1);
+                let is_enabled = self.temp_config.input.keyboards.is_enabled(i);
+                let style = if is_enabled {
+                    egui::RichText::new(&label).strong()
+                } else {
+                    egui::RichText::new(&label).weak()
+                };
+                if ui
+                    .selectable_label(self.selected_player == i, style)
+                    .clicked()
+                {
+                    self.selected_player = i;
+                    // Clear any pending rebind when switching players
+                    self.waiting_for_key = None;
+                }
+            }
+        });
+
+        ui.add_space(10.0);
+
+        // Enable/disable checkbox for selected player
+        let player = self.selected_player;
+        let is_enabled = self.temp_config.input.keyboards.is_enabled(player);
+
+        let mut enabled = is_enabled;
+        if ui
+            .checkbox(&mut enabled, "Enable keyboard for this player")
+            .changed()
+        {
+            if enabled && !is_enabled {
+                // Enable with default mapping
+                self.temp_config.input.keyboards.set(player, Some(KeyboardMapping::default()));
+            } else if !enabled && is_enabled {
+                // Disable
+                self.temp_config.input.keyboards.set(player, None);
+                // Clear any pending rebind
+                self.waiting_for_key = None;
+            }
+        }
+
+        ui.add_space(5.0);
+
+        // Show warning about key conflicts
+        let conflicts = self.find_key_conflicts();
+        if !conflicts.is_empty() {
+            ui.colored_label(
+                egui::Color32::YELLOW,
+                format!("Warning: {} key conflict(s) between players", conflicts.len()),
+            );
+            ui.add_space(5.0);
+        }
+
+        if !is_enabled {
+            ui.colored_label(
+                egui::Color32::GRAY,
+                "Keyboard input is disabled for this player.\nCheck the box above to enable.",
+            );
+            return;
+        }
+
         if self.waiting_for_key.is_some() {
             ui.colored_label(egui::Color32::YELLOW, "Press any key to rebind...");
             ui.label("Press ESC to cancel");
@@ -282,7 +353,14 @@ impl SharedSettingsUi {
             ui.add_space(10.0);
         }
 
-        let mapping = self.temp_config.input.keyboard.clone();
+        // Get the mapping for the selected player
+        let mapping = self
+            .temp_config
+            .input
+            .keyboards
+            .get(player)
+            .cloned()
+            .unwrap_or_default();
 
         // D-Pad
         ui.group(|ui| {
@@ -458,34 +536,55 @@ impl SharedSettingsUi {
         button: InputButton,
         mapping: &KeyboardMapping,
     ) {
+        let player = self.selected_player;
         ui.horizontal(|ui| {
             ui.label(format!("{:16}", button.name()));
 
             let key = button.get_key(mapping);
             let key_name = keycode_to_display_string(key);
 
-            let is_waiting = self.waiting_for_key == Some(WaitingFor::Button(button));
+            let is_waiting = self.waiting_for_key == Some(WaitingFor::Button(player, button));
             let button_text = if is_waiting { "..." } else { &key_name };
 
             if ui.button(button_text).clicked() {
-                self.waiting_for_key = Some(WaitingFor::Button(button));
+                self.waiting_for_key = Some(WaitingFor::Button(player, button));
             }
         });
     }
 
     fn render_axis_binding(&mut self, ui: &mut Ui, axis: InputAxis, mapping: &KeyboardMapping) {
+        let player = self.selected_player;
         ui.horizontal(|ui| {
             ui.label(format!("{:16}", axis.name()));
 
             let key = axis.get_key(mapping);
             let key_name = keycode_to_display_string(key);
 
-            let is_waiting = self.waiting_for_key == Some(WaitingFor::Axis(axis));
+            let is_waiting = self.waiting_for_key == Some(WaitingFor::Axis(player, axis));
             let button_text = if is_waiting { "..." } else { &key_name };
 
             if ui.button(button_text).clicked() {
-                self.waiting_for_key = Some(WaitingFor::Axis(axis));
+                self.waiting_for_key = Some(WaitingFor::Axis(player, axis));
             }
         });
+    }
+
+    /// Find key conflicts between players (same key bound to different players)
+    fn find_key_conflicts(&self) -> Vec<(usize, usize, KeyCode)> {
+        use hashbrown::HashMap;
+        let mut conflicts = Vec::new();
+        let mut key_to_player: HashMap<KeyCode, usize> = HashMap::new();
+
+        for (player, mapping) in self.temp_config.input.keyboards.iter_enabled() {
+            for key in mapping.all_keys() {
+                if let Some(&other_player) = key_to_player.get(&key) {
+                    conflicts.push((other_player, player, key));
+                } else {
+                    key_to_player.insert(key, player);
+                }
+            }
+        }
+
+        conflicts
     }
 }

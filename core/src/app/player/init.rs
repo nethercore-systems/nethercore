@@ -170,10 +170,10 @@ where
             }
             ConnectionMode::Session { session_file } => {
                 // Session mode - pre-negotiated session from library lobby (NCHS protocol)
-                let session = super::connection::create_session_from_file::<C, L>(
+                let session = super::connection::create_session_from_file::<C>(
                     session_file,
                     &self.config,
-                    &specs,
+                    specs,
                 )?;
 
                 runner

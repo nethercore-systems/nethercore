@@ -167,7 +167,7 @@ pub enum UiAction {
     /// Refresh the game library
     RefreshLibrary,
     /// Save settings and apply changes
-    SaveSettings(nethercore_core::app::config::Config),
+    SaveSettings(Box<nethercore_core::app::config::Config>),
     /// Set scale mode immediately (for preview)
     SetScaleMode(nethercore_core::app::config::ScaleMode),
     /// Import a ROM file from disk

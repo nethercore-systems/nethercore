@@ -137,6 +137,20 @@ pub struct KeyboardMapping {
         deserialize_with = "deserialize_keycode"
     )]
     pub right_trigger: KeyCode,
+
+    // Stick button keys (L3/R3)
+    #[serde(
+        default = "default_left_stick_button",
+        serialize_with = "serialize_keycode",
+        deserialize_with = "deserialize_keycode"
+    )]
+    pub left_stick_button: KeyCode,
+    #[serde(
+        default = "default_right_stick_button",
+        serialize_with = "serialize_keycode",
+        deserialize_with = "deserialize_keycode"
+    )]
+    pub right_stick_button: KeyCode,
 }
 
 // Default functions for serde (enables backwards compatibility with old configs)
@@ -169,6 +183,12 @@ fn default_left_trigger() -> KeyCode {
 }
 fn default_right_trigger() -> KeyCode {
     KeyCode::KeyO
+}
+fn default_left_stick_button() -> KeyCode {
+    KeyCode::KeyR
+}
+fn default_right_stick_button() -> KeyCode {
+    KeyCode::KeyY
 }
 
 impl Default for KeyboardMapping {
@@ -209,6 +229,42 @@ impl Default for KeyboardMapping {
             // U/O for triggers
             left_trigger: KeyCode::KeyU,
             right_trigger: KeyCode::KeyO,
+
+            // R/Y for stick buttons (L3/R3)
+            left_stick_button: KeyCode::KeyR,
+            right_stick_button: KeyCode::KeyY,
         }
+    }
+}
+
+impl KeyboardMapping {
+    /// Returns all keys bound in this mapping (for conflict detection)
+    pub fn all_keys(&self) -> Vec<KeyCode> {
+        vec![
+            self.dpad_up,
+            self.dpad_down,
+            self.dpad_left,
+            self.dpad_right,
+            self.button_a,
+            self.button_b,
+            self.button_x,
+            self.button_y,
+            self.left_bumper,
+            self.right_bumper,
+            self.start,
+            self.select,
+            self.left_stick_up,
+            self.left_stick_down,
+            self.left_stick_left,
+            self.left_stick_right,
+            self.right_stick_up,
+            self.right_stick_down,
+            self.right_stick_left,
+            self.right_stick_right,
+            self.left_trigger,
+            self.right_trigger,
+            self.left_stick_button,
+            self.right_stick_button,
+        ]
     }
 }

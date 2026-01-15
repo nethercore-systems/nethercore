@@ -45,14 +45,13 @@ pub(super) fn format_ggrs_addr(addr: &str, port: u16) -> String {
 }
 
 /// Performs NCHS handshake and creates P2P session from a session file
-pub(super) fn create_session_from_file<C, L>(
+pub(super) fn create_session_from_file<C>(
     session_file: &std::path::Path,
     _config: &StandaloneConfig,
     specs: &crate::console::ConsoleSpecs,
 ) -> Result<RollbackSession<C::Input, C::State, C::RollbackState>>
 where
     C: Console + Clone,
-    L: RomLoader<Console = C>,
 {
     const MAX_SESSION_FILE_BYTES: u64 = 1024 * 1024; // 1 MiB
     let session_file_len = std::fs::metadata(session_file)
@@ -271,81 +270,79 @@ where
 {
     /// Polls for peer connection in Host mode and creates session when connected
     pub(super) fn poll_for_peer_connection(&mut self) -> bool {
-        if let Some(ref mut waiting) = self.waiting_for_peer {
-            if let Some(peer_addr) = waiting.socket.poll_for_peer() {
-                tracing::info!("Peer connected from {}", peer_addr);
+        if let Some(ref mut waiting) = self.waiting_for_peer
+            && let Some(peer_addr) = waiting.socket.poll_for_peer()
+        {
+            tracing::info!("Peer connected from {}", peer_addr);
 
-                // Take the waiting state to get ownership of the socket
-                let waiting = self.waiting_for_peer.take().unwrap();
+            // Take the waiting state to get ownership of the socket
+            let waiting = self.waiting_for_peer.take().unwrap();
 
-                // Create the P2P session now that we have a peer
-                if let (Some(rom), Some(runner)) = (&self.loaded_rom, &mut self.runner) {
-                    let specs = C::specs();
-                    let session_config =
-                        SessionConfig::online(2).with_input_delay(self.config.input_delay);
+            // Create the P2P session now that we have a peer
+            if let (Some(rom), Some(runner)) = (&self.loaded_rom, &mut self.runner) {
+                let specs = C::specs();
+                let session_config =
+                    SessionConfig::online(2).with_input_delay(self.config.input_delay);
 
-                    // Host is player 0, peer is player 1
-                    let players = vec![
-                        (0, PlayerType::Local),
-                        (1, PlayerType::Remote(peer_addr.clone())),
-                    ];
-                    tracing::info!(
-                        "Host mode: creating P2P session (host=local p0, peer=remote p1)"
-                    );
+                // Host is player 0, peer is player 1
+                let players = vec![
+                    (0, PlayerType::Local),
+                    (1, PlayerType::Remote(peer_addr.clone())),
+                ];
+                tracing::info!("Host mode: creating P2P session (host=local p0, peer=remote p1)");
 
-                    match RollbackSession::new_p2p(
-                        session_config,
-                        waiting.socket,
-                        players,
-                        specs.ram_limit,
-                    ) {
-                        Ok(session) => {
-                            tracing::info!(
-                                "Host mode: session created, local_players = {:?}",
-                                session.local_players()
-                            );
-                            if let Err(e) = runner.load_game_with_session(
-                                rom.console.clone(),
-                                &rom.code,
-                                session,
-                            ) {
-                                tracing::error!("Failed to load game with P2P session: {}", e);
-                                self.error_state = Some(super::super::GameError {
-                                    summary: "Connection Error".to_string(),
-                                    details: format!("Failed to start game: {}", e),
-                                    stack_trace: None,
-                                    tick: None,
-                                    phase: GameErrorPhase::Update,
-                                    suggestions: vec![],
-                                });
-                            } else {
-                                tracing::info!("Host mode: game started with peer");
-                                // Set audio volume
-                                if let Some(session) = runner.session_mut()
-                                    && let Some(audio) = session.runtime.audio_mut()
-                                {
-                                    let config = super::super::config::load();
-                                    audio.set_master_volume(config.audio.master_volume);
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            tracing::error!("Failed to create P2P session: {}", e);
+                match RollbackSession::new_p2p(
+                    session_config,
+                    waiting.socket,
+                    players,
+                    specs.ram_limit,
+                ) {
+                    Ok(session) => {
+                        tracing::info!(
+                            "Host mode: session created, local_players = {:?}",
+                            session.local_players()
+                        );
+                        if let Err(e) = runner.load_game_with_session(
+                            rom.console.clone(),
+                            &rom.code,
+                            session,
+                        ) {
+                            tracing::error!("Failed to load game with P2P session: {}", e);
                             self.error_state = Some(super::super::GameError {
                                 summary: "Connection Error".to_string(),
-                                details: format!("Failed to create session: {}", e),
+                                details: format!("Failed to start game: {}", e),
                                 stack_trace: None,
                                 tick: None,
                                 phase: GameErrorPhase::Update,
                                 suggestions: vec![],
                             });
+                        } else {
+                            tracing::info!("Host mode: game started with peer");
+                            // Set audio volume
+                            if let Some(session) = runner.session_mut()
+                                && let Some(audio) = session.runtime.audio_mut()
+                            {
+                                let config = super::super::config::load();
+                                audio.set_master_volume(config.audio.master_volume);
+                            }
                         }
                     }
+                    Err(e) => {
+                        tracing::error!("Failed to create P2P session: {}", e);
+                        self.error_state = Some(super::super::GameError {
+                            summary: "Connection Error".to_string(),
+                            details: format!("Failed to create session: {}", e),
+                            stack_trace: None,
+                            tick: None,
+                            phase: GameErrorPhase::Update,
+                            suggestions: vec![],
+                        });
+                    }
                 }
-
-                self.needs_redraw = true;
-                return true;
             }
+
+            self.needs_redraw = true;
+            return true;
         }
         false
     }

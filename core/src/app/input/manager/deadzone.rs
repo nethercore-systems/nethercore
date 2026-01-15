@@ -18,6 +18,7 @@ impl InputManager {
     }
 
     /// Apply deadzone to trigger input
+    #[cfg_attr(not(feature = "gamepad"), allow(dead_code))]
     pub(super) fn apply_trigger_deadzone(&self, value: f32) -> f32 {
         let deadzone = self.config.trigger_deadzone;
         if value < deadzone {

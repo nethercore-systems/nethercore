@@ -36,11 +36,12 @@ pub(super) enum InputAxis {
     RightTrigger,
 }
 
-/// Represents what input we're waiting for during remapping
+/// Represents what input we're waiting for during remapping.
+/// The usize is the player index (0-3).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum WaitingFor {
-    Button(InputButton),
-    Axis(InputAxis),
+    Button(usize, InputButton),
+    Axis(usize, InputAxis),
 }
 
 impl InputButton {

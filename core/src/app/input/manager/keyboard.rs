@@ -1,17 +1,23 @@
 //! Keyboard input handling
 
+use crate::app::input::KeyboardMapping;
 use crate::console::RawInput;
 use winit::keyboard::KeyCode;
 
 use super::InputManager;
 
 impl InputManager {
-    /// Read keyboard input and map to RawInput
-    pub(super) fn read_keyboard_input(&self) -> RawInput {
+    /// Read keyboard input for a specific player slot.
+    /// Returns None if keyboard is disabled for that player.
+    pub(super) fn read_keyboard_input_for_player(&self, player: usize) -> Option<RawInput> {
+        let mapping = self.config.keyboards.get(player)?;
+        Some(self.read_keyboard_with_mapping(mapping))
+    }
+
+    /// Read keyboard input using the given mapping
+    fn read_keyboard_with_mapping(&self, mapping: &KeyboardMapping) -> RawInput {
         let is_pressed =
             |key: KeyCode| -> bool { self.keyboard_state.get(&key).copied().unwrap_or(false) };
-
-        let mapping = &self.config.keyboard;
 
         // Compute analog stick values from axis keys
         // Opposite keys cancel out (both pressed = 0)
@@ -74,8 +80,8 @@ impl InputManager {
             left_bumper: is_pressed(mapping.left_bumper),
             right_bumper: is_pressed(mapping.right_bumper),
 
-            left_stick_button: false,
-            right_stick_button: false,
+            left_stick_button: is_pressed(mapping.left_stick_button),
+            right_stick_button: is_pressed(mapping.right_stick_button),
 
             start: is_pressed(mapping.start),
             select: is_pressed(mapping.select),

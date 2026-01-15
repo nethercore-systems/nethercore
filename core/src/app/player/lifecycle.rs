@@ -106,11 +106,11 @@ where
             tracing::info!("run_game_frame: local_players = {:?}", local_players);
         }
 
-        // Map physical input devices to player handles
-        // physical_idx 0 = keyboard/first gamepad, physical_idx 1 = second gamepad, etc.
+        // Get all player inputs and map to session player handles
         // player_handle = the session's player slot (e.g., 0 for host, 1 for joiner)
-        for (physical_idx, &player_handle) in local_players.iter().enumerate() {
-            let raw_input = self.input_manager.get_player_input(physical_idx);
+        let all_inputs = self.input_manager.get_all_inputs();
+        for &player_handle in local_players.iter() {
+            let raw_input = all_inputs[player_handle];
             let console_input = session.runtime.console().map_input(&raw_input);
 
             if let Some(game) = session.runtime.game_mut() {

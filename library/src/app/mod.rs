@@ -203,7 +203,7 @@ impl App {
             }
             UiAction::SaveSettings(new_config) => {
                 tracing::info!("Saving settings...");
-                self.config = new_config.clone();
+                self.config = *new_config;
 
                 if let Err(e) = nethercore_core::app::config::save(&self.config) {
                     tracing::error!("Failed to save config: {}", e);

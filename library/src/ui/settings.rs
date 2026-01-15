@@ -40,7 +40,7 @@ impl SettingsUi {
         match self.inner.show_as_panel(ctx, "Back to Library") {
             SettingsAction::None => None,
             SettingsAction::Close => Some(UiAction::OpenSettings), // Toggle back to library
-            SettingsAction::Save(config) => Some(UiAction::SaveSettings(*config)),
+            SettingsAction::Save(config) => Some(UiAction::SaveSettings(config)),
             SettingsAction::ResetDefaults => None, // Applied internally, no library action needed
             SettingsAction::PreviewScaleMode(mode) => Some(UiAction::SetScaleMode(mode)),
             SettingsAction::ToggleFullscreen(_) => None, // Not exposed to library
