@@ -10,7 +10,7 @@ use super::vertex::{VERTEX_FORMAT_COUNT, vertex_stride, vertex_stride_packed};
 
 /// Z-index value for commands that don't participate in 2D ordering
 ///
-/// Sky and mesh commands use z_index 0 as they don't use the 2D ordering system.
+/// Environment and mesh commands use z_index 0 as they don't use the 2D ordering system.
 /// They're sorted by render_type instead.
 const NO_Z_INDEX: u32 = 0;
 
@@ -19,7 +19,7 @@ const NO_Z_INDEX: u32 = 0;
 /// Determines rendering order and which pipeline to use:
 /// - Quad: Screen-space 2D UI (renders first for early-z optimization)
 /// - Mesh: 3D geometry (renders second, culled behind UI)
-/// - Sky: Procedural background (renders last, fills gaps)
+/// - Environment: Procedural background (renders last, fills gaps)
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RenderType {
@@ -36,12 +36,12 @@ pub enum RenderType {
     /// early depth testing.
     Mesh = 1,
 
-    /// Procedural sky background
+    /// Procedural environment background
     ///
     /// Renders last with depth test enabled (LessEqual). Only fragments where
-    /// depth == 1.0 (clear value) pass, avoiding expensive sky shader invocations
+    /// depth == 1.0 (clear value) pass, avoiding expensive environment shader invocations
     /// for pixels already covered by geometry.
-    Sky = 2,
+    Environment = 2,
 }
 
 /// Specifies which buffer the geometry data comes from
@@ -118,9 +118,9 @@ pub enum VRPCommand {
         /// True if screen-space quad (always writes depth), false if billboard (uses PassConfig depth)
         is_screen_space: bool,
     },
-    /// Sky draw (fullscreen gradient + sun)
-    Sky {
-        shading_state_index: u32, // Index into shading_states for sky data
+    /// Environment draw (fullscreen procedural background)
+    Environment {
+        shading_state_index: u32, // Index into shading_states for environment data
         /// Viewport for split-screen rendering (captured at command creation)
         viewport: Viewport,
         /// Pass ID for render pass ordering (execution barrier)
@@ -134,7 +134,7 @@ pub enum VRPCommand {
 /// 1. Pass ID (preserves render pass ordering - execution barriers)
 /// 2. Viewport (split-screen regions)
 /// 3. Z-index (2D ordering for quads - higher values render on top)
-/// 4. Render type (Quad → Mesh → Sky for optimal early-z)
+/// 4. Render type (Quad → Mesh → Environment for optimal early-z)
 /// 5. Render state (cull mode)
 /// 6. Textures (minimize bind calls)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -146,7 +146,7 @@ pub struct CommandSortKey {
     pub viewport: Viewport,
     /// Z-index for 2D ordering (only used for quads, 0 for other commands)
     pub z_index: u32,
-    /// Render type (Quad=0, Mesh=1, Sky=2)
+    /// Render type (Quad=0, Mesh=1, Environment=2)
     pub render_type: RenderType,
     /// Vertex format (for regular pipelines)
     pub vertex_format: u8,
@@ -157,13 +157,13 @@ pub struct CommandSortKey {
 }
 
 impl CommandSortKey {
-    /// Create sort key for a sky command
-    pub fn sky(pass_id: u32, viewport: Viewport) -> Self {
+    /// Create sort key for an environment command
+    pub fn environment(pass_id: u32, viewport: Viewport) -> Self {
         Self {
             pass_id,
             viewport,
             z_index: NO_Z_INDEX,
-            render_type: RenderType::Sky,
+            render_type: RenderType::Environment,
             vertex_format: 0,
             cull_mode: 0,
             textures: [0; 4],

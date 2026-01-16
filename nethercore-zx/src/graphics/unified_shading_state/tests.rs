@@ -418,17 +418,17 @@ mod tests {
         let mut env = PackedEnvironmentState::default();
 
         env.set_base_mode(env_mode::GRADIENT);
-        env.set_overlay_mode(env_mode::SCATTER);
+        env.set_overlay_mode(env_mode::CELLS);
         env.set_blend_mode(blend_mode::ADD);
 
         assert_eq!(env.base_mode(), env_mode::GRADIENT);
-        assert_eq!(env.overlay_mode(), env_mode::SCATTER);
+        assert_eq!(env.overlay_mode(), env_mode::CELLS);
         assert_eq!(env.blend_mode(), blend_mode::ADD);
 
         // Change individual values without affecting others
         env.set_base_mode(env_mode::RINGS);
         assert_eq!(env.base_mode(), env_mode::RINGS);
-        assert_eq!(env.overlay_mode(), env_mode::SCATTER); // unchanged
+        assert_eq!(env.overlay_mode(), env_mode::CELLS); // unchanged
         assert_eq!(env.blend_mode(), blend_mode::ADD); // unchanged
     }
 
@@ -443,6 +443,14 @@ mod tests {
             nadir: 0x4A3728FF,
             rotation: 45.0,
             shift: 0.25,
+            sun_elevation: 0.5,
+            sun_disk: 12,
+            sun_halo: 200,
+            sun_intensity: 255,
+            horizon_haze: 128,
+            sun_warmth: 64,
+            cloudiness: 180,
+            cloud_phase: 0x1234,
         });
 
         assert_eq!(env.data[0], 0x3366B2FF);
@@ -450,9 +458,9 @@ mod tests {
         assert_eq!(env.data[2], 0x8B7355FF);
         assert_eq!(env.data[3], 0x4A3728FF);
 
-        // Verify f16x2 packing of rotation and shift
-        let (rotation, shift) = unpack_f16x2(env.data[4]);
-        assert!((rotation - 45.0).abs() < 0.1);
+        // Verify packing: cloud_phase:u16 (low16) | shift:f16 (high16)
+        assert_eq!(env.data[4] & 0xFFFF, 0x1234);
+        let shift = unpack_f16((env.data[4] >> 16) as u16);
         assert!((shift - 0.25).abs() < 0.01);
     }
 
@@ -460,7 +468,7 @@ mod tests {
     fn test_environment_default_gradient() {
         let env = PackedEnvironmentState::default_gradient();
         assert_eq!(env.base_mode(), env_mode::GRADIENT);
-        assert_eq!(env.overlay_mode(), env_mode::GRADIENT);
+        assert_eq!(env.overlay_mode(), env_mode::CELLS);
         assert_eq!(env.blend_mode(), blend_mode::ALPHA);
         // Verify colors are set
         assert_ne!(env.data[0], 0); // zenith

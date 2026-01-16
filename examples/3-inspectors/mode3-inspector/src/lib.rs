@@ -278,6 +278,7 @@ pub extern "C" fn render() {
             0,   // horizon haze
             0,   // sun warmth
             0,   // cloudiness
+            0,   // cloud_phase
         );
         light_set(0, SUN_DIR_X, SUN_DIR_Y, SUN_DIR_Z);
         light_color(0, SUN_COLOR);

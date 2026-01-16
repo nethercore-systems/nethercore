@@ -1,9 +1,9 @@
 // Quad Instanced Rendering Shader Template
-// Prepended with common.wgsl bindings/utilities by build.rs
+// Prepended with the common WGSL bindings/utilities by build.rs
 
 // ============================================================================
 // Quad-Specific Bindings
-// Uses bindings from common.wgsl: 0-4 (binding 5 is quad_instances below)
+// Uses bindings from the common WGSL sources: 0-4 (binding 5 is quad_instances below)
 // ============================================================================
 
 struct QuadInstance {

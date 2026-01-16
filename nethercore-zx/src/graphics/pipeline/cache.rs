@@ -6,7 +6,7 @@ use hashbrown::HashMap;
 
 use super::super::render_state::{PassConfig, RenderState};
 use super::pipeline_creation::{
-    create_pipeline, create_quad_pipeline, create_sky_pipeline, PipelineEntry,
+    create_environment_pipeline, create_pipeline, create_quad_pipeline, PipelineEntry,
 };
 use super::pipeline_key::PipelineKey;
 
@@ -176,26 +176,26 @@ impl PipelineCache {
         &self.pipelines[&key]
     }
 
-    /// Get or create a sky pipeline
+    /// Get or create an environment pipeline
     ///
-    /// Returns a reference to the cached sky pipeline, creating it if necessary.
-    pub fn get_or_create_sky(
+    /// Returns a reference to the cached environment pipeline, creating it if necessary.
+    pub fn get_or_create_environment(
         &mut self,
         device: &wgpu::Device,
         surface_format: wgpu::TextureFormat,
         pass_config: &PassConfig,
     ) -> &PipelineEntry {
-        let key = PipelineKey::sky(pass_config);
+        let key = PipelineKey::environment(pass_config);
 
         // Return existing pipeline if cached
         if self.pipelines.contains_key(&key) {
             return &self.pipelines[&key];
         }
 
-        // Otherwise, create a new sky pipeline
-        tracing::debug!("Creating sky pipeline: pass_config={:?}", pass_config);
+        // Otherwise, create a new environment pipeline
+        tracing::debug!("Creating environment pipeline: pass_config={:?}", pass_config);
 
-        let entry = create_sky_pipeline(device, surface_format, pass_config);
+        let entry = create_environment_pipeline(device, surface_format, pass_config);
         self.pipelines.insert(key, entry);
         &self.pipelines[&key]
     }

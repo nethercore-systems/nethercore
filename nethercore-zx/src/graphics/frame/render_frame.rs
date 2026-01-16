@@ -128,9 +128,9 @@ impl ZXGraphics {
                         texture_slots[3].0,
                     ],
                 ),
-                VRPCommand::Sky {
+                VRPCommand::Environment {
                     viewport, pass_id, ..
-                } => CommandSortKey::sky(*pass_id, *viewport),
+                } => CommandSortKey::environment(*pass_id, *viewport),
             });
 
         // =================================================================
@@ -249,8 +249,8 @@ impl ZXGraphics {
                 VRPCommand::Quad {
                     cull_mode, pass_id, ..
                 } => (self.unit_quad_format, *cull_mode, *pass_id),
-                VRPCommand::Sky { pass_id, .. } => {
-                    // Sky uses its own pipeline, but we need values for bind group layout
+                VRPCommand::Environment { pass_id, .. } => {
+                    // Environment uses its own pipeline, but we need values for bind group layout
                     (0, CullMode::None, *pass_id)
                 }
             };
@@ -441,7 +441,7 @@ impl ZXGraphics {
                 VRPCommand::Mesh { pass_id, .. }
                 | VRPCommand::IndexedMesh { pass_id, .. }
                 | VRPCommand::Quad { pass_id, .. }
-                | VRPCommand::Sky { pass_id, .. } => *pass_id,
+                | VRPCommand::Environment { pass_id, .. } => *pass_id,
             };
             let first_pass_config = z_state
                 .pass_configs
@@ -523,7 +523,7 @@ impl ZXGraphics {
                     texture_slots,
                     buffer_source,
                     is_quad,
-                    is_sky,
+                    is_environment,
                     is_screen_space_quad,
                 ) = match cmd {
                     VRPCommand::Mesh {
@@ -582,15 +582,15 @@ impl ZXGraphics {
                         false,
                         *is_screen_space,
                     ),
-                    VRPCommand::Sky {
+                    VRPCommand::Environment {
                         viewport, pass_id, ..
                     } => (
                         *viewport,
                         *pass_id,
-                        self.unit_quad_format, // Sky uses unit quad mesh
+                        self.unit_quad_format, // Environment uses unit quad mesh
                         super::super::render_state::CullMode::None,
                         [TextureHandle::INVALID; 4], // Default textures (unused)
-                        BufferSource::Quad,          // Sky renders as a fullscreen quad
+                        BufferSource::Quad,          // Environment renders as a fullscreen quad
                         false,
                         true,
                         false,
@@ -648,10 +648,10 @@ impl ZXGraphics {
                     cull_mode,
                 };
 
-                // Get/create pipeline - use sky/quad/regular pipeline based on command type
-                if is_sky {
-                    // Sky rendering: Ensure sky pipeline exists
-                    self.pipeline_cache.get_or_create_sky(
+                // Get/create pipeline - use environment/quad/regular pipeline based on command type
+                if is_environment {
+                    // Environment rendering: Ensure environment pipeline exists
+                    self.pipeline_cache.get_or_create_environment(
                         &self.device,
                         self.config.format,
                         &cmd_pass_config,
@@ -687,8 +687,8 @@ impl ZXGraphics {
                 }
 
                 // Now get immutable reference to pipeline entry (avoiding borrow issues)
-                let pipeline_key = if is_sky {
-                    PipelineKey::sky(&cmd_pass_config)
+                let pipeline_key = if is_environment {
+                    PipelineKey::environment(&cmd_pass_config)
                 } else if is_quad {
                     PipelineKey::quad(&state, &cmd_pass_config, is_screen_space_quad)
                 } else {
@@ -868,11 +868,11 @@ impl ZXGraphics {
                             *buffer_index..*buffer_index + 1,
                         );
                     }
-                    VRPCommand::Sky {
+                    VRPCommand::Environment {
                         shading_state_index,
                         ..
                     } => {
-                        // Sky rendering: Fullscreen triangle with procedural gradient
+                        // Environment rendering: Fullscreen triangle with procedural background
 
                         // Draw fullscreen triangle (3 vertices, no vertex buffer)
                         // Uses shading_state_index as instance range to pass index to shader

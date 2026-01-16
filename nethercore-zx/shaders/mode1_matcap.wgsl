@@ -2,8 +2,8 @@
 // Requires NORMAL flag - only 8 permutations (formats 4-7 and 12-15)
 // Matcaps in slots 1-3 multiply together
 
-// NOTE: Vertex shader (VertexIn/VertexOut structs and @vertex fn) is injected by shader_gen.rs from common.wgsl
-// NOTE: Common bindings, structures, and utilities are injected by shader_gen.rs from common.wgsl
+// NOTE: Vertex shader (VertexIn/VertexOut structs and @vertex fn) is injected by the shader generator from the common WGSL sources.
+// NOTE: Common bindings, structures, and utilities are injected by the shader generator from the common WGSL sources.
 
 // ============================================================================
 // Fragment Shader Utilities
@@ -151,7 +151,7 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     let matcap_uv = compute_matcap_uv(in.view_position, shading_view_normal);
 
     // Check use_matcap_reflection flag:
-    // 0 = use procedural sky for reflection (default)
+    // 0 = use procedural environment for reflection (default)
     // 1 = use matcap textures for stylized reflection
     if has_flag(shading.flags, FLAG_USE_MATCAP_REFLECTION) {
         // Sample and blend matcaps from slots 1-3 using their blend modes

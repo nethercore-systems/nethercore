@@ -640,14 +640,14 @@ light_range(index: u32, range: f32) void
 {{#tab name="Rust"}}
 ```rust
 // 8 Environment Modes (layer: 0=base, 1=overlay)
-env_gradient(layer, zenith, sky_h, ground_h, nadir, azim, shift, elev, disk, halo, intensity, haze, warmth, cloudiness)  // Mode 0
-env_scatter(layer, variant, density, size, glow, streak, c1, c2, parallax, psize, phase)  // Mode 1
-env_lines(layer, variant, type, thick, spacing, fade, c_prim, c_accent, every, phase)  // Mode 2
-env_silhouette(layer, jagged, layers, c_near, c_far, sky_z, sky_h, parallax, seed)  // Mode 3
-env_rectangles(layer, variant, density, lit, size_min, size_max, aspect, c_prim, c_var, parallax, phase)  // Mode 4
-env_room(layer, c_ceil, c_floor, c_wall, panel_size, panel_gap, light_xyz, light_int, corner, scale, viewer_xyz)  // Mode 5
-env_curtains(layer, layers, density, h_min, h_max, width, spacing, wave, c_near, c_far, glow, parallax, phase)  // Mode 6
-env_rings(layer, count, thick, c_a, c_b, c_center, falloff, twist, axis_xyz, phase)  // Mode 7
+env_gradient(layer, zenith, sky_h, ground_h, nadir, rotation, shift, sun_elev, disk, halo, intensity, haze, warmth, cloudiness, cloud_phase)  // Mode 0
+env_cells(layer, family, variant, density, size_min, size_max, intensity, shape, motion, parallax, height_bias, clustering, color_a, color_b, phase, seed)  // Mode 1
+env_lines(layer, variant, line_type, thickness, spacing, fade, parallax, color_primary, color_accent, accent_every, phase, profile, warp, wobble, glow, axis_x, axis_y, axis_z, seed)  // Mode 2
+env_silhouette(layer, family, jaggedness, layer_count, color_near, color_far, sky_zenith, sky_horizon, parallax_rate, seed, phase, fog, wind)  // Mode 3
+env_nebula(layer, family, coverage, softness, intensity, scale, detail, warp, flow, parallax, height_bias, contrast, color_a, color_b, axis_x, axis_y, axis_z, phase, seed)  // Mode 4
+env_room(layer, color_ceiling, color_floor, color_walls, panel_size, panel_gap, light_x, light_y, light_z, light_intensity, light_tint, corner_darken, room_scale, viewer_x, viewer_y, viewer_z, accent, accent_mode, roughness, phase)  // Mode 5
+env_veil(layer, family, density, width, taper, curvature, edge_soft, height_min, height_max, color_near, color_far, glow, parallax, axis_x, axis_y, axis_z, phase, seed)  // Mode 6
+env_rings(layer, family, ring_count, thickness, color_a, color_b, center_color, center_falloff, spiral_twist, axis_x, axis_y, axis_z, phase, wobble, noise, dash, glow, seed)  // Mode 7
 
 // Blending and rendering
 env_blend(mode)               // 0=alpha, 1=add, 2=mul, 3=screen
@@ -659,14 +659,14 @@ matcap_set(slot, texture)     // Slot 1-3 (Mode 1 only)
 {{#tab name="C/C++"}}
 ```c
 // 8 Environment Modes (layer: 0=base, 1=overlay)
-void env_gradient(u32 layer, u32 zenith, u32 sky_h, u32 ground_h, u32 nadir, f32 azim, f32 shift, f32 elev, u32 disk, u32 halo, u32 intensity, u32 haze, u32 warmth, u32 cloudiness);  // Mode 0
-void env_scatter(u32 layer, u32 variant, u32 density, u32 size, u32 glow, u32 streak, u32 c1, u32 c2, u32 parallax, u32 psize, u32 phase);  // Mode 1
-void env_lines(u32 layer, u32 variant, u32 type, u32 thick, f32 spacing, f32 fade, u32 c_prim, u32 c_accent, u32 every, u32 phase);  // Mode 2
-void env_silhouette(u32 layer, u32 jagged, u32 layers, u32 c_near, u32 c_far, u32 sky_z, u32 sky_h, u32 parallax, u32 seed);  // Mode 3
-void env_rectangles(u32 layer, u32 variant, u32 density, u32 lit, u32 size_min, u32 size_max, u32 aspect, u32 c_prim, u32 c_var, u32 parallax, u32 phase);  // Mode 4
-void env_room(u32 layer, u32 c_ceil, u32 c_floor, u32 c_wall, f32 panel_size, u32 panel_gap, f32 light_x, f32 light_y, f32 light_z, u32 light_int, u32 corner, f32 scale, i32 viewer_x, i32 viewer_y, i32 viewer_z);  // Mode 5
-void env_curtains(u32 layer, u32 layers, u32 density, u32 h_min, u32 h_max, u32 width, u32 spacing, u32 wave, u32 c_near, u32 c_far, u32 glow, u32 parallax, u32 phase);  // Mode 6
-void env_rings(u32 layer, u32 count, u32 thick, u32 c_a, u32 c_b, u32 c_center, u32 falloff, f32 twist, f32 axis_x, f32 axis_y, f32 axis_z, u32 phase);  // Mode 7
+void env_gradient(u32 layer, u32 zenith, u32 sky_h, u32 ground_h, u32 nadir, f32 rotation, f32 shift, f32 sun_elev, u32 disk, u32 halo, u32 intensity, u32 haze, u32 warmth, u32 cloudiness, u32 cloud_phase);  // Mode 0
+void env_cells(u32 layer, u32 family, u32 variant, u32 density, u32 size_min, u32 size_max, u32 intensity, u32 shape, u32 motion, u32 parallax, u32 height_bias, u32 clustering, u32 color_a, u32 color_b, u32 phase, u32 seed);  // Mode 1
+void env_lines(u32 layer, u32 variant, u32 line_type, u32 thickness, f32 spacing, f32 fade, u32 parallax, u32 color_primary, u32 color_accent, u32 accent_every, u32 phase, u32 profile, u32 warp, u32 wobble, u32 glow, f32 axis_x, f32 axis_y, f32 axis_z, u32 seed);  // Mode 2
+void env_silhouette(u32 layer, u32 family, u32 jaggedness, u32 layer_count, u32 color_near, u32 color_far, u32 sky_zenith, u32 sky_horizon, u32 parallax_rate, u32 seed, u32 phase, u32 fog, u32 wind);  // Mode 3
+void env_nebula(u32 layer, u32 family, u32 coverage, u32 softness, u32 intensity, u32 scale, u32 detail, u32 warp, u32 flow, u32 parallax, u32 height_bias, u32 contrast, u32 color_a, u32 color_b, f32 axis_x, f32 axis_y, f32 axis_z, u32 phase, u32 seed);  // Mode 4
+void env_room(u32 layer, u32 color_ceiling, u32 color_floor, u32 color_walls, f32 panel_size, u32 panel_gap, f32 light_x, f32 light_y, f32 light_z, u32 light_intensity, u32 light_tint, u32 corner_darken, f32 room_scale, i32 viewer_x, i32 viewer_y, i32 viewer_z, u32 accent, u32 accent_mode, u32 roughness, u32 phase);  // Mode 5
+void env_veil(u32 layer, u32 family, u32 density, u32 width, u32 taper, u32 curvature, u32 edge_soft, u32 height_min, u32 height_max, u32 color_near, u32 color_far, u32 glow, u32 parallax, f32 axis_x, f32 axis_y, f32 axis_z, u32 phase, u32 seed);  // Mode 6
+void env_rings(u32 layer, u32 family, u32 ring_count, u32 thickness, u32 color_a, u32 color_b, u32 center_color, u32 center_falloff, f32 spiral_twist, f32 axis_x, f32 axis_y, f32 axis_z, u32 phase, u32 wobble, u32 noise, u32 dash, u32 glow, u32 seed);  // Mode 7
 
 // Blending and rendering
 void env_blend(uint32_t mode);                    // 0=alpha, 1=add, 2=mul, 3=screen
@@ -678,14 +678,14 @@ void matcap_set(uint32_t slot, uint32_t texture); // Slot 1-3 (Mode 1 only)
 {{#tab name="Zig"}}
 ```zig
 // 8 Environment Modes (layer: 0=base, 1=overlay)
-env_gradient(layer: u32, zenith: u32, sky_h: u32, ground_h: u32, nadir: u32, azim: f32, shift: f32, elev: f32, disk: u32, halo: u32, intensity: u32, haze: u32, warmth: u32, cloudiness: u32) void  // Mode 0
-env_scatter(layer: u32, variant: u32, density: u32, size: u32, glow: u32, streak: u32, c1: u32, c2: u32, parallax: u32, psize: u32, phase: u32) void  // Mode 1
-env_lines(layer: u32, variant: u32, type: u32, thick: u32, spacing: f32, fade: f32, c_prim: u32, c_accent: u32, every: u32, phase: u32) void  // Mode 2
-env_silhouette(layer: u32, jagged: u32, layers: u32, c_near: u32, c_far: u32, sky_z: u32, sky_h: u32, parallax: u32, seed: u32) void  // Mode 3
-env_rectangles(layer: u32, variant: u32, density: u32, lit: u32, size_min: u32, size_max: u32, aspect: u32, c_prim: u32, c_var: u32, parallax: u32, phase: u32) void  // Mode 4
-env_room(layer: u32, c_ceil: u32, c_floor: u32, c_wall: u32, panel_size: f32, panel_gap: u32, light_x: f32, light_y: f32, light_z: f32, light_int: u32, corner: u32, scale: f32, viewer_x: i32, viewer_y: i32, viewer_z: i32) void  // Mode 5
-env_curtains(layer: u32, layers: u32, density: u32, h_min: u32, h_max: u32, width: u32, spacing: u32, wave: u32, c_near: u32, c_far: u32, glow: u32, parallax: u32, phase: u32) void  // Mode 6
-env_rings(layer: u32, count: u32, thick: u32, c_a: u32, c_b: u32, c_center: u32, falloff: u32, twist: f32, axis_x: f32, axis_y: f32, axis_z: f32, phase: u32) void  // Mode 7
+env_gradient(layer: u32, zenith: u32, sky_h: u32, ground_h: u32, nadir: u32, rotation: f32, shift: f32, sun_elev: f32, disk: u32, halo: u32, intensity: u32, haze: u32, warmth: u32, cloudiness: u32, cloud_phase: u32) void  // Mode 0
+env_cells(layer: u32, family: u32, variant: u32, density: u32, size_min: u32, size_max: u32, intensity: u32, shape: u32, motion: u32, parallax: u32, height_bias: u32, clustering: u32, color_a: u32, color_b: u32, phase: u32, seed: u32) void  // Mode 1
+env_lines(layer: u32, variant: u32, line_type: u32, thickness: u32, spacing: f32, fade: f32, parallax: u32, color_primary: u32, color_accent: u32, accent_every: u32, phase: u32, profile: u32, warp: u32, wobble: u32, glow: u32, axis_x: f32, axis_y: f32, axis_z: f32, seed: u32) void  // Mode 2
+env_silhouette(layer: u32, family: u32, jaggedness: u32, layer_count: u32, color_near: u32, color_far: u32, sky_zenith: u32, sky_horizon: u32, parallax_rate: u32, seed: u32, phase: u32, fog: u32, wind: u32) void  // Mode 3
+env_nebula(layer: u32, family: u32, coverage: u32, softness: u32, intensity: u32, scale: u32, detail: u32, warp: u32, flow: u32, parallax: u32, height_bias: u32, contrast: u32, color_a: u32, color_b: u32, axis_x: f32, axis_y: f32, axis_z: f32, phase: u32, seed: u32) void  // Mode 4
+env_room(layer: u32, color_ceiling: u32, color_floor: u32, color_walls: u32, panel_size: f32, panel_gap: u32, light_x: f32, light_y: f32, light_z: f32, light_intensity: u32, light_tint: u32, corner_darken: u32, room_scale: f32, viewer_x: i32, viewer_y: i32, viewer_z: i32, accent: u32, accent_mode: u32, roughness: u32, phase: u32) void  // Mode 5
+env_veil(layer: u32, family: u32, density: u32, width: u32, taper: u32, curvature: u32, edge_soft: u32, height_min: u32, height_max: u32, color_near: u32, color_far: u32, glow: u32, parallax: u32, axis_x: f32, axis_y: f32, axis_z: f32, phase: u32, seed: u32) void  // Mode 6
+env_rings(layer: u32, family: u32, ring_count: u32, thickness: u32, color_a: u32, color_b: u32, center_color: u32, center_falloff: u32, spiral_twist: f32, axis_x: f32, axis_y: f32, axis_z: f32, phase: u32, wobble: u32, noise: u32, dash: u32, glow: u32, seed: u32) void  // Mode 7
 
 // Blending and rendering
 env_blend(mode: u32) void             // 0=alpha, 1=add, 2=mul, 3=screen

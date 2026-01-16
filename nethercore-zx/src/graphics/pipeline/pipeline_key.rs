@@ -29,8 +29,8 @@ pub(crate) enum PipelineKey {
         /// True for screen-space quads (always write depth), false for billboards (use PassConfig)
         is_screen_space: bool,
     },
-    /// Procedural sky rendering pipeline (always renders behind)
-    Sky {
+    /// Procedural environment rendering pipeline (always renders behind)
+    Environment {
         /// Hash of PassConfig fields that affect pipeline state
         pass_config_hash: u64,
     },
@@ -65,9 +65,9 @@ impl PipelineKey {
         }
     }
 
-    /// Create a sky pipeline key
-    pub fn sky(pass_config: &PassConfig) -> Self {
-        Self::Sky {
+    /// Create an environment pipeline key
+    pub fn environment(pass_config: &PassConfig) -> Self {
+        Self::Environment {
             pass_config_hash: pass_config_hash(pass_config),
         }
     }

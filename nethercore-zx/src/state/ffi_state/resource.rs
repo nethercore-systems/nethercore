@@ -45,7 +45,7 @@ impl ZXFFIState {
     /// This clears only the resources that accumulate per-frame:
     /// - render_pass (immediate draw commands)
     /// - model_matrices (per-draw transforms)
-    /// - deferred_commands (billboards, sprites, text, sky)
+    /// - deferred_commands (billboards, sprites, text, environment)
     ///
     /// Note: Audio playback state is in ZRollbackState, not here.
     ///

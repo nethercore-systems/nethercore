@@ -427,10 +427,10 @@ All 40 shader permutations are generated at **compile time** by `build.rs`:
 
 ```
 Total: 40 shaders
-- Mode 0: 16 shaders (all vertex formats)
-- Mode 1: 8 shaders (formats with NORMAL)
-- Mode 2: 8 shaders (formats with NORMAL)
-- Mode 3: 8 shaders (formats with NORMAL)
+- Mode 0: 24 shaders (all vertex formats; TANGENT requires NORMAL)
+- Mode 1: 16 shaders (formats with NORMAL; optionally TANGENT)
+- Mode 2: 16 shaders (formats with NORMAL; optionally TANGENT)
+- Mode 3: 16 shaders (formats with NORMAL; optionally TANGENT)
 ```
 
 **Why compile-time?**
@@ -446,15 +446,16 @@ Shaders are generated from WGSL templates with placeholder replacement:
 - `shaders/mode0_lambert.wgsl` — Mode 0 template
 - `shaders/mode1_matcap.wgsl` — Mode 1 template
 - `shaders/blinnphong_common.wgsl` — Modes 2-3 common code
-- `shaders/common.wgsl` — Shared utilities
+- `shaders/common/*.wgsl` — Shared bindings/utilities (concatenated in-order by the build script)
 
 **Placeholders replaced:**
 
 Vertex inputs:
 - `//VIN_UV` → `@location(1) uv: vec2<f32>,`
-- `//VIN_COLOR` → `@location(2) color: vec4<f32>,`
-- `//VIN_NORMAL` → `@location(3) normal: u32,`
+- `//VIN_COLOR` → `@location(2) color: vec3<f32>,`
+- `//VIN_NORMAL` → `@location(3) normal_packed: u32,`
 - `//VIN_SKINNED` → bone indices/weights
+- `//VIN_TANGENT` → `@location(6) tangent_packed: u32,`
 
 Vertex shader body:
 - `//VS_UV` → UV passthrough
@@ -573,10 +574,10 @@ The EPU supports two independent environment layers (base and overlay) that can 
 // Configure base layer (layer 0)
 fn env_gradient(layer: u32, zenith: u32, sky_horizon: u32, ground_horizon: u32,
                 nadir: u32, azim: f32, shift: f32, elev: f32,
-                disk: u32, halo: u32, intensity: u32, haze: u32, warmth: u32, cloudiness: u32)
+                disk: u32, halo: u32, intensity: u32, haze: u32, warmth: u32, cloudiness: u32, cloud_phase: u32)
 
 // Configure overlay layer (layer 1) with a different mode
-fn env_scatter(layer: u32, variant: u32, density: u32, ...)
+fn env_cells(layer: u32, family: u32, variant: u32, density: u32, ...)
 
 // Set blend mode for overlay compositing
 fn env_blend(mode: u32)  // 0=alpha, 1=add, 2=multiply, 3=screen
@@ -589,7 +590,7 @@ fn draw_env()
 - Layer 0 (base): Primary environment layer
 - Layer 1 (overlay): Secondary layer composited on top
 - Same mode can be used on both layers with different parameters
-- Example: Stars (layer 0) + rain (layer 1), both using scatter mode
+- Example: Stars (layer 0) + rain (layer 1), both using Cells mode (family 0, variants 0/1)
 
 **Ambient calculation:**
 ```
@@ -741,7 +742,7 @@ Invalidate on:
 | `nethercore-zx/src/graphics/buffer/mod.rs` | Buffer management |
 | `nethercore-zx/src/graphics/command_buffer.rs` | Virtual render pass |
 | `nethercore-zx/src/graphics/texture_manager.rs` | Texture loading and VRAM tracking |
-| `nethercore-zx/src/shader_gen.rs` | Shader permutation system |
+| `nethercore-zx/src/shader_gen/` | Shader permutation system |
 | `nethercore-zx/shaders/*.wgsl` | Shader templates |
 
 ---

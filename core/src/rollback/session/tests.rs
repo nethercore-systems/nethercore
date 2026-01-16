@@ -10,7 +10,7 @@ use crate::test_utils::TestConsole;
 use crate::rollback::config::SessionConfig;
 use crate::rollback::events::{PlayerNetworkStats, SessionError, SessionEvent};
 use crate::rollback::player::PlayerSessionConfig;
-use super::session::RollbackSession;
+use super::RollbackSession;
 use super::types::{NetworkInput, SessionType};
 
 // Test input type for unit tests
@@ -59,7 +59,7 @@ fn test_local_session_advance() {
             assert_eq!(inputs.len(), 2);
             for (input, status) in inputs {
                 assert_eq!(*input, TestInput::default());
-                assert_eq!(*status, InputStatus::Confirmed);
+                assert_eq!(status, &InputStatus::Confirmed);
             }
         }
         _ => panic!("Expected AdvanceFrame request"),

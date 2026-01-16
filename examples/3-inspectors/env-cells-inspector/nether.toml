@@ -1,6 +1,6 @@
 [game]
-id = "env-scatter-inspector"
-title = "Env Scatter Inspector"
+id = "env-cells-inspector"
+title = "Env Cells Inspector"
 author = "Nethercore Examples"
 version = "0.1.0"
 render_mode = 2

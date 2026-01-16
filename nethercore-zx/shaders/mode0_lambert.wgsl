@@ -3,8 +3,8 @@
 // Without normals: flat color (no lighting)
 // With normals: Lambert shading using environment ambient + 4 dynamic lights
 
-// NOTE: Vertex shader (VertexIn/VertexOut structs and @vertex fn) is injected by shader_gen.rs from common.wgsl
-// NOTE: Common bindings, structures, and utilities are injected by shader_gen.rs from common.wgsl
+// NOTE: Vertex shader (VertexIn/VertexOut structs and @vertex fn) is injected by the shader generator from the common WGSL sources.
+// NOTE: Common bindings, structures, and utilities are injected by the shader generator from the common WGSL sources.
 
 // ============================================================================
 // Fragment Shader
@@ -23,7 +23,7 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     //FS_COLOR
     //FS_UV
 
-    // Ambient lighting (sampled from sky)
+    // Ambient lighting (sampled from environment)
     //FS_AMBIENT
 
     // Normal-based diffuse lighting (if normals present)

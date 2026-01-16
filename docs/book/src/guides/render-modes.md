@@ -515,7 +515,8 @@ fn init() {
         0,           // sun intensity (disabled)
         0,           // horizon haze
         0,           // sun warmth
-        0            // cloudiness
+        0,           // cloudiness
+        0            // cloud_phase
     );
 }
 
@@ -559,7 +560,8 @@ NCZX_EXPORT void init(void) {
         0u,          // sun intensity (disabled)
         0u,          // horizon haze
         0u,          // sun warmth
-        0u           // cloudiness
+        0u,          // cloudiness
+        0u           // cloud_phase
     );
 }
 
@@ -603,7 +605,8 @@ export fn init() void {
         0,           // sun intensity (disabled)
         0,           // horizon haze
         0,           // sun warmth
-        0            // cloudiness
+        0,           // cloudiness
+        0            // cloud_phase
     );
 }
 

@@ -62,12 +62,12 @@ New to Nethercore? Follow this progression:
 | **mode2-inspector** | Interactive Mode 2 (PBR) explorer |
 | **mode3-inspector** | Interactive Mode 3 (Blinn-Phong) explorer |
 | **env-gradient-inspector** | Gradient environment with presets |
-| **env-curtains-inspector** | Curtain-style environment effect |
+| **env-veil-inspector** | Veil environment effect |
 | **env-lines-inspector** | Line-based environment effect |
-| **env-rectangles-inspector** | Rectangle-based environment |
+| **env-nebula-inspector** | Nebula (fog/clouds/aurora) environment |
 | **env-rings-inspector** | Ring-based environment effect |
 | **env-room-inspector** | Room-style environment |
-| **env-scatter-inspector** | Scatter-based environment |
+| **env-cells-inspector** | Cells (particles/tiles) environment |
 | **env-silhouette-inspector** | Silhouette-based environment |
 
 ### 4. Animation & Skinning

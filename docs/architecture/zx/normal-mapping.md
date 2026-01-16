@@ -414,7 +414,7 @@ fn skip_normal_map(skip: u32);
 - `include/zx.rs` — `material_normal(texture)` and `skip_normal_map(skip)`.
 - `nethercore-zx/src/ffi/material.rs` — binds slot 3 and toggles the skip flag.
 - `nethercore-zx/src/graphics/unified_shading_state/shading_state.rs` — `FLAG_SKIP_NORMAL_MAP` (bit 16) and flag packing.
-- `nethercore-zx/shaders/common.wgsl` — `build_tbn()` + `sample_normal_map()` (slot 3).
+- `nethercore-zx/shaders/common/10_unpacking.wgsl` — `build_tbn()` + `sample_normal_map()` (slot 3).
 - `nethercore-zx/shaders/mode1_matcap.wgsl` and `nethercore-zx/shaders/blinnphong_common.wgsl` — consume shading normals.
 
 ## Using Normal Maps (Today)

@@ -6,13 +6,12 @@
 use wasmtime::Caller;
 
 use glam::Vec3;
-use zx_common::pack_octahedral_u16;
 
 use crate::ffi::ZXGameContext;
 use crate::graphics::env_mode;
 use crate::graphics::unified_shading_state::{
-    CurtainsConfig, GradientConfig, LinesConfig, RectanglesConfig, RingsConfig, RoomConfig,
-    ScatterConfig, SilhouetteConfig, ENV_OVERLAY_OFFSET,
+    CellsConfig, ENV_OVERLAY_OFFSET, GradientConfig, LinesConfig, NebulaConfig, RingsConfig,
+    RoomConfig, SilhouetteConfig, VeilConfig,
 };
 
 #[inline]
@@ -50,8 +49,8 @@ fn layer_offset_words(layer: u32) -> usize {
 /// ```
 ///
 /// **Examples:**
-/// - Blue sky: `env_gradient(0, 0x191970FF, 0x87CEEBFF, 0x228B22FF, 0x2F4F4FFF, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0)`
-/// - Sunset: `env_gradient(0, 0x4A00E0FF, 0xFF6B6BFF, 0x8B4513FF, 0x2F2F2FFF, 0.0, 0.1, 0.0, 0, 0, 0, 0, 0, 0)`
+/// - Blue sky: `env_gradient(0, 0x191970FF, 0x87CEEBFF, 0x228B22FF, 0x2F4F4FFF, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0, 0)`
+/// - Sunset: `env_gradient(0, 0x4A00E0FF, 0xFF6B6BFF, 0x8B4513FF, 0x2F2F2FFF, 0.0, 0.1, 0.0, 0, 0, 0, 0, 0, 0, 0)`
 pub(crate) fn env_gradient(
     mut caller: Caller<'_, ZXGameContext>,
     layer: u32,
@@ -68,6 +67,7 @@ pub(crate) fn env_gradient(
     horizon_haze: u32,
     sun_warmth: u32,
     cloudiness: u32,
+    cloud_phase: u32,
 ) {
     let state = &mut caller.data_mut().ffi;
     let offset = layer_offset_words(layer);
@@ -83,25 +83,15 @@ pub(crate) fn env_gradient(
             nadir,
             rotation,
             shift,
+            sun_elevation,
+            sun_disk,
+            sun_halo,
+            sun_intensity,
+            horizon_haze,
+            sun_warmth,
+            cloudiness,
+            cloud_phase,
         });
-
-    // Pack featured-sky controls into the per-layer extension words (w5/w6).
-    // rotation: sun azimuth (0 = +Z), sun_elevation: 0 = horizon, π/2 = zenith.
-    let (sin_az, cos_az) = rotation.sin_cos();
-    let (sin_el, cos_el) = sun_elevation.sin_cos();
-    let sun_dir = Vec3::new(cos_el * sin_az, sin_el, cos_el * cos_az).normalize_or_zero();
-
-    let sun_oct16 = pack_octahedral_u16(sun_dir) as u32;
-    let w5 = (sun_oct16 & 0xFFFF)
-        | ((sun_disk & 0xFF) << 16)
-        | ((sun_halo & 0xFF) << 24);
-    let w6 = (sun_intensity & 0xFF)
-        | ((horizon_haze & 0xFF) << 8)
-        | ((sun_warmth & 0xFF) << 16)
-        | ((cloudiness & 0xFF) << 24);
-
-    state.current_environment_state.data[offset + 5] = w5;
-    state.current_environment_state.data[offset + 6] = w6;
 
     // Set mode for the specified layer
     if layer == 0 {
@@ -117,77 +107,61 @@ pub(crate) fn env_gradient(
     state.environment_dirty = true;
 }
 
-/// Configure scatter environment (Mode 1)
+/// Configure cells environment (Mode 1).
 ///
-/// # Arguments
-/// * `layer` — Target layer: 0 = base layer, 1 = overlay layer
-/// * `variant` — Scatter type: 0=Stars, 1=Vertical (rain), 2=Horizontal, 3=Warp
-/// * `density` — Particle count (0-255)
-/// * `size` — Particle size (0-255)
-/// * `glow` — Glow/bloom intensity (0-255)
-/// * `streak_length` — Elongation for streaks (0-63, 0=points)
-/// * `color_primary` — Main particle color (0xRRGGBB00)
-/// * `color_secondary` — Variation/twinkle color (0xRRGGBB00)
-/// * `parallax_rate` — Layer separation amount (0-255, 0=flat)
-/// * `parallax_size` — Size variation with depth (0-255)
-/// * `phase` — Animation phase (0-65535, wraps for seamless looping)
-///
-/// Creates a procedural particle field. Variants:
-/// - **Stars (0):** Static twinkling points, good for night skies
-/// - **Vertical (1):** Rain/snow streaks falling downward
-/// - **Horizontal (2):** Speed lines, good for motion blur effects
-/// - **Warp (3):** Radial expansion from center (hyperspace effect)
-///
-/// **Animation:** Increment `phase` each frame for movement:
-/// - Rain: `phase = phase.wrapping_add((delta_time * speed * 65535.0) as u16)`
-/// - Twinkle: `phase = phase.wrapping_add((delta_time * 0.1 * 65535.0) as u16)`
-///
-/// **Example same-mode layering:**
-/// ```ignore
-/// env_scatter(0, 0, 128, 3, 200, 0, 0xFFFFFF00, 0xCCCCFF00, 50, 100, 0);  // Stars
-/// env_scatter(1, 1, 64, 2, 128, 30, 0x8888FF00, 0x4444FF00, 80, 50, 0);  // Rain overlay
-/// ```
-pub(crate) fn env_scatter(
+/// Two families under one mode ID:
+/// - Family 0: Particles (stars/snow/rain/embers/bubbles/warp)
+/// - Family 1: Tiles/Lights (Mondrian/Truchet, buildings, bands, panels)
+pub(crate) fn env_cells(
     mut caller: Caller<'_, ZXGameContext>,
     layer: u32,
+    family: u32,
     variant: u32,
     density: u32,
-    size: u32,
-    glow: u32,
-    streak_length: u32,
-    color_primary: u32,
-    color_secondary: u32,
-    parallax_rate: u32,
-    parallax_size: u32,
+    size_min: u32,
+    size_max: u32,
+    intensity: u32,
+    shape: u32,
+    motion: u32,
+    parallax: u32,
+    height_bias: u32,
+    clustering: u32,
+    color_a: u32,
+    color_b: u32,
     phase: u32,
+    seed: u32,
 ) {
     let state = &mut caller.data_mut().ffi;
 
-    // Pack scatter into specified layer
-    state.current_environment_state.pack_scatter(ScatterConfig {
+    // Pack cells into specified layer
+    state.current_environment_state.pack_cells(CellsConfig {
         offset: layer_offset_words(layer),
+        family,
         variant,
         density,
-        size,
-        glow,
-        streak_length,
-        color_primary,
-        color_secondary,
-        parallax_rate,
-        parallax_size,
+        size_min,
+        size_max,
+        intensity,
+        shape,
+        motion,
+        parallax,
+        height_bias,
+        clustering,
+        color_a,
+        color_b,
         phase,
-        layer_count: 1, // layer_count default
+        seed,
     });
 
     // Set mode for the specified layer
     if layer == 0 {
         state
             .current_environment_state
-            .set_base_mode(env_mode::SCATTER);
+            .set_base_mode(env_mode::CELLS);
     } else {
         state
             .current_environment_state
-            .set_overlay_mode(env_mode::SCATTER);
+            .set_overlay_mode(env_mode::CELLS);
     }
 
     state.environment_dirty = true;
@@ -202,6 +176,7 @@ pub(crate) fn env_scatter(
 /// * `thickness` — Line thickness (0-255)
 /// * `spacing` — Distance between lines (world units)
 /// * `fade_distance` — Distance where lines start fading (world units)
+/// * `parallax` — Horizon band perspective bias (0 disables, 255 = strongest)
 /// * `color_primary` — Main line color (0xRRGGBBAA)
 /// * `color_accent` — Accent line color (0xRRGGBBAA)
 /// * `accent_every` — Make every Nth line use accent color
@@ -223,10 +198,19 @@ pub(crate) fn env_lines(
     thickness: u32,
     spacing: f32,
     fade_distance: f32,
+    parallax: u32,
     color_primary: u32,
     color_accent: u32,
     accent_every: u32,
     phase: u32,
+    profile: u32,
+    warp: u32,
+    wobble: u32,
+    glow: u32,
+    axis_x: f32,
+    axis_y: f32,
+    axis_z: f32,
+    seed: u32,
 ) {
     let state = &mut caller.data_mut().ffi;
 
@@ -238,10 +222,17 @@ pub(crate) fn env_lines(
         thickness,
         spacing,
         fade_distance,
+        parallax,
         color_primary,
         color_accent,
         accent_every,
         phase,
+        profile,
+        warp,
+        wobble,
+        glow,
+        axis: Vec3::new(axis_x, axis_y, axis_z),
+        seed,
     });
 
     // Set mode for the specified layer
@@ -281,6 +272,7 @@ pub(crate) fn env_lines(
 pub(crate) fn env_silhouette(
     mut caller: Caller<'_, ZXGameContext>,
     layer: u32,
+    family: u32,
     jaggedness: u32,
     layer_count: u32,
     color_near: u32,
@@ -289,6 +281,9 @@ pub(crate) fn env_silhouette(
     sky_horizon: u32,
     parallax_rate: u32,
     seed: u32,
+    phase: u32,
+    fog: u32,
+    wind: u32,
 ) {
     let state = &mut caller.data_mut().ffi;
 
@@ -296,6 +291,7 @@ pub(crate) fn env_silhouette(
         .current_environment_state
         .pack_silhouette(SilhouetteConfig {
             offset: layer_offset_words(layer),
+            family,
             jaggedness,
             layer_count,
             color_near,
@@ -304,6 +300,9 @@ pub(crate) fn env_silhouette(
             sky_horizon,
             parallax_rate,
             seed,
+            phase,
+            fog,
+            wind,
         });
 
     // Set mode for the specified layer
@@ -320,72 +319,62 @@ pub(crate) fn env_silhouette(
     state.environment_dirty = true;
 }
 
-/// Configure rectangles environment (Mode 4)
+/// Configure nebula environment (Mode 4).
 ///
-/// # Arguments
-/// * `layer` — Target layer: 0 = base layer, 1 = overlay layer
-/// * `variant` — Pattern type: 0=Scatter, 1=Buildings, 2=Bands, 3=Panels
-/// * `density` — How many rectangles (0-255)
-/// * `lit_ratio` — Percentage of rectangles lit (0-255, 128=50%)
-/// * `size_min` — Minimum rectangle size (0-63)
-/// * `size_max` — Maximum rectangle size (0-63)
-/// * `aspect` — Aspect ratio bias (0-3, 0=square, 3=very tall)
-/// * `color_primary` — Main window/panel color (0xRRGGBBAA)
-/// * `color_variation` — Color variation for variety (0xRRGGBBAA)
-/// * `parallax_rate` — Layer separation (0-255, for scatter variant)
-/// * `phase` — Flicker phase (0-65535, wraps for seamless animation)
-///
-/// Creates rectangular light sources like windows, screens, or panels.
-///
-/// **Variants:**
-/// - Scatter (0): Random scattered rectangles
-/// - Buildings (1): Organized like building windows
-/// - Bands (2): Horizontal bands of rectangles
-/// - Panels (3): Grid-like control panel layout
-///
-/// **Animation:** Increment `phase` for window flicker:
-/// - Slow flicker: `phase = phase.wrapping_add((delta_time * 0.5 * 65535.0) as u16)`
-pub(crate) fn env_rectangles(
+/// Soft fields: fog/clouds/aurora/ink/plasma/kaleido.
+pub(crate) fn env_nebula(
     mut caller: Caller<'_, ZXGameContext>,
     layer: u32,
-    variant: u32,
-    density: u32,
-    lit_ratio: u32,
-    size_min: u32,
-    size_max: u32,
-    aspect: u32,
-    color_primary: u32,
-    color_variation: u32,
-    parallax_rate: u32,
+    family: u32,
+    coverage: u32,
+    softness: u32,
+    intensity: u32,
+    scale: u32,
+    detail: u32,
+    warp: u32,
+    flow: u32,
+    parallax: u32,
+    height_bias: u32,
+    contrast: u32,
+    color_a: u32,
+    color_b: u32,
+    axis_x: f32,
+    axis_y: f32,
+    axis_z: f32,
     phase: u32,
+    seed: u32,
 ) {
     let state = &mut caller.data_mut().ffi;
 
-    state
-        .current_environment_state
-        .pack_rectangles(RectanglesConfig {
-            offset: layer_offset_words(layer),
-            variant,
-            density,
-            lit_ratio,
-            size_min,
-            size_max,
-            aspect,
-            color_primary,
-            color_variation,
-            parallax_rate,
-            phase,
-        });
+    state.current_environment_state.pack_nebula(NebulaConfig {
+        offset: layer_offset_words(layer),
+        family,
+        coverage,
+        softness,
+        intensity,
+        scale,
+        detail,
+        warp,
+        flow,
+        parallax,
+        height_bias,
+        contrast,
+        color_a,
+        color_b,
+        axis: Vec3::new(axis_x, axis_y, axis_z),
+        phase,
+        seed,
+    });
 
     // Set mode for the specified layer
     if layer == 0 {
         state
             .current_environment_state
-            .set_base_mode(env_mode::RECTANGLES);
+            .set_base_mode(env_mode::NEBULA);
     } else {
         state
             .current_environment_state
-            .set_overlay_mode(env_mode::RECTANGLES);
+            .set_overlay_mode(env_mode::NEBULA);
     }
 
     state.environment_dirty = true;
@@ -429,11 +418,16 @@ pub(crate) fn env_room(
     light_dir_y: f32,
     light_dir_z: f32,
     light_intensity: u32,
+    light_tint: u32,
     corner_darken: u32,
     room_scale: f32,
     viewer_x: i32,
     viewer_y: i32,
     viewer_z: i32,
+    accent: u32,
+    accent_mode: u32,
+    roughness: u32,
+    phase: u32,
 ) {
     let state = &mut caller.data_mut().ffi;
 
@@ -446,11 +440,16 @@ pub(crate) fn env_room(
         panel_gap,
         light_direction: glam::Vec3::new(light_dir_x, light_dir_y, light_dir_z),
         light_intensity,
+        light_tint,
         corner_darken,
         room_scale,
         viewer_x,
         viewer_y,
         viewer_z,
+        accent,
+        accent_mode,
+        roughness,
+        phase,
     });
 
     // Set mode for the specified layer
@@ -467,77 +466,60 @@ pub(crate) fn env_room(
     state.environment_dirty = true;
 }
 
-/// Configure curtains environment (Mode 6)
+/// Configure veil environment (Mode 6).
 ///
-/// # Arguments
-/// * `layer` — Target layer: 0 = base layer, 1 = overlay layer
-/// * `layer_count` — Depth layers (1-3)
-/// * `density` — Structures per cell (0-255)
-/// * `height_min` — Minimum height (0-63)
-/// * `height_max` — Maximum height (0-63)
-/// * `width` — Structure width (0-31)
-/// * `spacing` — Gap between structures (0-31)
-/// * `waviness` — Organic wobble (0-255, 0=straight)
-/// * `color_near` — Nearest structure color (0xRRGGBBAA)
-/// * `color_far` — Farthest structure color (0xRRGGBBAA)
-/// * `glow` — Neon/magical glow intensity (0-255)
-/// * `parallax_rate` — Layer separation (0-255)
-/// * `phase` — Horizontal scroll phase (0-65535, wraps for seamless)
-///
-/// Creates vertical structures (pillars, trees) arranged around the viewer.
-///
-/// **Use cases:**
-/// - Forest: waviness=50, brown/green tones
-/// - Pillars: waviness=0, white/gray, evenly spaced
-/// - Neon: waviness=30, bright colors, high glow
-///
-/// **Animation:** Increment `phase` for side-scrolling parallax:
-/// - Running: `phase = phase.wrapping_add((velocity.x * delta_time * 65535.0) as u16)`
-pub(crate) fn env_curtains(
+/// Axis-aligned SDF ribbons/pillars with bounded depth slices.
+pub(crate) fn env_veil(
     mut caller: Caller<'_, ZXGameContext>,
     layer: u32,
-    layer_count: u32,
+    family: u32,
     density: u32,
+    width: u32,
+    taper: u32,
+    curvature: u32,
+    edge_soft: u32,
     height_min: u32,
     height_max: u32,
-    width: u32,
-    spacing: u32,
-    waviness: u32,
     color_near: u32,
     color_far: u32,
     glow: u32,
-    parallax_rate: u32,
+    parallax: u32,
+    axis_x: f32,
+    axis_y: f32,
+    axis_z: f32,
     phase: u32,
+    seed: u32,
 ) {
     let state = &mut caller.data_mut().ffi;
 
-    state
-        .current_environment_state
-        .pack_curtains(CurtainsConfig {
-            offset: layer_offset_words(layer),
-            layer_count,
-            density,
-            height_min,
-            height_max,
-            width,
-            spacing,
-            waviness,
-            color_near,
-            color_far,
-            glow,
-            parallax_rate,
-            phase,
-        });
+    state.current_environment_state.pack_veil(VeilConfig {
+        offset: layer_offset_words(layer),
+        family,
+        density,
+        height_min,
+        height_max,
+        width,
+        taper,
+        curvature,
+        edge_soft,
+        color_near,
+        color_far,
+        glow,
+        parallax,
+        axis: Vec3::new(axis_x, axis_y, axis_z),
+        phase,
+        seed,
+    });
 
     // Set mode for the specified layer
     if layer == 0 {
         state
             .current_environment_state
-            .set_base_mode(env_mode::CURTAINS);
+            .set_base_mode(env_mode::VEIL);
     } else {
         state
             .current_environment_state
-            .set_overlay_mode(env_mode::CURTAINS);
+            .set_overlay_mode(env_mode::VEIL);
     }
 
     state.environment_dirty = true;
@@ -565,6 +547,7 @@ pub(crate) fn env_curtains(
 pub(crate) fn env_rings(
     mut caller: Caller<'_, ZXGameContext>,
     layer: u32,
+    family: u32,
     ring_count: u32,
     thickness: u32,
     color_a: u32,
@@ -576,12 +559,18 @@ pub(crate) fn env_rings(
     axis_y: f32,
     axis_z: f32,
     phase: u32,
+    wobble: u32,
+    noise: u32,
+    dash: u32,
+    glow: u32,
+    seed: u32,
 ) {
     let state = &mut caller.data_mut().ffi;
 
     // Pack rings into specified layer
     state.current_environment_state.pack_rings(RingsConfig {
         offset: layer_offset_words(layer),
+        family,
         ring_count,
         thickness,
         color_a,
@@ -589,8 +578,13 @@ pub(crate) fn env_rings(
         center_color,
         center_falloff,
         spiral_twist,
-        axis: glam::Vec3::new(axis_x, axis_y, axis_z),
+        axis: Vec3::new(axis_x, axis_y, axis_z),
         phase,
+        wobble,
+        noise,
+        dash,
+        glow,
+        seed,
     });
 
     // Set mode for the specified layer

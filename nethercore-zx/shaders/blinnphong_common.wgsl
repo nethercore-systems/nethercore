@@ -4,8 +4,8 @@
 // Reference: Gotanda 2010 - "Practical Implementation at tri-Ace"
 // ============================================================================
 
-// NOTE: Vertex shader (VertexIn/VertexOut structs and @vertex fn) is injected by shader_gen.rs from common.wgsl
-// NOTE: Common bindings, structures, and utilities are injected by shader_gen.rs from common.wgsl
+// NOTE: Vertex shader (VertexIn/VertexOut structs and @vertex fn) is injected by the shader generator from the common WGSL sources.
+// NOTE: Common bindings, structures, and utilities are injected by the shader generator from the common WGSL sources.
 
 // ============================================================================
 // Material Unpacking Helpers
@@ -107,10 +107,10 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
 
     //FS_MODE2_3_TEXTURES  // Texture overrides for mode-specific slots
 
-    // MODE-SPECIFIC: Shininess computation (injected by shader_gen.rs)
+    // MODE-SPECIFIC: Shininess computation (injected by the shader generator)
     //FS_MODE2_3_SHININESS
 
-    // MODE-SPECIFIC: Specular color computation (injected by shader_gen.rs)
+    // MODE-SPECIFIC: Specular color computation (injected by the shader generator)
     //FS_MODE2_3_SPECULAR_COLOR
 
     let view_dir = normalize(in.camera_position - in.world_position);
@@ -143,7 +143,7 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     // Mode 3: diffuse_fresnel = vec3(1.0) (no diffuse reduction, artistic freedom)
     //FS_MODE2_3_DIFFUSE_FRESNEL
 
-    // MODE-SPECIFIC: Roughness (injected by shader_gen.rs)
+    // MODE-SPECIFIC: Roughness (injected by the shader generator)
     // Mode 2: direct from value1, Mode 3: derived from shininess
     //FS_MODE2_3_ROUGHNESS
 

@@ -69,7 +69,7 @@ pub(crate) fn matcap_set(mut caller: Caller<'_, ZXGameContext>, slot: u32, textu
 /// ```rust,ignore
 /// fn render() {
 ///     // Configure environment (e.g., gradient on base layer)
-///     env_gradient(0, 0x191970FF, 0x87CEEBFF, 0x228B22FF, 0x2F4F4FFF, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0);
+///     env_gradient(0, 0x191970FF, 0x87CEEBFF, 0x228B22FF, 0x2F4F4FFF, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0, 0);
 ///
 ///     // Draw environment first (before geometry)
 ///     draw_env();
@@ -97,10 +97,10 @@ pub(crate) fn draw_env(mut caller: Caller<'_, ZXGameContext>) {
     // This ensures the environment data is uploaded to GPU
     let shading_idx = state.add_shading_state();
 
-    // Add sky/environment draw command to render pass
+    // Add environment draw command to render pass
     state
         .render_pass
-        .add_command(crate::graphics::VRPCommand::Sky {
+        .add_command(crate::graphics::VRPCommand::Environment {
             shading_state_index: shading_idx.0,
             viewport,
             pass_id,

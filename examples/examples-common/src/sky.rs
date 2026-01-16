@@ -2,8 +2,8 @@
 //!
 //! Provides sky gradient and sun configuration with debug inspector integration.
 
-use crate::ffi::*;
 use crate::color;
+use crate::ffi::*;
 
 /// Sky state for debug control
 #[derive(Clone, Copy)]
@@ -50,8 +50,8 @@ impl DebugSky {
     /// Create a sunset sky preset
     pub fn sunset() -> Self {
         Self {
-            horizon: 0xFF804DFF,  // Orange
-            zenith: 0x4D1A80FF,   // Purple
+            horizon: 0xFF804DFF,   // Orange
+            zenith: 0x4D1A80FF,    // Purple
             sun_dir_x: 0.8,
             sun_dir_y: -0.2,
             sun_dir_z: 0.0,
@@ -63,8 +63,8 @@ impl DebugSky {
     /// Create a night sky preset
     pub fn night() -> Self {
         Self {
-            horizon: 0x0D0D1AFF,  // Very dark blue
-            zenith: 0x03030DFF,   // Almost black
+            horizon: 0x0D0D1AFF,   // Very dark blue
+            zenith: 0x03030DFF,    // Almost black
             sun_dir_x: 0.0,
             sun_dir_y: -1.0,
             sun_dir_z: 0.0,
@@ -76,7 +76,7 @@ impl DebugSky {
     /// Apply sky settings and draw (call in render())
     pub fn apply_and_draw(&self) {
         unsafe {
-            // Use env_gradient for 2-color sky (zenith -> horizon for sky, horizon -> same for ground)
+            // Use env_gradient for a 2-color sky (zenith -> horizon for sky, horizon -> same for ground).
             env_gradient(
                 0,
                 self.zenith,
@@ -92,11 +92,14 @@ impl DebugSky {
                 0,   // horizon haze
                 0,   // sun warmth
                 0,   // cloudiness
+                0,   // cloud_phase
             );
-            // Use new lighting API
+
+            // Use new lighting API.
             light_set(0, self.sun_dir_x, self.sun_dir_y, self.sun_dir_z);
             light_color(0, self.sun_color);
             light_intensity(0, 1.0);
+
             draw_env();
         }
     }
@@ -104,7 +107,6 @@ impl DebugSky {
     /// Just apply settings without drawing (for lighting calculations)
     pub fn apply(&self) {
         unsafe {
-            // Use env_gradient for 2-color sky (zenith -> horizon for sky, horizon -> same for ground)
             env_gradient(
                 0,
                 self.zenith,
@@ -120,8 +122,10 @@ impl DebugSky {
                 0,   // horizon haze
                 0,   // sun warmth
                 0,   // cloudiness
+                0,   // cloud_phase
             );
-            // Use new lighting API
+
+            // Use new lighting API.
             light_set(0, self.sun_dir_x, self.sun_dir_y, self.sun_dir_z);
             light_color(0, self.sun_color);
             light_intensity(0, 1.0);
@@ -154,3 +158,4 @@ pub unsafe fn register_sky_debug(
     debug_register_f32(b"sharpness".as_ptr(), 9, sun_sharpness as *const u8);
     debug_group_end();
 }
+

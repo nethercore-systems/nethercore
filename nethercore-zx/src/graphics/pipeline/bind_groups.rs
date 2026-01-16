@@ -23,7 +23,7 @@ pub(crate) fn create_frame_bind_group_layout(
         // =====================================================================
 
         // Binding 0: unified_transforms - all mat4x4 matrices [models | views | projs]
-        // VERTEX_FRAGMENT: sky shader needs view/proj matrices in fragment
+        // VERTEX_FRAGMENT: environment shader needs view/proj matrices in fragment
         wgpu::BindGroupLayoutEntry {
             binding: 0,
             visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
@@ -81,7 +81,7 @@ pub(crate) fn create_frame_bind_group_layout(
         // =====================================================================
 
         // Binding 4: environment_states - per-frame array of PackedEnvironmentState
-        // Used by sky shader for procedural environment rendering
+        // Used by environment shader for procedural environment rendering
         wgpu::BindGroupLayoutEntry {
             binding: 4,
             visibility: wgpu::ShaderStages::FRAGMENT,

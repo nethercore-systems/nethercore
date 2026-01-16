@@ -22,7 +22,7 @@ This document describes Nethercore's codebase organization principles, module st
 - Create a module directory if multiple related files emerge
 
 **Exceptions:**
-- Generated code (e.g., `shader_gen.rs` with template-generated shaders)
+- Generated code (e.g., the build-time generated shader tables under `nethercore-zx/src/shader_gen/`)
 - Test modules with extensive test cases (keep related tests together)
 - Files with clear boundaries that would be awkward to split
 

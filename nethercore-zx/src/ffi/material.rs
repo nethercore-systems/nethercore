@@ -163,7 +163,7 @@ fn material_emissive(mut caller: Caller<'_, ZXGameContext>, value: f32) {
 ///
 /// Rim lighting creates edge highlights. Intensity controls brightness,
 /// power controls falloff sharpness (higher = tighter highlight).
-/// Rim lighting uses the sky color from behind the object for coherent scene lighting.
+/// Rim lighting uses the environment color from behind the object for coherent scene lighting.
 fn material_rim(mut caller: Caller<'_, ZXGameContext>, intensity: f32, power: f32) {
     let state = &mut caller.data_mut().ffi;
 
@@ -303,12 +303,12 @@ fn use_uniform_specular(mut caller: Caller<'_, ZXGameContext>, enabled: u32) {
     state.set_use_uniform_specular(enabled != 0);
 }
 
-/// Set whether to use matcap texture for reflection instead of sky (Mode 1 only)
+/// Set whether to use matcap texture for reflection instead of the environment (Mode 1 only)
 ///
 /// # Arguments
-/// * `enabled` — 0 = use procedural sky reflection (default), 1 = use matcap texture
+/// * `enabled` — 0 = use procedural environment reflection (default), 1 = use matcap texture
 ///
-/// When enabled, matcap slots provide stylized reflection instead of the procedural sky.
+/// When enabled, matcap slots provide stylized reflection instead of the procedural environment.
 fn use_matcap_reflection(mut caller: Caller<'_, ZXGameContext>, enabled: u32) {
     let state = &mut caller.data_mut().ffi;
     state.set_use_matcap_reflection(enabled != 0);

@@ -1,7 +1,7 @@
 //! Render state management
 //!
 //! Defines render state enums (cull mode, blend mode, texture filter),
-//! texture handles, sky uniforms, and the overall render state struct.
+//! texture handles, environment uniforms, and the overall render state struct.
 
 /// Handle to a loaded texture
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

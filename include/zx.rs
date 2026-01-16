@@ -935,36 +935,31 @@ extern "C" {
         horizon_haze: u32,
         sun_warmth: u32,
         cloudiness: u32,
+        cloud_phase: u32,
     );
 
-    /// Configure scatter environment (Mode 1: stars, rain, warp).
+    /// Configure cells environment (Mode 1).
     ///
-    /// Creates a procedural particle field.
-    ///
-    /// # Arguments
-    /// * `layer` — Target layer: 0 = base layer, 1 = overlay layer
-    /// * `variant` — 0=Stars, 1=Vertical (rain), 2=Horizontal, 3=Warp
-    /// * `density` — Particle count (0-255)
-    /// * `size` — Particle size (0-255)
-    /// * `glow` — Glow/bloom intensity (0-255)
-    /// * `streak_length` — Elongation for streaks (0-63, 0=points)
-    /// * `color_primary` — Main particle color (0xRRGGBB00)
-    /// * `color_secondary` — Variation/twinkle color (0xRRGGBB00)
-    /// * `parallax_rate` — Layer separation amount (0-255)
-    /// * `parallax_size` — Size variation with depth (0-255)
-    /// * `phase` — Animation phase (0-65535, wraps for seamless looping)
-    pub fn env_scatter(
+    /// Two families under one mode ID:
+    /// - Family 0: Particles (stars/snow/rain/embers/bubbles/warp)
+    /// - Family 1: Tiles/Lights (Mondrian/Truchet, buildings, bands, panels)
+    pub fn env_cells(
         layer: u32,
+        family: u32,
         variant: u32,
         density: u32,
-        size: u32,
-        glow: u32,
-        streak_length: u32,
-        color_primary: u32,
-        color_secondary: u32,
-        parallax_rate: u32,
-        parallax_size: u32,
+        size_min: u32,
+        size_max: u32,
+        intensity: u32,
+        shape: u32,
+        motion: u32,
+        parallax: u32,
+        height_bias: u32,
+        clustering: u32,
+        color_a: u32,
+        color_b: u32,
         phase: u32,
+        seed: u32,
     );
 
     /// Configure lines environment (Mode 2: synthwave grid, racing track).
@@ -978,10 +973,17 @@ extern "C" {
     /// * `thickness` — Line thickness (0-255)
     /// * `spacing` — Distance between lines in world units
     /// * `fade_distance` — Distance where lines start fading in world units
+    /// * `parallax` — Horizon band perspective bias + bounded internal depth slices (`0–95` → 1 slice, `96–191` → 2 slices, `192–255` → 3 slices)
     /// * `color_primary` — Main line color (0xRRGGBBAA)
     /// * `color_accent` — Accent line color (0xRRGGBBAA)
     /// * `accent_every` — Make every Nth line use accent color
     /// * `phase` — Scroll phase (0-65535, wraps for seamless looping)
+    /// * `profile` — Style family: 0=Grid, 1=Lanes, 2=Scanlines, 3=Caustic Bands
+    /// * `warp` — Static domain warp amount (0-255)
+    /// * `wobble` — Phase-driven wobble strength (0-255)
+    /// * `glow` — Emissive energy boost (0-255)
+    /// * `axis_x/y/z` — World-space scroll axis / orientation (normalized; falls back if near-zero)
+    /// * `seed` — Deterministic variation seed (0 derives from params)
     pub fn env_lines(
         layer: u32,
         variant: u32,
@@ -989,10 +991,19 @@ extern "C" {
         thickness: u32,
         spacing: f32,
         fade_distance: f32,
+        parallax: u32,
         color_primary: u32,
         color_accent: u32,
         accent_every: u32,
         phase: u32,
+        profile: u32,
+        warp: u32,
+        wobble: u32,
+        glow: u32,
+        axis_x: f32,
+        axis_y: f32,
+        axis_z: f32,
+        seed: u32,
     );
 
     /// Configure silhouette environment (Mode 3: mountains, cityscape).
@@ -1011,6 +1022,7 @@ extern "C" {
     /// * `seed` — Noise seed for terrain shape
     pub fn env_silhouette(
         layer: u32,
+        family: u32,
         jaggedness: u32,
         layer_count: u32,
         color_near: u32,
@@ -1019,36 +1031,39 @@ extern "C" {
         sky_horizon: u32,
         parallax_rate: u32,
         seed: u32,
+        phase: u32,
+        fog: u32,
+        wind: u32,
     );
 
-    /// Configure rectangles environment (Mode 4: city windows, control panels).
+    /// Configure nebula environment (Mode 4).
     ///
-    /// Creates rectangular light sources like windows or screens.
+    /// Soft fields: fog/clouds/aurora/ink/plasma/kaleido.
     ///
-    /// # Arguments
-    /// * `layer` — Target layer: 0 = base layer, 1 = overlay layer
-    /// * `variant` — 0=Scatter, 1=Buildings, 2=Bands, 3=Panels
-    /// * `density` — How many rectangles (0-255)
-    /// * `lit_ratio` — Percentage of rectangles lit (0-255, 128=50%)
-    /// * `size_min` — Minimum rectangle size (0-63)
-    /// * `size_max` — Maximum rectangle size (0-63)
-    /// * `aspect` — Aspect ratio bias (0-3, 0=square, 3=very tall)
-    /// * `color_primary` — Main window/panel color (0xRRGGBBAA)
-    /// * `color_variation` — Color variation for variety (0xRRGGBBAA)
-    /// * `parallax_rate` — Layer separation (0-255)
-    /// * `phase` — Flicker phase (0-65535, wraps for seamless animation)
-    pub fn env_rectangles(
+    /// Notes:
+    /// - `phase` is treated as `u16` (wraps); motion is designed to be loopable (closed path) rather than “scroll forever”.
+    /// - `parallax` selects bounded internal depth slices (`0–95` → 1 slice, `96–191` → 2 slices, `192–255` → 3 slices).
+    /// - `seed=0` means “auto”: derive a deterministic seed from the packed payload.
+    pub fn env_nebula(
         layer: u32,
-        variant: u32,
-        density: u32,
-        lit_ratio: u32,
-        size_min: u32,
-        size_max: u32,
-        aspect: u32,
-        color_primary: u32,
-        color_variation: u32,
-        parallax_rate: u32,
+        family: u32,
+        coverage: u32,
+        softness: u32,
+        intensity: u32,
+        scale: u32,
+        detail: u32,
+        warp: u32,
+        flow: u32,
+        parallax: u32,
+        height_bias: u32,
+        contrast: u32,
+        color_a: u32,
+        color_b: u32,
+        axis_x: f32,
+        axis_y: f32,
+        axis_z: f32,
         phase: u32,
+        seed: u32,
     );
 
     /// Configure room environment (Mode 5: interior spaces).
@@ -1078,45 +1093,40 @@ extern "C" {
         light_dir_y: f32,
         light_dir_z: f32,
         light_intensity: u32,
+        light_tint: u32,
         corner_darken: u32,
         room_scale: f32,
         viewer_x: i32,
         viewer_y: i32,
         viewer_z: i32,
+        accent: u32,
+        accent_mode: u32,
+        roughness: u32,
+        phase: u32,
     );
 
-    /// Configure curtains environment (Mode 6: pillars, trees, vertical structures).
+    /// Configure veil environment (Mode 6).
     ///
-    /// Creates vertical structures arranged around the viewer.
-    ///
-    /// # Arguments
-    /// * `layer` — Target layer: 0 = base layer, 1 = overlay layer
-    /// * `layer_count` — Depth layers (1-3)
-    /// * `density` — Structures per cell (0-255)
-    /// * `height_min` — Minimum height (0-63)
-    /// * `height_max` — Maximum height (0-63)
-    /// * `width` — Structure width (0-31)
-    /// * `spacing` — Gap between structures (0-31)
-    /// * `waviness` — Organic wobble (0-255, 0=straight)
-    /// * `color_near` — Nearest structure color (0xRRGGBBAA)
-    /// * `color_far` — Farthest structure color (0xRRGGBBAA)
-    /// * `glow` — Neon/magical glow intensity (0-255)
-    /// * `parallax_rate` — Layer separation (0-255)
-    /// * `phase` — Horizontal scroll phase (0-65535, wraps for seamless)
-    pub fn env_curtains(
+    /// Axis-aligned SDF ribbons/pillars with bounded depth slices.
+    pub fn env_veil(
         layer: u32,
-        layer_count: u32,
+        family: u32,
         density: u32,
+        width: u32,
+        taper: u32,
+        curvature: u32,
+        edge_soft: u32,
         height_min: u32,
         height_max: u32,
-        width: u32,
-        spacing: u32,
-        waviness: u32,
         color_near: u32,
         color_far: u32,
         glow: u32,
-        parallax_rate: u32,
+        parallax: u32,
+        axis_x: f32,
+        axis_y: f32,
+        axis_z: f32,
         phase: u32,
+        seed: u32,
     );
 
     /// Configure rings environment (Mode 7: portals, tunnels, vortex).
@@ -1136,6 +1146,7 @@ extern "C" {
     /// * `phase` — Rotation phase (0-65535 = 0°-360°, wraps for seamless)
     pub fn env_rings(
         layer: u32,
+        family: u32,
         ring_count: u32,
         thickness: u32,
         color_a: u32,
@@ -1147,6 +1158,11 @@ extern "C" {
         axis_y: f32,
         axis_z: f32,
         phase: u32,
+        wobble: u32,
+        noise: u32,
+        dash: u32,
+        glow: u32,
+        seed: u32,
     );
 
     /// Set the blend mode for combining base and overlay layers.

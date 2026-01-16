@@ -65,7 +65,7 @@ pub struct PackedUnifiedShadingState {
     /// Padding for struct alignment (animation_flags slot unused)
     pub _pad: u32,
 
-    /// Index into environment_states buffer for sky/environment rendering
+    /// Index into environment_states buffer for environment rendering
     /// References a PackedEnvironmentState in the GPU buffer
     pub environment_index: u32,
 }
@@ -142,7 +142,7 @@ pub const FLAG_USE_UNIFORM_ROUGHNESS: u32 = 1 << 4;
 pub const FLAG_USE_UNIFORM_EMISSIVE: u32 = 1 << 5;
 /// Flag bit for uniform specular override (bit 6, Mode 3 only)
 pub const FLAG_USE_UNIFORM_SPECULAR: u32 = 1 << 6;
-/// Flag bit for matcap vs sky reflection (bit 7, Mode 1 only)
+/// Flag bit for matcap vs environment reflection (bit 7, Mode 1 only)
 pub const FLAG_USE_MATCAP_REFLECTION: u32 = 1 << 7;
 
 // ============================================================================

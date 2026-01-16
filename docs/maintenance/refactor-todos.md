@@ -94,7 +94,7 @@ Legend: **P0** = foundational architecture/correctness, **P1** = high-ROI cleanu
 #### Graphics pipeline
 
 - [ ] Break up `nethercore/nethercore-zx/src/graphics/unified_shading_state.rs` + `frame.rs` into smaller pieces (pipeline config, bind groups, frame graph, post).
-- [ ] Reduce build-time codegen sprawl (`shader_gen.rs` + generated outputs): make the interface stable and test it.
+- [ ] Reduce build-time codegen sprawl (`shader_gen` + generated outputs): make the interface stable and test it.
 
 #### FFI and state
 

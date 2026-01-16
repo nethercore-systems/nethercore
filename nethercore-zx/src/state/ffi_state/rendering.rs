@@ -42,6 +42,14 @@ impl ZXFFIState {
                 nadir,
                 rotation: 0.0,
                 shift: 0.0,
+                sun_elevation: 0.0,
+                sun_disk: 0,
+                sun_halo: 0,
+                sun_intensity: 0,
+                horizon_haze: 0,
+                sun_warmth: 0,
+                cloudiness: 0,
+                cloud_phase: 0,
             });
 
         self.environment_dirty = true;

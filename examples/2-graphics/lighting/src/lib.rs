@@ -315,7 +315,8 @@ pub extern "C" fn render() {
             0,            // sun intensity (disabled)
             0,            // horizon haze
             0,            // sun warmth
-            0             // cloudiness
+            0,            // cloudiness
+            0             // cloud_phase
         );
         light_set(0, -0.7, -0.2, -0.7);  // Direction: rays from sun near horizon
         light_color(0, 0xFFFAF0FF);      // Color: warm white

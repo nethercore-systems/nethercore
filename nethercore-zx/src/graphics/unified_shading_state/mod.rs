@@ -22,9 +22,9 @@ mod tests;
 
 // Re-export all public types and functions to preserve API
 pub use environment::{
-    blend_mode, env_mode, CurtainsConfig, EnvironmentIndex, GradientConfig, LinesConfig,
-    PackedEnvironmentState, RectanglesConfig, RingsConfig, RoomConfig, ScatterConfig,
-    SilhouetteConfig, ENV_LAYER_WORDS, ENV_OVERLAY_OFFSET,
+    CellsConfig, ENV_LAYER_WORDS, ENV_OVERLAY_OFFSET, EnvironmentIndex, GradientConfig,
+    LinesConfig, NebulaConfig, PackedEnvironmentState, RingsConfig, RoomConfig, SilhouetteConfig,
+    VeilConfig, blend_mode, env_mode,
 };
 
 pub use light::{LightType, PackedLight};
@@ -39,10 +39,10 @@ pub use quantization::{
 };
 
 pub use shading_state::{
-    PackedUnifiedShadingState, ShadingStateIndex, DEFAULT_FLAGS, FLAG_DITHER_OFFSET_X_MASK,
-    FLAG_DITHER_OFFSET_X_SHIFT, FLAG_DITHER_OFFSET_Y_MASK, FLAG_DITHER_OFFSET_Y_SHIFT,
-    FLAG_SKIP_NORMAL_MAP, FLAG_SKINNING_MODE, FLAG_TEXTURE_FILTER_LINEAR,
-    FLAG_UNIFORM_ALPHA_MASK, FLAG_UNIFORM_ALPHA_SHIFT, FLAG_USE_MATCAP_REFLECTION,
-    FLAG_USE_UNIFORM_COLOR, FLAG_USE_UNIFORM_EMISSIVE, FLAG_USE_UNIFORM_METALLIC,
-    FLAG_USE_UNIFORM_ROUGHNESS, FLAG_USE_UNIFORM_SPECULAR,
+    DEFAULT_FLAGS, FLAG_DITHER_OFFSET_X_MASK, FLAG_DITHER_OFFSET_X_SHIFT,
+    FLAG_DITHER_OFFSET_Y_MASK, FLAG_DITHER_OFFSET_Y_SHIFT, FLAG_SKINNING_MODE,
+    FLAG_SKIP_NORMAL_MAP, FLAG_TEXTURE_FILTER_LINEAR, FLAG_UNIFORM_ALPHA_MASK,
+    FLAG_UNIFORM_ALPHA_SHIFT, FLAG_USE_MATCAP_REFLECTION, FLAG_USE_UNIFORM_COLOR,
+    FLAG_USE_UNIFORM_EMISSIVE, FLAG_USE_UNIFORM_METALLIC, FLAG_USE_UNIFORM_ROUGHNESS,
+    FLAG_USE_UNIFORM_SPECULAR, PackedUnifiedShadingState, ShadingStateIndex,
 };

@@ -217,19 +217,19 @@ pub(crate) fn create_quad_pipeline(
     }
 }
 
-/// Create sky rendering pipeline for fullscreen procedural sky
-pub(crate) fn create_sky_pipeline(
+/// Create environment rendering pipeline for fullscreen procedural environment
+pub(crate) fn create_environment_pipeline(
     device: &wgpu::Device,
     surface_format: wgpu::TextureFormat,
     pass_config: &PassConfig,
 ) -> PipelineEntry {
-    // Load sky shader (generated from common.wgsl + sky_template.wgsl by build.rs)
-    use crate::shader_gen::SKY_SHADER;
+    // Load environment shader (generated from the common WGSL sources + env_template.wgsl by build.rs)
+    use crate::shader_gen::ENVIRONMENT_SHADER;
 
     // Create shader module
     let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("Sky Shader"),
-        source: wgpu::ShaderSource::Wgsl(SKY_SHADER.into()),
+        label: Some("Environment Shader"),
+        source: wgpu::ShaderSource::Wgsl(ENVIRONMENT_SHADER.into()),
     });
 
     // Create bind group layouts (same as other pipelines)
@@ -238,14 +238,14 @@ pub(crate) fn create_sky_pipeline(
 
     // Create pipeline layout
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: Some("Sky Pipeline Layout"),
+        label: Some("Environment Pipeline Layout"),
         bind_group_layouts: &[&bind_group_layout_frame, &bind_group_layout_textures],
         push_constant_ranges: &[],
     });
 
     // Create render pipeline
     let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("Sky Pipeline"),
+        label: Some("Environment Pipeline"),
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState {
             module: &shader_module,
@@ -274,7 +274,7 @@ pub(crate) fn create_sky_pipeline(
         },
         depth_stencil: Some(wgpu::DepthStencilState {
             format: wgpu::TextureFormat::Depth24PlusStencil8,
-            depth_write_enabled: false, // Sky is infinitely far, don't write depth
+            depth_write_enabled: false, // Environment is infinitely far, don't write depth
             depth_compare: wgpu::CompareFunction::LessEqual, // Only render where depth == 1.0 (cleared, nothing drew)
             stencil: pass_config.to_wgpu_stencil_state(),
             bias: wgpu::DepthBiasState::default(),

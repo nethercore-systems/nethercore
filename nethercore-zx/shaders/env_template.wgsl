@@ -1,12 +1,12 @@
-// Sky rendering shader template
-// Prepended with common.wgsl by build.rs
+// Environment rendering shader template
+// Prepended with the common WGSL sources by build.rs
 // Renders a fullscreen procedural environment using Multi-Environment v4
 
 // ============================================================================
 // Vertex and Fragment Shaders
 // ============================================================================
 
-struct SkyVertexOut {
+struct EnvVertexOut {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) screen_pos: vec2<f32>,  // NDC x,y for fragment shader to compute view ray
     @location(1) @interpolate(flat) shading_state_index: u32,
@@ -15,8 +15,8 @@ struct SkyVertexOut {
 }
 
 @vertex
-fn vs(@builtin(vertex_index) vertex_index: u32, @builtin(instance_index) instance_index: u32) -> SkyVertexOut {
-    var out: SkyVertexOut;
+fn vs(@builtin(vertex_index) vertex_index: u32, @builtin(instance_index) instance_index: u32) -> EnvVertexOut {
+    var out: EnvVertexOut;
 
     // Generate fullscreen triangle coordinates (same pattern as blit.wgsl)
     // Vertex 0: (-1, -1)
@@ -43,7 +43,7 @@ fn vs(@builtin(vertex_index) vertex_index: u32, @builtin(instance_index) instanc
 }
 
 @fragment
-fn fs(in: SkyVertexOut) -> @location(0) vec4<f32> {
+fn fs(in: EnvVertexOut) -> @location(0) vec4<f32> {
     // Get environment index from shading state (Multi-Environment v4)
     let shading = shading_states[in.shading_state_index];
     let env_index = shading.environment_index;

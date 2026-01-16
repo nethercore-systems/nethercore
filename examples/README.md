@@ -113,12 +113,12 @@ Interactive debuggers for render modes and environment effects.
 |---------|-------------|-------------|
 | **debug-demo** | Debug inspection system (F4 panel) | Frame controls, inspection |
 | **env-gradient-inspector** | Gradient | 4-point gradient with 4 presets, debug controls |
-| **env-curtains-inspector** | Curtains | Curtain-style environment effect |
+| **env-veil-inspector** | Veil | Veil-style environment effect |
 | **env-lines-inspector** | Lines | Line-based procedural environment |
-| **env-rectangles-inspector** | Rectangles | Rectangle pattern environment |
+| **env-nebula-inspector** | Nebula | Nebula / fog / clouds environment |
 | **env-rings-inspector** | Rings | Concentric ring environment |
 | **env-room-inspector** | Room | Room-style enclosed environment |
-| **env-scatter-inspector** | Scatter | Particle scatter environment |
+| **env-cells-inspector** | Cells | Particles + tiles environment |
 | **env-silhouette-inspector** | Silhouette | Silhouette-based environment |
 
 **Difficulty:** 🟡 Intermediate | **Key Features:** F4 debug panels, real-time parameter tweaking
