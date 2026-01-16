@@ -54,18 +54,16 @@ fn sign_not_zero2(v: vec2<f32>) -> vec2<f32> {
 
 fn safe_normalize(v: vec3<f32>, fallback: vec3<f32>) -> vec3<f32> {
     let len2 = dot(v, v);
-    if (len2 > 1e-12) {
-        return v * inverseSqrt(len2);
-    }
-    return fallback;
+    let inv_len = inverseSqrt(max(len2, 1e-12));
+    let n = v * inv_len;
+    return select(fallback, n, len2 > 1e-12);
 }
 
 fn safe_normalize2(v: vec2<f32>, fallback: vec2<f32>) -> vec2<f32> {
     let len2 = dot(v, v);
-    if (len2 > 1e-12) {
-        return v * inverseSqrt(len2);
-    }
-    return fallback;
+    let inv_len = inverseSqrt(max(len2, 1e-12));
+    let n = v * inv_len;
+    return select(fallback, n, len2 > 1e-12);
 }
 
 fn safe_rcp(x: f32) -> f32 {
@@ -79,16 +77,34 @@ fn wrap_dist01(a: f32, b: f32) -> f32 {
     return abs(fract(a - b + 0.5) - 0.5);
 }
 
+// Signed delta on a wrapping [0,1) domain (returned in [-0.5, 0.5)).
+fn wrap_delta01(a: f32, b: f32) -> f32 {
+    return fract(a - b + 0.5) - 0.5;
+}
+
+// Signed delta on a wrapping [0,period) domain (returned in [-period/2, period/2)).
+fn wrap_delta(p: f32, q: f32, period: f32) -> f32 {
+    return wrap_delta01(p / period, q / period) * period;
+}
+
+fn wrap_mod_i32(v: i32, period: i32) -> i32 {
+    let m = v % period;
+    return select(m + period, m, m >= 0);
+}
+
 // Octahedral mapping: dir → uv in [-1, 1]^2 (no trig).
 fn dir_to_oct_uv(dir: vec3<f32>) -> vec2<f32> {
     let n = safe_normalize(dir, vec3<f32>(0.0, 0.0, 1.0));
-    var p = n / (abs(n.x) + abs(n.y) + abs(n.z) + 1e-12);
-    var uv = p.xz;
-    if (p.y < 0.0) {
-        let yx = uv.yx;
-        uv = (1.0 - abs(yx)) * sign_not_zero2(uv);
-    }
-    return uv;
+    let inv_l1 = 1.0 / (abs(n.x) + abs(n.y) + abs(n.z) + 1e-12);
+    let p = n * inv_l1;
+
+    // IMPORTANT: avoid non-uniform control flow here. Derivatives (fwidth/dfdx/dfdy)
+    // used later in environment shaders become undefined if intermediate values
+    // depend on divergent branches (common right at the horizon fold).
+    let uv = p.xz;
+    let yx = uv.yx;
+    let uv_fold = (1.0 - abs(yx)) * sign_not_zero2(uv);
+    return select(uv, uv_fold, p.y < 0.0);
 }
 
 fn dir_to_oct_uv01(dir: vec3<f32>) -> vec2<f32> {

@@ -54,7 +54,7 @@ fn sample_cells_particles_layer(
 
     // Variant-specific loopable motion (must wrap cleanly at phase).
     if (variant == 1u) { // Fall (rain/snow)
-        // Avoid wrapping the oct-UV domain (it's not periodic on the sphere and creates seam bands).
+        // Gentle loopable sideways meander (azimuth wraps later).
         uv.x = uv.x + tri(uv.y * 2.0 + phase01) * motion * 0.015;
     } else if (variant == 2u) { // Drift (embers/dust/bubbles)
         let drift = vec2<f32>(tri(phase01), tri(phase01 + 0.25)) * motion * 0.04;
@@ -67,6 +67,7 @@ fn sample_cells_particles_layer(
     }
 
     uv = (uv - vec2<f32>(0.5)) * horizon_boost + vec2<f32>(0.5);
+    uv.x = fract(uv.x);
 
     // Depth-dependent size (farther = smaller).
     let size_mul = mix(1.0, 0.55, depth01);
@@ -75,7 +76,9 @@ fn sample_cells_particles_layer(
 
     // Grid frequency: smaller particles -> more cells.
     let size_hi = max(size_min_l, size_max_l);
-    let freq = mix(10.0, 90.0, 1.0 - size_hi);
+    let freq_f = mix(10.0, 90.0, 1.0 - size_hi);
+    let freq_i = max(1, i32(round(freq_f)));
+    let freq = f32(freq_i);
 
     let p = uv * freq;
     let base_cell = vec2<i32>(i32(floor(p.x)), i32(floor(p.y)));
@@ -111,10 +114,15 @@ fn sample_cells_particles_layer(
     let sx: i32 = select(1, -1, f.x < 0.5);
     let sy: i32 = select(1, -1, f.y < 0.5);
 
-    let c0 = base_cell;
-    let c1 = base_cell + vec2<i32>(sx, 0);
-    let c2 = base_cell + vec2<i32>(0, sy);
-    let c3 = base_cell + vec2<i32>(sx, sy);
+    var c0 = base_cell;
+    var c1 = base_cell + vec2<i32>(sx, 0);
+    var c2 = base_cell + vec2<i32>(0, sy);
+    var c3 = base_cell + vec2<i32>(sx, sy);
+
+    c0.x = wrap_mod_i32(c0.x, freq_i);
+    c1.x = wrap_mod_i32(c1.x, freq_i);
+    c2.x = wrap_mod_i32(c2.x, freq_i);
+    c3.x = wrap_mod_i32(c3.x, freq_i);
 
     var best_a = 0.0;
     var best_rgb = vec3<f32>(0.0);
@@ -126,7 +134,8 @@ fn sample_cells_particles_layer(
             if (spawn) {
                 let jitter = (hash22_u32(ch ^ 0x9e3779b9u) - vec2<f32>(0.5)) * 0.6;
                 let center = vec2<f32>(f32(c0.x), f32(c0.y)) + vec2<f32>(0.5) + jitter;
-            let d = p_eval - center;
+            var d = p_eval - center;
+            d.x = wrap_delta(p_eval.x, center.x, freq);
                 let dist = length(d);
                 let size_r = mix(size_min_l, size_max_l, hash01_u32(ch ^ 0x85ebca6bu));
                 let r = max(0.01, size_r * 0.35);
@@ -180,7 +189,8 @@ fn sample_cells_particles_layer(
         if (spawn) {
             let jitter = (hash22_u32(ch ^ 0x9e3779b9u) - vec2<f32>(0.5)) * 0.6;
             let center = vec2<f32>(f32(c1.x), f32(c1.y)) + vec2<f32>(0.5) + jitter;
-            let d = p_eval - center;
+            var d = p_eval - center;
+            d.x = wrap_delta(p_eval.x, center.x, freq);
             let dist = length(d);
             let size_r = mix(size_min_l, size_max_l, hash01_u32(ch ^ 0x85ebca6bu));
             let r = max(0.01, size_r * 0.35);
@@ -234,7 +244,8 @@ fn sample_cells_particles_layer(
         if (spawn) {
             let jitter = (hash22_u32(ch ^ 0x9e3779b9u) - vec2<f32>(0.5)) * 0.6;
             let center = vec2<f32>(f32(c2.x), f32(c2.y)) + vec2<f32>(0.5) + jitter;
-            let d = p_eval - center;
+            var d = p_eval - center;
+            d.x = wrap_delta(p_eval.x, center.x, freq);
             let dist = length(d);
             let size_r = mix(size_min_l, size_max_l, hash01_u32(ch ^ 0x85ebca6bu));
             let r = max(0.01, size_r * 0.35);
@@ -287,7 +298,8 @@ fn sample_cells_particles_layer(
         if (spawn) {
             let jitter = (hash22_u32(ch ^ 0x9e3779b9u) - vec2<f32>(0.5)) * 0.6;
             let center = vec2<f32>(f32(c3.x), f32(c3.y)) + vec2<f32>(0.5) + jitter;
-            let d = p_eval - center;
+            var d = p_eval - center;
+            d.x = wrap_delta(p_eval.x, center.x, freq);
             let dist = length(d);
             let size_r = mix(size_min_l, size_max_l, hash01_u32(ch ^ 0x85ebca6bu));
             let r = max(0.01, size_r * 0.35);
@@ -380,8 +392,14 @@ fn sample_cells(data: array<u32, 14>, offset: u32, direction: vec3<f32>) -> vec4
     let dir = safe_normalize(direction, vec3<f32>(0.0, 0.0, 1.0));
     let h01 = clamp(dir.y * 0.5 + 0.5, 0.0, 1.0);
 
-    // Base oct UV (0..1), with mild parallax scaling near the horizon.
-    let uv_base = dir_to_oct_uv01(dir);
+    // Base UV for the sky sphere (azimuth wraps, height is linear).
+    // Avoid octahedral folds here; they create visible quadrant seams for
+    // anisotropic patterns (e.g. Fall streaks, glints, buildings).
+    let uv_sphere = vec2<f32>(pseudo_angle01(vec2<f32>(dir.x, dir.z)), h01);
+
+    // Warp (family 0, variant 3) expects a centered square domain.
+    let uv_oct = dir_to_oct_uv01(dir);
+    let uv_base = select(uv_sphere, uv_oct, family == 0u && variant == 3u);
     let horizon_boost = 1.0 + parallax * (1.0 - abs(dir.y)) * 1.25;
 
     // Energy scaling: intensity boosts RGB more than alpha (coverage stays geometric).
@@ -485,9 +503,12 @@ fn sample_cells(data: array<u32, 14>, offset: u32, direction: vec3<f32>) -> vec4
 
         // Mild "perspective" bias for tile families near the horizon.
         uv.x = (uv.x - 0.5) * (1.0 + parallax * (1.0 - h01) * 1.25) + 0.5;
+        uv.x = fract(uv.x);
 
         let size_hi = max(size_min01, size_max01);
-        let freq = mix(3.0, 30.0, 1.0 - size_hi);
+        let freq_f = mix(3.0, 30.0, 1.0 - size_hi);
+        let freq_i = max(1, i32(round(freq_f)));
+        let freq = f32(freq_i);
         let p = uv * freq;
         let cell = vec2<i32>(i32(floor(p.x)), i32(floor(p.y)));
         let f = fract(p);

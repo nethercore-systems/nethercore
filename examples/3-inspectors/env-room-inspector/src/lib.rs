@@ -340,7 +340,7 @@ pub extern "C" fn render() {
             VIEWER_Y as f32 * scale,
             VIEWER_Z as f32 * scale,
         );
-        set_color(0xFFCC00FF);
+        set_color(0xFFFFFFFF);
         material_metallic(0.6);
         material_roughness(0.3);
         let mesh = match SHAPE_INDEX {

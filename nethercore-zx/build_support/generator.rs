@@ -117,9 +117,13 @@ pub(crate) fn generate_shader(mode: u8, format: u8) -> Result<String, String> {
             ""
         },
     );
+
+    // Camera position is needed for view-dependent reflection sampling.
+    // Modes 2-3 always need it; mode 0 needs it when normals are present (environment reflection blend).
+    let needs_camera_pos = mode >= 2 || (mode == 0 && flags.has_normal);
     shader = shader.replace(
         "//VOUT_CAMERA_POS",
-        if mode >= 2 {
+        if needs_camera_pos {
             snippets::VOUT_CAMERA_POS
         } else {
             ""
@@ -191,8 +195,8 @@ pub(crate) fn generate_shader(mode: u8, format: u8) -> Result<String, String> {
         shader = shader.replace("//VS_VIEW_POS", "");
     }
 
-    // Camera position extraction (modes 2-3 only)
-    if mode >= 2 {
+    // Camera position extraction (modes 2-3, and mode 0 when normals are present)
+    if needs_camera_pos {
         shader = shader.replace("//VS_CAMERA_POS", snippets::VS_CAMERA_POS);
     } else {
         shader = shader.replace("//VS_CAMERA_POS", "");
