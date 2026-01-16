@@ -54,8 +54,7 @@ fn sample_cells_particles_layer(
 
     // Variant-specific loopable motion (must wrap cleanly at phase).
     if (variant == 1u) { // Fall (rain/snow)
-        // Wrap within the oct domain for seamless looping.
-        uv.y = fract(uv.y + phase01);
+        // Avoid wrapping the oct-UV domain (it's not periodic on the sphere and creates seam bands).
         uv.x = uv.x + tri(uv.y * 2.0 + phase01) * motion * 0.015;
     } else if (variant == 2u) { // Drift (embers/dust/bubbles)
         let drift = vec2<f32>(tri(phase01), tri(phase01 + 0.25)) * motion * 0.04;
@@ -81,6 +80,12 @@ fn sample_cells_particles_layer(
     let p = uv * freq;
     let base_cell = vec2<i32>(i32(floor(p.x)), i32(floor(p.y)));
     let f = fract(p);
+
+    // Fall motion: loopable shift within each cell (keeps sampling seamless across the sphere).
+    var p_eval = p;
+    if (variant == 1u) {
+        p_eval.y = floor(p.y) + fract(f.y + phase01);
+    }
 
     // Height bias shaping:
     // - Stars/Fall/Drift: 0 = zenith-biased, 1 = horizon-biased.
@@ -116,16 +121,16 @@ fn sample_cells_particles_layer(
 
     // Candidate evaluation helper (inline, no unbounded loops).
     {
-        let ch = hash_cell_u32(c0, seed, 0x243f6a88u);
-        let spawn = hash01_u32(ch) < density_eff;
-        if (spawn) {
-            let jitter = (hash22_u32(ch ^ 0x9e3779b9u) - vec2<f32>(0.5)) * 0.6;
-            let center = vec2<f32>(f32(c0.x), f32(c0.y)) + vec2<f32>(0.5) + jitter;
-            let d = p - center;
-            let dist = length(d);
-            let size_r = mix(size_min_l, size_max_l, hash01_u32(ch ^ 0x85ebca6bu));
-            let r = max(0.01, size_r * 0.35);
-            let aa = fwidth(dist) + 1e-6;
+            let ch = hash_cell_u32(c0, seed, 0x243f6a88u);
+            let spawn = hash01_u32(ch) < density_eff;
+            if (spawn) {
+                let jitter = (hash22_u32(ch ^ 0x9e3779b9u) - vec2<f32>(0.5)) * 0.6;
+                let center = vec2<f32>(f32(c0.x), f32(c0.y)) + vec2<f32>(0.5) + jitter;
+            let d = p_eval - center;
+                let dist = length(d);
+                let size_r = mix(size_min_l, size_max_l, hash01_u32(ch ^ 0x85ebca6bu));
+                let r = max(0.01, size_r * 0.35);
+                let aa = fwidth(dist) + 1e-6;
 
             var a = 1.0 - smoothstep(r, r + aa, dist);
             var rgb = mix(color_a.rgb, color_b.rgb, hash01_u32(ch ^ 0xc2b2ae35u));
@@ -138,7 +143,8 @@ fn sample_cells_particles_layer(
                 let g1 = max(gx, gy);
                 let g2 = 1.0 - smoothstep(r * glint_w, r * glint_w + aa, abs(d.x + d.y));
                 let g3 = 1.0 - smoothstep(r * glint_w, r * glint_w + aa, abs(d.x - d.y));
-                let glint = max(g1, max(g2, g3)) * shape;
+                let ray_falloff = 1.0 - smoothstep(r * 1.25, r * 4.0 + aa, dist);
+                let glint = max(g1, max(g2, g3)) * shape * ray_falloff;
                 a = max(a, glint * 0.85);
                 rgb = rgb * tw;
             } else if (variant == 1u) { // Fall
@@ -174,7 +180,7 @@ fn sample_cells_particles_layer(
         if (spawn) {
             let jitter = (hash22_u32(ch ^ 0x9e3779b9u) - vec2<f32>(0.5)) * 0.6;
             let center = vec2<f32>(f32(c1.x), f32(c1.y)) + vec2<f32>(0.5) + jitter;
-            let d = p - center;
+            let d = p_eval - center;
             let dist = length(d);
             let size_r = mix(size_min_l, size_max_l, hash01_u32(ch ^ 0x85ebca6bu));
             let r = max(0.01, size_r * 0.35);
@@ -191,7 +197,9 @@ fn sample_cells_particles_layer(
                 let g1 = max(gx, gy);
                 let g2 = 1.0 - smoothstep(r * glint_w, r * glint_w + aa, abs(d.x + d.y));
                 let g3 = 1.0 - smoothstep(r * glint_w, r * glint_w + aa, abs(d.x - d.y));
-                let glint = max(g1, max(g2, g3)) * shape;
+                // Keep glints local (avoid stars reading as long lines).
+                let ray_falloff = 1.0 - smoothstep(r * 1.25, r * 4.0 + aa, dist);
+                let glint = max(g1, max(g2, g3)) * shape * ray_falloff;
                 a = max(a, glint * 0.85);
                 rgb = rgb * tw;
             } else if (variant == 1u) {
@@ -226,7 +234,7 @@ fn sample_cells_particles_layer(
         if (spawn) {
             let jitter = (hash22_u32(ch ^ 0x9e3779b9u) - vec2<f32>(0.5)) * 0.6;
             let center = vec2<f32>(f32(c2.x), f32(c2.y)) + vec2<f32>(0.5) + jitter;
-            let d = p - center;
+            let d = p_eval - center;
             let dist = length(d);
             let size_r = mix(size_min_l, size_max_l, hash01_u32(ch ^ 0x85ebca6bu));
             let r = max(0.01, size_r * 0.35);
@@ -243,7 +251,8 @@ fn sample_cells_particles_layer(
                 let g1 = max(gx, gy);
                 let g2 = 1.0 - smoothstep(r * glint_w, r * glint_w + aa, abs(d.x + d.y));
                 let g3 = 1.0 - smoothstep(r * glint_w, r * glint_w + aa, abs(d.x - d.y));
-                let glint = max(g1, max(g2, g3)) * shape;
+                let ray_falloff = 1.0 - smoothstep(r * 1.25, r * 4.0 + aa, dist);
+                let glint = max(g1, max(g2, g3)) * shape * ray_falloff;
                 a = max(a, glint * 0.85);
                 rgb = rgb * tw;
             } else if (variant == 1u) {
@@ -278,7 +287,7 @@ fn sample_cells_particles_layer(
         if (spawn) {
             let jitter = (hash22_u32(ch ^ 0x9e3779b9u) - vec2<f32>(0.5)) * 0.6;
             let center = vec2<f32>(f32(c3.x), f32(c3.y)) + vec2<f32>(0.5) + jitter;
-            let d = p - center;
+            let d = p_eval - center;
             let dist = length(d);
             let size_r = mix(size_min_l, size_max_l, hash01_u32(ch ^ 0x85ebca6bu));
             let r = max(0.01, size_r * 0.35);
@@ -295,7 +304,8 @@ fn sample_cells_particles_layer(
                 let g1 = max(gx, gy);
                 let g2 = 1.0 - smoothstep(r * glint_w, r * glint_w + aa, abs(d.x + d.y));
                 let g3 = 1.0 - smoothstep(r * glint_w, r * glint_w + aa, abs(d.x - d.y));
-                let glint = max(g1, max(g2, g3)) * shape;
+                let ray_falloff = 1.0 - smoothstep(r * 1.25, r * 4.0 + aa, dist);
+                let glint = max(g1, max(g2, g3)) * shape * ray_falloff;
                 a = max(a, glint * 0.85);
                 rgb = rgb * tw;
             } else if (variant == 1u) {

@@ -43,6 +43,15 @@ fn saturate(x: f32) -> f32 {
     return clamp(x, 0.0, 1.0);
 }
 
+// sign() returns 0.0 for inputs exactly 0.0, which can produce visible seams in
+// octahedral folds on common cardinal directions. Use a non-zero sign instead.
+fn sign_not_zero2(v: vec2<f32>) -> vec2<f32> {
+    return vec2<f32>(
+        select(-1.0, 1.0, v.x >= 0.0),
+        select(-1.0, 1.0, v.y >= 0.0)
+    );
+}
+
 fn safe_normalize(v: vec3<f32>, fallback: vec3<f32>) -> vec3<f32> {
     let len2 = dot(v, v);
     if (len2 > 1e-12) {
@@ -59,6 +68,12 @@ fn safe_normalize2(v: vec2<f32>, fallback: vec2<f32>) -> vec2<f32> {
     return fallback;
 }
 
+fn safe_rcp(x: f32) -> f32 {
+    // Avoid INF/NaN paths when x is near 0 (common for axis-aligned directions).
+    let s = select(-1.0, 1.0, x >= 0.0);
+    return select(s * 1e6, 1.0 / x, abs(x) > 1e-6);
+}
+
 // Signed distance on a wrapping [0,1) domain (returned as absolute distance in [0, 0.5]).
 fn wrap_dist01(a: f32, b: f32) -> f32 {
     return abs(fract(a - b + 0.5) - 0.5);
@@ -71,7 +86,7 @@ fn dir_to_oct_uv(dir: vec3<f32>) -> vec2<f32> {
     var uv = p.xz;
     if (p.y < 0.0) {
         let yx = uv.yx;
-        uv = (1.0 - abs(yx)) * sign(uv);
+        uv = (1.0 - abs(yx)) * sign_not_zero2(uv);
     }
     return uv;
 }
@@ -141,4 +156,3 @@ fn value_noise2(uv: vec2<f32>) -> f32 {
 
     return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
 }
-

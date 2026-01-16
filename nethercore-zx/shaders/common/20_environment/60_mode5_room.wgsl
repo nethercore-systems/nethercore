@@ -43,7 +43,7 @@ fn sample_room(data: array<u32, 14>, offset: u32, direction: vec3<f32>) -> vec4<
     let dir = safe_normalize(direction, vec3<f32>(0.0, 0.0, 1.0));
 
     // Ray-box intersection (viewer inside an axis-aligned box).
-    let inv_dir = 1.0 / dir;
+    let inv_dir = vec3<f32>(safe_rcp(dir.x), safe_rcp(dir.y), safe_rcp(dir.z));
     let t_min = (-room_scale - viewer) * inv_dir;
     let t_max = (room_scale - viewer) * inv_dir;
 

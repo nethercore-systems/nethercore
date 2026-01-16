@@ -53,13 +53,18 @@ fn sample_rings(data: array<u32, 14>, offset: u32, direction: vec3<f32>) -> vec4
     let az = pseudo_angle01(p);
     let az_rot = fract(az + phase01);
 
+    // Azimuth is ill-defined at the ring center (p≈0, r≈0). Fade azimuth-driven modulation
+    // near the center pole to avoid visible "merging" artifacts.
+    let az_w = smoothstep(0.02, 0.12, r);
+    let az_rot_s = mix(seed01, az_rot, az_w);
+
     // Secondary domain warp (stable, loopable).
     if (wobble01 > 0.0) {
-        let w = tri(az_rot * 2.0 + phase01 + seed01 * 3.0);
+        let w = tri(az_rot_s * 2.0 + phase01 + seed01 * 3.0);
         r = clamp(r + w * wobble01 * 0.08 * (0.25 + 0.75 * r), 0.0, 1.0);
     }
     if (noise01 > 0.0) {
-        let n = value_noise2(vec2<f32>(az_rot * 8.0, r * 8.0) + vec2<f32>(seed01 * 17.0, seed01 * 31.0));
+        let n = value_noise2(vec2<f32>(az_rot_s * 8.0, r * 8.0) + vec2<f32>(seed01 * 17.0, seed01 * 31.0));
         r = clamp(r + (n - 0.5) * noise01 * 0.08, 0.0, 1.0);
     }
 
@@ -67,7 +72,7 @@ fn sample_rings(data: array<u32, 14>, offset: u32, direction: vec3<f32>) -> vec4
 
     // Ring-space coordinate.
     var u = r * f32(ring_count);
-    u = u + az_rot * twist_turns * f32(ring_count);
+    u = u + az_rot_s * twist_turns * f32(ring_count);
 
     // Family-specific motion.
     let travel = phase01 * f32(ring_count);
@@ -106,12 +111,13 @@ fn sample_rings(data: array<u32, 14>, offset: u32, direction: vec3<f32>) -> vec4
     // Dash/segmentation around azimuth.
     if (dash01 > 0.0) {
         let segs = mix(4.0, 64.0, dash01);
-        let sd = abs(fract(az_rot * segs + seed01) - 0.5);
-        let seg_aa = fwidth(az_rot * segs) + 1e-6;
+        let sd = abs(fract(az_rot_s * segs + seed01) - 0.5);
+        let seg_aa = fwidth(az_rot_s * segs) + 1e-6;
         let w = mix(0.5, 0.06, dash01);
         let dash_mask = 1.0 - smoothstep(w, w + seg_aa, sd);
-        a = a * dash_mask;
-        rgb = rgb * dash_mask;
+        let dash_mask_w = mix(1.0, dash_mask, az_w);
+        a = a * dash_mask_w;
+        rgb = rgb * dash_mask_w;
     }
 
     // Radar sweep (family 3): bright wedge driven by az vs phase.
@@ -119,7 +125,7 @@ fn sample_rings(data: array<u32, 14>, offset: u32, direction: vec3<f32>) -> vec4
         let sweep_d = wrap_dist01(az, phase01);
         let sweep_w = 0.03;
         let sweep_aa = fwidth(sweep_d) + 1e-6;
-        let sweep = 1.0 - smoothstep(sweep_w, sweep_w + sweep_aa, sweep_d);
+        let sweep = (1.0 - smoothstep(sweep_w, sweep_w + sweep_aa, sweep_d)) * az_w;
         rgb = rgb * (0.6 + 1.8 * sweep);
     }
 

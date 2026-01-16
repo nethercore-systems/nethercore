@@ -145,7 +145,9 @@ pub extern "C" fn on_debug_change() {
         PRESET_INDEX = PRESET_INDEX.clamp(0, PRESET_COUNT as i32 - 1);
         FAMILY = FAMILY.clamp(0, 3);
         if HEIGHT_MIN > HEIGHT_MAX {
-            core::mem::swap(&mut HEIGHT_MIN, &mut HEIGHT_MAX);
+            let tmp = HEIGHT_MIN;
+            HEIGHT_MIN = HEIGHT_MAX;
+            HEIGHT_MAX = tmp;
         }
 
         // Normalize axis.
@@ -172,35 +174,47 @@ pub extern "C" fn init() {
         load_preset(0);
 
         debug_group_begin(b"veil".as_ptr(), 4);
-        debug_register_u8(b"family".as_ptr(), 6, &FAMILY);
-        debug_register_u8(b"density".as_ptr(), 7, &DENSITY);
-        debug_register_u8(b"width".as_ptr(), 5, &WIDTH);
-        debug_register_u8(b"taper".as_ptr(), 5, &TAPER);
-        debug_register_u8(b"curv".as_ptr(), 4, &CURVATURE);
-        debug_register_u8(b"edge_soft".as_ptr(), 9, &EDGE_SOFT);
-        debug_register_u8(b"h_min".as_ptr(), 5, &HEIGHT_MIN);
-        debug_register_u8(b"h_max".as_ptr(), 5, &HEIGHT_MAX);
-        debug_register_color(b"near".as_ptr(), 4, &COLOR_NEAR as *const u32 as *const u8);
-        debug_register_color(b"far".as_ptr(), 3, &COLOR_FAR as *const u32 as *const u8);
-        debug_register_u8(b"glow".as_ptr(), 4, &GLOW);
-        debug_register_u8(b"parallax".as_ptr(), 8, &PARALLAX);
-        debug_register_u32(b"seed".as_ptr(), 4, &SEED as *const u32 as *const u8);
+        debug_register_u8(b"family".as_ptr(), 6, core::ptr::addr_of!(FAMILY));
+        debug_register_u8(b"density".as_ptr(), 7, core::ptr::addr_of!(DENSITY));
+        debug_register_u8(b"width".as_ptr(), 5, core::ptr::addr_of!(WIDTH));
+        debug_register_u8(b"taper".as_ptr(), 5, core::ptr::addr_of!(TAPER));
+        debug_register_u8(b"curv".as_ptr(), 4, core::ptr::addr_of!(CURVATURE));
+        debug_register_u8(b"edge_soft".as_ptr(), 9, core::ptr::addr_of!(EDGE_SOFT));
+        debug_register_u8(b"h_min".as_ptr(), 5, core::ptr::addr_of!(HEIGHT_MIN));
+        debug_register_u8(b"h_max".as_ptr(), 5, core::ptr::addr_of!(HEIGHT_MAX));
+        debug_register_color(
+            b"near".as_ptr(),
+            4,
+            core::ptr::addr_of!(COLOR_NEAR) as *const u8,
+        );
+        debug_register_color(
+            b"far".as_ptr(),
+            3,
+            core::ptr::addr_of!(COLOR_FAR) as *const u8,
+        );
+        debug_register_u8(b"glow".as_ptr(), 4, core::ptr::addr_of!(GLOW));
+        debug_register_u8(b"parallax".as_ptr(), 8, core::ptr::addr_of!(PARALLAX));
+        debug_register_u32(b"seed".as_ptr(), 4, core::ptr::addr_of!(SEED) as *const u8);
         debug_group_end();
 
         debug_group_begin(b"axis".as_ptr(), 4);
-        debug_register_f32(b"x".as_ptr(), 1, &AXIS_X as *const f32 as *const u8);
-        debug_register_f32(b"y".as_ptr(), 1, &AXIS_Y as *const f32 as *const u8);
-        debug_register_f32(b"z".as_ptr(), 1, &AXIS_Z as *const f32 as *const u8);
+        debug_register_f32(b"x".as_ptr(), 1, core::ptr::addr_of!(AXIS_X) as *const u8);
+        debug_register_f32(b"y".as_ptr(), 1, core::ptr::addr_of!(AXIS_Y) as *const u8);
+        debug_register_f32(b"z".as_ptr(), 1, core::ptr::addr_of!(AXIS_Z) as *const u8);
         debug_group_end();
 
         debug_group_begin(b"animation".as_ptr(), 9);
-        debug_register_u8(b"animate".as_ptr(), 7, &ANIMATE);
-        debug_register_u32(b"phase".as_ptr(), 5, &PHASE as *const u32 as *const u8);
-        debug_register_u32(b"rate".as_ptr(), 4, &PHASE_RATE as *const u32 as *const u8);
+        debug_register_u8(b"animate".as_ptr(), 7, core::ptr::addr_of!(ANIMATE));
+        debug_register_u32(b"phase".as_ptr(), 5, core::ptr::addr_of!(PHASE) as *const u8);
+        debug_register_u32(b"rate".as_ptr(), 4, core::ptr::addr_of!(PHASE_RATE) as *const u8);
         debug_group_end();
 
         debug_group_begin(b"preset".as_ptr(), 6);
-        debug_register_i32(b"index".as_ptr(), 5, &PRESET_INDEX as *const i32 as *const u8);
+        debug_register_i32(
+            b"index".as_ptr(),
+            5,
+            core::ptr::addr_of!(PRESET_INDEX) as *const u8,
+        );
         debug_group_end();
     }
 }
@@ -272,9 +286,9 @@ pub extern "C" fn render() {
         draw_env();
 
         push_identity();
-        set_color(0x333344FF);
+        set_color(0xFFFFFFFF);
         material_metallic(0.8);
-        material_roughness(0.2);
+        material_roughness(0.4);
         let mesh = match SHAPE_INDEX {
             0 => SPHERE_MESH,
             1 => CUBE_MESH,

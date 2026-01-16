@@ -131,7 +131,9 @@ fn sample_silhouette(data: array<u32, 14>, offset: u32, direction: vec3<f32>) ->
 
         // Coverage mask with derivative AA.
         let edge = dir.y - h;
-        let aa = fwidth(edge) + 1e-5;
+        // Only AA in the vertical dimension; horizontal discontinuities in `h` (e.g. city block
+        // steps) can otherwise produce faint vertical "bands" above silhouettes.
+        let aa = fwidth(dir.y) + 1e-5;
         let mask = 1.0 - smoothstep(0.0, aa, edge);
 
         var layer_col = mix(color_near, color_far, depth);
