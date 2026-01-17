@@ -11,6 +11,8 @@ Multi-Environment v4 provides:
 - **Blend modes** — `env_blend(0..3)` controls how overlay composites onto base
 - **Loopable animation** — Most modes take a `phase` that wraps cleanly (0–65535)
 
+For mode selection and example recipes, see [EPU Environments](../guides/epu-environments.md).
+
 All environments are rendered by calling `draw_env()` in your `render()` function.
 
 ## Quick Use

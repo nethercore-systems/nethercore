@@ -23,6 +23,7 @@
 # Guides
 
 - [Render Modes](./guides/render-modes.md)
+- [EPU Environments](./guides/epu-environments.md)
 - [Rollback Safety](./guides/rollback-safety.md)
 - [Asset Pipeline](./guides/asset-pipeline.md)
 - [Publishing Your Game](./guides/publishing.md)
