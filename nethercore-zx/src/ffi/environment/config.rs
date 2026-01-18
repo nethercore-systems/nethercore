@@ -472,7 +472,7 @@ pub(crate) fn env_room(
 
 /// Configure veil environment (Mode 6).
 ///
-/// Axis-aligned SDF ribbons/pillars with bounded depth slices.
+/// Direction-based SDF ribbons/pillars with bounded depth slices.
 pub(crate) fn env_veil(
     mut caller: Caller<'_, ZXGameContext>,
     layer: u32,

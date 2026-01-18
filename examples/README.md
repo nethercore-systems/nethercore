@@ -115,7 +115,7 @@ Interactive debuggers for render modes and environment effects.
 | **env-gradient-inspector** | Gradient | 4-point gradient with 4 presets, debug controls |
 | **env-veil-inspector** | Veil | Veil-style environment effect |
 | **env-lines-inspector** | Lines | Line-based procedural environment |
-| **env-nebula-inspector** | Nebula | Nebula / fog / clouds environment |
+| **env-nebula-inspector** | Nebula | Soft-field environment (fog/clouds/aurora/ink/plasma/kaleido) |
 | **env-rings-inspector** | Rings | Concentric ring environment |
 | **env-room-inspector** | Room | Room-style enclosed environment |
 | **env-cells-inspector** | Cells | Particles + tiles environment |

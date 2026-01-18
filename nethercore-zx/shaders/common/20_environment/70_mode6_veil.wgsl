@@ -26,13 +26,15 @@ fn veil_eval_slice(
     weight: f32,
 ) -> vec4<f32> {
     let stripe_u = uv.x;
-    let s0 = stripe_u * freq + scroll;
+    let u01 = fract(stripe_u + scroll);
+    let s0 = u01 * freq;
     let i0 = floor(s0);
     let i1 = i0 + 1.0;
 
     // Per-stripe offsets (stable, anchored to stripe IDs).
-    let stripe_id0 = bitcast<u32>(i32(i0));
-    let stripe_id1 = bitcast<u32>(i32(i1));
+    let freq_u = u32(freq);
+    let stripe_id0 = u32(i0) % freq_u;
+    let stripe_id1 = u32(i1) % freq_u;
     let off0 = hash01_u32(hash_u32(stripe_id0 ^ seed ^ 0x9e3779b9u));
     let off1 = hash01_u32(hash_u32(stripe_id1 ^ seed ^ 0x9e3779b9u));
 
@@ -44,7 +46,7 @@ fn veil_eval_slice(
     let sway_bias = select(0.55, 0.8, family == 1u || family == 3u);
 
     // Curvature displacement uses the secondary coordinate (uv.y).
-    let y = uv.y;
+    let y = uv.y * 2.0 - 1.0;
     let s = s0 + curv_amp * y * mix(static_bend, sway, sway_bias);
 
     // Distance to stripe center in stripe units.
@@ -126,16 +128,6 @@ fn sample_veil(data: array<u32, 14>, offset: u32, direction: vec3<f32>) -> vec4<
 
     let dir = safe_normalize(direction, vec3<f32>(0.0, 0.0, 1.0));
 
-    // Locked density→frequency mapping: 2..64 stripes.
-    let d = density_u8;
-    let freq_u = 2u + (((d - 1u) * 62u + 127u) / 254u);
-    let freq0 = f32(freq_u);
-
-    // Local oct UV around axis (no trig).
-    let b = basis_from_axis(axis);
-    let local = vec3<f32>(dot(dir, b.t), dot(dir, b.n), dot(dir, b.b));
-    let uv = dir_to_oct_uv(local); // [-1,1]
-
     // Dot-height gating in 0..255.
     let h01 = saturate(dot(dir, axis) * 0.5 + 0.5);
     let h255 = h01 * 255.0;
@@ -148,6 +140,17 @@ fn sample_veil(data: array<u32, 14>, offset: u32, direction: vec3<f32>) -> vec4<
     if (height_gate <= 0.0) {
         return vec4<f32>(0.0);
     }
+
+    // Locked density→frequency mapping: 2..64 stripes.
+    let d = density_u8;
+    let freq_u = 2u + (((d - 1u) * 62u + 127u) / 254u);
+    let freq0 = f32(freq_u);
+
+    // Trig-free azimuth around axis (diamond angle).
+    let b = basis_from_axis(axis);
+    let p = vec2<f32>(dot(dir, b.t), dot(dir, b.b));
+    let u01 = pseudo_angle01(p);
+    let uv = vec2<f32>(u01, h01);
 
     // Taper: modulate width across the active height span.
     let taper01 = f32(taper_u8) / 255.0;

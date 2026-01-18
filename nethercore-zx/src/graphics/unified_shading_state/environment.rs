@@ -643,7 +643,7 @@ impl PackedEnvironmentState {
     }
 
     /// Pack veil parameters into data[offset..offset+7]
-    /// Mode 6: Veil - Axis-aligned SDF ribbons/pillars (bounded 1–3 depth slices)
+    /// Mode 6: Veil - Direction-based SDF ribbons/pillars (bounded 1–3 depth slices)
     pub fn pack_veil(&mut self, config: VeilConfig) {
         let VeilConfig {
             offset,

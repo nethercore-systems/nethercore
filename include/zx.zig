@@ -669,9 +669,29 @@ pub extern "C" fn env_gradient(layer: u32, zenith: u32, sky_horizon: u32, ground
 
 /// Configure cells environment (Mode 1).
 /// 
-/// Two families under one mode ID:
+/// Unified cell generator with two families:
 /// - Family 0: Particles (stars/snow/rain/embers/bubbles/warp)
 /// - Family 1: Tiles/Lights (Mondrian/Truchet, buildings, bands, panels)
+/// 
+/// # Arguments
+/// * `layer`  Target layer: 0 = base layer, 1 = overlay layer
+/// * `family`  0=Particles, 1=Tiles/Lights
+/// * `variant`  Depends on `family`:
+/// - Family 0: 0=Stars/Fireflies, 1=Fall (Rain/Snow), 2=Drift (Embers/Dust/Bubbles), 3=Warp (Hyperspace/Burst)
+/// - Family 1: 0=Abstract (Mondrian/Truchet), 1=Buildings (Windows), 2=Bands (Signage Floors), 3=Panels (UI Grids)
+/// * `density`  Spawn/occupancy amount (0-255)
+/// * `size_min`/`size_max`  Size range (0-255; mapped to a mode-specific radius/extent)
+/// * `intensity`  Emissive energy multiplier (0-255; affects RGB more than alpha)
+/// * `shape`  Variant-specific profile/hardness knob (0-255)
+/// * `motion`  Variant-specific animation strength knob (0-255; loops cleanly over `phase`)
+/// * `parallax`  Depth/perspective strength (0-255). For Particles, also selects bounded internal depth slices:
+/// 0-95=1 slice, 96-191=2 slices, 192-255=3 slices.
+/// * `height_bias`  Placement/zoning bias (0-255)
+/// * `clustering`  Grouping/districting bias (0-255)
+/// * `color_a`/`color_b`  Palette endpoints (0xRRGGBBAA); `color_b` is variation/twinkle/accent
+/// * `axis_x/y/z`  World-space axis/flow direction (normalized; if near-zero, falls back to Y-up, except Particles/Fall defaults to Y-down)
+/// * `phase`  Loopable animation driver (treated as u16; wraps). Avoid using `phase` directly as a hash input.
+/// * `seed`  Deterministic variation seed (0 derives from packed payload)
 pub extern "C" fn env_cells(layer: u32, family: u32, variant: u32, density: u32, size_min: u32, size_max: u32, intensity: u32, shape: u32, motion: u32, parallax: u32, height_bias: u32, clustering: u32, color_a: u32, color_b: u32, axis_x: f32, axis_y: f32, axis_z: f32, phase: u32, seed: u32) void;
 
 /// Configure lines environment (Mode 2: synthwave grid, racing track).
@@ -719,6 +739,7 @@ pub extern "C" fn env_silhouette(layer: u32, family: u32, jaggedness: u32, layer
 /// Soft fields: fog/clouds/aurora/ink/plasma/kaleido.
 /// 
 /// Notes:
+/// - Projection (no trig): axis-oriented oct-UV for all Nebula families (including `family=2` Aurora).
 /// - `phase` is treated as `u16` (wraps); motion is designed to be loopable (closed path) rather than “scroll forever”.
 /// - `parallax` selects bounded internal depth slices (`0–95` → 1 slice, `96–191` → 2 slices, `192–255` → 3 slices).
 /// - `seed=0` means “auto”: derive a deterministic seed from the packed payload.
@@ -744,7 +765,7 @@ pub extern "C" fn env_room(layer: u32, color_ceiling: u32, color_floor: u32, col
 
 /// Configure veil environment (Mode 6).
 /// 
-/// Axis-aligned SDF ribbons/pillars with bounded depth slices.
+/// Direction-based SDF ribbons/pillars with bounded depth slices.
 pub extern "C" fn env_veil(layer: u32, family: u32, density: u32, width: u32, taper: u32, curvature: u32, edge_soft: u32, height_min: u32, height_max: u32, color_near: u32, color_far: u32, glow: u32, parallax: u32, axis_x: f32, axis_y: f32, axis_z: f32, phase: u32, seed: u32) void;
 
 /// Configure rings environment (Mode 7: portals, tunnels, vortex).

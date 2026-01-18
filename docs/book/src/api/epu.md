@@ -257,6 +257,11 @@ Unified cell generator with two families:
 - Family `0`: particles (stars/snow/rain/embers/bubbles/warp)
 - Family `1`: tiles/lights (Mondrian/Truchet, buildings, bands, panels)
 
+Enums:
+- `family`: `0`=Particles, `1`=Tiles/Lights
+- `variant` (Family `0`): `0`=Stars/Fireflies, `1`=Fall (Rain/Snow), `2`=Drift (Embers/Dust/Bubbles), `3`=Warp (Hyperspace/Burst)
+- `variant` (Family `1`): `0`=Abstract (Mondrian/Truchet), `1`=Buildings (Windows), `2`=Bands (Signage Floors), `3`=Panels (UI Grids)
+
 ### env_cells
 
 {{#tabs global="lang"}}
@@ -643,6 +648,7 @@ pub extern fn env_nebula(
 {{#endtabs}}
 
 Notes:
+- Projection (no trig): axis-oriented oct-UV for all Nebula families (including `family=2` Aurora).
 - `phase` is treated as `u16` (wraps); motion is designed to be loopable (closed path) rather than “scroll forever”.
 - `parallax` also selects bounded internal depth slices: `0–95` → 1 slice, `96–191` → 2 slices, `192–255` → 3 slices (far slices are calmer + less emissive).
 - `seed=0` means “auto”: derive from the packed payload.
@@ -769,7 +775,7 @@ Packed layout (per layer):
 
 ## Mode 6: Veil (Bands / Pillars / Drapes / Shards)
 
-Axis-aligned SDF bands with bounded depth slices (1–3) and fwidth-based AA.
+Direction-based SDF bands with bounded depth slices (1–3) and fwidth-based AA.
 
 Enums:
 - `family`: `0`=Pillars/Trunks, `1`=Drapes/Ribbons, `2`=Shards/Crystals, `3`=Soft Veils
@@ -857,6 +863,7 @@ pub extern fn env_veil(
 
 Notes:
 - `density=0` disables the layer (alpha=0).
+- `axis_x`/`axis_y`/`axis_z` is a normalized world-space direction (packed as `axis_oct16`) used to orient the veil.
 - `height_min`/`height_max` gate by dot-height along `axis`; if min > max, they are swapped.
 - `parallax` selects 1–3 bounded depth slices (see inspector presets).
 - `seed=0` means “auto”: derive from the packed payload.

@@ -577,7 +577,27 @@ fn env_gradient(layer: u32, zenith: u32, sky_horizon: u32, ground_horizon: u32,
                 disk: u32, halo: u32, intensity: u32, haze: u32, warmth: u32, cloudiness: u32, cloud_phase: u32)
 
 // Configure overlay layer (layer 1) with a different mode
-fn env_cells(layer: u32, family: u32, variant: u32, density: u32, ..., axis_x: f32, axis_y: f32, axis_z: f32, phase: u32, seed: u32)
+fn env_cells(
+    layer: u32,
+    family: u32,
+    variant: u32,
+    density: u32,
+    size_min: u32,
+    size_max: u32,
+    intensity: u32,
+    shape: u32,
+    motion: u32,
+    parallax: u32,
+    height_bias: u32,
+    clustering: u32,
+    color_a: u32,
+    color_b: u32,
+    axis_x: f32,
+    axis_y: f32,
+    axis_z: f32,
+    phase: u32,
+    seed: u32,
+)
 
 // Set blend mode for overlay compositing
 fn env_blend(mode: u32)  // 0=alpha, 1=add, 2=multiply, 3=screen

@@ -1,6 +1,6 @@
 //! Environment Veil Inspector - Mode 6 Demo
 //!
-//! Demonstrates Veil: axis-aligned SDF ribbons/pillars (bounded depth slices).
+//! Demonstrates Veil: direction-based SDF ribbons/pillars (bounded depth slices).
 
 #![no_std]
 #![no_main]
