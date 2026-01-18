@@ -2,6 +2,7 @@
 
 use anyhow::{Context, Result};
 use hashbrown::HashMap;
+use std::time::Instant;
 
 use crate::graphics::{
     BufferManager, MeshHandle, QuadBatchInfo, QuadInstance, RetainedMesh,
@@ -338,6 +339,8 @@ impl ZXGraphics {
     // =================================================================
 
     pub fn set_render_mode(&mut self, mode: u8) {
+        let started = Instant::now();
+
         if mode > 3 {
             tracing::warn!("Invalid render mode: {}, clamping to 3", mode);
             self.current_render_mode = 3;
@@ -347,6 +350,16 @@ impl ZXGraphics {
                 "Set render mode to {} ({})",
                 mode,
                 crate::shader_gen::mode_name(mode)
+            );
+        }
+
+        if PipelineCache::should_precompile_shaders() {
+            self.pipeline_cache
+                .precompile_shaders_for_render_mode(&self.device, self.current_render_mode);
+            tracing::info!(
+                "Shader precompile for mode {} took {:?}",
+                self.current_render_mode,
+                started.elapsed()
             );
         }
     }

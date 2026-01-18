@@ -24,32 +24,10 @@ pub(crate) fn create_pipeline(
     surface_format: wgpu::TextureFormat,
     render_mode: u8,
     format: u8,
+    shader_module: &wgpu::ShaderModule,
     state: &RenderState,
     pass_config: &PassConfig,
 ) -> PipelineEntry {
-    use crate::shader_gen::generate_shader;
-
-    // Generate shader source, falling back to Mode 0 if the requested mode/format is invalid
-    let shader_source = match generate_shader(render_mode, format) {
-        Ok(source) => source,
-        Err(e) => {
-            tracing::warn!(
-                "Shader generation failed for mode {} format {}: {}. Falling back to Mode 0 (Lambert).",
-                render_mode,
-                format,
-                e
-            );
-            // Fallback to Mode 0 (Lambert) which supports all formats
-            generate_shader(0, format).expect("Mode 0 should support all vertex formats")
-        }
-    };
-
-    // Create shader module
-    let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some(&format!("Shader Mode{} Format{}", render_mode, format)),
-        source: wgpu::ShaderSource::Wgsl(shader_source.into()),
-    });
-
     // Create bind group layouts
     let bind_group_layout_frame = create_frame_bind_group_layout(device, render_mode);
     let bind_group_layout_textures = create_texture_bind_group_layout(device);
@@ -69,13 +47,13 @@ pub(crate) fn create_pipeline(
         label: Some(&format!("Pipeline Mode{} Format{}", render_mode, format)),
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState {
-            module: &shader_module,
+            module: shader_module,
             entry_point: Some("vs"),
             buffers: &[vertex_info.vertex_buffer_layout()],
             compilation_options: Default::default(),
         },
         fragment: Some(wgpu::FragmentState {
-            module: &shader_module,
+            module: shader_module,
             entry_point: Some("fs"),
             targets: &[Some(wgpu::ColorTargetState {
                 format: surface_format,
@@ -124,18 +102,10 @@ pub(crate) fn create_pipeline(
 pub(crate) fn create_quad_pipeline(
     device: &wgpu::Device,
     surface_format: wgpu::TextureFormat,
+    shader_module: &wgpu::ShaderModule,
     pass_config: &PassConfig,
     is_screen_space: bool,
 ) -> PipelineEntry {
-    // Load quad shader (generated from quad_template.wgsl by build.rs)
-    use crate::shader_gen::QUAD_SHADER;
-
-    // Create shader module
-    let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("Quad Shader"),
-        source: wgpu::ShaderSource::Wgsl(QUAD_SHADER.into()),
-    });
-
     // Create bind group layouts (same as regular pipelines)
     let bind_group_layout_frame = create_frame_bind_group_layout(device, 0);
     let bind_group_layout_textures = create_texture_bind_group_layout(device);
@@ -170,13 +140,13 @@ pub(crate) fn create_quad_pipeline(
         }),
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState {
-            module: &shader_module,
+            module: shader_module,
             entry_point: Some("vs"),
             buffers: &[vertex_info.vertex_buffer_layout()],
             compilation_options: Default::default(),
         },
         fragment: Some(wgpu::FragmentState {
-            module: &shader_module,
+            module: shader_module,
             entry_point: Some("fs"),
             targets: &[Some(wgpu::ColorTargetState {
                 format: surface_format,
@@ -221,17 +191,9 @@ pub(crate) fn create_quad_pipeline(
 pub(crate) fn create_environment_pipeline(
     device: &wgpu::Device,
     surface_format: wgpu::TextureFormat,
+    shader_module: &wgpu::ShaderModule,
     pass_config: &PassConfig,
 ) -> PipelineEntry {
-    // Load environment shader (generated from the common WGSL sources + env_template.wgsl by build.rs)
-    use crate::shader_gen::ENVIRONMENT_SHADER;
-
-    // Create shader module
-    let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("Environment Shader"),
-        source: wgpu::ShaderSource::Wgsl(ENVIRONMENT_SHADER.into()),
-    });
-
     // Create bind group layouts (same as other pipelines)
     let bind_group_layout_frame = create_frame_bind_group_layout(device, 0);
     let bind_group_layout_textures = create_texture_bind_group_layout(device);
@@ -248,13 +210,13 @@ pub(crate) fn create_environment_pipeline(
         label: Some("Environment Pipeline"),
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState {
-            module: &shader_module,
+            module: shader_module,
             entry_point: Some("vs"),
             buffers: &[], // No vertex buffer - generated in shader
             compilation_options: Default::default(),
         },
         fragment: Some(wgpu::FragmentState {
-            module: &shader_module,
+            module: shader_module,
             entry_point: Some("fs"),
             targets: &[Some(wgpu::ColorTargetState {
                 format: surface_format,

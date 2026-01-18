@@ -29,11 +29,15 @@ where
         window: Arc<Window>,
         _event_loop: &ActiveEventLoop,
     ) -> Result<()> {
+        let startup_started = Instant::now();
+
         if self.config.fullscreen {
             window.set_fullscreen(Some(Fullscreen::Borderless(None)));
         }
 
+        let started = Instant::now();
         let rom = L::load_rom(&self.config.rom_path)?;
+        tracing::info!("ROM load took {:?}", started.elapsed());
         self.loaded_rom = Some(rom.clone());
 
         window.set_title(&format!("{} - {}", C::specs().name, rom.game_name));
@@ -48,16 +52,20 @@ where
             render_height,
         )));
 
+        let started = Instant::now();
         let mut runner = ConsoleRunner::new(console.clone(), window.clone())?;
+        tracing::info!("Graphics init took {:?}", started.elapsed());
         runner.graphics_mut().set_scale_mode(self.scale_mode);
 
         // Create session based on connection mode
         match &self.config.connection_mode {
             ConnectionMode::Local => {
                 // Standard local session (no rollback)
+                let started = Instant::now();
                 runner
                     .load_game(rom.console, &rom.code, self.config.num_players)
                     .context("Failed to load game")?;
+                tracing::info!("Game load (WASM compile/init) took {:?}", started.elapsed());
             }
             ConnectionMode::SyncTest { check_distance } => {
                 // Sync test session for determinism testing
@@ -67,9 +75,11 @@ where
                 );
                 let session = RollbackSession::new_sync_test(session_config, specs.ram_limit)
                     .context("Failed to create sync test session")?;
+                let started = Instant::now();
                 runner
                     .load_game_with_session(rom.console, &rom.code, session)
                     .context("Failed to load game with sync test session")?;
+                tracing::info!("Game load (WASM compile/init) took {:?}", started.elapsed());
                 tracing::info!(
                     "Sync test mode enabled (check_distance: {})",
                     check_distance
@@ -113,9 +123,11 @@ where
                 let session =
                     RollbackSession::new_p2p(session_config, socket, players, specs.ram_limit)
                         .context("Failed to create P2P session")?;
+                let started = Instant::now();
                 runner
                     .load_game_with_session(rom.console, &rom.code, session)
                     .context("Failed to load game with P2P session")?;
+                tracing::info!("Game load (WASM compile/init) took {:?}", started.elapsed());
                 tracing::info!(
                     "P2P mode: bind={}, peer={}, local_player={}",
                     bind_port,
@@ -164,9 +176,11 @@ where
                     "Join mode: session created, local_players = {:?}",
                     session.local_players()
                 );
+                let started = Instant::now();
                 runner
                     .load_game_with_session(rom.console, &rom.code, session)
                     .context("Failed to load game with P2P session")?;
+                tracing::info!("Game load (WASM compile/init) took {:?}", started.elapsed());
             }
             ConnectionMode::Session { session_file } => {
                 // Session mode - pre-negotiated session from library lobby (NCHS protocol)
@@ -176,9 +190,11 @@ where
                     specs,
                 )?;
 
+                let started = Instant::now();
                 runner
                     .load_game_with_session(rom.console, &rom.code, session)
                     .context("Failed to load game with NCHS session")?;
+                tracing::info!("Game load (WASM compile/init) took {:?}", started.elapsed());
 
                 // Clean up the session file after reading
                 let _ = std::fs::remove_file(session_file);
@@ -216,6 +232,7 @@ where
         self.next_tick = Instant::now();
 
         tracing::info!("Game loaded: {}", self.config.rom_path.display());
+        tracing::info!("Player startup total {:?}", startup_started.elapsed());
         Ok(())
     }
 }

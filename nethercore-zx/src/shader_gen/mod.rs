@@ -22,10 +22,11 @@ mod pregenerated;
 mod templates;
 
 pub use error::ShaderGenError;
+#[allow(unused_imports)] // Re-exported for debugging/tests; may be unused within this module.
 pub use formats::{mode_name, shader_count_for_mode, valid_formats_for_mode};
-pub use pregenerated::{
-    ENVIRONMENT_SHADER, PREGENERATED_SHADERS, QUAD_SHADER, get_pregenerated_shader,
-};
+#[allow(unused_imports)] // Re-exported for debugging/tests; may be unused within this module.
+pub use pregenerated::{ENVIRONMENT_SHADER, PREGENERATED_SHADERS, QUAD_SHADER, get_pregenerated_shader};
+#[allow(unused_imports)] // Re-exported for debugging/tests; may be unused within this module.
 pub use templates::get_template;
 
 use crate::graphics::FORMAT_NORMAL;
@@ -33,13 +34,13 @@ use crate::graphics::FORMAT_NORMAL;
 /// Get a pregenerated shader for a specific mode and vertex format
 ///
 /// All shaders are pregenerated at build time and validated with naga.
-/// This function returns the pregenerated shader source as a `String`.
+/// This function returns the pregenerated shader source as a `&'static str`.
 ///
 /// # Errors
 ///
 /// Returns `ShaderGenError::InvalidRenderMode` if mode is not 0-3.
 /// Returns `ShaderGenError::MissingNormalFlag` if modes 1-3 are used without NORMAL flag.
-pub fn generate_shader(mode: u8, format: u8) -> Result<String, ShaderGenError> {
+pub fn generate_shader(mode: u8, format: u8) -> Result<&'static str, ShaderGenError> {
     // Validate mode
     if mode > 3 {
         return Err(ShaderGenError::InvalidRenderMode(mode));
@@ -56,7 +57,7 @@ pub fn generate_shader(mode: u8, format: u8) -> Result<String, ShaderGenError> {
     let source = get_pregenerated_shader(mode, format)
         .expect("Pregenerated shader missing - this indicates a bug in build.rs");
 
-    Ok(source.to_string())
+    Ok(source)
 }
 
 #[cfg(test)]

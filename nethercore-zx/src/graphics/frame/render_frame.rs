@@ -663,7 +663,6 @@ impl ZXGraphics {
                     self.pipeline_cache.get_or_create_quad(
                         &self.device,
                         self.config.format,
-                        &state,
                         &cmd_pass_config,
                         is_screen_space_quad,
                     );
@@ -690,7 +689,7 @@ impl ZXGraphics {
                 let pipeline_key = if is_environment {
                     PipelineKey::environment(&cmd_pass_config)
                 } else if is_quad {
-                    PipelineKey::quad(&state, &cmd_pass_config, is_screen_space_quad)
+                    PipelineKey::quad(&cmd_pass_config, is_screen_space_quad)
                 } else {
                     PipelineKey::new(self.current_render_mode, format, &state, &cmd_pass_config)
                 };

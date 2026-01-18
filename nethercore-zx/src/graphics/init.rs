@@ -269,7 +269,7 @@ impl ZXGraphics {
         retained_index_buf_mut.ensure_capacity(&device, &queue, index_bytes.len() as u64);
         retained_index_buf_mut.write(&queue, index_bytes);
 
-        let mut graphics = Self {
+        let graphics = Self {
             surface,
             device,
             queue,
@@ -311,12 +311,6 @@ impl ZXGraphics {
             quad_instance_scratch: Vec::new(),
             quad_batch_scratch: Vec::new(),
         };
-
-        // Precompile all 40 shader modules at startup
-        // This catches any shader generation bugs early and ensures no lazy compilation surprises
-        graphics
-            .pipeline_cache
-            .precompile_all_shaders(&graphics.device);
 
         Ok(graphics)
     }

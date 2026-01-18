@@ -187,17 +187,35 @@ impl Audio for ZXAudio {
 pub struct NethercoreZX {
     /// Optional datapack for ROM assets (textures, meshes, sounds)
     data_pack: Option<Arc<ZXDataPack>>,
+    /// Default render mode for this ROM (0-3).
+    ///
+    /// Stored on the host side and applied to `ZXFFIState.init_config` before `init()` runs.
+    render_mode: u8,
 }
 
 impl NethercoreZX {
     /// Create a new Nethercore ZX console instance
     pub fn new() -> Self {
-        Self { data_pack: None }
+        Self {
+            data_pack: None,
+            render_mode: 0,
+        }
     }
 
     /// Create a new Nethercore ZX console instance with a datapack
     pub fn with_datapack(data_pack: Option<Arc<ZXDataPack>>) -> Self {
-        Self { data_pack }
+        Self {
+            data_pack,
+            render_mode: 0,
+        }
+    }
+
+    /// Create a new Nethercore ZX console instance with a datapack and default render mode.
+    pub fn with_datapack_and_render_mode(data_pack: Option<Arc<ZXDataPack>>, render_mode: u8) -> Self {
+        Self {
+            data_pack,
+            render_mode: render_mode.min(3),
+        }
     }
 }
 
@@ -341,6 +359,9 @@ impl Console for NethercoreZX {
     fn initialize_ffi_state(&self, state: &mut ZXFFIState) {
         // Set datapack for rom_* FFI functions
         state.data_pack = self.data_pack.clone();
+
+        // Set default render mode before init() runs.
+        state.init_config.render_mode = self.render_mode;
     }
 
     fn clear_color_from_state(state: &Self::State) -> [f32; 4] {

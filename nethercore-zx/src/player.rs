@@ -52,7 +52,8 @@ impl RomLoader for ZXRomLoader {
 
             // Create console with datapack
             let data_pack: Option<Arc<ZXDataPack>> = rom.data_pack.map(Arc::new);
-            let console = NethercoreZX::with_datapack(data_pack);
+            let render_mode = rom.metadata.render_mode.unwrap_or(0).min(3) as u8;
+            let console = NethercoreZX::with_datapack_and_render_mode(data_pack, render_mode);
 
             Ok(LoadedRom {
                 code: rom.code,

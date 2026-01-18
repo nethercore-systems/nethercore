@@ -134,3 +134,9 @@ wat = "1"
 lto = "fat"         # Full link-time optimization (maximum optimization)
 strip = true        # Strip debug symbols to reduce binary size
 panic = "abort"     # Abort on panic (smaller binaries, no unwinding)
+
+# Dev profile: keep workspace crates debuggable, but optimize dependencies.
+# This significantly improves runtime performance (startup, shader compilation, WASM JIT)
+# without making our own code hard to step through.
+[profile.dev.package."*"]
+opt-level = 3

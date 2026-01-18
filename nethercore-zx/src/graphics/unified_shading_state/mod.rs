@@ -21,6 +21,7 @@ mod shading_state;
 mod tests;
 
 // Re-export all public types and functions to preserve API
+#[allow(unused_imports)]
 pub use environment::{
     CellsConfig, ENV_LAYER_WORDS, ENV_OVERLAY_OFFSET, EnvironmentIndex, GradientConfig,
     LinesConfig, NebulaConfig, PackedEnvironmentState, RingsConfig, RoomConfig, SilhouetteConfig,

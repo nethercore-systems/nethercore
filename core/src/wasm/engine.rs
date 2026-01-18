@@ -1,7 +1,7 @@
 //! WASM engine wrapper for loading and compiling modules
 
 use anyhow::{Context, Result};
-use wasmtime::{Engine, ExternType, Module};
+use wasmtime::{Cache, Config, Engine, ExternType, Module, OptLevel};
 
 /// Shared WASM engine (one per application)
 pub struct WasmEngine {
@@ -11,7 +11,32 @@ pub struct WasmEngine {
 impl WasmEngine {
     /// Create a new WASM engine with default configuration
     pub fn new() -> Result<Self> {
-        let engine = Engine::default();
+        let mut config = Config::new();
+
+        // Debug builds prioritize fast startup (WASM compilation) over peak runtime perf.
+        // This is particularly noticeable when iterating on games and restarting often.
+        let opt_level = parse_opt_level_env().unwrap_or_else(|| {
+            if cfg!(debug_assertions) {
+                OptLevel::None
+            } else {
+                OptLevel::Speed
+            }
+        });
+        config.cranelift_opt_level(opt_level);
+
+        // Enable Wasmtime's on-disk compilation cache when available.
+        // This can drastically reduce subsequent startup times for unchanged ROMs.
+        match Cache::from_file(None) {
+            Ok(cache) => {
+                config.cache(Some(cache));
+                tracing::debug!("Wasmtime compilation cache enabled");
+            }
+            Err(e) => {
+                tracing::debug!("Wasmtime compilation cache disabled: {e}");
+            }
+        }
+
+        let engine = Engine::new(&config).context("Failed to create WASM engine")?;
         Ok(Self { engine })
     }
 
@@ -75,3 +100,19 @@ impl WasmEngine {
 // The WASM engine initialization is fallible (wasmtime::Engine::default() can fail
 // on unsupported platforms or with invalid configuration). Using WasmEngine::new()
 // returns Result<Self> which properly propagates initialization errors.
+
+fn parse_opt_level_env() -> Option<OptLevel> {
+    let value = std::env::var("NETHERCORE_WASM_OPT_LEVEL").ok()?;
+    match value.trim().to_ascii_lowercase().as_str() {
+        "none" | "0" => Some(OptLevel::None),
+        "speed" | "1" => Some(OptLevel::Speed),
+        "speed_and_size" | "speedandsize" | "2" => Some(OptLevel::SpeedAndSize),
+        _ => {
+            tracing::warn!(
+                "Invalid NETHERCORE_WASM_OPT_LEVEL value '{}'; expected none/speed/speed_and_size",
+                value
+            );
+            None
+        }
+    }
+}

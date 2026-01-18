@@ -97,7 +97,7 @@ fn compile_and_validate_shader(mode: u8, format: u8) -> Result<(), String> {
     })?;
 
     // Parse the WGSL source
-    let module = naga::front::wgsl::parse_str(&shader_source).map_err(|e| {
+    let module = naga::front::wgsl::parse_str(shader_source).map_err(|e| {
         format!(
             "WGSL parse error for mode {} format {}: {:?}",
             mode, format, e
