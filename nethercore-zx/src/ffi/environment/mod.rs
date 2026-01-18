@@ -90,6 +90,9 @@ pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
                 ValType::I32,
                 ValType::I32,
                 ValType::I32,
+                ValType::F32,
+                ValType::F32,
+                ValType::F32,
                 ValType::I32,
                 ValType::I32,
             ],
@@ -112,8 +115,11 @@ pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
                 params[11].unwrap_i32() as u32,
                 params[12].unwrap_i32() as u32,
                 params[13].unwrap_i32() as u32,
-                params[14].unwrap_i32() as u32,
-                params[15].unwrap_i32() as u32,
+                params[14].unwrap_f32(),
+                params[15].unwrap_f32(),
+                params[16].unwrap_f32(),
+                params[17].unwrap_i32() as u32,
+                params[18].unwrap_i32() as u32,
             );
             Ok(())
         },

@@ -45,19 +45,3 @@ fn sample_environment_ambient(env_index: u32, direction: vec3<f32>) -> vec3<f32>
     let env_color = sample_environment(env_index, direction);
     return env_color.rgb;
 }
-
-// ============================================================================
-// Mode 0 Ambient (Lambert) helper
-// ============================================================================
-
-// How much of Mode 0's environment ambient comes from view-dependent reflection.
-// 0.0 = purely diffuse (normal), 1.0 = purely reflected.
-const MODE0_ENV_REFLECTION_BLEND: f32 = 1.0 / 3.0;
-
-fn sample_environment_mode0_ambient(env_index: u32, normal: vec3<f32>, view_dir: vec3<f32>) -> vec3<f32> {
-    let N = safe_normalize(normal, vec3<f32>(0.0, 0.0, 1.0));
-    let V = safe_normalize(view_dir, vec3<f32>(0.0, 0.0, 1.0));
-    let R = reflect(-V, N);
-    let sample_dir = safe_normalize(mix(N, R, MODE0_ENV_REFLECTION_BLEND), N);
-    return sample_environment_ambient(env_index, sample_dir);
-}

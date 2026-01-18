@@ -90,6 +90,9 @@ pub struct CellsParams {
     pub clustering: u32,
     pub color_a: u32,
     pub color_b: u32,
+    pub axis_x: f32,
+    pub axis_y: f32,
+    pub axis_z: f32,
     pub phase: u16,
     pub seed: u32,
 }
@@ -110,6 +113,9 @@ impl CellsParams {
             clustering: 0,
             color_a: 0,
             color_b: 0,
+            axis_x: 0.0,
+            axis_y: 1.0,
+            axis_z: 0.0,
             phase: 0,
             seed: 0,
         }
@@ -130,6 +136,9 @@ impl CellsParams {
             clustering: 40,
             color_a: 0xDDE6FFFF,
             color_b: 0xFFF2C0FF,
+            axis_x: 0.0,
+            axis_y: 1.0,
+            axis_z: 0.0,
             phase: 0,
             seed: 0,
         }
@@ -323,6 +332,9 @@ impl DebugEnvironment {
                         self.cells.clustering,
                         self.cells.color_a,
                         self.cells.color_b,
+                        self.cells.axis_x,
+                        self.cells.axis_y,
+                        self.cells.axis_z,
                         self.cells.phase as u32,
                         self.cells.seed,
                     );
@@ -412,6 +424,9 @@ impl DebugEnvironment {
                         self.cells.clustering,
                         self.cells.color_a,
                         self.cells.color_b,
+                        self.cells.axis_x,
+                        self.cells.axis_y,
+                        self.cells.axis_z,
                         self.cells.phase as u32,
                         self.cells.seed,
                     );

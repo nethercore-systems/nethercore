@@ -2,13 +2,13 @@
 
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 
 use nethercore_core::library::LocalGame;
 use nethercore_shared::ConsoleType;
 
 use super::helpers::{console_type_from_extension, console_type_from_str, supported_console_types, supported_extension_list};
-use super::player::{build_player_command, find_player_binary};
+use super::player::{launch_player_with_options, run_player_with_options};
 
 /// Multiplayer connection mode
 #[derive(Debug, Clone)]
@@ -202,50 +202,12 @@ impl PlayerLauncher {
     /// Launch the player (spawns and returns immediately).
     pub fn launch(self) -> Result<()> {
         let (rom_path, console_type) = self.resolve_target()?;
-        let mut cmd = build_player_command(rom_path, console_type, &self.options);
-
-        tracing::info!("Launching player: {:?}", cmd);
-
-        cmd.spawn().with_context(|| {
-            "Failed to launch player. Make sure it exists in the same directory as the library or in your PATH."
-        })?;
-
-        Ok(())
+        launch_player_with_options(rom_path, console_type, &self.options)
     }
 
     /// Run the player and wait for it to finish.
     pub fn run(self) -> Result<()> {
         let (rom_path, console_type) = self.resolve_target()?;
-        let player = find_player_binary(console_type);
-
-        tracing::info!(
-            "Running player: {} {}{}{}",
-            player.display(),
-            rom_path.display(),
-            if self.options.fullscreen {
-                " --fullscreen"
-            } else {
-                ""
-            },
-            if self.options.debug { " --debug" } else { "" },
-        );
-
-        let mut cmd = build_player_command(rom_path, console_type, &self.options);
-
-        let status = cmd.status().with_context(|| {
-            format!(
-                "Failed to run player '{}'. Make sure it exists in the same directory as the library or in your PATH.",
-                player.display()
-            )
-        })?;
-
-        if !status.success()
-            && let Some(code) = status.code()
-            && code != 0
-        {
-            tracing::debug!("Player exited with code: {}", code);
-        }
-
-        Ok(())
+        run_player_with_options(rom_path, console_type, &self.options)
     }
 }

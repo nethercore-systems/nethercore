@@ -682,15 +682,10 @@ NCZX_IMPORT void env_gradient(uint32_t layer, uint32_t zenith, uint32_t sky_hori
 
 /** Configure cells environment (Mode 1). */
 /**  */
-/** Unified cell generator with two families under one mode ID: */
-/** - family 0: particles (stars/snow/rain/embers/bubbles/warp) */
-/** - family 1: tiles/lights (Mondrian/Truchet, buildings, bands, panels) */
-/**  */
-/** Notes: */
-/** - `phase` is treated as `u16` (wraps); animation is designed to be loopable and shimmer-free. */
-/** - `parallax` selects bounded internal depth slices for family 0 particles: `0–95` → 1 slice, `96–191` → 2 slices, `192–255` → 3 slices. */
-/** - `seed=0` means “auto”: derive a deterministic seed from the packed payload. */
-NCZX_IMPORT void env_cells(uint32_t layer, uint32_t family, uint32_t variant, uint32_t density, uint32_t size_min, uint32_t size_max, uint32_t intensity, uint32_t shape, uint32_t motion, uint32_t parallax, uint32_t height_bias, uint32_t clustering, uint32_t color_a, uint32_t color_b, uint32_t phase, uint32_t seed);
+/** Two families under one mode ID: */
+/** - Family 0: Particles (stars/snow/rain/embers/bubbles/warp) */
+/** - Family 1: Tiles/Lights (Mondrian/Truchet, buildings, bands, panels) */
+NCZX_IMPORT void env_cells(uint32_t layer, uint32_t family, uint32_t variant, uint32_t density, uint32_t size_min, uint32_t size_max, uint32_t intensity, uint32_t shape, uint32_t motion, uint32_t parallax, uint32_t height_bias, uint32_t clustering, uint32_t color_a, uint32_t color_b, float axis_x, float axis_y, float axis_z, uint32_t phase, uint32_t seed);
 
 /** Configure lines environment (Mode 2: synthwave grid, racing track). */
 /**  */
@@ -760,24 +755,9 @@ NCZX_IMPORT void env_nebula(uint32_t layer, uint32_t family, uint32_t coverage, 
 /** * `viewer_x`, `viewer_y`, `viewer_z` — Viewer position in room (-128 to 127 = -1.0 to 1.0) */
 NCZX_IMPORT void env_room(uint32_t layer, uint32_t color_ceiling, uint32_t color_floor, uint32_t color_walls, float panel_size, uint32_t panel_gap, float light_dir_x, float light_dir_y, float light_dir_z, uint32_t light_intensity, uint32_t light_tint, uint32_t corner_darken, float room_scale, int32_t viewer_x, int32_t viewer_y, int32_t viewer_z, uint32_t accent, uint32_t accent_mode, uint32_t roughness, uint32_t phase);
 
-/** Configure curtains environment (Mode 6: pillars, trees, vertical structures). */
+/** Configure veil environment (Mode 6). */
 /**  */
-/** Creates vertical structures arranged around the viewer. */
-/**  */
-/** # Arguments */
-/** * `layer` — Target layer: 0 = base layer, 1 = overlay layer */
-/** * `layer_count` — Depth layers (1-3) */
-/** * `density` — Structures per cell (0-255) */
-/** * `height_min` — Minimum height (0-63) */
-/** * `height_max` — Maximum height (0-63) */
-/** * `width` — Structure width (0-31) */
-/** * `spacing` — Gap between structures (0-31) */
-/** * `waviness` — Organic wobble (0-255, 0=straight) */
-/** * `color_near` — Nearest structure color (0xRRGGBBAA) */
-/** * `color_far` — Farthest structure color (0xRRGGBBAA) */
-/** * `glow` — Neon/magical glow intensity (0-255) */
-/** * `parallax_rate` — Layer separation (0-255) */
-/** * `phase` — Horizontal scroll phase (0-65535, wraps for seamless) */
+/** Axis-aligned SDF ribbons/pillars with bounded depth slices. */
 NCZX_IMPORT void env_veil(uint32_t layer, uint32_t family, uint32_t density, uint32_t width, uint32_t taper, uint32_t curvature, uint32_t edge_soft, uint32_t height_min, uint32_t height_max, uint32_t color_near, uint32_t color_far, uint32_t glow, uint32_t parallax, float axis_x, float axis_y, float axis_z, uint32_t phase, uint32_t seed);
 
 /** Configure rings environment (Mode 7: portals, tunnels, vortex). */

@@ -29,6 +29,9 @@ static mut HEIGHT_BIAS: u8 = 100;
 static mut CLUSTERING: u8 = 40;
 static mut COLOR_A: u32 = 0xDDE6FFFF;
 static mut COLOR_B: u32 = 0xFFF2C0FF;
+static mut AXIS_X: f32 = 0.0;
+static mut AXIS_Y: f32 = 1.0;
+static mut AXIS_Z: f32 = 0.0;
 static mut SEED: u32 = 0; // 0 = derive
 
 static mut PHASE: u32 = 0;
@@ -70,6 +73,9 @@ fn load_preset(index: usize) {
                 CLUSTERING = 40;
                 COLOR_A = 0xDDE6FFFF;
                 COLOR_B = 0xFFF2C0FF;
+                AXIS_X = 0.0;
+                AXIS_Y = 1.0;
+                AXIS_Z = 0.0;
                 SEED = 0;
                 PHASE_RATE = 2700;
             }
@@ -88,6 +94,9 @@ fn load_preset(index: usize) {
                 CLUSTERING = 90;
                 COLOR_A = 0xF2F7FFFF;
                 COLOR_B = 0xCFE6FFFF;
+                AXIS_X = 0.0;
+                AXIS_Y = -1.0;
+                AXIS_Z = 0.0;
                 SEED = 0;
                 PHASE_RATE = 6500;
             }
@@ -106,6 +115,9 @@ fn load_preset(index: usize) {
                 CLUSTERING = 230;
                 COLOR_A = 0x52D6FFFF;
                 COLOR_B = 0xFFD36BFF;
+                AXIS_X = 0.0;
+                AXIS_Y = 1.0;
+                AXIS_Z = 0.0;
                 SEED = 0;
                 PHASE_RATE = 11000;
             }
@@ -124,6 +136,9 @@ fn load_preset(index: usize) {
                 CLUSTERING = 180;
                 COLOR_A = 0x8B5CFFFF;
                 COLOR_B = 0x00FFD1FF;
+                AXIS_X = 0.0;
+                AXIS_Y = 1.0;
+                AXIS_Z = 0.0;
                 SEED = 0;
                 PHASE_RATE = 5500;
             }
@@ -139,6 +154,23 @@ pub extern "C" fn on_debug_change() {
         VARIANT = VARIANT.clamp(0, 3);
         if SIZE_MIN > SIZE_MAX {
             core::mem::swap(&mut SIZE_MIN, &mut SIZE_MAX);
+        }
+
+        let len = libm::sqrtf(AXIS_X * AXIS_X + AXIS_Y * AXIS_Y + AXIS_Z * AXIS_Z);
+        if len > 1e-6 {
+            AXIS_X /= len;
+            AXIS_Y /= len;
+            AXIS_Z /= len;
+        } else if FAMILY == 0 && VARIANT == 1 {
+            // Fall defaults to "down" (rain/snow).
+            AXIS_X = 0.0;
+            AXIS_Y = -1.0;
+            AXIS_Z = 0.0;
+        } else {
+            // Most variants default to Y-up.
+            AXIS_X = 0.0;
+            AXIS_Y = 1.0;
+            AXIS_Z = 0.0;
         }
     }
 }
@@ -167,6 +199,12 @@ pub extern "C" fn init() {
         debug_register_color(b"color_a".as_ptr(), 7, &COLOR_A as *const u32 as *const u8);
         debug_register_color(b"color_b".as_ptr(), 7, &COLOR_B as *const u32 as *const u8);
         debug_register_u32(b"seed".as_ptr(), 4, &SEED as *const u32 as *const u8);
+        debug_group_end();
+
+        debug_group_begin(b"axis".as_ptr(), 4);
+        debug_register_f32(b"x".as_ptr(), 1, &AXIS_X as *const f32 as *const u8);
+        debug_register_f32(b"y".as_ptr(), 1, &AXIS_Y as *const f32 as *const u8);
+        debug_register_f32(b"z".as_ptr(), 1, &AXIS_Z as *const f32 as *const u8);
         debug_group_end();
 
         debug_group_begin(b"animation".as_ptr(), 9);
@@ -240,6 +278,9 @@ pub extern "C" fn render() {
             CLUSTERING as u32,
             COLOR_A,
             COLOR_B,
+            AXIS_X,
+            AXIS_Y,
+            AXIS_Z,
             PHASE,
             SEED,
         );

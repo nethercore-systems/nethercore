@@ -95,6 +95,7 @@ pub struct CellsConfig {
     pub clustering: u32,
     pub color_a: u32,
     pub color_b: u32,
+    pub axis: Vec3,
     pub phase: u32,
     pub seed: u32,
 }
@@ -356,6 +357,7 @@ impl PackedEnvironmentState {
             clustering,
             color_a,
             color_b,
+            axis,
             phase,
             seed,
         } = config;
@@ -376,8 +378,19 @@ impl PackedEnvironmentState {
         self.data[offset + 2] = color_a;
         self.data[offset + 3] = color_b;
 
-        // w4: parallax:u8 | reserved:u8 | reserved:u8 | flags:u8 (must be zero)
-        self.data[offset + 4] = parallax & 0xFF;
+        // w4: parallax:u8 | reserved:u8 | axis_oct16:u16
+        let axis_default = if family == 0 && variant == 1 {
+            Vec3::new(0.0, -1.0, 0.0)
+        } else {
+            Vec3::Y
+        };
+        let axis_safe = if axis.length_squared() < 1e-6 {
+            axis_default
+        } else {
+            axis.normalize()
+        };
+        let axis_oct16 = pack_octahedral_u16(axis_safe) as u32;
+        self.data[offset + 4] = (parallax & 0xFF) | ((axis_oct16 & 0xFFFF) << 16);
 
         // w5: phase:u16 (low) | height_bias:u8 | clustering:u8
         self.data[offset + 5] =

@@ -641,7 +641,7 @@ light_range(index: u32, range: f32) void
 ```rust
 // 8 Environment Modes (layer: 0=base, 1=overlay)
 env_gradient(layer, zenith, sky_h, ground_h, nadir, rotation, shift, sun_elev, disk, halo, intensity, haze, warmth, cloudiness, cloud_phase)  // Mode 0
-env_cells(layer, family, variant, density, size_min, size_max, intensity, shape, motion, parallax, height_bias, clustering, color_a, color_b, phase, seed)  // Mode 1
+env_cells(layer, family, variant, density, size_min, size_max, intensity, shape, motion, parallax, height_bias, clustering, color_a, color_b, axis_x, axis_y, axis_z, phase, seed)  // Mode 1
 env_lines(layer, variant, line_type, thickness, spacing, fade, parallax, color_primary, color_accent, accent_every, phase, profile, warp, wobble, glow, axis_x, axis_y, axis_z, seed)  // Mode 2
 env_silhouette(layer, family, jaggedness, layer_count, color_near, color_far, sky_zenith, sky_horizon, parallax_rate, seed, phase, fog, wind)  // Mode 3
 env_nebula(layer, family, coverage, softness, intensity, scale, detail, warp, flow, parallax, height_bias, contrast, color_a, color_b, axis_x, axis_y, axis_z, phase, seed)  // Mode 4
@@ -660,7 +660,7 @@ matcap_set(slot, texture)     // Slot 1-3 (Mode 1 only)
 ```c
 // 8 Environment Modes (layer: 0=base, 1=overlay)
 void env_gradient(u32 layer, u32 zenith, u32 sky_h, u32 ground_h, u32 nadir, f32 rotation, f32 shift, f32 sun_elev, u32 disk, u32 halo, u32 intensity, u32 haze, u32 warmth, u32 cloudiness, u32 cloud_phase);  // Mode 0
-void env_cells(u32 layer, u32 family, u32 variant, u32 density, u32 size_min, u32 size_max, u32 intensity, u32 shape, u32 motion, u32 parallax, u32 height_bias, u32 clustering, u32 color_a, u32 color_b, u32 phase, u32 seed);  // Mode 1
+void env_cells(u32 layer, u32 family, u32 variant, u32 density, u32 size_min, u32 size_max, u32 intensity, u32 shape, u32 motion, u32 parallax, u32 height_bias, u32 clustering, u32 color_a, u32 color_b, f32 axis_x, f32 axis_y, f32 axis_z, u32 phase, u32 seed);  // Mode 1
 void env_lines(u32 layer, u32 variant, u32 line_type, u32 thickness, f32 spacing, f32 fade, u32 parallax, u32 color_primary, u32 color_accent, u32 accent_every, u32 phase, u32 profile, u32 warp, u32 wobble, u32 glow, f32 axis_x, f32 axis_y, f32 axis_z, u32 seed);  // Mode 2
 void env_silhouette(u32 layer, u32 family, u32 jaggedness, u32 layer_count, u32 color_near, u32 color_far, u32 sky_zenith, u32 sky_horizon, u32 parallax_rate, u32 seed, u32 phase, u32 fog, u32 wind);  // Mode 3
 void env_nebula(u32 layer, u32 family, u32 coverage, u32 softness, u32 intensity, u32 scale, u32 detail, u32 warp, u32 flow, u32 parallax, u32 height_bias, u32 contrast, u32 color_a, u32 color_b, f32 axis_x, f32 axis_y, f32 axis_z, u32 phase, u32 seed);  // Mode 4
@@ -679,7 +679,7 @@ void matcap_set(uint32_t slot, uint32_t texture); // Slot 1-3 (Mode 1 only)
 ```zig
 // 8 Environment Modes (layer: 0=base, 1=overlay)
 env_gradient(layer: u32, zenith: u32, sky_h: u32, ground_h: u32, nadir: u32, rotation: f32, shift: f32, sun_elev: f32, disk: u32, halo: u32, intensity: u32, haze: u32, warmth: u32, cloudiness: u32, cloud_phase: u32) void  // Mode 0
-env_cells(layer: u32, family: u32, variant: u32, density: u32, size_min: u32, size_max: u32, intensity: u32, shape: u32, motion: u32, parallax: u32, height_bias: u32, clustering: u32, color_a: u32, color_b: u32, phase: u32, seed: u32) void  // Mode 1
+env_cells(layer: u32, family: u32, variant: u32, density: u32, size_min: u32, size_max: u32, intensity: u32, shape: u32, motion: u32, parallax: u32, height_bias: u32, clustering: u32, color_a: u32, color_b: u32, axis_x: f32, axis_y: f32, axis_z: f32, phase: u32, seed: u32) void  // Mode 1
 env_lines(layer: u32, variant: u32, line_type: u32, thickness: u32, spacing: f32, fade: f32, parallax: u32, color_primary: u32, color_accent: u32, accent_every: u32, phase: u32, profile: u32, warp: u32, wobble: u32, glow: u32, axis_x: f32, axis_y: f32, axis_z: f32, seed: u32) void  // Mode 2
 env_silhouette(layer: u32, family: u32, jaggedness: u32, layer_count: u32, color_near: u32, color_far: u32, sky_zenith: u32, sky_horizon: u32, parallax_rate: u32, seed: u32, phase: u32, fog: u32, wind: u32) void  // Mode 3
 env_nebula(layer: u32, family: u32, coverage: u32, softness: u32, intensity: u32, scale: u32, detail: u32, warp: u32, flow: u32, parallax: u32, height_bias: u32, contrast: u32, color_a: u32, color_b: u32, axis_x: f32, axis_y: f32, axis_z: f32, phase: u32, seed: u32) void  // Mode 4

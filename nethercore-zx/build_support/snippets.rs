@@ -117,14 +117,14 @@ pub(crate) const FS_UV: &str = r#"if !has_flag(shading.flags, FLAG_USE_UNIFORM_C
     }"#;
 // Mode 0 Lambert: ambient from environment gradient + save albedo for lighting (no tangent)
 pub(crate) const FS_AMBIENT: &str = r#"let shading_normal = in.world_normal;
-    let ambient = color * sample_environment_mode0_ambient(shading.environment_index, shading_normal, in.camera_position - in.world_position);
+    let ambient = color * sample_environment_ambient(shading.environment_index, shading_normal);
     let albedo = color;"#;
 
 // Mode 0 Lambert: ambient with tangent/normal map support
 pub(crate) const FS_AMBIENT_TANGENT: &str = r#"// Build TBN matrix and sample normal map
     let tbn = build_tbn(in.world_tangent, in.world_normal, in.bitangent_sign);
     let shading_normal = sample_normal_map(slot3, in.uv, tbn, shading.flags);
-    let ambient = color * sample_environment_mode0_ambient(shading.environment_index, shading_normal, in.camera_position - in.world_position);
+    let ambient = color * sample_environment_ambient(shading.environment_index, shading_normal);
     let albedo = color;"#;
 
 // Mode 0 Lambert: 4 dynamic lights only (no sun direct lighting)

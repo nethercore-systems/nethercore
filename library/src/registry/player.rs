@@ -2,6 +2,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::{ffi::OsStr, io};
 
 use anyhow::{Context, Result};
 
@@ -31,14 +32,115 @@ pub fn find_player_binary(console_type: ConsoleType) -> PathBuf {
     if let Ok(exe) = std::env::current_exe()
         && let Some(dir) = exe.parent()
     {
-        let player_path = dir.join(&exe_name);
-        if player_path.exists() {
-            return player_path;
+        let local = dir.join(&exe_name);
+        if local.exists() {
+            return local;
+        }
+
+        // Developer ergonomics: allow mixing debug/release builds.
+        // If the library is running from target/{debug,release}, also look for the player in the other profile.
+        if let Some(profile) = dir.file_name().and_then(OsStr::to_str)
+            && (profile == "debug" || profile == "release")
+            && let Some(target_dir) = dir.parent()
+        {
+            let other_profile = if profile == "debug" { "release" } else { "debug" };
+            let other = target_dir.join(other_profile).join(&exe_name);
+            if other.exists() {
+                return other;
+            }
         }
     }
 
     // Fall back to PATH
     PathBuf::from(exe_name)
+}
+
+fn nethercore_workspace_root_from_current_exe() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let profile_dir = exe.parent()?; // .../target/{debug|release}
+    let target_dir = profile_dir.parent()?; // .../target
+    let workspace_dir = target_dir.parent()?; // workspace root
+
+    let manifest = workspace_dir.join("Cargo.toml");
+    if manifest.exists() {
+        Some(workspace_dir.to_path_buf())
+    } else {
+        None
+    }
+}
+
+fn build_cargo_run_player_command(
+    rom_path: &Path,
+    console_type: ConsoleType,
+    options: &PlayerOptions,
+) -> Option<Command> {
+    // Only attempt this in a developer workspace (i.e., we can locate the workspace Cargo.toml).
+    let workspace_dir = nethercore_workspace_root_from_current_exe()?;
+
+    // Only attempt this if cargo exists (developer machines).
+    if Command::new("cargo").arg("--version").output().is_err() {
+        return None;
+    }
+
+    let package = player_binary_name(console_type);
+
+    // Match the library build profile if we can (debug vs release).
+    let prefer_release = std::env::current_exe()
+        .ok()
+        .and_then(|p| {
+            p.parent()
+                .and_then(|d| d.file_name())
+                .map(|dir| dir == OsStr::new("release"))
+        })
+        .unwrap_or(false);
+
+    let mut cmd = Command::new("cargo");
+    cmd.current_dir(workspace_dir);
+    cmd.arg("run");
+    if prefer_release {
+        cmd.arg("--release");
+    }
+    cmd.args(["-p", package, "--"]);
+
+    cmd.arg(rom_path);
+
+    if options.fullscreen {
+        cmd.arg("--fullscreen");
+    }
+    if options.debug {
+        cmd.arg("--debug");
+    }
+    if let Some(players) = options.players {
+        cmd.arg("--players");
+        cmd.arg(players.to_string());
+    }
+
+    if let Some(ref connection) = options.connection {
+        match connection {
+            ConnectionMode::Host { port } => {
+                cmd.arg("--host");
+                cmd.arg(port.to_string());
+            }
+            ConnectionMode::Join { host_ip, port } => {
+                cmd.arg("--join");
+                cmd.arg(format!("{}:{}", host_ip, port));
+            }
+            ConnectionMode::Session { file } => {
+                cmd.arg("--session");
+                cmd.arg(file);
+            }
+        }
+    }
+
+    if options.preview {
+        cmd.arg("--preview");
+        if let Some(ref asset) = options.preview_asset {
+            cmd.arg("--asset");
+            cmd.arg(asset);
+        }
+    }
+
+    Some(cmd)
 }
 
 /// Build player command with options
@@ -99,25 +201,7 @@ pub(crate) fn build_player_command(
 /// The library continues running while the game plays.
 /// Use `run_player` if you want to wait for the player to finish.
 pub fn launch_player(rom_path: &Path, console_type: ConsoleType) -> Result<()> {
-    let player = find_player_binary(console_type);
-
-    tracing::info!(
-        "Launching player: {} {}",
-        player.display(),
-        rom_path.display()
-    );
-
-    Command::new(&player)
-        .arg(rom_path)
-        .spawn()
-        .with_context(|| {
-            format!(
-                "Failed to launch player '{}'. Make sure it exists in the same directory as the library or in your PATH.",
-                player.display()
-            )
-        })?;
-
-    Ok(())
+    launch_player_with_options(rom_path, console_type, &PlayerOptions::default())
 }
 
 /// Run a game using the appropriate player process and wait for it to finish.
@@ -140,9 +224,31 @@ pub fn launch_player_with_options(
 
     tracing::info!("Launching player with options: {:?}", cmd);
 
-    cmd.spawn().with_context(|| {
-        "Failed to launch player. Make sure it exists in the same directory as the library or in your PATH.".to_string()
-    })?;
+    match cmd.spawn() {
+        Ok(_) => {}
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {
+            if let Some(mut cargo_cmd) = build_cargo_run_player_command(rom_path, console_type, options) {
+                tracing::warn!(
+                    "Player binary not found; falling back to building/running via cargo: {:?}",
+                    cargo_cmd
+                );
+                cargo_cmd
+                    .spawn()
+                    .context("Failed to spawn 'cargo run' fallback for player")?;
+            } else {
+                return Err(e).with_context(|| {
+                    "Failed to launch player. Make sure it exists in the same directory as the library or in your PATH."
+                        .to_string()
+                });
+            }
+        }
+        Err(e) => {
+            return Err(e).with_context(|| {
+                "Failed to launch player. Make sure it exists in the same directory as the library or in your PATH."
+                    .to_string()
+            });
+        }
+    }
 
     Ok(())
 }
@@ -171,12 +277,35 @@ pub fn run_player_with_options(
 
     let mut cmd = build_player_command(rom_path, console_type, options);
 
-    let status = cmd.status().with_context(|| {
-        format!(
-            "Failed to run player '{}'. Make sure it exists in the same directory as the library or in your PATH.",
-            player.display()
-        )
-    })?;
+    let status = match cmd.status() {
+        Ok(status) => status,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {
+            if let Some(mut cargo_cmd) = build_cargo_run_player_command(rom_path, console_type, options) {
+                tracing::warn!(
+                    "Player binary not found; falling back to building/running via cargo: {:?}",
+                    cargo_cmd
+                );
+                cargo_cmd
+                    .status()
+                    .context("Failed to run 'cargo run' fallback for player")?
+            } else {
+                return Err(e).with_context(|| {
+                    format!(
+                        "Failed to run player '{}'. Make sure it exists in the same directory as the library or in your PATH.",
+                        player.display()
+                    )
+                });
+            }
+        }
+        Err(e) => {
+            return Err(e).with_context(|| {
+                format!(
+                    "Failed to run player '{}'. Make sure it exists in the same directory as the library or in your PATH.",
+                    player.display()
+                )
+            });
+        }
+    };
 
     if !status.success()
         && let Some(code) = status.code()

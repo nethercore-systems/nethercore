@@ -5,7 +5,7 @@
 // w1: size_min:u8 | size_max:u8 | shape:u8 | motion:u8
 // w2: color_a (RGBA8)
 // w3: color_b (RGBA8)
-// w4: parallax:u8 | reserved:u8 | reserved:u8 | flags:u8 (all reserved/flags are 0)
+// w4: parallax:u8 | reserved:u8 | axis_oct16:u16
 // w5: phase:u16 (low) | height_bias:u8 | clustering:u8
 // w6: seed:u32 (0 = derive from packed words)
 
@@ -22,6 +22,7 @@ fn hash_cell_u32(cell: vec2<i32>, seed: u32, salt: u32) -> u32 {
 fn sample_cells_particles_layer(
     uv_base: vec2<f32>,
     dir: vec3<f32>,
+    axis_dot: f32,
     variant: u32,
     density: f32,
     size_min01: f32,
@@ -47,7 +48,7 @@ fn sample_cells_particles_layer(
     // - depth01=0 is the nearest slice, depth01=1 is the farthest slice.
     // - Far slices are smaller + less parallax-biased.
     let parallax_layer = parallax * mix(1.0, 0.35, depth01);
-    let horizon_boost = 1.0 + parallax_layer * (1.0 - abs(dir.y)) * 1.25;
+    let horizon_boost = 1.0 + parallax_layer * (1.0 - abs(axis_dot)) * 1.25;
     let phase01 = fract(phase01_in);
 
     var uv = uv_base;
@@ -60,10 +61,9 @@ fn sample_cells_particles_layer(
         let drift = vec2<f32>(tri(phase01), tri(phase01 + 0.25)) * motion * 0.04;
         uv = uv + drift;
     } else if (variant == 3u) { // Warp (hyperspace/burst)
-        let p = (uv - vec2<f32>(0.5)) * horizon_boost;
-        let az = pseudo_angle01(p);
-        let r = saturate(length(p) * 1.41421356); // normalize ~[0,1]
-        uv = vec2<f32>(az, fract(r + phase01));
+        // Axis-polar mapping: uv.x is azimuth, uv.y is radial distance (0 at +axis, 1 at -axis).
+        // Scroll along the radial coordinate for a loopable hyperspace look.
+        uv.y = fract(uv.y + phase01);
     }
 
     uv = (uv - vec2<f32>(0.5)) * horizon_boost + vec2<f32>(0.5);
@@ -92,15 +92,15 @@ fn sample_cells_particles_layer(
 
     // Height bias shaping:
     // - Stars/Fall/Drift: 0 = zenith-biased, 1 = horizon-biased.
-    // - Warp: 0 = edge-biased, 1 = center-biased (radial in oct UV).
+    // - Warp: 0 = edge-biased, 1 = center-biased (radial around axis).
     var place = 1.0;
     if (variant == 3u) {
-        let rad = saturate(length((uv_base - vec2<f32>(0.5))) * 1.41421356);
+        let rad = clamp(uv_base.y, 0.0, 1.0);
         place = mix(rad, 1.0 - rad, height_bias);
     } else {
-        let h01 = clamp(dir.y * 0.5 + 0.5, 0.0, 1.0);
+        let h01 = clamp(axis_dot * 0.5 + 0.5, 0.0, 1.0);
         let zenith_w = h01;
-        let horizon_w = 1.0 - abs(dir.y);
+        let horizon_w = 1.0 - abs(axis_dot);
         place = mix(zenith_w, horizon_w, height_bias);
     }
 
@@ -368,8 +368,10 @@ fn sample_cells(data: array<u32, 14>, offset: u32, direction: vec3<f32>) -> vec4
     let color_a = unpack_rgba8(data[offset + 2u]);
     let color_b = unpack_rgba8(data[offset + 3u]);
 
-    let parallax_u8 = data[offset + 4u] & 0xFFu;
+    let w4 = data[offset + 4u];
+    let parallax_u8 = w4 & 0xFFu;
     let parallax = f32(parallax_u8) / 255.0;
+    let axis_oct16 = (w4 >> 16u) & 0xFFFFu;
 
     let w5 = data[offset + 5u];
     let phase_u16 = w5 & 0xFFFFu;
@@ -390,17 +392,23 @@ fn sample_cells(data: array<u32, 14>, offset: u32, direction: vec3<f32>) -> vec4
     }
 
     let dir = safe_normalize(direction, vec3<f32>(0.0, 0.0, 1.0));
-    let h01 = clamp(dir.y * 0.5 + 0.5, 0.0, 1.0);
 
-    // Base UV for the sky sphere (azimuth wraps, height is linear).
-    // Avoid octahedral folds here; they create visible quadrant seams for
-    // anisotropic patterns (e.g. Fall streaks, glints, buildings).
-    let uv_sphere = vec2<f32>(pseudo_angle01(vec2<f32>(dir.x, dir.z)), h01);
+    // Axis-based cylindrical / polar mapping (trig-free).
+    let axis = unpack_octahedral_u16(axis_oct16);
+    let basis = basis_from_axis(axis);
+    let axis_dot = dot(dir, basis.n);
+    let h01 = clamp(axis_dot * 0.5 + 0.5, 0.0, 1.0);
 
-    // Warp (family 0, variant 3) expects a centered square domain.
-    let uv_oct = dir_to_oct_uv01(dir);
-    let uv_base = select(uv_sphere, uv_oct, family == 0u && variant == 3u);
-    let horizon_boost = 1.0 + parallax * (1.0 - abs(dir.y)) * 1.25;
+    let p = vec2<f32>(dot(dir, basis.t), dot(dir, basis.b));
+    let u01 = pseudo_angle01(p);
+
+    // Horizon-wrap domain (cylindrical around axis).
+    let uv_cyl = vec2<f32>(u01, h01);
+    // Warp domain (polar around axis): radial coordinate is 0 at +axis, 1 at -axis.
+    let uv_warp = vec2<f32>(u01, 1.0 - h01);
+
+    let uv_base = select(uv_cyl, uv_warp, family == 0u && variant == 3u);
+    let horizon_boost = 1.0 + parallax * (1.0 - abs(axis_dot)) * 1.25;
 
     // Energy scaling: intensity boosts RGB more than alpha (coverage stays geometric).
     let energy = 1.0 + intensity * 6.0;
@@ -416,6 +424,7 @@ fn sample_cells(data: array<u32, 14>, offset: u32, direction: vec3<f32>) -> vec4
         let p0 = sample_cells_particles_layer(
             uv_base,
             dir,
+            axis_dot,
             variant,
             density,
             size_min01,
@@ -439,12 +448,13 @@ fn sample_cells(data: array<u32, 14>, offset: u32, direction: vec3<f32>) -> vec4
         if (slice_count >= 2u) {
             let depth1 = select(1.0, 0.5, slice_count == 3u);
             let p1 = sample_cells_particles_layer(
-                uv_base,
-                dir,
-                variant,
-                density,
-                size_min01,
-                size_max01,
+            uv_base,
+            dir,
+            axis_dot,
+            variant,
+            density,
+            size_min01,
+            size_max01,
                 shape,
                 motion,
                 parallax,
@@ -467,12 +477,13 @@ fn sample_cells(data: array<u32, 14>, offset: u32, direction: vec3<f32>) -> vec4
         // Slice 2 (farthest)
         if (slice_count >= 3u) {
             let p2 = sample_cells_particles_layer(
-                uv_base,
-                dir,
-                variant,
-                density,
-                size_min01,
-                size_max01,
+            uv_base,
+            dir,
+            axis_dot,
+            variant,
+            density,
+            size_min01,
+            size_max01,
                 shape,
                 motion,
                 parallax,
@@ -515,7 +526,7 @@ fn sample_cells(data: array<u32, 14>, offset: u32, direction: vec3<f32>) -> vec4
 
         // Zoning and districts.
         let zenith_w = h01;
-        let horizon_w = 1.0 - abs(dir.y);
+        let horizon_w = 1.0 - abs(axis_dot);
         let zone = mix(zenith_w, horizon_w, height_bias);
         let district = vec2<i32>(cell.x >> 2, cell.y >> 2);
         let district_hash = hash01_u32(hash_cell_u32(district, seed, 0xbb67ae85u));

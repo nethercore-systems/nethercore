@@ -669,15 +669,10 @@ pub extern "C" fn env_gradient(layer: u32, zenith: u32, sky_horizon: u32, ground
 
 /// Configure cells environment (Mode 1).
 /// 
-/// Unified cell generator with two families under one mode ID:
-/// - family 0: particles (stars/snow/rain/embers/bubbles/warp)
-/// - family 1: tiles/lights (Mondrian/Truchet, buildings, bands, panels)
-/// 
-/// Notes:
-/// - `phase` is treated as `u16` (wraps); animation is designed to be loopable and shimmer-free.
-/// - `parallax` selects bounded internal depth slices for family 0 particles: `0–95` → 1 slice, `96–191` → 2 slices, `192–255` → 3 slices.
-/// - `seed=0` means “auto”: derive a deterministic seed from the packed payload.
-pub extern "C" fn env_cells(layer: u32, family: u32, variant: u32, density: u32, size_min: u32, size_max: u32, intensity: u32, shape: u32, motion: u32, parallax: u32, height_bias: u32, clustering: u32, color_a: u32, color_b: u32, phase: u32, seed: u32) void;
+/// Two families under one mode ID:
+/// - Family 0: Particles (stars/snow/rain/embers/bubbles/warp)
+/// - Family 1: Tiles/Lights (Mondrian/Truchet, buildings, bands, panels)
+pub extern "C" fn env_cells(layer: u32, family: u32, variant: u32, density: u32, size_min: u32, size_max: u32, intensity: u32, shape: u32, motion: u32, parallax: u32, height_bias: u32, clustering: u32, color_a: u32, color_b: u32, axis_x: f32, axis_y: f32, axis_z: f32, phase: u32, seed: u32) void;
 
 /// Configure lines environment (Mode 2: synthwave grid, racing track).
 /// 
@@ -747,24 +742,9 @@ pub extern "C" fn env_nebula(layer: u32, family: u32, coverage: u32, softness: u
 /// * `viewer_x`, `viewer_y`, `viewer_z` — Viewer position in room (-128 to 127 = -1.0 to 1.0)
 pub extern "C" fn env_room(layer: u32, color_ceiling: u32, color_floor: u32, color_walls: u32, panel_size: f32, panel_gap: u32, light_dir_x: f32, light_dir_y: f32, light_dir_z: f32, light_intensity: u32, light_tint: u32, corner_darken: u32, room_scale: f32, viewer_x: i32, viewer_y: i32, viewer_z: i32, accent: u32, accent_mode: u32, roughness: u32, phase: u32) void;
 
-/// Configure curtains environment (Mode 6: pillars, trees, vertical structures).
+/// Configure veil environment (Mode 6).
 /// 
-/// Creates vertical structures arranged around the viewer.
-/// 
-/// # Arguments
-/// * `layer` — Target layer: 0 = base layer, 1 = overlay layer
-/// * `layer_count` — Depth layers (1-3)
-/// * `density` — Structures per cell (0-255)
-/// * `height_min` — Minimum height (0-63)
-/// * `height_max` — Maximum height (0-63)
-/// * `width` — Structure width (0-31)
-/// * `spacing` — Gap between structures (0-31)
-/// * `waviness` — Organic wobble (0-255, 0=straight)
-/// * `color_near` — Nearest structure color (0xRRGGBBAA)
-/// * `color_far` — Farthest structure color (0xRRGGBBAA)
-/// * `glow` — Neon/magical glow intensity (0-255)
-/// * `parallax_rate` — Layer separation (0-255)
-/// * `phase` — Horizontal scroll phase (0-65535, wraps for seamless)
+/// Axis-aligned SDF ribbons/pillars with bounded depth slices.
 pub extern "C" fn env_veil(layer: u32, family: u32, density: u32, width: u32, taper: u32, curvature: u32, edge_soft: u32, height_min: u32, height_max: u32, color_near: u32, color_far: u32, glow: u32, parallax: u32, axis_x: f32, axis_y: f32, axis_z: f32, phase: u32, seed: u32) void;
 
 /// Configure rings environment (Mode 7: portals, tunnels, vortex).

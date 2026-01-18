@@ -128,6 +128,9 @@ pub(crate) fn env_cells(
     clustering: u32,
     color_a: u32,
     color_b: u32,
+    axis_x: f32,
+    axis_y: f32,
+    axis_z: f32,
     phase: u32,
     seed: u32,
 ) {
@@ -149,6 +152,7 @@ pub(crate) fn env_cells(
         clustering,
         color_a,
         color_b,
+        axis: Vec3::new(axis_x, axis_y, axis_z),
         phase,
         seed,
     });

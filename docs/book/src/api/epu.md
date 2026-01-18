@@ -278,6 +278,9 @@ fn env_cells(
     clustering: u32,
     color_a: u32,
     color_b: u32,
+    axis_x: f32,
+    axis_y: f32,
+    axis_z: f32,
     phase: u32,
     seed: u32,
 )
@@ -301,6 +304,9 @@ NCZX_IMPORT void env_cells(
     uint32_t clustering,
     uint32_t color_a,
     uint32_t color_b,
+    float axis_x,
+    float axis_y,
+    float axis_z,
     uint32_t phase,
     uint32_t seed
 );
@@ -324,6 +330,9 @@ pub extern fn env_cells(
     clustering: u32,
     color_a: u32,
     color_b: u32,
+    axis_x: f32,
+    axis_y: f32,
+    axis_z: f32,
     phase: u32,
     seed: u32,
 ) void;
@@ -334,6 +343,7 @@ pub extern fn env_cells(
 
 Notes:
 - `phase` is treated as `u16` (wraps). Avoid using `phase` directly as a hash input; animation is designed to be loopable and shimmer-free.
+- `axis_x/y/z` is a world-space axis/flow direction (normalized; if near-zero, falls back to Y-up, except Particles/Fall defaults to Y-down).
 - `parallax` also selects bounded internal depth slices for **Family 0: Particles**: `0–95` → 1 slice, `96–191` → 2 slices, `192–255` → 3 slices (farthest slices are smaller + less parallax-biased).
 - `seed=0` means “auto”: derive a deterministic seed from the packed payload.
 
@@ -341,7 +351,7 @@ Packed layout (per layer):
 - `w0`: `family:u8 | variant:u8 | density:u8 | intensity:u8`
 - `w1`: `size_min:u8 | size_max:u8 | shape:u8 | motion:u8`
 - `w2..w3`: `color_a`, `color_b` (RGBA8)
-- `w4`: `parallax:u8 | reserved:u24` (**reserved must be zero**)
+- `w4`: `parallax:u8 | reserved:u8 | axis_oct16:u16` (**reserved must be zero**)
 - `w5`: `phase:u16 (low16) | height_bias:u8 | clustering:u8`
 - `w6`: `seed:u32` (`0` = auto)
 
@@ -972,7 +982,7 @@ These are directly from the mode sheets (see the inspector examples for full pre
 env_gradient(0, 0x2E65FFFF, 0xA9D8FFFF, 0x4D8B4DFF, 0x102010FF, 0.35, 0.00, 0.95, 10, 72, 230, 32, 24, 40, 0);
 
 // Mode 1: Cells — Starfield Calm (Particles/Stars)
-env_cells(1, 0, 0, 120, 2, 10, 200, 220, 64, 140, 100, 40, 0xDDE6FFFF, 0xFFF2C0FF, 0, 0);
+env_cells(1, 0, 0, 120, 2, 10, 200, 220, 64, 140, 100, 40, 0xDDE6FFFF, 0xFFF2C0FF, 0.0, 1.0, 0.0, 0, 0);
 
 // Mode 2: Lines — Synth Grid
 env_lines(1, 0, 2, 18, 2.25, 80.0, 0, 0x00FFB0C0, 0xFF3AF0FF, 8, 0, 0, 24, 0, 96, 0.0, 0.0, 1.0, 0x4D2F5A10);
