@@ -4,8 +4,7 @@ use anyhow::{Result, bail};
 use wasmtime::Caller;
 
 use zx_common::formats::{
-    BoneTransform, PLATFORM_BONE_KEYFRAME_SIZE, PlatformBoneKeyframe,
-    decode_bone_transform,
+    BoneTransform, PLATFORM_BONE_KEYFRAME_SIZE, PlatformBoneKeyframe, decode_bone_transform,
 };
 
 use crate::ffi::ZXGameContext;
@@ -134,7 +133,11 @@ pub(super) fn keyframe_read(
 /// Unlike the legacy `keyframe_read() -> set_bones()` path, this uses pre-uploaded
 /// static keyframe data. The GPU shader reads directly from the all_keyframes buffer
 /// at the computed offset.
-pub(super) fn keyframe_bind(mut caller: Caller<'_, ZXGameContext>, handle: u32, index: u32) -> Result<()> {
+pub(super) fn keyframe_bind(
+    mut caller: Caller<'_, ZXGameContext>,
+    handle: u32,
+    index: u32,
+) -> Result<()> {
     if handle == 0 {
         // Unbind keyframes - reset to default static offset 0
         let state = &mut caller.data_mut().ffi;

@@ -7,11 +7,11 @@ use crate::console::{Console, ConsoleInput};
 use crate::rollback::ConnectionQuality;
 use crate::test_utils::TestConsole;
 
+use super::RollbackSession;
+use super::types::{NetworkInput, SessionType};
 use crate::rollback::config::SessionConfig;
 use crate::rollback::events::{PlayerNetworkStats, SessionError, SessionEvent};
 use crate::rollback::player::PlayerSessionConfig;
-use super::RollbackSession;
-use super::types::{NetworkInput, SessionType};
 
 // Test input type for unit tests
 #[repr(C)]
@@ -234,10 +234,8 @@ fn test_rollback_session_local_has_player_config() {
 fn test_rollback_session_local_with_config() {
     // Create a local session with custom player config
     let player_config = PlayerSessionConfig::new(4, 0b0011); // Only players 0, 1 local
-    let session = RollbackSession::<TestInput, ()>::new_local_with_config(
-        player_config,
-        test_ram_limit(),
-    );
+    let session =
+        RollbackSession::<TestInput, ()>::new_local_with_config(player_config, test_ram_limit());
 
     assert_eq!(session.player_config().num_players(), 4);
     assert_eq!(session.player_config().local_player_mask(), 0b0011);

@@ -1,15 +1,12 @@
 //! NCIT packing functions (ItModule → NCIT binary)
 
-use crate::module::{
-    ItEnvelope, ItInstrument, ItModule, ItPattern, ItSample,
-    ItSampleFlags,
-};
+use crate::module::{ItEnvelope, ItInstrument, ItModule, ItPattern, ItSample, ItSampleFlags};
 
 use super::{
     INSTR_HAS_DEFAULT_PAN, INSTR_HAS_FILTER, INSTR_HAS_PAN_ENV, INSTR_HAS_PITCH_ENV,
-    INSTR_HAS_VOL_ENV, MAX_ENVELOPE_POINTS, SAMPLE_HAS_LOOP, SAMPLE_HAS_PAN,
-    SAMPLE_HAS_SUSTAIN, SAMPLE_HAS_VIBRATO, SAMPLE_PINGPONG_LOOP, SAMPLE_PINGPONG_SUSTAIN,
-    TABLE_FULL, TABLE_SPARSE, TABLE_UNIFORM,
+    INSTR_HAS_VOL_ENV, MAX_ENVELOPE_POINTS, SAMPLE_HAS_LOOP, SAMPLE_HAS_PAN, SAMPLE_HAS_SUSTAIN,
+    SAMPLE_HAS_VIBRATO, SAMPLE_PINGPONG_LOOP, SAMPLE_PINGPONG_SUSTAIN, TABLE_FULL, TABLE_SPARSE,
+    TABLE_UNIFORM,
 };
 use super::{write_u16, write_u32};
 

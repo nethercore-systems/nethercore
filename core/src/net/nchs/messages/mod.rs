@@ -28,7 +28,7 @@ pub use host::{
     PlayerSlot, SessionStart,
 };
 pub use peer::{PunchAck, PunchHello};
-pub use shared::{NetworkConfig, PlayerInfo, SaveConfig, SaveMode, MAX_PLAYER_NAME_LEN};
+pub use shared::{MAX_PLAYER_NAME_LEN, NetworkConfig, PlayerInfo, SaveConfig, SaveMode};
 
 /// NCHS protocol magic bytes
 pub const NCHS_MAGIC: [u8; 4] = *b"NCHS";

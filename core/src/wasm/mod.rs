@@ -15,9 +15,9 @@
 //! - [`GameState`] - Minimal core state (input, timing, RNG, saves)
 //! - [`WasmGameContext`] - Context combining core + console FFI + rollback state
 
-pub mod state;
 mod engine;
 mod instance;
+pub mod state;
 
 #[cfg(test)]
 mod tests;

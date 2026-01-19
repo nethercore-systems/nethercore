@@ -15,6 +15,7 @@
 mod buffer;
 mod command_buffer;
 mod draw;
+pub mod epu;
 mod frame;
 mod init;
 mod matrix_packing;

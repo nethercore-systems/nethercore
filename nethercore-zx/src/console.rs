@@ -211,7 +211,10 @@ impl NethercoreZX {
     }
 
     /// Create a new Nethercore ZX console instance with a datapack and default render mode.
-    pub fn with_datapack_and_render_mode(data_pack: Option<Arc<ZXDataPack>>, render_mode: u8) -> Self {
+    pub fn with_datapack_and_render_mode(
+        data_pack: Option<Arc<ZXDataPack>>,
+        render_mode: u8,
+    ) -> Self {
         Self {
             data_pack,
             render_mode: render_mode.min(3),

@@ -1,10 +1,10 @@
 //! NCHS session implementation
 
 use crate::net::nchs::{
+    LobbyState, NchsSocket, SessionStart,
     guest::{GuestEvent, GuestState, GuestStateMachine},
     host::{HostEvent, HostState, HostStateMachine},
     types::{NchsConfig, NchsError, NchsEvent, NchsRole, NchsState},
-    LobbyState, NchsSocket, SessionStart,
 };
 
 /// Internal state machine wrapper

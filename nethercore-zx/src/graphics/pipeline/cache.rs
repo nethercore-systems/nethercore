@@ -6,7 +6,7 @@ use hashbrown::HashMap;
 
 use super::super::render_state::{PassConfig, RenderState};
 use super::pipeline_creation::{
-    create_environment_pipeline, create_pipeline, create_quad_pipeline, PipelineEntry,
+    PipelineEntry, create_environment_pipeline, create_pipeline, create_quad_pipeline,
 };
 use super::pipeline_key::PipelineKey;
 
@@ -114,8 +114,8 @@ impl PipelineCache {
         render_mode: u8,
         format: u8,
     ) -> &wgpu::ShaderModule {
-        use crate::shader_gen::generate_shader;
         use crate::graphics::FORMAT_NORMAL;
+        use crate::shader_gen::generate_shader;
 
         let render_mode = render_mode.min(3);
         let key = (render_mode, format);
@@ -150,7 +150,10 @@ impl PipelineCache {
         let label = if actual_mode == render_mode {
             format!("Mode{}_Format{}", render_mode, format)
         } else {
-            format!("Mode{}_Format{}_FallbackMode{}", render_mode, format, actual_mode)
+            format!(
+                "Mode{}_Format{}_FallbackMode{}",
+                render_mode, format, actual_mode
+            )
         };
 
         let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -164,10 +167,11 @@ impl PipelineCache {
 
     fn get_or_create_quad_shader_module(&mut self, device: &wgpu::Device) -> &wgpu::ShaderModule {
         if self.quad_shader_module.is_none() {
-            self.quad_shader_module = Some(device.create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some("Quad Shader"),
-                source: wgpu::ShaderSource::Wgsl(crate::shader_gen::QUAD_SHADER.into()),
-            }));
+            self.quad_shader_module =
+                Some(device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                    label: Some("Quad Shader"),
+                    source: wgpu::ShaderSource::Wgsl(crate::shader_gen::QUAD_SHADER.into()),
+                }));
         }
 
         self.quad_shader_module
@@ -275,8 +279,13 @@ impl PipelineCache {
         );
 
         let shader_module = self.get_or_create_quad_shader_module(device);
-        let entry =
-            create_quad_pipeline(device, surface_format, shader_module, pass_config, is_screen_space);
+        let entry = create_quad_pipeline(
+            device,
+            surface_format,
+            shader_module,
+            pass_config,
+            is_screen_space,
+        );
         self.pipelines.insert(key, entry);
         &self.pipelines[&key]
     }
@@ -298,7 +307,10 @@ impl PipelineCache {
         }
 
         // Otherwise, create a new environment pipeline
-        tracing::debug!("Creating environment pipeline: pass_config={:?}", pass_config);
+        tracing::debug!(
+            "Creating environment pipeline: pass_config={:?}",
+            pass_config
+        );
 
         let shader_module = self.get_or_create_environment_shader_module(device);
         let entry = create_environment_pipeline(device, surface_format, shader_module, pass_config);

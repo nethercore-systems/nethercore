@@ -11,9 +11,9 @@ use winit::window::Window;
 use crate::console::Console;
 
 use super::super::event_loop::ConsoleApp;
-use super::types::{RomLoader, StandaloneGraphicsSupport};
-use super::StandaloneApp;
 use super::super::{GameErrorPhase, RuntimeError, parse_wasm_error};
+use super::StandaloneApp;
+use super::types::{RomLoader, StandaloneGraphicsSupport};
 
 impl<C, L> ConsoleApp<C> for StandaloneApp<C, L>
 where

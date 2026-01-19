@@ -330,8 +330,8 @@ fn test_rebuild_from_unpacked_input() {
     let unpacked_size = unpacked_xm.len();
 
     // Rebuild it (should output packed format)
-    let rebuilt = rebuild_xm_without_samples(&unpacked_xm, &unpacked_module)
-        .expect("Rebuild should work");
+    let rebuilt =
+        rebuild_xm_without_samples(&unpacked_xm, &unpacked_module).expect("Rebuild should work");
     let rebuilt_size = rebuilt.len();
 
     println!(

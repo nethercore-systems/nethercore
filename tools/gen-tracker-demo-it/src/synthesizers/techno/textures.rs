@@ -1,7 +1,7 @@
 //! Acid techno texture instruments: pads, stabs, risers, atmosphere, and crash
 
 use super::super::common::{exp_attack, exp_decay, sawtooth_blep, SimpleRng, SAMPLE_RATE};
-use super::filters::{soft_saturate, StateVariableFilter, BiquadHP};
+use super::filters::{soft_saturate, BiquadHP, StateVariableFilter};
 use std::f32::consts::PI;
 
 const TWO_PI: f32 = 2.0 * PI;

@@ -7,7 +7,10 @@ use anyhow::Result;
 use nethercore_core::library::LocalGame;
 use nethercore_shared::ConsoleType;
 
-use super::helpers::{console_type_from_extension, console_type_from_str, supported_console_types, supported_extension_list};
+use super::helpers::{
+    console_type_from_extension, console_type_from_str, supported_console_types,
+    supported_extension_list,
+};
 use super::player::{launch_player_with_options, run_player_with_options};
 
 /// Multiplayer connection mode

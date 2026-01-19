@@ -2,7 +2,7 @@
 
 use smallvec::SmallVec;
 
-use super::host_state::{HostRollbackState, HOST_STATE_SIZE};
+use super::host_state::{HOST_STATE_SIZE, HostRollbackState};
 use super::{ConsoleDataVec, InputDataVec};
 
 /// Snapshot of game state for rollback

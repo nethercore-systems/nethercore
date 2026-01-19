@@ -1009,3 +1009,94 @@ env_veil(1, 1, 140, 28, 190, 170, 80, 88, 248, 0xFF2BD6FF, 0x00E5FFFF, 220, 200,
 // Mode 7: Rings — Stargate Portal
 env_rings(1, 0, 48, 28, 0x2EE7FFFF, 0x0B2B4CFF, 0xE8FFFFFF, 190, 25.0, 0.0, 0.0, 1.0, 0, 9000, 32, 24, 160, 41);
 ```
+
+---
+
+## Rust Presets
+
+The EPU provides factory functions for common environment types. These return ready-to-use `EpuConfig` values that can be used directly with the EPU runtime.
+
+### Available Presets
+
+| Preset | Description | Key Features |
+|--------|-------------|--------------|
+| `void_with_stars()` | Black void with twinkling stars | RAMP (black) + SCATTER (emissive stars) |
+| `sunny_meadow()` | Blue sky, green ground, sun disk | RAMP + LOBE + DECAL (sun) + FLOW (clouds) |
+| `cyberpunk_alley()` | Neon-lit urban with fog and rain | Dual LOBEs + FOG + GRID + SCATTER (windows) |
+| `underwater_cave()` | Deep blue with caustics and bubbles | RAMP + LOBE + FOG + FLOW (caustics) + SCATTER |
+| `space_station()` | Industrial panels, overhead lighting | RAMP + LOBE + BAND + GRID + DECAL + SCATTER |
+| `sunset_beach()` | Warm horizon, sun near horizon | RAMP + LOBE + DECAL (sun) + FLOW (clouds) |
+| `haunted_forest()` | Dark forest with fog and fireflies | RAMP + LOBE + FOG + SCATTER (wisps) |
+| `lava_cave()` | Hot glowing environment with lava | RAMP + LOBE + FOG + FLOW (lava) + SCATTER (embers) |
+
+### Example Usage (Rust)
+
+```rust
+use nethercore_zx::graphics::epu::presets;
+
+// Get a ready-to-use environment
+let config = presets::sunny_meadow();
+
+// Or import directly
+use nethercore_zx::graphics::epu::void_with_stars;
+let stars = void_with_stars();
+```
+
+### Preset Layer Structure
+
+All presets follow the recommended slot usage:
+
+- **Slots 0-3 (Bounds):** RAMP, LOBE, BAND, FOG
+- **Slots 4-7 (Features):** DECAL, GRID, SCATTER, FLOW
+
+#### Void with Stars
+```
+B0: RAMP (black enclosure)
+F0: SCATTER (emissive twinkling stars)
+```
+
+#### Sunny Meadow
+```
+B0: RAMP (sky/horizon/ground gradient)
+B1: LOBE (sun glow)
+F0: DECAL (sun disk, emissive)
+F1: FLOW (slow cloud drift, visual-only)
+```
+
+#### Cyberpunk Alley
+```
+B0: RAMP (dark urban enclosure)
+B1: LOBE (left neon spill, magenta)
+B2: LOBE (right neon spill, cyan)
+B3: FOG (atmospheric haze)
+F0: GRID (building panels)
+F1: DECAL (neon sign)
+F2: FLOW (rain streaks, visual-only)
+F3: SCATTER (lit windows)
+```
+
+#### Underwater Cave
+```
+B0: RAMP (deep blue/teal enclosure)
+B1: LOBE (light from above)
+B2: FOG (water absorption)
+F0: FLOW (caustic patterns, emissive)
+F1: SCATTER (rising bubbles)
+```
+
+#### Space Station
+```
+B0: RAMP (metallic gray enclosure)
+B1: LOBE (overhead fluorescent)
+B2: BAND (horizon accent strip)
+F0: GRID (wall panels)
+F1: DECAL (warning light, pulsing)
+F2: SCATTER (indicator lights)
+```
+
+---
+
+## See Also
+
+- [EPU Environments Guide](../guides/epu-environments.md) - Quick-start guide with mode overview and recipes
+- [EPU Architecture Overview](../architecture/epu-overview.md) - Underlying architecture, compute pipeline, and data model

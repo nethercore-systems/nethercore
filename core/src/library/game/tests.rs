@@ -1,7 +1,7 @@
 //! Tests for game library management
 
+use super::operations::{delete_game_in_dir, is_cached_in_dir};
 use super::scanning::get_games_from_dir;
-use super::operations::{is_cached_in_dir, delete_game_in_dir};
 use std::fs;
 use std::path::Path;
 use tempfile::TempDir;

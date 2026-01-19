@@ -1,7 +1,7 @@
 //! Roland TR-909 drum machine sounds
 
 use super::super::common::{SimpleRng, SAMPLE_RATE};
-use super::filters::{soft_saturate, StateVariableFilter, BiquadLP};
+use super::filters::{soft_saturate, BiquadLP, StateVariableFilter};
 use std::f32::consts::PI;
 
 const TWO_PI: f32 = 2.0 * PI;

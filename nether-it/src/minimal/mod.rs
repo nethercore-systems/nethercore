@@ -32,9 +32,9 @@
 //!
 //! **Total savings: ~75-80% reduction in metadata overhead**
 
+mod legacy;
 mod pack;
 mod parse;
-mod legacy;
 
 #[cfg(test)]
 mod tests;
@@ -47,9 +47,9 @@ use crate::module::ItModule;
 use crate::parser::parse_it;
 
 // Re-export public API
+pub use legacy::{pack_it_minimal, strip_it_samples};
 pub use pack::pack_ncit;
 pub use parse::parse_ncit;
-pub use legacy::{pack_it_minimal, strip_it_samples};
 
 // =============================================================================
 // Constants

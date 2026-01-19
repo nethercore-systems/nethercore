@@ -70,8 +70,8 @@ fn fs(in: EnvVertexOut) -> @location(0) vec4<f32> {
     // Transform to world space
     let view_ray = cam_right * view_ray_cam.x + cam_up * view_ray_cam.y + cam_back * view_ray_cam.z;
 
-    // Sample environment (Multi-Environment v4)
-    let env_color = sample_environment(env_index, normalize(view_ray));
+    // Sample background from EPU precomputed octahedral map
+    let env_color = sample_epu_background(env_index, normalize(view_ray));
 
     return env_color;
 }

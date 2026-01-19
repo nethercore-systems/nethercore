@@ -4,17 +4,17 @@ use std::cell::RefCell;
 
 use winit::window::Fullscreen;
 
-use crate::capture::{read_render_target_pixels, CaptureSupport};
+use crate::capture::{CaptureSupport, read_render_target_pixels};
 use crate::console::{Audio, Console, ConsoleResourceManager};
+use crate::debug::ActionRequest;
 use crate::debug::registry::RegisteredValue;
 use crate::debug::types::DebugValue;
-use crate::debug::ActionRequest;
 use crate::rollback::{ConnectionQuality, SessionType};
 
-use super::error_ui::{render_error_screen, ErrorAction};
-use super::types::{RomLoader, StandaloneGraphicsSupport};
 use super::super::ui::SettingsAction;
 use super::StandaloneApp;
+use super::error_ui::{ErrorAction, render_error_screen};
+use super::types::{RomLoader, StandaloneGraphicsSupport};
 
 impl<C, L> StandaloneApp<C, L>
 where

@@ -11,8 +11,8 @@ use wasmtime::Linker;
 
 use super::ZXGameContext;
 
-pub mod sound;
 pub mod music;
+pub mod sound;
 pub mod tracker;
 
 /// Music type constants for music_type() return value

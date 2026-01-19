@@ -15,18 +15,18 @@
 
 use std::sync::Arc;
 
-mod output;
+mod backend;
 mod generation;
 mod mixing;
-mod backend;
+mod output;
 
 #[cfg(test)]
 mod tests;
 
 // Re-export public API
-pub use output::{AudioOutput, OUTPUT_SAMPLE_RATE, SOURCE_SAMPLE_RATE};
-pub use generation::{generate_audio_frame_with_tracker, advance_audio_positions};
 pub use backend::{ZXAudio, ZXAudioGenerator};
+pub use generation::{advance_audio_positions, generate_audio_frame_with_tracker};
+pub use output::{AudioOutput, OUTPUT_SAMPLE_RATE, SOURCE_SAMPLE_RATE};
 
 /// Sound data (raw PCM)
 #[derive(Clone, Debug)]

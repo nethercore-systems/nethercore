@@ -125,7 +125,11 @@ pub(super) fn keyframes_load(
 /// Keyframe collection handle (>0) on success. Traps on failure.
 ///
 /// **Init-only:** Can only be called during `init()`.
-pub(super) fn rom_keyframes(mut caller: Caller<'_, ZXGameContext>, id_ptr: u32, id_len: u32) -> Result<u32> {
+pub(super) fn rom_keyframes(
+    mut caller: Caller<'_, ZXGameContext>,
+    id_ptr: u32,
+    id_len: u32,
+) -> Result<u32> {
     check_init_only(&caller, "rom_keyframes")?;
 
     // Read asset ID from WASM memory

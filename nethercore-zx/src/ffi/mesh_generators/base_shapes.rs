@@ -81,7 +81,12 @@ pub fn cube(mut caller: Caller<'_, ZXGameContext>, size_x: f32, size_y: f32, siz
 /// The sphere uses equirectangular UV mapping and smooth normals.
 ///
 /// **Init-only**: Must be called during `init()`.
-pub fn sphere(mut caller: Caller<'_, ZXGameContext>, radius: f32, segments: u32, rings: u32) -> u32 {
+pub fn sphere(
+    mut caller: Caller<'_, ZXGameContext>,
+    radius: f32,
+    segments: u32,
+    rings: u32,
+) -> u32 {
     if let Err(e) = check_init_only(&caller, "sphere") {
         warn!("{}", e);
         return 0;

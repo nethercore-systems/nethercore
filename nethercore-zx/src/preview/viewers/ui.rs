@@ -164,7 +164,8 @@ impl ZXAssetViewer {
                 );
 
                 // Draw waveform
-                let samples_per_pixel = (sound_samples.len() as f32 / available_width).max(1.0) as usize;
+                let samples_per_pixel =
+                    (sound_samples.len() as f32 / available_width).max(1.0) as usize;
 
                 for x in 0..(available_width as usize) {
                     let sample_idx = x * samples_per_pixel;
@@ -207,7 +208,10 @@ impl ZXAssetViewer {
                 if is_playing {
                     let pos_x = rect.left() + progress * available_width;
                     painter.line_segment(
-                        [egui::pos2(pos_x, rect.top()), egui::pos2(pos_x, rect.bottom())],
+                        [
+                            egui::pos2(pos_x, rect.top()),
+                            egui::pos2(pos_x, rect.bottom()),
+                        ],
                         egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 100, 100)),
                     );
                 }
@@ -375,9 +379,8 @@ impl ZXAssetViewer {
                         let data = &keyframe_data[matrix_offset..matrix_offset + 48];
                         let mut floats = Vec::new();
                         for chunk in data.chunks(4) {
-                            floats.push(f32::from_le_bytes([
-                                chunk[0], chunk[1], chunk[2], chunk[3],
-                            ]));
+                            floats
+                                .push(f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]));
                         }
                         ui.code(format!(
                             "[ {:.3}, {:.3}, {:.3}, {:.3} ]\n\

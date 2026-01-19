@@ -1,9 +1,9 @@
 //! Input manager handling keyboard and gamepad
 
 mod deadzone;
-mod keyboard;
 #[cfg(feature = "gamepad")]
 mod gamepad;
+mod keyboard;
 #[cfg(test)]
 mod tests;
 

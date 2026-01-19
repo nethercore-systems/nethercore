@@ -5,8 +5,8 @@ use hashbrown::HashMap;
 use std::time::Instant;
 
 use crate::graphics::{
-    BufferManager, MeshHandle, QuadBatchInfo, QuadInstance, RetainedMesh,
-    TextureHandle, VirtualRenderPass,
+    BufferManager, MeshHandle, QuadBatchInfo, QuadInstance, RetainedMesh, TextureHandle,
+    VirtualRenderPass, epu::EpuRuntime,
 };
 
 use super::init::RenderTarget;
@@ -113,6 +113,11 @@ pub struct ZXGraphics {
     pub(super) quad_instance_scratch: Vec<QuadInstance>,
     /// Batch info for creating quad draw commands
     pub(super) quad_batch_scratch: Vec<QuadBatchInfo>,
+
+    // EPU (Environment Processing Unit) runtime for precomputed environment maps
+    pub(super) epu_runtime: EpuRuntime,
+    /// EPU sampler for environment map sampling (linear filtering)
+    pub(super) epu_sampler: wgpu::Sampler,
 }
 
 impl ZXGraphics {
@@ -383,6 +388,42 @@ impl ZXGraphics {
         self.invalidate_frame_bind_group();
 
         tracing::info!("Cleared game resources for new game");
+    }
+
+    // =================================================================
+    // EPU (Environment Processing Unit) ACCESS
+    // =================================================================
+
+    /// Get a reference to the EPU runtime for building environment maps.
+    pub fn epu_runtime(&self) -> &EpuRuntime {
+        &self.epu_runtime
+    }
+
+    /// Build EPU environment maps for the given configurations.
+    ///
+    /// This dispatches compute shaders to generate EnvSharp, EnvLight0/1/2, and
+    /// ambient cubes for the specified environment configurations.
+    ///
+    /// # Arguments
+    /// * `encoder` - Command encoder to record compute passes
+    /// * `configs` - Slice of (env_id, config) pairs to evaluate
+    /// * `time` - Current time for animation (in seconds)
+    pub fn build_epu_environments(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        configs: &[(u32, &crate::graphics::epu::EpuConfig)],
+        time: f32,
+    ) {
+        self.epu_runtime
+            .build_envs(&self.device, &self.queue, encoder, configs, time);
+    }
+
+    /// Upload EPU palette data.
+    ///
+    /// # Arguments
+    /// * `palette` - Array of 256 RGBA colors in linear space
+    pub fn upload_epu_palette(&self, palette: &[[f32; 4]; 256]) {
+        self.epu_runtime.upload_palette(&self.queue, palette);
     }
 
     // =================================================================

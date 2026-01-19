@@ -1,7 +1,7 @@
 //! Channel mixing - core audio rendering logic
 
-use super::super::utils::{SINE_LUT, apply_channel_pan, sample_channel};
 use super::super::TrackerEngine;
+use super::super::utils::{SINE_LUT, apply_channel_pan, sample_channel};
 use super::{CHANNEL_VOLUME_MAX, PAN_ENVELOPE_CENTER, PAN_NOTE_RANGE, VOLUME_ENVELOPE_MAX};
 use crate::audio::Sound;
 

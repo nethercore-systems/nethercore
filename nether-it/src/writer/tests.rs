@@ -1,7 +1,7 @@
 //! Tests for IT file writer
 
 use super::*;
-use crate::{parse_it, ItInstrument, ItSample, IT_MAGIC};
+use crate::{IT_MAGIC, ItInstrument, ItSample, parse_it};
 
 #[test]
 fn test_write_empty_module() {

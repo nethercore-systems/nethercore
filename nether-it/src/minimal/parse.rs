@@ -14,7 +14,7 @@ use super::{
     SAMPLE_HAS_VIBRATO, SAMPLE_PINGPONG_LOOP, SAMPLE_PINGPONG_SUSTAIN, TABLE_FULL, TABLE_SPARSE,
     TABLE_UNIFORM,
 };
-use super::{read_u16, read_u32, read_u8};
+use super::{read_u8, read_u16, read_u32};
 
 /// Parse NCIT minimal format into an ItModule
 ///
@@ -326,7 +326,10 @@ pub(super) fn parse_sample(cursor: &mut Cursor<&[u8]>) -> Result<ItSample, ItErr
 }
 
 /// Parse a pattern from NCIT format
-pub(super) fn parse_pattern(cursor: &mut Cursor<&[u8]>, num_channels: u8) -> Result<ItPattern, ItError> {
+pub(super) fn parse_pattern(
+    cursor: &mut Cursor<&[u8]>,
+    num_channels: u8,
+) -> Result<ItPattern, ItError> {
     let num_rows = read_u16(cursor)?;
     let packed_size = read_u16(cursor)?;
 

@@ -1,6 +1,9 @@
 //! Drum pattern helper functions for Nether Acid
 
-use super::{CH_CLAP, CH_HIHAT, CH_HIHAT_OPEN, CH_KICK, INST_CLAP, INST_HH_CLOSED, INST_HH_OPEN, INST_KICK, C5};
+use super::{
+    C5, CH_CLAP, CH_HIHAT, CH_HIHAT_OPEN, CH_KICK, INST_CLAP, INST_HH_CLOSED, INST_HH_OPEN,
+    INST_KICK,
+};
 use nether_it::{ItNote, ItWriter};
 
 /// 4-on-the-floor kick (classic techno)

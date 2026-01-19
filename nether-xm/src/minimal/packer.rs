@@ -6,8 +6,8 @@ use crate::error::XmError;
 use crate::module::{XmEnvelope, XmModule};
 use crate::parser::pack_pattern_data;
 
-use super::io::{write_u16, write_u32};
 use super::MAX_ENVELOPE_POINTS;
+use super::io::{write_u16, write_u32};
 
 /// Pack an XmModule into minimal binary format
 ///

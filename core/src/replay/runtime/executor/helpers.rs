@@ -46,7 +46,9 @@ pub(super) fn compute_delta(
     if delta.is_empty() { None } else { Some(delta) }
 }
 
-pub(super) fn map_to_btree(values: HashMap<String, DebugValueData>) -> BTreeMap<String, DebugValueData> {
+pub(super) fn map_to_btree(
+    values: HashMap<String, DebugValueData>,
+) -> BTreeMap<String, DebugValueData> {
     values.into_iter().collect()
 }
 

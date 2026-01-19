@@ -3,16 +3,20 @@
 use std::net::SocketAddr;
 use std::time::Instant;
 
+use crate::net::nchs::NchsError;
 use crate::net::nchs::messages::{
     JoinAccept, JoinReject, JoinRejectReason, JoinRequest, NchsMessage,
 };
-use crate::net::nchs::NchsError;
 
 use super::state::{ConnectedPlayer, HostEvent, HostState, HostStateMachine};
 
 impl HostStateMachine {
     /// Handle an incoming message
-    pub(super) fn handle_message(&mut self, from: SocketAddr, msg: NchsMessage) -> Option<HostEvent> {
+    pub(super) fn handle_message(
+        &mut self,
+        from: SocketAddr,
+        msg: NchsMessage,
+    ) -> Option<HostEvent> {
         match msg {
             NchsMessage::JoinRequest(req) => self.handle_join_request(from, req),
             NchsMessage::GuestReady(ready) => self.handle_guest_ready(from, ready.ready),

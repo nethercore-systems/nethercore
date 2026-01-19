@@ -1,7 +1,7 @@
 //! Unit tests for tracker engine
 
-use super::super::channels::NNA_CUT;
 use super::super::TrackerEngine;
+use super::super::channels::NNA_CUT;
 use nether_tracker::{
     FormatFlags, NewNoteAction, TrackerEffect, TrackerInstrument, TrackerModule, TrackerNote,
     TrackerPattern,

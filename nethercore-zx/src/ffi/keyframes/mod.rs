@@ -13,9 +13,9 @@ use wasmtime::Linker;
 
 use super::ZXGameContext;
 
+mod access;
 mod loading;
 mod query;
-mod access;
 
 /// Register keyframe animation FFI functions
 pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {

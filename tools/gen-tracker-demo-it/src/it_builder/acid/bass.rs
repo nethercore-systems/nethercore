@@ -1,6 +1,6 @@
 //! TB-303 bass pattern helper functions for Nether Acid
 
-use super::{CH_303, INST_BASS_303, A2, B2, D3, E2, E3, G2};
+use super::{A2, B2, CH_303, D3, E2, E3, G2, INST_BASS_303};
 use nether_it::{ItNote, ItWriter};
 
 /// Main 303 pattern - classic acid sequence with accents and slides

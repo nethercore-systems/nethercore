@@ -4,13 +4,13 @@
 //! and resource limit enforcement.
 
 #[cfg(test)]
-mod lifecycle_tests;
-#[cfg(test)]
-mod rollback_tests;
+mod full_integration_tests;
 #[cfg(test)]
 mod input_tests;
 #[cfg(test)]
-mod full_integration_tests;
+mod lifecycle_tests;
+#[cfg(test)]
+mod rollback_tests;
 
 #[cfg(test)]
 pub(crate) mod test_utils {

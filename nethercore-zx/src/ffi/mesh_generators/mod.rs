@@ -12,8 +12,8 @@
 //! for GPU upload, which must happen during init() to ensure deterministic rollback.
 
 mod base_shapes;
-mod uv_shapes;
 mod tangent_shapes;
+mod uv_shapes;
 
 use anyhow::Result;
 use wasmtime::Linker;

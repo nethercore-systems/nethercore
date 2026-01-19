@@ -9,7 +9,7 @@ use crate::module::{
 };
 use crate::{INSTRUMENT_MAGIC, MAX_ENVELOPE_POINTS};
 
-use super::helpers::{read_string, read_u16, read_u8};
+use super::helpers::{read_string, read_u8, read_u16};
 
 /// Parse a single instrument
 pub(crate) fn parse_instrument(

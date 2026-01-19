@@ -9,7 +9,10 @@ use anyhow::{Context, Result};
 use nethercore_core::library::LocalGame;
 use nethercore_shared::ConsoleType;
 
-use super::helpers::{console_type_from_extension, console_type_from_str, player_binary_name, supported_console_types, supported_extension_list};
+use super::helpers::{
+    console_type_from_extension, console_type_from_str, player_binary_name,
+    supported_console_types, supported_extension_list,
+};
 use super::launcher::{ConnectionMode, PlayerOptions};
 
 /// Find the player binary for a console type.
@@ -43,7 +46,11 @@ pub fn find_player_binary(console_type: ConsoleType) -> PathBuf {
             && (profile == "debug" || profile == "release")
             && let Some(target_dir) = dir.parent()
         {
-            let other_profile = if profile == "debug" { "release" } else { "debug" };
+            let other_profile = if profile == "debug" {
+                "release"
+            } else {
+                "debug"
+            };
             let other = target_dir.join(other_profile).join(&exe_name);
             if other.exists() {
                 return other;
@@ -227,7 +234,9 @@ pub fn launch_player_with_options(
     match cmd.spawn() {
         Ok(_) => {}
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
-            if let Some(mut cargo_cmd) = build_cargo_run_player_command(rom_path, console_type, options) {
+            if let Some(mut cargo_cmd) =
+                build_cargo_run_player_command(rom_path, console_type, options)
+            {
                 tracing::warn!(
                     "Player binary not found; falling back to building/running via cargo: {:?}",
                     cargo_cmd
@@ -280,7 +289,9 @@ pub fn run_player_with_options(
     let status = match cmd.status() {
         Ok(status) => status,
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
-            if let Some(mut cargo_cmd) = build_cargo_run_player_command(rom_path, console_type, options) {
+            if let Some(mut cargo_cmd) =
+                build_cargo_run_player_command(rom_path, console_type, options)
+            {
                 tracing::warn!(
                     "Player binary not found; falling back to building/running via cargo: {:?}",
                     cargo_cmd

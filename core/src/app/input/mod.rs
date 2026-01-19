@@ -14,7 +14,10 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct KeyboardsConfig {
     /// Player 1 keyboard mapping (enabled by default)
-    #[serde(default = "default_keyboard_p1", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default = "default_keyboard_p1",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub p1: Option<KeyboardMapping>,
     /// Player 2 keyboard mapping (disabled by default)
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -83,14 +86,9 @@ impl KeyboardsConfig {
 
     /// Iterate over all (player_index, mapping) pairs for enabled players
     pub fn iter_enabled(&self) -> impl Iterator<Item = (usize, &KeyboardMapping)> {
-        [
-            (0, &self.p1),
-            (1, &self.p2),
-            (2, &self.p3),
-            (3, &self.p4),
-        ]
-        .into_iter()
-        .filter_map(|(i, opt)| opt.as_ref().map(|m| (i, m)))
+        [(0, &self.p1), (1, &self.p2), (2, &self.p3), (3, &self.p4)]
+            .into_iter()
+            .filter_map(|(i, opt)| opt.as_ref().map(|m| (i, m)))
     }
 }
 

@@ -11,18 +11,20 @@
 use super::common::SAMPLE_RATE;
 use std::f32::consts::PI;
 
-mod strings;
+mod bass_effects;
 mod brass_winds;
 mod percussion;
 mod plucked_vocal;
-mod bass_effects;
+mod strings;
 
 // Re-export public API
-pub use strings::{generate_strings_cello, generate_strings_viola, generate_strings_violin};
+pub use bass_effects::{generate_bass_epic, generate_fx_epic, generate_pad_orchestra};
 pub use brass_winds::{generate_brass_horn, generate_brass_trumpet, generate_flute};
-pub use percussion::{generate_timpani, generate_snare_orch, generate_cymbal_crash};
-pub use plucked_vocal::{generate_harp_gliss, generate_piano, generate_choir_ah, generate_choir_oh};
-pub use bass_effects::{generate_bass_epic, generate_pad_orchestra, generate_fx_epic};
+pub use percussion::{generate_cymbal_crash, generate_snare_orch, generate_timpani};
+pub use plucked_vocal::{
+    generate_choir_ah, generate_choir_oh, generate_harp_gliss, generate_piano,
+};
+pub use strings::{generate_strings_cello, generate_strings_viola, generate_strings_violin};
 
 // =============================================================================
 // DSP Utilities (shared by all instruments)

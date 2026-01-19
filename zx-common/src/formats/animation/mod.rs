@@ -33,5 +33,5 @@ pub use encoding::{
 };
 pub use header::NetherZXAnimationHeader;
 pub use types::{
-    BoneTransform, PlatformBoneKeyframe, BONE_TRANSFORM_SIZE, PLATFORM_BONE_KEYFRAME_SIZE,
+    BONE_TRANSFORM_SIZE, BoneTransform, PLATFORM_BONE_KEYFRAME_SIZE, PlatformBoneKeyframe,
 };

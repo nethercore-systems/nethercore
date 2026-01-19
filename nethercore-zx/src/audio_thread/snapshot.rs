@@ -40,6 +40,7 @@ pub struct AudioGenSnapshot {
 }
 
 impl AudioGenSnapshot {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         audio: AudioPlaybackState,
         tracker: TrackerState,

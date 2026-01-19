@@ -9,12 +9,12 @@ mod retained_mesh;
 #[cfg(test)]
 mod tests;
 
-use hashbrown::HashMap;
 use anyhow::Result;
+use hashbrown::HashMap;
 
 pub use growable_buffer::GrowableBuffer;
-pub use retained_mesh::{MeshHandle, RetainedMesh};
 use retained_mesh::MeshLoader;
+pub use retained_mesh::{MeshHandle, RetainedMesh};
 
 use super::vertex::VERTEX_FORMAT_COUNT;
 
@@ -184,7 +184,8 @@ impl BufferManager {
             &mut self.retained_index_buffers,
             &mut self.next_mesh_id,
         );
-        let (handle, mesh) = loader.load_mesh_indexed_packed(device, queue, data, indices, format)?;
+        let (handle, mesh) =
+            loader.load_mesh_indexed_packed(device, queue, data, indices, format)?;
         self.retained_meshes.insert(handle.0, mesh);
         Ok(handle)
     }

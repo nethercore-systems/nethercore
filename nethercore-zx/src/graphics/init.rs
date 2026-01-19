@@ -213,6 +213,21 @@ impl ZXGraphics {
         // Create texture manager (handles fallback textures)
         let texture_manager = super::texture_manager::TextureManager::new(&device, &queue)?;
 
+        // Create EPU runtime for precomputed environment maps
+        let epu_runtime = super::epu::EpuRuntime::new(&device);
+
+        // Create EPU sampler for environment map sampling (linear filtering, clamp to edge)
+        let epu_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("EPU Sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
+
         // Create offscreen render target at default resolution
         let (target_width, target_height) = RESOLUTION;
         let render_target =
@@ -310,6 +325,8 @@ impl ZXGraphics {
             unit_quad_first_index,
             quad_instance_scratch: Vec::new(),
             quad_batch_scratch: Vec::new(),
+            epu_runtime,
+            epu_sampler,
         };
 
         Ok(graphics)

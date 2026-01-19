@@ -1,6 +1,6 @@
 //! IT file serialization orchestration
 
-use super::{pack_pattern, write_instrument, write_sample_header, write_string, ItWriter};
+use super::{ItWriter, pack_pattern, write_instrument, write_sample_header, write_string};
 use crate::IT_MAGIC;
 
 /// Serialize a complete IT module to bytes
@@ -191,12 +191,7 @@ fn write_header(output: &mut Vec<u8>, writer: &ItWriter, message_offset: usize) 
     output.push(writer.module.pitch_wheel_depth);
 
     // MsgLgth (2 bytes)
-    let msg_len = writer
-        .module
-        .message
-        .as_ref()
-        .map(|m| m.len())
-        .unwrap_or(0) as u16;
+    let msg_len = writer.module.message.as_ref().map(|m| m.len()).unwrap_or(0) as u16;
     output.extend_from_slice(&msg_len.to_le_bytes());
 
     // MsgOff (4 bytes)

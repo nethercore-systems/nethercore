@@ -51,6 +51,10 @@
 - [ROM Loading](./api/rom-loading.md)
 - [Debug](./api/debug.md)
 
+# Architecture
+
+- [EPU Overview](./architecture/epu-overview.md)
+
 # Reference
 
 - [Dither Patterns](./reference/dither-patterns.md)

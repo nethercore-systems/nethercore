@@ -2,12 +2,16 @@
 
 #[cfg(test)]
 mod tests {
+    use super::super::load_assets;
     use crate::manifest::{AssetsSection, NetherManifest};
     use crate::pack::assets::{
-        animation::load_keyframes, audio::load_sound, data::load_data, mesh::load_mesh,
-        texture::load_texture, utils::{hash_sample_data, sanitize_name},
+        animation::load_keyframes,
+        audio::load_sound,
+        data::load_data,
+        mesh::load_mesh,
+        texture::load_texture,
+        utils::{hash_sample_data, sanitize_name},
     };
-    use super::super::load_assets;
     use tempfile::tempdir;
     use zx_common::{
         vertex_stride_packed, NetherZXAnimationHeader, NetherZXMeshHeader, TextureFormat,

@@ -8,23 +8,17 @@ use std::io::BufWriter;
 use std::path::Path;
 
 use crate::formats::write_nether_mesh;
-use crate::{vertex_stride_packed, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_TANGENT, FORMAT_UV};
+use crate::{
+    vertex_stride_packed, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_TANGENT, FORMAT_UV,
+};
 
 /// Convert a glTF/GLB file to in-memory mesh data (for direct ROM packing)
 ///
 /// Automatically detects and includes skinning data (bone indices + weights)
 /// when present in the glTF file.
 pub fn convert_gltf_to_memory(input: &Path) -> Result<ConvertedMesh> {
-    let (
-        positions,
-        uvs,
-        colors,
-        normals,
-        tangents,
-        skinning,
-        indices,
-        format,
-    ) = parse_gltf_file(input)?;
+    let (positions, uvs, colors, normals, tangents, skinning, indices, format) =
+        parse_gltf_file(input)?;
 
     // Pack vertex data
     let vertex_data = pack_vertices_skinned(
@@ -48,16 +42,8 @@ pub fn convert_gltf_to_memory(input: &Path) -> Result<ConvertedMesh> {
 
 /// Convert a glTF/GLB file to NetherMesh format
 pub fn convert_gltf(input: &Path, output: &Path, format_override: Option<&str>) -> Result<()> {
-    let (
-        positions,
-        uvs,
-        colors,
-        normals,
-        tangents,
-        skinning,
-        indices,
-        auto_format,
-    ) = parse_gltf_file(input)?;
+    let (positions, uvs, colors, normals, tangents, skinning, indices, auto_format) =
+        parse_gltf_file(input)?;
 
     // Use override format if provided, otherwise use auto-detected format
     let format = if let Some(fmt_str) = format_override {
@@ -257,5 +243,7 @@ fn parse_gltf_file(
         format |= FORMAT_TANGENT;
     }
 
-    Ok((positions, uvs, colors, normals, tangents, skinning, indices, format))
+    Ok((
+        positions, uvs, colors, normals, tangents, skinning, indices, format,
+    ))
 }

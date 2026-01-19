@@ -40,4 +40,4 @@ mod tests;
 
 // Re-export public API
 pub use error::LocalSocketError;
-pub use socket::{LocalSocket, DEFAULT_LOCAL_PORT};
+pub use socket::{DEFAULT_LOCAL_PORT, LocalSocket};

@@ -2,11 +2,11 @@
 
 use std::io::{Cursor, Seek, SeekFrom};
 
+use crate::MAX_PATTERN_ROWS;
 use crate::error::ItError;
 use crate::module::{ItNote, ItPattern};
-use crate::MAX_PATTERN_ROWS;
 
-use super::helpers::{read_u16, read_u8};
+use super::helpers::{read_u8, read_u16};
 
 /// Parse a single pattern
 pub(crate) fn parse_pattern(

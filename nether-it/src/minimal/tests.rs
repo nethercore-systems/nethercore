@@ -5,10 +5,10 @@ use std::io::Cursor;
 use crate::IT_MAGIC;
 use crate::module::*;
 
-use super::{pack_ncit, parse_it_minimal, parse_ncit, TABLE_UNIFORM};
 use super::legacy::pack_it_minimal;
 use super::pack::{pack_envelope, pack_note_sample_table, pack_sample};
 use super::parse::{parse_envelope, parse_note_sample_table, parse_sample};
+use super::{TABLE_UNIFORM, pack_ncit, parse_it_minimal, parse_ncit};
 
 /// Create a minimal test module
 fn create_test_module() -> ItModule {

@@ -5,8 +5,8 @@ use std::io::{Cursor, Read, Seek, SeekFrom};
 use crate::error::XmError;
 use crate::module::{XmEnvelope, XmInstrument, XmModule, XmPattern};
 
-use super::io::{read_u16, read_u32, read_u8};
 use super::HEADER_SIZE;
+use super::io::{read_u8, read_u16, read_u32};
 
 /// Parse a minimal XM format into an XmModule
 ///

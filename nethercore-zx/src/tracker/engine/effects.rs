@@ -2,8 +2,8 @@
 
 use nether_tracker::TrackerEffect;
 
-use super::super::utils::note_to_period;
 use super::super::TrackerEngine;
+use super::super::utils::note_to_period;
 use super::{CHANNEL_VOLUME_MAX, GLOBAL_VOLUME_MAX};
 
 impl TrackerEngine {

@@ -11,9 +11,9 @@ use crate::console::{Audio, Console};
 use crate::net::nchs::SessionStart;
 use crate::rollback::{LocalSocket, RollbackSession, SessionConfig};
 
-use super::types::{RomLoader, StandaloneConfig};
-use super::StandaloneApp;
 use super::super::GameErrorPhase;
+use super::StandaloneApp;
+use super::types::{RomLoader, StandaloneConfig};
 
 /// Formats a GGRS address from an address string and port
 pub(super) fn format_ggrs_addr(addr: &str, port: u16) -> String {
@@ -66,8 +66,8 @@ where
     );
 
     let bytes = std::fs::read(session_file).context("Failed to read session file")?;
-    let session_start: SessionStart = bitcode::decode(&bytes)
-        .map_err(|e| anyhow::anyhow!("Failed to decode session: {}", e))?;
+    let session_start: SessionStart =
+        bitcode::decode(&bytes).map_err(|e| anyhow::anyhow!("Failed to decode session: {}", e))?;
 
     tracing::info!(
         "Session mode: loading pre-negotiated session (local_player={}, player_count={}, seed={})",
@@ -132,12 +132,14 @@ where
             let mut buf = [0u8; 64];
             match socket.socket().recv_from(&mut buf) {
                 Ok((len, from)) => {
-                    if len >= HANDSHAKE_HELLO.len() && &buf[..HANDSHAKE_HELLO.len()] == HANDSHAKE_HELLO
+                    if len >= HANDSHAKE_HELLO.len()
+                        && &buf[..HANDSHAKE_HELLO.len()] == HANDSHAKE_HELLO
                     {
                         // Extract handle from after HELLO
                         if len > HANDSHAKE_HELLO.len() {
                             let handle = buf[HANDSHAKE_HELLO.len()];
-                            if expected_guests.contains(&handle) && !received_from.contains_key(&handle)
+                            if expected_guests.contains(&handle)
+                                && !received_from.contains_key(&handle)
                             {
                                 tracing::info!(
                                     "Session mode: received HELLO from guest {} at {}",
@@ -302,11 +304,9 @@ where
                             "Host mode: session created, local_players = {:?}",
                             session.local_players()
                         );
-                        if let Err(e) = runner.load_game_with_session(
-                            rom.console.clone(),
-                            &rom.code,
-                            session,
-                        ) {
+                        if let Err(e) =
+                            runner.load_game_with_session(rom.console.clone(), &rom.code, session)
+                        {
                             tracing::error!("Failed to load game with P2P session: {}", e);
                             self.error_state = Some(super::super::GameError {
                                 summary: "Connection Error".to_string(),

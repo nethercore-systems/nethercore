@@ -37,7 +37,7 @@ pub(super) fn convert_xm_instrument(xm_instr: &nether_xm::XmInstrument) -> Track
     let mut note_sample_table = [(0u8, 1u8); 120];
     for (i, entry) in note_sample_table.iter_mut().enumerate() {
         entry.0 = i as u8; // Note plays as itself
-                           // All notes map to sample 1 (XM has simpler mapping)
+        // All notes map to sample 1 (XM has simpler mapping)
     }
 
     // Convert sample loop type

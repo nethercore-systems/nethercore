@@ -5,9 +5,7 @@ mod instrument;
 mod sample;
 
 pub use envelope::{ItEnvelope, ItEnvelopeFlags};
-pub use instrument::{
-    DuplicateCheckAction, DuplicateCheckType, ItInstrument, NewNoteAction,
-};
+pub use instrument::{DuplicateCheckAction, DuplicateCheckType, ItInstrument, NewNoteAction};
 pub use sample::{ItSample, ItSampleFlags};
 
 /// Parsed IT module (patterns and metadata - samples loaded from ROM)

@@ -15,12 +15,10 @@ impl WasmEngine {
 
         // Debug builds prioritize fast startup (WASM compilation) over peak runtime perf.
         // This is particularly noticeable when iterating on games and restarting often.
-        let opt_level = parse_opt_level_env().unwrap_or_else(|| {
-            if cfg!(debug_assertions) {
-                OptLevel::None
-            } else {
-                OptLevel::Speed
-            }
+        let opt_level = parse_opt_level_env().unwrap_or(if cfg!(debug_assertions) {
+            OptLevel::None
+        } else {
+            OptLevel::Speed
         });
         config.cranelift_opt_level(opt_level);
 

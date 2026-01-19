@@ -13,9 +13,9 @@ use crate::console::{Audio, Console};
 use crate::rollback::{ConnectionMode, LocalSocket, RollbackSession, SessionConfig};
 use crate::runner::ConsoleRunner;
 
+use super::StandaloneApp;
 use super::error_ui::{WaitingForPeer, sanitize_game_id};
 use super::types::{RomLoader, StandaloneGraphicsSupport};
-use super::StandaloneApp;
 
 impl<C, L> StandaloneApp<C, L>
 where

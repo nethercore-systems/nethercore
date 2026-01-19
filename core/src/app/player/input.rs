@@ -7,8 +7,8 @@ use winit::window::Fullscreen;
 use crate::capture::CaptureSupport;
 use crate::console::Console;
 
-use super::types::{RomLoader, StandaloneGraphicsSupport};
 use super::StandaloneApp;
+use super::types::{RomLoader, StandaloneGraphicsSupport};
 
 impl<C, L> StandaloneApp<C, L>
 where

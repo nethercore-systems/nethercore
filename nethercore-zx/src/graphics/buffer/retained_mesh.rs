@@ -2,10 +2,12 @@
 //!
 //! Handles mesh upload and storage for retained mode rendering.
 
-use std::borrow::Cow;
-use anyhow::Result;
 use super::growable_buffer::GrowableBuffer;
-use crate::graphics::vertex::{VertexFormatInfo, vertex_stride, vertex_stride_packed, VERTEX_FORMAT_COUNT};
+use crate::graphics::vertex::{
+    VERTEX_FORMAT_COUNT, VertexFormatInfo, vertex_stride, vertex_stride_packed,
+};
+use anyhow::Result;
+use std::borrow::Cow;
 
 /// Handle to a retained mesh
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

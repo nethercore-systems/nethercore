@@ -1,8 +1,8 @@
 //! Audio mixing utilities: channel mixing, panning, and soft clipping
 
-use tracing::warn;
-use crate::state::ChannelState;
 use super::Sound;
+use crate::state::ChannelState;
+use tracing::warn;
 
 /// Mix a single channel, returning the sample value and advancing the playhead
 ///

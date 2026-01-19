@@ -4,8 +4,8 @@ use std::sync::Arc;
 use tracing::warn;
 
 use super::Sound;
+use super::generation::{advance_audio_positions, generate_audio_frame_with_tracker};
 use super::output::{AudioOutput, OUTPUT_SAMPLE_RATE};
-use super::generation::{generate_audio_frame_with_tracker, advance_audio_positions};
 
 /// Nethercore ZX audio backend
 ///

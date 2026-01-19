@@ -2,8 +2,8 @@
 //!
 //! Pipeline keys uniquely identify a pipeline configuration for caching purposes.
 
-use super::super::render_state::PassConfig;
 use super::super::RenderState;
+use super::super::render_state::PassConfig;
 
 /// Key for pipeline cache lookup
 ///

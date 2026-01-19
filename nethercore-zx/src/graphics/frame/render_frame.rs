@@ -6,12 +6,12 @@
 //! - Managing render passes and GPU state
 //! - Executing draw commands with state tracking
 
-use super::bind_group_cache::BindGroupKey;
 use super::super::ZXGraphics;
 use super::super::command_buffer::{BufferSource, CommandSortKey, VRPCommand};
 use super::super::pipeline::PipelineKey;
 use super::super::render_state::{CullMode, PassConfig, RenderState, TextureHandle};
 use super::super::vertex::VERTEX_FORMAT_COUNT;
+use super::bind_group_cache::BindGroupKey;
 use glam::Mat4;
 use zx_common::pack_vertex_data;
 
@@ -302,6 +302,9 @@ impl ZXGraphics {
                     // 3: Animation (unified_animation)
                     // 4: Environment (environment_states) - Multi-Environment v4
                     // 5: Quad rendering (quad_instances)
+                    // 6-7: EPU textures (env_sharp, sampler)
+                    // 8-10: EPU blur pyramid (env_light0, env_light1, env_light2)
+                    // 11: EPU ambient cubes (diffuse irradiance)
                     let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                         label: Some("Frame Bind Group (Unified)"),
                         layout: &pipeline_entry.bind_group_layout_frame,
@@ -333,6 +336,41 @@ impl ZXGraphics {
                                     .quad_instance_buffer()
                                     .as_entire_binding(),
                             },
+                            wgpu::BindGroupEntry {
+                                binding: 6,
+                                resource: wgpu::BindingResource::TextureView(
+                                    self.epu_runtime.env_sharp_view(),
+                                ),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 7,
+                                resource: wgpu::BindingResource::Sampler(&self.epu_sampler),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 8,
+                                resource: wgpu::BindingResource::TextureView(
+                                    self.epu_runtime.env_light0_view(),
+                                ),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 9,
+                                resource: wgpu::BindingResource::TextureView(
+                                    self.epu_runtime.env_light1_view(),
+                                ),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 10,
+                                resource: wgpu::BindingResource::TextureView(
+                                    self.epu_runtime.env_light2_view(),
+                                ),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 11,
+                                resource: self
+                                    .epu_runtime
+                                    .ambient_cubes_buffer()
+                                    .as_entire_binding(),
+                            },
                         ],
                     });
                     self.cached_frame_bind_group = Some(bind_group.clone());
@@ -362,6 +400,9 @@ impl ZXGraphics {
                 // 3: Animation (unified_animation)
                 // 4: Environment (environment_states) - Multi-Environment v4
                 // 5: Quad rendering (quad_instances)
+                // 6-7: EPU textures (env_sharp, sampler)
+                // 8-10: EPU blur pyramid (env_light0, env_light1, env_light2)
+                // 11: EPU ambient cubes (diffuse irradiance)
                 let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some("Frame Bind Group (Unified)"),
                     layout: &pipeline_entry.bind_group_layout_frame,
@@ -392,6 +433,38 @@ impl ZXGraphics {
                                 .buffer_manager
                                 .quad_instance_buffer()
                                 .as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 6,
+                            resource: wgpu::BindingResource::TextureView(
+                                self.epu_runtime.env_sharp_view(),
+                            ),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 7,
+                            resource: wgpu::BindingResource::Sampler(&self.epu_sampler),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 8,
+                            resource: wgpu::BindingResource::TextureView(
+                                self.epu_runtime.env_light0_view(),
+                            ),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 9,
+                            resource: wgpu::BindingResource::TextureView(
+                                self.epu_runtime.env_light1_view(),
+                            ),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 10,
+                            resource: wgpu::BindingResource::TextureView(
+                                self.epu_runtime.env_light2_view(),
+                            ),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 11,
+                            resource: self.epu_runtime.ambient_cubes_buffer().as_entire_binding(),
                         },
                     ],
                 });

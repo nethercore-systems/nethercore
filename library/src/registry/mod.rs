@@ -35,9 +35,8 @@ mod rom_loader;
 // Re-export public API
 pub use launcher::{ConnectionMode, LaunchTarget, PlayerLauncher, PlayerOptions};
 pub use player::{
-    find_player_binary, launch_game_by_id, launch_game_by_id_with_options,
-    launch_game_from_path, launch_player, launch_player_with_options, run_game_by_id,
-    run_game_by_id_with_options, run_game_from_path, run_game_from_path_with_options, run_player,
-    run_player_with_options,
+    find_player_binary, launch_game_by_id, launch_game_by_id_with_options, launch_game_from_path,
+    launch_player, launch_player_with_options, run_game_by_id, run_game_by_id_with_options,
+    run_game_from_path, run_game_from_path_with_options, run_player, run_player_with_options,
 };
-pub use rom_loader::{create_rom_loader_registry, ConsoleRegistry};
+pub use rom_loader::{ConsoleRegistry, create_rom_loader_registry};

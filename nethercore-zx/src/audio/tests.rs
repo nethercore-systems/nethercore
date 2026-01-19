@@ -1,7 +1,7 @@
 //! Audio module tests
 
-use super::*;
 use super::mixing::{apply_pan, soft_clip};
+use super::*;
 use crate::state::{AudioPlaybackState, ChannelState, TrackerState};
 use crate::tracker::TrackerEngine;
 

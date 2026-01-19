@@ -101,6 +101,54 @@ const ENV_BLEND_SCREEN: u32 = 3u;    // 1 - (1-base) * (1-overlay)
 // Binding 5: quad_instances - for GPU-instanced quad rendering (declared in quad_template.wgsl)
 // (not declared here - only used by quad shader)
 
+// ============================================================================
+// EPU (Environment Processing Unit) Textures - Binding 6-7
+// ============================================================================
+// Precomputed octahedral environment maps from EPU compute pipeline.
+// EnvSharp: Full resolution procedural environment for background rendering.
+
+// Binding 6: EPU EnvSharp texture array (64x64 octahedral, 256 layers)
+@group(0) @binding(6) var epu_env_sharp: texture_2d_array<f32>;
+
+// Binding 7: EPU linear sampler for environment map sampling
+@group(0) @binding(7) var epu_sampler: sampler;
+
+// ============================================================================
+// EPU Blur Pyramid Textures - Binding 8-10
+// ============================================================================
+// Pre-blurred environment maps for roughness-based reflection sampling.
+// EnvLight0: Sharp lighting (minimal blur)
+// EnvLight1: Medium blur level
+// EnvLight2: Heavy blur level (diffuse-like)
+
+// Binding 8: EPU EnvLight0 texture array (64x64 octahedral, 256 layers)
+@group(0) @binding(8) var epu_env_light0: texture_2d_array<f32>;
+
+// Binding 9: EPU EnvLight1 texture array (64x64 octahedral, 256 layers)
+@group(0) @binding(9) var epu_env_light1: texture_2d_array<f32>;
+
+// Binding 10: EPU EnvLight2 texture array (64x64 octahedral, 256 layers)
+@group(0) @binding(10) var epu_env_light2: texture_2d_array<f32>;
+
+// ============================================================================
+// EPU Ambient Cubes Buffer - Binding 11
+// ============================================================================
+// Pre-computed 6-direction ambient cube irradiance samples from EnvLight2.
+// Used for efficient diffuse lighting (avoids expensive texture sampling).
+
+// Ambient cube storage for 6-direction diffuse irradiance samples (96 bytes)
+struct EpuAmbientCube {
+    pos_x: vec3f, _pad0: f32,
+    neg_x: vec3f, _pad1: f32,
+    pos_y: vec3f, _pad2: f32,
+    neg_y: vec3f, _pad3: f32,
+    pos_z: vec3f, _pad4: f32,
+    neg_z: vec3f, _pad5: f32,
+}
+
+// Binding 11: EPU ambient cubes storage buffer (256 entries)
+@group(0) @binding(11) var<storage, read> epu_ambient_cubes: array<EpuAmbientCube>;
+
 // Helper to expand 3x4 bone matrix → 4x4 for skinning calculations
 // Input is row-major, output is column-major (WGSL mat4x4 convention)
 fn bone_to_mat4(bone: BoneMatrix3x4) -> mat4x4<f32> {

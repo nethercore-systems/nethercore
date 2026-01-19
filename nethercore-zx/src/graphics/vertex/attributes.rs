@@ -297,9 +297,7 @@ pub static VERTEX_ATTRIBUTES: [&[wgpu::VertexAttribute]; 32] = [
         attr_normal(SIZE_POS + SIZE_COLOR),
         attr_tangent(SIZE_POS + SIZE_COLOR + SIZE_NORMAL),
         attr_bone_indices(SIZE_POS + SIZE_COLOR + SIZE_NORMAL + SIZE_TANGENT),
-        attr_bone_weights(
-            SIZE_POS + SIZE_COLOR + SIZE_NORMAL + SIZE_TANGENT + SIZE_BONE_INDICES,
-        ),
+        attr_bone_weights(SIZE_POS + SIZE_COLOR + SIZE_NORMAL + SIZE_TANGENT + SIZE_BONE_INDICES),
     ],
     // Format 31: POS_UV_COLOR_NORMAL_TANGENT_SKINNED
     &[

@@ -3,7 +3,7 @@
 //! Generates complete IT files with embedded sample data, suitable for preview
 //! in external trackers (MilkyTracker, OpenMPT, SchismTracker).
 
-use crate::module::{ItInstrument, ItFlags, ItModule, ItNote, ItPattern, ItSample, ItSampleFlags};
+use crate::module::{ItFlags, ItInstrument, ItModule, ItNote, ItPattern, ItSample, ItSampleFlags};
 
 mod encoding;
 mod pattern_packer;

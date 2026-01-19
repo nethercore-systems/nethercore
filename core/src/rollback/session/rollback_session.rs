@@ -8,7 +8,9 @@ use crate::wasm::GameInstance;
 use super::super::config::{NethercoreConfig, SessionConfig};
 use super::super::events::{PlayerNetworkStats, SessionError, SessionEvent};
 use super::super::player::PlayerSessionConfig;
-use super::super::state::{GameStateSnapshot, LoadStateError, RollbackStateManager, SaveStateError};
+use super::super::state::{
+    GameStateSnapshot, LoadStateError, RollbackStateManager, SaveStateError,
+};
 use super::types::{SessionInner, SessionType};
 
 /// Frame advantage threshold for warning events

@@ -1,10 +1,10 @@
 //! Audio frame generation and position advancement
 
+use super::Sound;
+use super::mixing::{apply_pan, mix_channel, soft_clip};
+use super::output::SOURCE_SAMPLE_RATE;
 use crate::state::{AudioPlaybackState, ChannelState, TrackerState, tracker_flags};
 use crate::tracker::TrackerEngine;
-use super::Sound;
-use super::output::SOURCE_SAMPLE_RATE;
-use super::mixing::{mix_channel, apply_pan, soft_clip};
 
 /// Generate one frame of audio samples with tracker support
 ///

@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use wasmtime::{Instance, Linker, Module, Store, TypedFunc, Val};
 
 use super::engine::WasmEngine;
-use super::state::{GameState, WasmGameContext, MAX_PLAYERS, DEFAULT_RAM_LIMIT};
+use super::state::{DEFAULT_RAM_LIMIT, GameState, MAX_PLAYERS, WasmGameContext};
 use crate::console::{ConsoleInput, ConsoleRollbackState};
 use crate::debug::types::ActionParamValue;
 

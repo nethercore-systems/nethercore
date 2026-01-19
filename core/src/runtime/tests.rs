@@ -76,13 +76,9 @@ fn test_runtime_load_game() {
     .unwrap();
     let module = engine.load_module(&wasm).unwrap();
     let linker = Linker::new(engine.engine());
-    let game = GameInstance::<TestInput, ()>::with_ram_limit(
-        &engine,
-        &module,
-        &linker,
-        test_ram_limit(),
-    )
-    .unwrap();
+    let game =
+        GameInstance::<TestInput, ()>::with_ram_limit(&engine, &module, &linker, test_ram_limit())
+            .unwrap();
 
     runtime.load_game(game);
     assert!(runtime.game().is_some());
@@ -105,13 +101,9 @@ fn test_runtime_init_game() {
     .unwrap();
     let module = engine.load_module(&wasm).unwrap();
     let linker = Linker::new(engine.engine());
-    let game = GameInstance::<TestInput, ()>::with_ram_limit(
-        &engine,
-        &module,
-        &linker,
-        test_ram_limit(),
-    )
-    .unwrap();
+    let game =
+        GameInstance::<TestInput, ()>::with_ram_limit(&engine, &module, &linker, test_ram_limit())
+            .unwrap();
 
     runtime.load_game(game);
     let result = runtime.init_game();
@@ -137,8 +129,7 @@ fn test_runtime_set_session() {
     let console = TestConsole;
     let mut runtime = Runtime::<TestConsole>::new(console);
 
-    let session =
-        crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, test_ram_limit());
+    let session = crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, test_ram_limit());
     runtime.set_session(session);
 
     assert!(runtime.session().is_some());
@@ -150,8 +141,7 @@ fn test_runtime_session_mut() {
     let console = TestConsole;
     let mut runtime = Runtime::<TestConsole>::new(console);
 
-    let session =
-        crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, test_ram_limit());
+    let session = crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, test_ram_limit());
     runtime.set_session(session);
 
     // Verify mutable access
@@ -222,13 +212,9 @@ fn test_runtime_render_with_game() {
     .unwrap();
     let module = engine.load_module(&wasm).unwrap();
     let linker = Linker::new(engine.engine());
-    let game = GameInstance::<TestInput, ()>::with_ram_limit(
-        &engine,
-        &module,
-        &linker,
-        test_ram_limit(),
-    )
-    .unwrap();
+    let game =
+        GameInstance::<TestInput, ()>::with_ram_limit(&engine, &module, &linker, test_ram_limit())
+            .unwrap();
 
     runtime.load_game(game);
     let result = runtime.render();
@@ -261,8 +247,7 @@ fn test_runtime_add_local_input_with_session() {
     let console = TestConsole;
     let mut runtime = Runtime::<TestConsole>::new(console);
 
-    let session =
-        crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, test_ram_limit());
+    let session = crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, test_ram_limit());
     runtime.set_session(session);
 
     // Local sessions don't use GGRS input, so this should succeed
@@ -295,8 +280,7 @@ fn test_runtime_handle_session_events_local_session() {
     let console = TestConsole;
     let mut runtime = Runtime::<TestConsole>::new(console);
 
-    let session =
-        crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, test_ram_limit());
+    let session = crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, test_ram_limit());
     runtime.set_session(session);
 
     // Local sessions don't produce events
@@ -322,8 +306,7 @@ fn test_runtime_poll_remote_clients_local_session() {
     let console = TestConsole;
     let mut runtime = Runtime::<TestConsole>::new(console);
 
-    let session =
-        crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, test_ram_limit());
+    let session = crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, test_ram_limit());
     runtime.set_session(session);
 
     // Should not panic (no-op for local sessions)

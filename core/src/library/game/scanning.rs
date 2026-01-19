@@ -3,13 +3,11 @@
 //! This module handles scanning the games directory for installed games,
 //! supporting both ROM files and directory-based games with manifests.
 
-use nethercore_shared::{
-    LocalGameManifest, MAX_ROM_BYTES, ZX_ROM_FORMAT, read_file_with_limit,
-};
+use nethercore_shared::{LocalGameManifest, MAX_ROM_BYTES, ZX_ROM_FORMAT, read_file_with_limit};
 use std::path::Path;
 
-use crate::library::{DataDirProvider, rom::RomLoaderRegistry};
 use super::LocalGame;
+use crate::library::{DataDirProvider, rom::RomLoaderRegistry};
 
 /// Returns all locally cached games.
 ///
@@ -52,7 +50,10 @@ pub fn get_local_games_with_loaders(
 /// Scans for:
 /// 1. ROM files matching registered loader extensions (if registry provided)
 /// 2. Directories with `manifest.json` (backward compatibility, development)
-pub(super) fn get_games_from_dir(games_dir: &Path, registry: Option<&RomLoaderRegistry>) -> Vec<LocalGame> {
+pub(super) fn get_games_from_dir(
+    games_dir: &Path,
+    registry: Option<&RomLoaderRegistry>,
+) -> Vec<LocalGame> {
     let Ok(entries) = std::fs::read_dir(games_dir) else {
         return vec![];
     };

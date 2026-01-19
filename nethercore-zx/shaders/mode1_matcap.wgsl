@@ -167,8 +167,8 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
         color = blend_colors(color, matcap3, blend_mode_3);
     } else {
         // Use procedural environment for reflection instead of matcaps
-        // Sample 4-color environment gradient in shading normal direction
-        let env_color = sample_environment_ambient(shading.environment_index, shading_world_normal);
+        // Sample EPU ambient cube in shading normal direction
+        let env_color = sample_epu_ambient(shading.environment_index, shading_world_normal);
         // Apply using first blend mode for consistency
         color = blend_colors(color, env_color, blend_mode_1);
     }

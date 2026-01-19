@@ -6,7 +6,7 @@ use crate::console::{ConsoleInput, ConsoleRollbackState};
 use crate::rollback::config::MAX_STATE_SIZE;
 use crate::wasm::GameInstance;
 
-use super::host_state::{HostRollbackState, HOST_STATE_SIZE};
+use super::host_state::{HOST_STATE_SIZE, HostRollbackState};
 use super::pool::StatePool;
 use super::snapshot::GameStateSnapshot;
 use super::{InputDataVec, STATE_POOL_SIZE};

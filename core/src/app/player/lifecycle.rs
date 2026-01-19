@@ -4,9 +4,9 @@ use std::time::Instant;
 
 use crate::console::{Audio, AudioGenerator, Console, ConsoleResourceManager};
 
-use super::types::RomLoader;
+use super::super::{FRAME_TIME_HISTORY_SIZE, GameError, GameErrorPhase, RuntimeError};
 use super::StandaloneApp;
-use super::super::{GameError, GameErrorPhase, RuntimeError, FRAME_TIME_HISTORY_SIZE};
+use super::types::RomLoader;
 
 impl<C, L> StandaloneApp<C, L>
 where

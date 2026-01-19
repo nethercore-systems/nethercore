@@ -3,9 +3,7 @@
 /// Target sample rate for Nethercore audio
 pub(crate) const TARGET_SAMPLE_RATE: u32 = 22050;
 
-use crate::{
-    FormatFlags, TrackerModule, TrackerNote, TrackerPattern,
-};
+use crate::{FormatFlags, TrackerModule, TrackerNote, TrackerPattern};
 
 mod effects;
 mod instruments;

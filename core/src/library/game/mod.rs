@@ -9,15 +9,15 @@
 
 use std::path::PathBuf;
 
-mod scanning;
 mod operations;
+mod scanning;
 
 #[cfg(test)]
 mod tests;
 
 // Re-export public API
+pub use operations::{delete_game, is_cached};
 pub use scanning::{get_local_games, get_local_games_with_loaders};
-pub use operations::{is_cached, delete_game};
 
 /// A locally cached game with its metadata and ROM path.
 #[derive(Debug, Clone)]

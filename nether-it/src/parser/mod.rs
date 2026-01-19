@@ -4,7 +4,9 @@ use std::io::{Cursor, Read, Seek, SeekFrom};
 
 use crate::error::ItError;
 use crate::module::{ItFlags, ItInstrument, ItModule, ItPattern, ItSample};
-use crate::{IT_MAGIC, MAX_CHANNELS, MAX_INSTRUMENTS, MAX_PATTERNS, MAX_SAMPLES, MIN_COMPATIBLE_VERSION};
+use crate::{
+    IT_MAGIC, MAX_CHANNELS, MAX_INSTRUMENTS, MAX_PATTERNS, MAX_SAMPLES, MIN_COMPATIBLE_VERSION,
+};
 
 mod helpers;
 mod instrument;
@@ -13,12 +15,12 @@ mod sample;
 #[cfg(test)]
 mod tests;
 
-use helpers::{read_string, read_u16, read_u32, read_u8};
+use helpers::{read_string, read_u8, read_u16, read_u32};
 use instrument::parse_instrument;
 use pattern::parse_pattern;
 
 // Re-export public APIs
-pub use sample::{load_sample_data, parse_sample, SampleData, SampleInfo};
+pub use sample::{SampleData, SampleInfo, load_sample_data, parse_sample};
 
 /// Parse an IT file into an ItModule
 ///

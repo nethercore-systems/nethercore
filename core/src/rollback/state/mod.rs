@@ -10,7 +10,7 @@ mod pool;
 mod snapshot;
 
 // Re-export public types
-pub use host_state::{HostRollbackState, HOST_STATE_SIZE};
+pub use host_state::{HOST_STATE_SIZE, HostRollbackState};
 pub use manager::{LoadStateError, RollbackStateManager, SaveStateError};
 pub use pool::StatePool;
 pub use snapshot::GameStateSnapshot;

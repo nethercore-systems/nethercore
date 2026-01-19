@@ -25,8 +25,7 @@ fn unpack_position(data: &[u8], vertex_idx: usize) -> [f32; 3] {
 fn unpack_normal(data: &[u8], vertex_idx: usize) -> [f32; 3] {
     let base = vertex_idx * 12 + 8; // Skip position (8 bytes)
     let norm_bytes = &data[base..base + 4]; // octahedral u32 (4 bytes)
-    let packed =
-        u32::from_le_bytes([norm_bytes[0], norm_bytes[1], norm_bytes[2], norm_bytes[3]]);
+    let packed = u32::from_le_bytes([norm_bytes[0], norm_bytes[1], norm_bytes[2], norm_bytes[3]]);
     let normal = unpack_octahedral_u32(packed);
     [normal.x, normal.y, normal.z]
 }
@@ -64,8 +63,7 @@ fn test_normals_normalized() {
     // Check every normal is unit length
     for i in 0..vertex_count {
         let normal = unpack_normal(&mesh.vertices, i);
-        let length =
-            (normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]).sqrt();
+        let length = (normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]).sqrt();
         assert!(
             (length - 1.0).abs() < 0.02, // Increased tolerance for packed format
             "Normal not normalized: {}",

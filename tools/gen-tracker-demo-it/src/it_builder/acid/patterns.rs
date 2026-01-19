@@ -3,9 +3,8 @@
 use super::bass::{add_303_main_pattern, add_303_simple};
 use super::drums::{add_claps, add_hihat_16ths, add_hihat_8ths, add_kick_4x4};
 use super::{
-    CH_303, CH_FX, CH_KICK, CH_PAD, CH_STAB, INST_ATMOSPHERE, INST_BASS_303,
-    INST_BASS_303_SQUELCH, INST_CRASH, INST_KICK, INST_PAD, INST_RISER, INST_STAB, A2, A3, B2,
-    C5, D3, E2, E3, FS3, G2,
+    A2, A3, B2, C5, CH_303, CH_FX, CH_KICK, CH_PAD, CH_STAB, D3, E2, E3, FS3, G2, INST_ATMOSPHERE,
+    INST_BASS_303, INST_BASS_303_SQUELCH, INST_CRASH, INST_KICK, INST_PAD, INST_RISER, INST_STAB,
 };
 use nether_it::{ItNote, ItWriter};
 

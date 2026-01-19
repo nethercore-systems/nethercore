@@ -6,11 +6,9 @@ use std::time::{Duration, Instant};
 
 use nethercore_shared::netplay::NetplayMetadata;
 
-use crate::net::nchs::messages::{
-    NetworkConfig, PlayerInfo, PlayerSlot, LobbyState, SessionStart,
-};
-use crate::net::nchs::socket::NchsSocket;
 use crate::net::nchs::NchsError;
+use crate::net::nchs::messages::{LobbyState, NetworkConfig, PlayerInfo, PlayerSlot, SessionStart};
+use crate::net::nchs::socket::NchsSocket;
 
 /// Host state machine states
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

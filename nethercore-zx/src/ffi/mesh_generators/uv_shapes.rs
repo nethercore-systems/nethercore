@@ -28,7 +28,12 @@ use crate::state::PendingMeshPacked;
 /// Perfect for skybox/environment mapping and earth-like textures.
 ///
 /// **Init-only**: Must be called during `init()`.
-pub fn sphere_uv(mut caller: Caller<'_, ZXGameContext>, radius: f32, segments: u32, rings: u32) -> u32 {
+pub fn sphere_uv(
+    mut caller: Caller<'_, ZXGameContext>,
+    radius: f32,
+    segments: u32,
+    rings: u32,
+) -> u32 {
     if let Err(e) = check_init_only(&caller, "sphere_uv") {
         warn!("{}", e);
         return 0;
@@ -143,7 +148,12 @@ pub fn plane_uv(
 /// Perfect for cubemaps and multi-texture cubes.
 ///
 /// **Init-only**: Must be called during `init()`.
-pub fn cube_uv(mut caller: Caller<'_, ZXGameContext>, size_x: f32, size_y: f32, size_z: f32) -> u32 {
+pub fn cube_uv(
+    mut caller: Caller<'_, ZXGameContext>,
+    size_x: f32,
+    size_y: f32,
+    size_z: f32,
+) -> u32 {
     if let Err(e) = check_init_only(&caller, "cube_uv") {
         warn!("{}", e);
         return 0;

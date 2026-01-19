@@ -1,9 +1,6 @@
 //! Full Game Lifecycle Tests (init → update → render)
 
-use crate::{
-    runtime::Runtime,
-    test_utils::TestConsole,
-};
+use crate::{runtime::Runtime, test_utils::TestConsole};
 
 use super::test_utils::*;
 

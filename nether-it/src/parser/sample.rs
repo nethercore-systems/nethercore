@@ -2,15 +2,15 @@
 
 use std::io::{Cursor, Read, Seek, SeekFrom};
 
+use crate::SAMPLE_MAGIC;
 use crate::compression::{
-    decompress_it215_16bit, decompress_it215_16bit_with_size, decompress_it215_8bit,
-    decompress_it215_8bit_with_size,
+    decompress_it215_8bit, decompress_it215_8bit_with_size, decompress_it215_16bit,
+    decompress_it215_16bit_with_size,
 };
 use crate::error::ItError;
 use crate::module::{ItSample, ItSampleFlags};
-use crate::SAMPLE_MAGIC;
 
-use super::helpers::{read_string, read_u32, read_u8};
+use super::helpers::{read_string, read_u8, read_u32};
 
 /// Sample metadata including offset for loading sample data
 #[derive(Debug, Clone)]

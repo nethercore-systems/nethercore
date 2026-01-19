@@ -83,6 +83,62 @@ pub(crate) const QUAD_TEMPLATE: &str = include_str!(concat!(
     "/shaders/quad_template.wgsl"
 ));
 
+// ============================================================================
+// EPU (Environment Processing Unit) Shaders
+// ============================================================================
+// Note: These constants are declared for use in subsequent EPU pipeline tasks.
+// Allow dead_code until the runtime wiring is complete.
+
+/// EPU common types, decoding, and helpers (octahedral encode/decode, instruction
+/// field extraction, region weights, blend logic, palette lookup).
+#[allow(dead_code)]
+pub(crate) const EPU_COMMON: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/shaders/epu/epu_common.wgsl"
+));
+
+/// EPU bounds opcodes: RAMP, LOBE, BAND, FOG.
+#[allow(dead_code)]
+pub(crate) const EPU_BOUNDS: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/shaders/epu/epu_bounds.wgsl"
+));
+
+/// EPU feature opcodes: DECAL, GRID, SCATTER, FLOW, plus layer dispatch.
+#[allow(dead_code)]
+pub(crate) const EPU_FEATURES: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/shaders/epu/epu_features.wgsl"
+));
+
+/// EPU compute shader: environment evaluation (builds EnvSharp + EnvLight0).
+#[allow(dead_code)]
+pub(crate) const EPU_COMPUTE_ENV: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/shaders/epu/epu_compute_env.wgsl"
+));
+
+/// EPU compute shader: Kawase blur pyramid generation.
+#[allow(dead_code)]
+pub(crate) const EPU_COMPUTE_BLUR: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/shaders/epu/epu_compute_blur.wgsl"
+));
+
+/// EPU compute shader: 6-direction ambient cube extraction.
+#[allow(dead_code)]
+pub(crate) const EPU_COMPUTE_IRRAD: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/shaders/epu/epu_compute_irrad.wgsl"
+));
+
+/// EPU sampling functions for render pipelines (background, reflection, ambient).
+#[allow(dead_code)]
+pub(crate) const EPU_SAMPLE: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/shaders/epu/epu_sample.wgsl"
+));
+
 const RERUN_IF_CHANGED_FILES: &[&str] = &[
     "shaders/common/00_bindings.wgsl",
     "shaders/common/10_unpacking.wgsl",
@@ -103,6 +159,14 @@ const RERUN_IF_CHANGED_FILES: &[&str] = &[
     "shaders/mode1_matcap.wgsl",
     "shaders/env_template.wgsl",
     "shaders/quad_template.wgsl",
+    // EPU shaders
+    "shaders/epu/epu_common.wgsl",
+    "shaders/epu/epu_bounds.wgsl",
+    "shaders/epu/epu_features.wgsl",
+    "shaders/epu/epu_compute_env.wgsl",
+    "shaders/epu/epu_compute_blur.wgsl",
+    "shaders/epu/epu_compute_irrad.wgsl",
+    "shaders/epu/epu_sample.wgsl",
 ];
 
 pub(crate) fn emit_rerun_if_changed() {

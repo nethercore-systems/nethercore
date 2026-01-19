@@ -1,11 +1,11 @@
 //! Tests for nether-tracker types
 
-use crate::instrument::TrackerEnvelope;
+use crate::effects::TrackerEffect;
 use crate::instrument::EnvelopeFlags;
+use crate::instrument::TrackerEnvelope;
 use crate::pattern::{TrackerNote, TrackerPattern};
 use crate::sample::TrackerSample;
 use crate::{FormatFlags, TrackerModule};
-use crate::effects::TrackerEffect;
 
 #[test]
 fn test_tracker_note_methods() {

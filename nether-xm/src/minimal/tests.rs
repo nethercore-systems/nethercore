@@ -1,9 +1,9 @@
 //! Tests for minimal XM format packing and parsing
 
-use crate::module::{XmEnvelope, XmInstrument, XmModule, XmPattern};
 use crate::XmNote;
+use crate::module::{XmEnvelope, XmInstrument, XmModule, XmPattern};
 
-use super::{pack_xm_minimal, parse_xm_minimal, HEADER_SIZE, MAX_ENVELOPE_POINTS};
+use super::{HEADER_SIZE, MAX_ENVELOPE_POINTS, pack_xm_minimal, parse_xm_minimal};
 
 /// Create a minimal test module
 fn create_test_module() -> XmModule {

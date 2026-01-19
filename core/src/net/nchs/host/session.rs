@@ -2,10 +2,8 @@
 
 use std::time::Instant;
 
-use crate::net::nchs::messages::{
-    NchsMessage, PlayerConnectionInfo, PlayerInfo, SessionStart,
-};
 use crate::net::nchs::NchsError;
+use crate::net::nchs::messages::{NchsMessage, PlayerConnectionInfo, PlayerInfo, SessionStart};
 
 use super::state::HostStateMachine;
 

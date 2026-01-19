@@ -315,7 +315,10 @@ impl SharedSettingsUi {
         {
             if enabled && !is_enabled {
                 // Enable with default mapping
-                self.temp_config.input.keyboards.set(player, Some(KeyboardMapping::default()));
+                self.temp_config
+                    .input
+                    .keyboards
+                    .set(player, Some(KeyboardMapping::default()));
             } else if !enabled && is_enabled {
                 // Disable
                 self.temp_config.input.keyboards.set(player, None);
@@ -331,7 +334,10 @@ impl SharedSettingsUi {
         if !conflicts.is_empty() {
             ui.colored_label(
                 egui::Color32::YELLOW,
-                format!("Warning: {} key conflict(s) between players", conflicts.len()),
+                format!(
+                    "Warning: {} key conflict(s) between players",
+                    conflicts.len()
+                ),
             );
             ui.add_space(5.0);
         }

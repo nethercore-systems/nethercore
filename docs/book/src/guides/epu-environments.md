@@ -1,11 +1,13 @@
 # EPU Environments
 
-The Environment Processing Unit (EPU) is ZX’s procedural background + ambient environment system.
+The Environment Processing Unit (EPU) is ZX's procedural background + ambient environment system.
 
 - It renders an infinite environment when you call `draw_env()`.
 - The same environment is sampled by lit shaders for ambient/reflection lighting.
 
 For exact function signatures, packed layouts, and parameter docs, see the [Environment (EPU) API](../api/epu.md).
+
+For the underlying architecture (dual-map flow, compute pipeline, data model), see the [EPU Architecture Overview](../architecture/epu-overview.md).
 
 ---
 
@@ -43,6 +45,53 @@ Tips:
 - Neon city: Silhouette (City skyline) base + Cells (Tiles/Lights) overlay (Screen/Add)
 - Space: Nebula base + Cells (stars) overlay + Rings overlay
 - Indoor sci-fi: Room base + Lines overlay + (optional) Veil overlay
+
+---
+
+## Rust Preset Recipes
+
+For Rust users, the EPU provides ready-to-use preset factory functions. These implement common environment configurations using the EPU builder API.
+
+### Available Presets
+
+| Preset | Environment Type | Layers Used |
+|--------|-----------------|-------------|
+| `void_with_stars()` | Space / void | RAMP + SCATTER |
+| `sunny_meadow()` | Outdoor daytime | RAMP + LOBE + DECAL + FLOW |
+| `cyberpunk_alley()` | Urban night | RAMP + 2x LOBE + FOG + GRID + DECAL + FLOW + SCATTER |
+| `underwater_cave()` | Underwater | RAMP + LOBE + FOG + FLOW + SCATTER |
+| `space_station()` | Industrial interior | RAMP + LOBE + BAND + GRID + DECAL + SCATTER |
+| `sunset_beach()` | Sunset scene | RAMP + LOBE + DECAL + FLOW |
+| `haunted_forest()` | Dark forest | RAMP + LOBE + FOG + SCATTER |
+| `lava_cave()` | Volcanic | RAMP + LOBE + FOG + FLOW + SCATTER |
+
+### Usage
+
+```rust
+use nethercore_zx::graphics::epu::presets;
+
+// Use a preset directly
+let config = presets::sunny_meadow();
+
+// Presets are re-exported at the module level
+use nethercore_zx::graphics::epu::void_with_stars;
+let stars = void_with_stars();
+```
+
+### Key Patterns
+
+**Emissive vs Visual-Only Features:**
+- Features with `EpuBlend::Add` are emissive (contribute to lighting)
+- Features with `EpuBlend::Lerp` or `EpuBlend::Max` are visual-only
+
+**Common Layer Combinations:**
+- Sun/moon: `LOBE` (glow) + `DECAL` (disk, emissive)
+- Fog/haze: `FOG` (uses MULTIPLY blend for absorption)
+- Stars/particles: `SCATTER` (emissive)
+- Clouds/caustics: `FLOW` (visual-only or emissive depending on intent)
+- Industrial panels: `GRID` (emissive) + `BAND` (accent)
+
+For complete API documentation, see the [Environment (EPU) API Reference](../api/epu.md#rust-presets).
 
 ---
 

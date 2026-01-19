@@ -14,9 +14,9 @@ mod patterns;
 
 use patterns::{
     build_breakdown_deep_pattern, build_breakdown_pattern, build_build_intense_pattern,
-    build_build_pattern, build_drop_b_intense_pattern, build_drop_b_pattern,
-    build_drop_pattern, build_drop_variation_pattern, build_groove_a_pattern,
-    build_groove_b_pattern, build_intro_pattern, build_outro_pattern,
+    build_build_pattern, build_drop_b_intense_pattern, build_drop_b_pattern, build_drop_pattern,
+    build_drop_variation_pattern, build_groove_a_pattern, build_groove_b_pattern,
+    build_intro_pattern, build_outro_pattern,
 };
 
 // ============================================================================
