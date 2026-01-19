@@ -1,33 +1,62 @@
 // ============================================================================
 // EPU COMMON TYPES, DECODING, AND HELPERS
 // Environment Processing Unit - shared definitions
+// EPU v2: 128-bit instructions with direct RGB24 colors
 // ============================================================================
 
 const PI: f32 = 3.141592653589793;
 const TAU: f32 = 6.283185307179586;
 
-const OP_NOP: u32 = 0x0u;
-const OP_RAMP: u32 = 0x1u;
-const OP_LOBE: u32 = 0x2u;
-const OP_BAND: u32 = 0x3u;
-const OP_FOG:  u32 = 0x4u;
-const OP_DECAL:   u32 = 0x5u;
-const OP_GRID:    u32 = 0x6u;
-const OP_SCATTER: u32 = 0x7u;
-const OP_FLOW:    u32 = 0x8u;
+// ============================================================================
+// OPCODE CONSTANTS (5-bit, 32 possible)
+// ============================================================================
 
-const REGION_ALL:   u32 = 0u;
-const REGION_SKY:   u32 = 1u;
-const REGION_WALLS: u32 = 2u;
-const REGION_FLOOR: u32 = 3u;
+const OP_NOP: u32 = 0x00u;
+const OP_RAMP: u32 = 0x01u;
+const OP_LOBE: u32 = 0x02u;
+const OP_BAND: u32 = 0x03u;
+const OP_FOG: u32 = 0x04u;
+const OP_DECAL: u32 = 0x05u;
+const OP_GRID: u32 = 0x06u;
+const OP_SCATTER: u32 = 0x07u;
+const OP_FLOW: u32 = 0x08u;
+// 0x09..0x1F reserved for future opcodes
 
-const BLEND_ADD:      u32 = 0u;
+// ============================================================================
+// REGION MASK CONSTANTS (3-bit bitfield)
+// SKY=0b100, WALLS=0b010, FLOOR=0b001
+// ============================================================================
+
+const REGION_NONE: u32 = 0u;        // 0b000 - layer disabled
+const REGION_FLOOR: u32 = 1u;       // 0b001
+const REGION_WALLS: u32 = 2u;       // 0b010
+const REGION_WALLS_FLOOR: u32 = 3u; // 0b011
+const REGION_SKY: u32 = 4u;         // 0b100
+const REGION_SKY_FLOOR: u32 = 5u;   // 0b101
+const REGION_SKY_WALLS: u32 = 6u;   // 0b110
+const REGION_ALL: u32 = 7u;         // 0b111
+
+// ============================================================================
+// BLEND MODE CONSTANTS (3-bit, 8 modes)
+// ============================================================================
+
+const BLEND_ADD: u32 = 0u;
 const BLEND_MULTIPLY: u32 = 1u;
-const BLEND_MAX:      u32 = 2u;
-const BLEND_LERP:     u32 = 3u;
+const BLEND_MAX: u32 = 2u;
+const BLEND_LERP: u32 = 3u;
+const BLEND_SCREEN: u32 = 4u;
+const BLEND_HSV_MOD: u32 = 5u;
+const BLEND_MIN: u32 = 6u;
+const BLEND_OVERLAY: u32 = 7u;
+
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
 
 fn saturate(x: f32) -> f32 { return clamp(x, 0.0, 1.0); }
+fn saturate3(v: vec3f) -> vec3f { return clamp(v, vec3f(0.0), vec3f(1.0)); }
 fn u8_to_01(x: u32) -> f32 { return f32(x) / 255.0; }
+fn u4_to_01(x: u32) -> f32 { return f32(x) / 15.0; }
 
 fn nibble_to_signed_1(v4: u32) -> f32 {
     // 0..15 -> -1..1
@@ -63,29 +92,153 @@ fn decode_dir16(encoded: u32) -> vec3f {
 }
 
 // ============================================================================
-// INSTRUCTION FIELD EXTRACTION
-// Packed 64-bit instruction layout (stored as vec2u: lo, hi):
-//   63..60  opcode        (4)
-//   59..58  region_mask   (2)
-//   57..56  blend_mode    (2)
-//   55..48  color_index   (8)
-//   47..40  intensity     (8)
-//   39..32  param_a       (8)
-//   31..24  param_b       (8)
-//   23..16  param_c       (8)
-//   15..0   direction     (16)
+// INSTRUCTION FIELD EXTRACTION (128-bit, EPU v2)
+//
+// 128-bit instruction stored as vec4<u32>: [w0, w1, w2, w3]
+//   w3 = bits 127..96 (hi.hi)
+//   w2 = bits  95..64 (hi.lo)
+//   w1 = bits  63..32 (lo.hi)
+//   w0 = bits  31..0  (lo.lo)
+//
+// u64 hi [bits 127..64]:
+//   bits 127..123: opcode     (5)  - 32 opcodes
+//   bits 122..120: region     (3)  - Bitfield: SKY=0b100, WALLS=0b010, FLOOR=0b001
+//   bits 119..117: blend      (3)  - 8 blend modes
+//   bits 116..113: emissive   (4)  - L_light0 contribution (0=none, 15=full)
+//   bit  112:      reserved   (1)  - Future flag
+//   bits 111..88:  color_a    (24) - RGB24 primary color
+//   bits 87..64:   color_b    (24) - RGB24 secondary color
+//
+// u64 lo [bits 63..0]:
+//   bits 63..56:   intensity  (8)
+//   bits 55..48:   param_a    (8)
+//   bits 47..40:   param_b    (8)
+//   bits 39..32:   param_c    (8)
+//   bits 31..24:   param_d    (8)
+//   bits 23..8:    direction  (16)
+//   bits 7..4:     alpha_a    (4)
+//   bits 3..0:     alpha_b    (4)
 // ============================================================================
 
-// Extract fields from packed instruction (lo = bits 0..31, hi = bits 32..63)
-fn instr_opcode(lo: u32, hi: u32) -> u32 { return (hi >> 28u) & 0xFu; }
-fn instr_region(lo: u32, hi: u32) -> u32 { return (hi >> 26u) & 0x3u; }
-fn instr_blend(lo: u32, hi: u32) -> u32 { return (hi >> 24u) & 0x3u; }
-fn instr_color(lo: u32, hi: u32) -> u32 { return (hi >> 16u) & 0xFFu; }
-fn instr_intensity(lo: u32, hi: u32) -> u32 { return (hi >> 8u) & 0xFFu; }
-fn instr_a(lo: u32, hi: u32) -> u32 { return hi & 0xFFu; }
-fn instr_b(lo: u32, hi: u32) -> u32 { return (lo >> 24u) & 0xFFu; }
-fn instr_c(lo: u32, hi: u32) -> u32 { return (lo >> 16u) & 0xFFu; }
-fn instr_dir16(lo: u32, hi: u32) -> u32 { return lo & 0xFFFFu; }
+// Extract 5-bit opcode from bits 127..123 (w3 bits 31..27)
+fn instr_opcode(instr: vec4u) -> u32 {
+    return (instr.w >> 27u) & 0x1Fu;
+}
+
+// Extract 3-bit region mask from bits 122..120 (w3 bits 26..24)
+fn instr_region(instr: vec4u) -> u32 {
+    return (instr.w >> 24u) & 0x7u;
+}
+
+// Extract 3-bit blend mode from bits 119..117 (w3 bits 23..21)
+fn instr_blend(instr: vec4u) -> u32 {
+    return (instr.w >> 21u) & 0x7u;
+}
+
+// Extract 4-bit emissive from bits 116..113 (w3 bits 20..17)
+fn instr_emissive(instr: vec4u) -> u32 {
+    return (instr.w >> 17u) & 0xFu;
+}
+
+// Extract reserved bit 112 (w3 bit 16)
+fn instr_reserved(instr: vec4u) -> u32 {
+    return (instr.w >> 16u) & 0x1u;
+}
+
+// Extract 24-bit color_a from bits 111..88 (w3 bits 15..0 + w2 bits 31..24)
+// color_a spans: w3[15:0] (16 bits) and w2[31:24] (8 bits)
+// Actually: bits 111..88 = 24 bits
+//   bit 111 = w3 bit 15
+//   bit 88  = w2 bit 24
+// So: w3[15:0] gives bits 111..96 (16 bits), w2[31:24] gives bits 95..88 (8 bits)
+fn instr_color_a_raw(instr: vec4u) -> u32 {
+    let hi_part = (instr.w & 0xFFFFu) << 8u;  // bits 111..96 shifted to 23..8
+    let lo_part = (instr.z >> 24u) & 0xFFu;   // bits 95..88 as 7..0
+    return hi_part | lo_part;
+}
+
+// Extract 24-bit color_b from bits 87..64 (w2 bits 23..0)
+fn instr_color_b_raw(instr: vec4u) -> u32 {
+    return instr.z & 0xFFFFFFu;
+}
+
+// Extract 8-bit intensity from bits 63..56 (w1 bits 31..24)
+fn instr_intensity(instr: vec4u) -> u32 {
+    return (instr.y >> 24u) & 0xFFu;
+}
+
+// Extract 8-bit param_a from bits 55..48 (w1 bits 23..16)
+fn instr_a(instr: vec4u) -> u32 {
+    return (instr.y >> 16u) & 0xFFu;
+}
+
+// Extract 8-bit param_b from bits 47..40 (w1 bits 15..8)
+fn instr_b(instr: vec4u) -> u32 {
+    return (instr.y >> 8u) & 0xFFu;
+}
+
+// Extract 8-bit param_c from bits 39..32 (w1 bits 7..0)
+fn instr_c(instr: vec4u) -> u32 {
+    return instr.y & 0xFFu;
+}
+
+// Extract 8-bit param_d from bits 31..24 (w0 bits 31..24)
+fn instr_d(instr: vec4u) -> u32 {
+    return (instr.x >> 24u) & 0xFFu;
+}
+
+// Extract 16-bit direction from bits 23..8 (w0 bits 23..8)
+fn instr_dir16(instr: vec4u) -> u32 {
+    return (instr.x >> 8u) & 0xFFFFu;
+}
+
+// Extract 4-bit alpha_a from bits 7..4 (w0 bits 7..4)
+fn instr_alpha_a(instr: vec4u) -> u32 {
+    return (instr.x >> 4u) & 0xFu;
+}
+
+// Extract 4-bit alpha_b from bits 3..0 (w0 bits 3..0)
+fn instr_alpha_b(instr: vec4u) -> u32 {
+    return instr.x & 0xFu;
+}
+
+// ============================================================================
+// RGB24 COLOR EXTRACTION HELPERS
+// ============================================================================
+
+// Extract RGB24 as vec3<f32> in 0-1 range
+// RGB24 layout: R[23:16], G[15:8], B[7:0]
+fn rgb24_to_vec3f(rgb24: u32) -> vec3f {
+    let r = f32((rgb24 >> 16u) & 0xFFu) / 255.0;
+    let g = f32((rgb24 >> 8u) & 0xFFu) / 255.0;
+    let b = f32(rgb24 & 0xFFu) / 255.0;
+    return vec3f(r, g, b);
+}
+
+// Get color_a as vec3f (0-1 range)
+fn instr_color_a(instr: vec4u) -> vec3f {
+    return rgb24_to_vec3f(instr_color_a_raw(instr));
+}
+
+// Get color_b as vec3f (0-1 range)
+fn instr_color_b(instr: vec4u) -> vec3f {
+    return rgb24_to_vec3f(instr_color_b_raw(instr));
+}
+
+// Get alpha_a as f32 (0-1 range)
+fn instr_alpha_a_f32(instr: vec4u) -> f32 {
+    return u4_to_01(instr_alpha_a(instr));
+}
+
+// Get alpha_b as f32 (0-1 range)
+fn instr_alpha_b_f32(instr: vec4u) -> f32 {
+    return u4_to_01(instr_alpha_b(instr));
+}
+
+// Get emissive as f32 (0-1 range for scaling contribution to L_light0)
+fn instr_emissive_f32(instr: vec4u) -> f32 {
+    return u4_to_01(instr_emissive(instr));
+}
 
 // ============================================================================
 // REGION WEIGHTS AND ENCLOSURE
@@ -104,15 +257,16 @@ struct EnclosureConfig {
     soft: f32,
 }
 
-fn enclosure_from_ramp(lo: u32, hi: u32) -> EnclosureConfig {
-    let up = decode_dir16(instr_dir16(lo, hi));
+fn enclosure_from_ramp(instr: vec4u) -> EnclosureConfig {
+    let up = decode_dir16(instr_dir16(instr));
 
-    let pc = instr_c(lo, hi);
-    let ceil_q = (pc >> 4u) & 0xFu;
-    let floor_q = pc & 0xFu;
+    // EPU v2: Heights are packed in param_d (param_a/b/c are floor RGB)
+    let pd = instr_d(instr);
+    let ceil_q = (pd >> 4u) & 0xFu;
+    let floor_q = pd & 0xFu;
 
     // Soften to a small minimum to avoid hard banding.
-    let soft = mix(0.01, 0.5, u8_to_01(instr_intensity(lo, hi)));
+    let soft = mix(0.01, 0.5, u8_to_01(instr_intensity(instr)));
 
     var ceil_y = nibble_to_signed_1(ceil_q);
     var floor_y = nibble_to_signed_1(floor_q);
@@ -136,14 +290,20 @@ fn compute_region_weights(dir: vec3f, enc: EnclosureConfig) -> RegionWeights {
     return RegionWeights(w_sky, w_wall, w_floor);
 }
 
+// Compute region weight from bitfield mask (v2 style)
+// mask is a 3-bit bitfield: SKY=0b100, WALLS=0b010, FLOOR=0b001
 fn region_weight(weights: RegionWeights, mask: u32) -> f32 {
-    switch mask {
-        case REGION_ALL:   { return 1.0; }
-        case REGION_SKY:   { return weights.sky; }
-        case REGION_WALLS: { return weights.wall; }
-        case REGION_FLOOR: { return weights.floor; }
-        default:           { return 1.0; }
+    var w = 0.0;
+    if (mask & REGION_SKY) != 0u {
+        w += weights.sky;
     }
+    if (mask & REGION_WALLS) != 0u {
+        w += weights.wall;
+    }
+    if (mask & REGION_FLOOR) != 0u {
+        w += weights.floor;
+    }
+    return w;
 }
 
 // ============================================================================
@@ -173,17 +333,29 @@ fn apply_blend(dst: vec3f, s: LayerSample, blend: u32) -> vec3f {
             // Lerp directly to src (not premultiplied).
             return mix(dst, src, a);
         }
+        case BLEND_SCREEN: {
+            // Screen blend: 1 - (1-dst)*(1-src*a)
+            return vec3f(1.0) - (vec3f(1.0) - dst) * (vec3f(1.0) - src * a);
+        }
+        case BLEND_HSV_MOD: {
+            // HSV modulation placeholder - shifts hue/sat/val by src
+            // For now, approximate with additive hue shift via color rotation
+            // Full HSV would require rgb<->hsv conversion
+            let shifted = dst + (src - vec3f(0.5)) * a * 2.0;
+            return saturate3(shifted);
+        }
+        case BLEND_MIN: {
+            return min(dst, mix(vec3f(1.0), src, a));
+        }
+        case BLEND_OVERLAY: {
+            // Overlay: 2*dst*src if dst<0.5, else 1-2*(1-dst)*(1-src)
+            let lo = 2.0 * dst * src;
+            let hi = vec3f(1.0) - 2.0 * (vec3f(1.0) - dst) * (vec3f(1.0) - src);
+            let overlay = select(hi, lo, dst < vec3f(0.5));
+            return mix(dst, overlay, a);
+        }
         default: {
             return dst + src * a;
         }
     }
-}
-
-// ============================================================================
-// PALETTE LOOKUP
-// Palette: storage buffer of 256 RGB values in linear space.
-// ============================================================================
-
-fn palette_lookup(palette: ptr<storage, array<vec4f>, read>, idx: u32) -> vec3f {
-    return (*palette)[idx & 255u].rgb;
 }

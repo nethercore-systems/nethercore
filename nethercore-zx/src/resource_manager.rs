@@ -3,6 +3,7 @@
 //! Manages the mapping between game resource handles (u32) and
 //! graphics backend handles (TextureHandle, MeshHandle).
 
+use crate::graphics::epu::{EpuConfig, RampParams, epu_begin, epu_finish};
 use crate::graphics::{MeshHandle, TextureHandle, ZXGraphics, pack_vertex_data};
 use crate::state::{
     BoneMatrix3x4, KeyframeGpuInfo, LoadedKeyframeCollection, SkeletonData, SkeletonGpuInfo,
@@ -59,6 +60,36 @@ fn bone_transform_to_matrix(t: &BoneTransform) -> BoneMatrix3x4 {
         row1: [r10 * sx, r11 * sy, r12 * sz, py],
         row2: [r20 * sx, r21 * sy, r22 * sz, pz],
     }
+}
+
+/// Default environment configuration for the resource manager.
+///
+/// A simple cyan sky with gray walls and dark floor. This is used as a fallback
+/// when games don't specify their own environment configuration via epu_set().
+///
+/// v2 format: Layer 0 is a RAMP enclosure with emissive=15, layers 1-7 are empty.
+/// For preset examples showing full EPU capabilities, see the epu-inspector example.
+fn default_environment() -> EpuConfig {
+    use glam::Vec3;
+
+    let mut e = epu_begin();
+
+    // Simple enclosure: cyan sky, gray walls, dark gray floor
+    // Emissive=15 so the enclosure contributes to scene lighting
+    e.ramp_enclosure(RampParams {
+        up: Vec3::Y,
+        wall_color: [128, 128, 128], // gray walls
+        sky_color: [100, 200, 220],  // cyan sky
+        floor_color: [64, 64, 64],   // dark gray floor
+        ceil_q: 10,                  // ceiling threshold
+        floor_q: 5,                  // floor threshold
+        softness: 180,               // soft transitions
+        emissive: 15,                // full emissive - contributes to lighting
+    });
+
+    // Layers 1-7 remain as NOP (empty [0, 0]) from epu_begin()
+
+    epu_finish(e)
 }
 
 /// Resource manager for Nethercore ZX
@@ -363,6 +394,50 @@ impl ConsoleResourceManager for ZResourceManager {
         state: &Self::State,
         clear_color: [f32; 4],
     ) {
+        // =====================================================================
+        // EPU Compute Dispatch: Generate environment maps before rendering
+        // =====================================================================
+        //
+        // The EPU (Environment Processing Unit) generates EnvSharp, EnvLight0/1/2,
+        // and AmbientCubes for active environments. This must happen before
+        // render_frame() so the textures are valid for sampling during rendering.
+
+        // Tick the EPU cache (invalidates time-dependent environments)
+        graphics.epu_runtime().advance_frame();
+
+        // Collect active environment IDs from the environment pool
+        let env_count = state.environment_pool.len();
+        if env_count > 0 {
+            let default_config: EpuConfig = default_environment();
+
+            // Collect configs - use stored config if present, otherwise default
+            // Games set configs via epu_set() which stores them in state.epu_configs
+            let configs: Vec<(u32, EpuConfig)> = (0..env_count as u32)
+                .map(|env_id| {
+                    let config = state
+                        .epu_configs
+                        .get(&env_id)
+                        .copied()
+                        .unwrap_or(default_config);
+                    (env_id, config)
+                })
+                .collect();
+
+            // Convert to reference pairs for build_epu_environments API
+            let config_refs: Vec<(u32, &EpuConfig)> =
+                configs.iter().map(|(id, cfg)| (*id, cfg)).collect();
+
+            // Time parameter: use 0.0 for static environments, or derive from frame counter
+            // The EPU cache handles time-dependent configs (they rebuild every frame)
+            let time = (graphics.epu_runtime().current_frame() as f32) / 60.0;
+
+            // Dispatch EPU compute shaders
+            graphics.build_epu_environments(encoder, &config_refs, time);
+        }
+
+        // =====================================================================
+        // Main Render Pass
+        // =====================================================================
         graphics.render_frame(encoder, state, &self.texture_map, clear_color);
     }
 }

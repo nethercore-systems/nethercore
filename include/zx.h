@@ -655,163 +655,123 @@ NCZX_IMPORT void draw_env(void);
 /** * `slot` — Matcap slot (1-3) */
 NCZX_IMPORT void matcap_set(uint32_t slot, uint32_t texture);
 
-/** Configure gradient environment (Mode 0). */
+/** Set an EPU environment configuration (v2 128-byte format). */
 /**  */
-/** Creates a 4-color gradient background with vertical blending. */
-/**  */
-/** # Arguments */
-/** * `layer` — Target layer: 0 = base layer, 1 = overlay layer */
-/** * `zenith` — Color directly overhead (0xRRGGBBAA) */
-/** * `sky_horizon` — Sky color at horizon level (0xRRGGBBAA) */
-/** * `ground_horizon` — Ground color at horizon level (0xRRGGBBAA) */
-/** * `nadir` — Color directly below (0xRRGGBBAA) */
-/** * `rotation` — Sun azimuth around Y axis in radians (0 = +Z, π/2 = +X) */
-/** * `shift` — Horizon vertical shift (-1.0 to 1.0, 0.0 = equator) */
-/** * `sun_elevation` — Sun elevation in radians (0 = horizon, π/2 = zenith) */
-/** * `sun_disk` — Sun disc size (0-255) */
-/** * `sun_halo` — Sun halo size (0-255) */
-/** * `sun_intensity` — Sun intensity (0 disables sun) */
-/** * `horizon_haze` — Haze near the horizon (0-255) */
-/** * `sun_warmth` — Sun color warmth (0 = neutral/white, 255 = warm/orange) */
-/** * `cloudiness` — Stylized cloud bands (0 disables, 255 = strongest) */
-/**  */
-/** The gradient interpolates: zenith → sky_horizon (Y > 0), sky_horizon → ground_horizon (at Y = 0 + shift), ground_horizon → nadir (Y < 0). */
-/**  */
-/** You can configure the same mode on both layers with different parameters for creative effects. */
-NCZX_IMPORT void env_gradient(uint32_t layer, uint32_t zenith, uint32_t sky_horizon, uint32_t ground_horizon, uint32_t nadir, float rotation, float shift, float sun_elevation, uint32_t sun_disk, uint32_t sun_halo, uint32_t sun_intensity, uint32_t horizon_haze, uint32_t sun_warmth, uint32_t cloudiness, uint32_t cloud_phase);
-
-/** Configure cells environment (Mode 1). */
-/**  */
-/** Unified cell generator with two families: */
-/** - Family 0: Particles (stars/snow/rain/embers/bubbles/warp) */
-/** - Family 1: Tiles/Lights (Mondrian/Truchet, buildings, bands, panels) */
+/** Uploads a 128-byte (8 x 128-bit = 16 x u64) environment configuration to */
+/** the specified slot. The configuration contains 8 packed instruction layers */
+/** that are evaluated by the GPU compute shader to generate octahedral */
+/** environment maps. */
 /**  */
 /** # Arguments */
-/** * `layer`  Target layer: 0 = base layer, 1 = overlay layer */
-/** * `family`  0=Particles, 1=Tiles/Lights */
-/** * `variant`  Depends on `family`: */
-/** - Family 0: 0=Stars/Fireflies, 1=Fall (Rain/Snow), 2=Drift (Embers/Dust/Bubbles), 3=Warp (Hyperspace/Burst) */
-/** - Family 1: 0=Abstract (Mondrian/Truchet), 1=Buildings (Windows), 2=Bands (Signage Floors), 3=Panels (UI Grids) */
-/** * `density`  Spawn/occupancy amount (0-255) */
-/** * `size_min`/`size_max`  Size range (0-255; mapped to a mode-specific radius/extent) */
-/** * `intensity`  Emissive energy multiplier (0-255; affects RGB more than alpha) */
-/** * `shape`  Variant-specific profile/hardness knob (0-255) */
-/** * `motion`  Variant-specific animation strength knob (0-255; loops cleanly over `phase`) */
-/** * `parallax`  Depth/perspective strength (0-255). For Particles, also selects bounded internal depth slices: */
-/** 0-95=1 slice, 96-191=2 slices, 192-255=3 slices. */
-/** * `height_bias`  Placement/zoning bias (0-255) */
-/** * `clustering`  Grouping/districting bias (0-255) */
-/** * `color_a`/`color_b`  Palette endpoints (0xRRGGBBAA); `color_b` is variation/twinkle/accent */
-/** * `axis_x/y/z`  World-space axis/flow direction (normalized; if near-zero, falls back to Y-up, except Particles/Fall defaults to Y-down) */
-/** * `phase`  Loopable animation driver (treated as u16; wraps). Avoid using `phase` directly as a hash input. */
-/** * `seed`  Deterministic variation seed (0 derives from packed payload) */
-NCZX_IMPORT void env_cells(uint32_t layer, uint32_t family, uint32_t variant, uint32_t density, uint32_t size_min, uint32_t size_max, uint32_t intensity, uint32_t shape, uint32_t motion, uint32_t parallax, uint32_t height_bias, uint32_t clustering, uint32_t color_a, uint32_t color_b, float axis_x, float axis_y, float axis_z, uint32_t phase, uint32_t seed);
-
-/** Configure lines environment (Mode 2: synthwave grid, racing track). */
+/** * `env_id` — Environment slot ID (0-255) */
+/** * `config_ptr` — Pointer to 16 u64 values (128 bytes total) in WASM memory */
 /**  */
-/** Creates an infinite procedural grid. */
+/** # Configuration Layout */
+/** Each environment is exactly 8 x 128-bit instructions (each stored as [hi, lo]): */
+/** - Slots 0-3: Bounds layers (RAMP, LOBE, BAND, FOG) */
+/** - Slots 4-7: Feature layers (DECAL, GRID, SCATTER, FLOW) */
 /**  */
-/** # Arguments */
-/** * `layer` — Target layer: 0 = base layer, 1 = overlay layer */
-/** * `variant` — 0=Floor, 1=Ceiling, 2=Sphere */
-/** * `line_type` — 0=Horizontal, 1=Vertical, 2=Grid */
-/** * `thickness` — Line thickness (0-255) */
-/** * `spacing` — Distance between lines in world units */
-/** * `fade_distance` — Distance where lines start fading in world units */
-/** * `parallax` — Horizon band perspective bias + bounded internal depth slices (`0–95` → 1 slice, `96–191` → 2 slices, `192–255` → 3 slices) */
-/** * `color_primary` — Main line color (0xRRGGBBAA) */
-/** * `color_accent` — Accent line color (0xRRGGBBAA) */
-/** * `accent_every` — Make every Nth line use accent color */
-/** * `phase` — Scroll phase (0-65535, wraps for seamless looping) */
-/** * `profile` — Style family: 0=Grid, 1=Lanes, 2=Scanlines, 3=Caustic Bands */
-/** * `warp` — Static domain warp amount (0-255) */
-/** * `wobble` — Phase-driven wobble strength (0-255) */
-/** * `glow` — Emissive energy boost (0-255) */
-/** * `axis_x/y/z` — World-space scroll axis / orientation (normalized; falls back if near-zero) */
-/** * `seed` — Deterministic variation seed (0 derives from params) */
-NCZX_IMPORT void env_lines(uint32_t layer, uint32_t variant, uint32_t line_type, uint32_t thickness, float spacing, float fade_distance, uint32_t parallax, uint32_t color_primary, uint32_t color_accent, uint32_t accent_every, uint32_t phase, uint32_t profile, uint32_t warp, uint32_t wobble, uint32_t glow, float axis_x, float axis_y, float axis_z, uint32_t seed);
-
-/** Configure silhouette environment (Mode 3: mountains, cityscape). */
+/** # Instruction Bit Layout (per 128-bit = 2 x u64) */
+/** ```text */
+/** u64 hi [bits 127..64]: */
+/** 63..59  opcode     (5)   Which algorithm to run (32 opcodes) */
+/** 58..56  region     (3)   Bitfield: SKY=0b100, WALLS=0b010, FLOOR=0b001 */
+/** 55..53  blend      (3)   8 blend modes */
+/** 52..49  emissive   (4)   L_light0 contribution (0=none, 15=full) */
+/** 48      reserved   (1)   Future flag */
+/** 47..24  color_a    (24)  RGB24 primary color */
+/** 23..0   color_b    (24)  RGB24 secondary color */
 /**  */
-/** Creates layered terrain silhouettes with procedural noise. */
+/** u64 lo [bits 63..0]: */
+/** 63..56  intensity  (8)   Layer brightness */
+/** 55..48  param_a    (8)   Opcode-specific */
+/** 47..40  param_b    (8)   Opcode-specific */
+/** 39..32  param_c    (8)   Opcode-specific */
+/** 31..24  param_d    (8)   Opcode-specific */
+/** 23..8   direction  (16)  Octahedral-encoded direction */
+/** 7..4    alpha_a    (4)   color_a alpha (0-15) */
+/** 3..0    alpha_b    (4)   color_b alpha (0-15) */
+/** ``` */
 /**  */
-/** # Arguments */
-/** * `layer` — Target layer: 0 = base layer, 1 = overlay layer */
-/** * `jaggedness` — Terrain roughness (0-255, 0=smooth hills, 255=sharp peaks) */
-/** * `layer_count` — Number of depth layers (1-3) */
-/** * `color_near` — Nearest silhouette color (0xRRGGBBAA) */
-/** * `color_far` — Farthest silhouette color (0xRRGGBBAA) */
-/** * `sky_zenith` — Sky color at zenith behind silhouettes (0xRRGGBBAA) */
-/** * `sky_horizon` — Sky color at horizon behind silhouettes (0xRRGGBBAA) */
-/** * `parallax_rate` — Layer separation amount (0-255) */
-/** * `seed` — Noise seed for terrain shape */
-NCZX_IMPORT void env_silhouette(uint32_t layer, uint32_t family, uint32_t jaggedness, uint32_t layer_count, uint32_t color_near, uint32_t color_far, uint32_t sky_zenith, uint32_t sky_horizon, uint32_t parallax_rate, uint32_t seed, uint32_t phase, uint32_t fog, uint32_t wind);
-
-/** Configure nebula environment (Mode 4). */
-/**  */
-/** Soft fields: fog/clouds/aurora/ink/plasma/kaleido. */
-/**  */
-/** Notes: */
-/** - Projection (no trig): axis-oriented oct-UV for all Nebula families (including `family=2` Aurora). */
-/** - `phase` is treated as `u16` (wraps); motion is designed to be loopable (closed path) rather than “scroll forever”. */
-/** - `parallax` selects bounded internal depth slices (`0–95` → 1 slice, `96–191` → 2 slices, `192–255` → 3 slices). */
-/** - `seed=0` means “auto”: derive a deterministic seed from the packed payload. */
-NCZX_IMPORT void env_nebula(uint32_t layer, uint32_t family, uint32_t coverage, uint32_t softness, uint32_t intensity, uint32_t scale, uint32_t detail, uint32_t warp, uint32_t flow, uint32_t parallax, uint32_t height_bias, uint32_t contrast, uint32_t color_a, uint32_t color_b, float axis_x, float axis_y, float axis_z, uint32_t phase, uint32_t seed);
-
-/** Configure room environment (Mode 5: interior spaces). */
-/**  */
-/** Creates interior of a 3D box with directional lighting. */
-/**  */
-/** # Arguments */
-/** * `layer` — Target layer: 0 = base layer, 1 = overlay layer */
-/** * `color_ceiling` — Ceiling color (0xRRGGBB00) */
-/** * `color_floor` — Floor color (0xRRGGBB00) */
-/** * `color_walls` — Wall color (0xRRGGBB00) */
-/** * `panel_size` — Size of wall panel pattern in world units */
-/** * `panel_gap` — Gap between panels (0-255) */
-/** * `light_dir_x`, `light_dir_y`, `light_dir_z` — Light direction */
-/** * `light_intensity` — Directional light strength (0-255) */
-/** * `corner_darken` — Corner/edge darkening amount (0-255) */
-/** * `room_scale` — Room size multiplier */
-/** * `viewer_x`, `viewer_y`, `viewer_z` — Viewer position in room (-128 to 127 = -1.0 to 1.0) */
-NCZX_IMPORT void env_room(uint32_t layer, uint32_t color_ceiling, uint32_t color_floor, uint32_t color_walls, float panel_size, uint32_t panel_gap, float light_dir_x, float light_dir_y, float light_dir_z, uint32_t light_intensity, uint32_t light_tint, uint32_t corner_darken, float room_scale, int32_t viewer_x, int32_t viewer_y, int32_t viewer_z, uint32_t accent, uint32_t accent_mode, uint32_t roughness, uint32_t phase);
-
-/** Configure veil environment (Mode 6). */
-/**  */
-/** Direction-based SDF ribbons/pillars with bounded depth slices. */
-NCZX_IMPORT void env_veil(uint32_t layer, uint32_t family, uint32_t density, uint32_t width, uint32_t taper, uint32_t curvature, uint32_t edge_soft, uint32_t height_min, uint32_t height_max, uint32_t color_near, uint32_t color_far, uint32_t glow, uint32_t parallax, float axis_x, float axis_y, float axis_z, uint32_t phase, uint32_t seed);
-
-/** Configure rings environment (Mode 7: portals, tunnels, vortex). */
-/**  */
-/** Creates concentric rings for portals or vortex effects. */
-/**  */
-/** # Arguments */
-/** * `layer` — Target layer: 0 = base layer, 1 = overlay layer */
-/** * `ring_count` — Number of rings (1-255) */
-/** * `thickness` — Ring thickness (0-255) */
-/** * `color_a` — First alternating color (0xRRGGBBAA) */
-/** * `color_b` — Second alternating color (0xRRGGBBAA) */
-/** * `center_color` — Bright center color (0xRRGGBBAA) */
-/** * `center_falloff` — Center glow falloff (0-255) */
-/** * `spiral_twist` — Spiral rotation in degrees (0=concentric) */
-/** * `axis_x`, `axis_y`, `axis_z` — Ring axis direction (normalized) */
-/** * `phase` — Rotation phase (0-65535 = 0°-360°, wraps for seamless) */
-NCZX_IMPORT void env_rings(uint32_t layer, uint32_t family, uint32_t ring_count, uint32_t thickness, uint32_t color_a, uint32_t color_b, uint32_t center_color, uint32_t center_falloff, float spiral_twist, float axis_x, float axis_y, float axis_z, uint32_t phase, uint32_t wobble, uint32_t noise, uint32_t dash, uint32_t glow, uint32_t seed);
-
-/** Set the blend mode for combining base and overlay layers. */
-/**  */
-/** # Arguments */
-/** * `mode` — Blend mode (0-3) */
+/** # Opcodes */
+/** - 0x00: NOP (disable layer) */
+/** - 0x01: RAMP (enclosure gradient) */
+/** - 0x02: LOBE (directional glow) */
+/** - 0x03: BAND (horizon ring) */
+/** - 0x04: FOG (atmospheric absorption) */
+/** - 0x05: DECAL (sharp SDF shape) */
+/** - 0x06: GRID (repeating lines/panels) */
+/** - 0x07: SCATTER (point field) */
+/** - 0x08: FLOW (animated noise/streaks) */
 /**  */
 /** # Blend Modes */
-/** * 0 — Alpha: Standard alpha blending */
-/** * 1 — Add: Additive blending */
-/** * 2 — Multiply: Multiplicative blending */
-/** * 3 — Screen: Screen blending */
+/** - 0: ADD (dst + src * a) */
+/** - 1: MULTIPLY (dst * mix(1, src, a)) */
+/** - 2: MAX (max(dst, src * a)) */
+/** - 3: LERP (mix(dst, src, a)) */
+/** - 4: SCREEN (1 - (1-dst)*(1-src*a)) */
+/** - 5: HSV_MOD (HSV shift dst by src) */
+/** - 6: MIN (min(dst, src * a)) */
+/** - 7: OVERLAY (Photoshop-style overlay) */
+NCZX_IMPORT void epu_set(uint32_t env_id, const uint64_t* config_ptr);
+
+/** Draw the background using the specified EPU environment. */
 /**  */
-/** Controls how the overlay layer composites onto the base layer. */
-/** Use this to create different visual effects when layering environments. */
-NCZX_IMPORT void env_blend(uint32_t mode);
+/** Renders the procedural environment background for the given environment ID. */
+/** The environment must have been configured via `epu_set()` first. */
+/**  */
+/** # Arguments */
+/** * `env_id` — Environment slot ID (0-255) */
+/**  */
+/** # Usage */
+/** Call this **first** in your `render()` function, before any 3D geometry: */
+/** ```rust,ignore */
+/** fn render() { */
+/** // Set up environment (usually once, or when it changes) */
+/** epu_set(0, config.as_ptr()); */
+/**  */
+/** // Draw environment background */
+/** epu_draw(0); */
+/**  */
+/** // Then draw scene geometry */
+/** draw_mesh(terrain); */
+/** draw_mesh(player); */
+/** } */
+/** ``` */
+/**  */
+/** # Notes */
+/** - Environment always renders behind all geometry (at far plane) */
+/** - Multiple viewports can use different env_ids for split-screen */
+/** - The EPU compute pass runs automatically before rendering */
+NCZX_IMPORT void epu_draw(uint32_t env_id);
+
+/** Sample the ambient cube for diffuse lighting from an EPU environment. */
+/**  */
+/** Returns the diffuse irradiance approximation for a given surface normal direction. */
+/** The ambient cube is extracted from the most blurred environment light level. */
+/**  */
+/** # Arguments */
+/** * `env_id` — Environment slot ID (0-255) */
+/** * `normal_x`, `normal_y`, `normal_z` — Surface normal direction (normalized) */
+/**  */
+/** # Returns */
+/** Packed RGB color as u32 in 0xRRGGBB00 format (alpha channel unused). */
+/**  */
+/** # Usage */
+/** Use this for custom lighting calculations when you need environment-aware */
+/** diffuse lighting on objects: */
+/** ```rust,ignore */
+/** let ambient = epu_get_ambient(0, normal.x, normal.y, normal.z); */
+/** let r = ((ambient >> 24) & 0xFF) as f32 / 255.0; */
+/** let g = ((ambient >> 16) & 0xFF) as f32 / 255.0; */
+/** let b = ((ambient >> 8) & 0xFF) as f32 / 255.0; */
+/** ``` */
+/**  */
+/** # Notes */
+/** - Returns black (0x00000000) if env_id is invalid or not configured */
+/** - The ambient cube uses 6-direction sampling (+X, -X, +Y, -Y, +Z, -Z) */
+/** - For most use cases, the automatic EPU lighting is sufficient */
+NCZX_IMPORT uint32_t epu_get_ambient(uint32_t env_id, float normal_x, float normal_y, float normal_z);
 
 /** Bind an MRE texture (Metallic-Roughness-Emissive) to slot 1. */
 NCZX_IMPORT void material_mre(uint32_t texture);

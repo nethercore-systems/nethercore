@@ -1,4 +1,4 @@
-//! EPU GPU Runtime
+//! EPU GPU Runtime (v2 - 128-bit instructions)
 //!
 //! This module provides the GPU infrastructure to execute EPU compute shaders
 //! and produce EnvSharp and EnvLight0 octahedral maps.
@@ -6,9 +6,15 @@
 //! # Architecture
 //!
 //! The EPU runtime manages:
-//! - GPU buffers for palette, environment states, and frame uniforms
+//! - GPU buffers for environment states and frame uniforms
 //! - Storage textures for EnvSharp and EnvLight0 output
 //! - Compute pipeline and bind groups
+//!
+//! # v2 Changes
+//!
+//! EPU v2 uses 128-bit instructions with embedded RGB24 colors. The palette
+//! buffer has been removed - colors are now packed directly into the
+//! instruction format.
 //!
 //! # Usage
 //!
@@ -53,9 +59,6 @@ pub const MAX_ENV_STATES: u32 = 256;
 
 /// Maximum number of active environments per dispatch.
 pub const MAX_ACTIVE_ENVS: u32 = 32;
-
-/// Palette entry count (256 RGBA colors).
-const PALETTE_SIZE: u32 = 256;
 
 /// Cache entry for dirty-state tracking of environment configurations.
 ///
@@ -258,32 +261,48 @@ pub struct AmbientCube {
     _pad5: f32,
 }
 
-/// GPU buffer format for environment state (8 layers as vec2u pairs for u64 emulation).
+/// GPU representation of an EPU environment state (v2 128-bit format).
 ///
-/// The shader expects `array<vec2u, 8>` where each vec2u represents (lo, hi) of a u64.
+/// Each layer is 128 bits = 4 x u32 for GPU compatibility.
+/// The shader expects `array<vec4u, 8>` where each vec4u represents a 128-bit instruction.
+///
+/// WGSL vec4u layout: [w0, w1, w2, w3] where:
+/// - w0 = bits 31..0   (lo.lo)
+/// - w1 = bits 63..32  (lo.hi)
+/// - w2 = bits 95..64  (hi.lo)
+/// - w3 = bits 127..96 (hi.hi)
 #[repr(C)]
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct GpuEnvironmentState {
-    /// 8 layers stored as [lo0, hi0, lo1, hi1, ...] pairs
-    layers: [[u32; 2]; 8],
+    /// 8 layers stored as [lo_lo, lo_hi, hi_lo, hi_hi] quadruplets
+    /// Total: 8 layers x 4 u32 = 32 u32 = 128 bytes
+    layers: [[u32; 4]; 8],
 }
 
 impl From<&EpuConfig> for GpuEnvironmentState {
     fn from(config: &EpuConfig) -> Self {
-        let layers = config
-            .layers
-            .map(|layer| [(layer & 0xFFFF_FFFF) as u32, (layer >> 32) as u32]);
+        // EpuConfig stores [hi, lo] where hi=bits 127..64, lo=bits 63..0
+        // WGSL vec4u needs [w0, w1, w2, w3] = [lo_lo, lo_hi, hi_lo, hi_hi]
+        let layers = config.layers.map(|[hi, lo]| {
+            [
+                (lo & 0xFFFF_FFFF) as u32, // w0 = lo bits 31..0
+                (lo >> 32) as u32,         // w1 = lo bits 63..32
+                (hi & 0xFFFF_FFFF) as u32, // w2 = hi bits 31..0 (overall bits 95..64)
+                (hi >> 32) as u32,         // w3 = hi bits 63..32 (overall bits 127..96)
+            ]
+        });
         Self { layers }
     }
 }
 
-/// EPU GPU runtime for environment map generation.
+/// EPU GPU runtime for environment map generation (v2).
 ///
 /// Manages GPU resources and compute pipeline for generating EnvSharp and EnvLight0
 /// octahedral maps from EPU configurations.
+///
+/// v2: Palette buffer removed - colors are embedded in 128-bit instructions.
 pub struct EpuRuntime {
     // GPU buffers
-    palette_buffer: wgpu::Buffer,
     env_states_buffer: wgpu::Buffer,
     active_env_ids_buffer: wgpu::Buffer,
     frame_uniforms_buffer: wgpu::Buffer,
@@ -326,15 +345,8 @@ impl EpuRuntime {
     /// # Arguments
     /// * `device` - The wgpu device to create resources on
     pub fn new(device: &wgpu::Device) -> Self {
-        // Create palette buffer (256 x vec4f = 4096 bytes)
-        let palette_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("EPU Palette"),
-            size: (PALETTE_SIZE as usize * std::mem::size_of::<[f32; 4]>()) as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        // Create environment states buffer (256 environments x 64 bytes = 16KB)
+        // Create environment states buffer (256 environments x 128 bytes = 32KB)
+        // v2: Each environment is 128 bytes (8 layers x 16 bytes per 128-bit instruction)
         let env_states_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("EPU Environment States"),
             size: (MAX_ENV_STATES as usize * std::mem::size_of::<GpuEnvironmentState>()) as u64,
@@ -457,11 +469,11 @@ impl EpuRuntime {
             source: wgpu::ShaderSource::Wgsl(shader_source.into()),
         });
 
-        // Create bind group layout
+        // Create bind group layout (v2: no palette buffer, bindings 0-4)
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("EPU Bind Group Layout"),
             entries: &[
-                // @binding(0) epu_palette: storage buffer of vec4f
+                // @binding(0) epu_states: storage buffer of PackedEnvironmentState
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::COMPUTE,
@@ -472,7 +484,7 @@ impl EpuRuntime {
                     },
                     count: None,
                 },
-                // @binding(1) epu_states: storage buffer of PackedEnvironmentState
+                // @binding(1) epu_active_env_ids: storage buffer of u32
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStages::COMPUTE,
@@ -483,20 +495,9 @@ impl EpuRuntime {
                     },
                     count: None,
                 },
-                // @binding(2) epu_active_env_ids: storage buffer of u32
+                // @binding(2) epu_frame: uniform buffer
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                // @binding(3) epu_frame: uniform buffer
-                wgpu::BindGroupLayoutEntry {
-                    binding: 3,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
@@ -505,9 +506,9 @@ impl EpuRuntime {
                     },
                     count: None,
                 },
-                // @binding(4) epu_out_sharp: storage texture 2d array (write)
+                // @binding(3) epu_out_sharp: storage texture 2d array (write)
                 wgpu::BindGroupLayoutEntry {
-                    binding: 4,
+                    binding: 3,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::StorageTexture {
                         access: wgpu::StorageTextureAccess::WriteOnly,
@@ -516,9 +517,9 @@ impl EpuRuntime {
                     },
                     count: None,
                 },
-                // @binding(5) epu_out_light0: storage texture 2d array (write)
+                // @binding(4) epu_out_light0: storage texture 2d array (write)
                 wgpu::BindGroupLayoutEntry {
-                    binding: 5,
+                    binding: 4,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::StorageTexture {
                         access: wgpu::StorageTextureAccess::WriteOnly,
@@ -530,33 +531,29 @@ impl EpuRuntime {
             ],
         });
 
-        // Create bind group
+        // Create bind group (v2: no palette, bindings 0-4)
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("EPU Bind Group"),
             layout: &bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: palette_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
                     resource: env_states_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 2,
+                    binding: 1,
                     resource: active_env_ids_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 3,
+                    binding: 2,
                     resource: frame_uniforms_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 4,
+                    binding: 3,
                     resource: wgpu::BindingResource::TextureView(&env_sharp_view),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 5,
+                    binding: 4,
                     resource: wgpu::BindingResource::TextureView(&env_light0_view),
                 },
             ],
@@ -789,7 +786,6 @@ impl EpuRuntime {
         });
 
         Self {
-            palette_buffer,
             env_states_buffer,
             active_env_ids_buffer,
             frame_uniforms_buffer,
@@ -813,15 +809,6 @@ impl EpuRuntime {
             irrad_bind_group_layout,
             cache: EpuCache::new(),
         }
-    }
-
-    /// Upload palette data to the GPU.
-    ///
-    /// # Arguments
-    /// * `queue` - The wgpu queue for buffer writes
-    /// * `palette` - Array of 256 RGBA colors in linear space
-    pub fn upload_palette(&self, queue: &wgpu::Queue, palette: &[[f32; 4]; 256]) {
-        queue.write_buffer(&self.palette_buffer, 0, bytemuck::cast_slice(palette));
     }
 
     /// Advance to the next frame for cache purposes.
@@ -1285,11 +1272,11 @@ mod tests {
 
     #[test]
     fn test_gpu_environment_state_size() {
-        // GpuEnvironmentState must be exactly 64 bytes (8 layers x 8 bytes)
+        // GpuEnvironmentState must be exactly 128 bytes (8 layers x 16 bytes)
         assert_eq!(
             std::mem::size_of::<GpuEnvironmentState>(),
-            64,
-            "GpuEnvironmentState must be 64 bytes"
+            128,
+            "GpuEnvironmentState must be 128 bytes"
         );
     }
 
@@ -1297,31 +1284,38 @@ mod tests {
     fn test_gpu_environment_state_conversion() {
         let config = EpuConfig {
             layers: [
-                0x1234_5678_9ABC_DEF0,
-                0xFEDC_BA98_7654_3210,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
+                [0x1234_5678_9ABC_DEF0, 0xFEDC_BA98_7654_3210], // layer 0: [hi, lo]
+                [0xAAAA_BBBB_CCCC_DDDD, 0x1111_2222_3333_4444], // layer 1: [hi, lo]
+                [0, 0],
+                [0, 0],
+                [0, 0],
+                [0, 0],
+                [0, 0],
+                [0, 0],
             ],
         };
 
         let gpu_state = GpuEnvironmentState::from(&config);
 
-        // Check first layer
-        assert_eq!(gpu_state.layers[0][0], 0x9ABC_DEF0); // lo
-        assert_eq!(gpu_state.layers[0][1], 0x1234_5678); // hi
+        // Check first layer [hi, lo] -> [lo_lo, lo_hi, hi_lo, hi_hi]
+        // hi = 0x1234_5678_9ABC_DEF0 -> hi_hi=0x1234_5678, hi_lo=0x9ABC_DEF0
+        // lo = 0xFEDC_BA98_7654_3210 -> lo_hi=0xFEDC_BA98, lo_lo=0x7654_3210
+        assert_eq!(gpu_state.layers[0][0], 0x7654_3210); // w0 = lo_lo
+        assert_eq!(gpu_state.layers[0][1], 0xFEDC_BA98); // w1 = lo_hi
+        assert_eq!(gpu_state.layers[0][2], 0x9ABC_DEF0); // w2 = hi_lo
+        assert_eq!(gpu_state.layers[0][3], 0x1234_5678); // w3 = hi_hi
 
         // Check second layer
-        assert_eq!(gpu_state.layers[1][0], 0x7654_3210); // lo
-        assert_eq!(gpu_state.layers[1][1], 0xFEDC_BA98); // hi
+        // hi = 0xAAAA_BBBB_CCCC_DDDD -> hi_hi=0xAAAA_BBBB, hi_lo=0xCCCC_DDDD
+        // lo = 0x1111_2222_3333_4444 -> lo_hi=0x1111_2222, lo_lo=0x3333_4444
+        assert_eq!(gpu_state.layers[1][0], 0x3333_4444); // w0 = lo_lo
+        assert_eq!(gpu_state.layers[1][1], 0x1111_2222); // w1 = lo_hi
+        assert_eq!(gpu_state.layers[1][2], 0xCCCC_DDDD); // w2 = hi_lo
+        assert_eq!(gpu_state.layers[1][3], 0xAAAA_BBBB); // w3 = hi_hi
 
         // Rest should be zero
         for i in 2..8 {
-            assert_eq!(gpu_state.layers[i][0], 0);
-            assert_eq!(gpu_state.layers[i][1], 0);
+            assert_eq!(gpu_state.layers[i], [0, 0, 0, 0]);
         }
     }
 
@@ -1487,7 +1481,16 @@ mod tests {
     fn test_epu_cache_needs_rebuild_first_call() {
         let cache = super::EpuCache::new();
         let config = EpuConfig {
-            layers: [1, 2, 3, 4, 5, 6, 7, 8],
+            layers: [
+                [1, 2],
+                [3, 4],
+                [5, 6],
+                [7, 8],
+                [9, 10],
+                [11, 12],
+                [13, 14],
+                [15, 16],
+            ],
         };
 
         // First call should always need rebuild (cache not valid)
@@ -1498,7 +1501,16 @@ mod tests {
     fn test_epu_cache_hit_static_config() {
         let cache = super::EpuCache::new();
         let config = EpuConfig {
-            layers: [1, 2, 3, 4, 5, 6, 7, 8], // Static config (no time-dependent features)
+            layers: [
+                [1, 2],
+                [3, 4],
+                [5, 6],
+                [7, 8],
+                [9, 10],
+                [11, 12],
+                [13, 14],
+                [15, 16],
+            ], // Static config
         };
 
         // First call: cache miss
@@ -1515,10 +1527,28 @@ mod tests {
     fn test_epu_cache_miss_different_config() {
         let cache = super::EpuCache::new();
         let config1 = EpuConfig {
-            layers: [1, 2, 3, 4, 5, 6, 7, 8],
+            layers: [
+                [1, 2],
+                [3, 4],
+                [5, 6],
+                [7, 8],
+                [9, 10],
+                [11, 12],
+                [13, 14],
+                [15, 16],
+            ],
         };
         let config2 = EpuConfig {
-            layers: [1, 2, 3, 4, 5, 6, 7, 9], // Different last layer
+            layers: [
+                [1, 2],
+                [3, 4],
+                [5, 6],
+                [7, 8],
+                [9, 10],
+                [11, 12],
+                [13, 14],
+                [15, 17],
+            ], // Different
         };
 
         // First config
@@ -1560,7 +1590,16 @@ mod tests {
     fn test_epu_cache_invalidate_single() {
         let cache = super::EpuCache::new();
         let config = EpuConfig {
-            layers: [1, 2, 3, 4, 5, 6, 7, 8],
+            layers: [
+                [1, 2],
+                [3, 4],
+                [5, 6],
+                [7, 8],
+                [9, 10],
+                [11, 12],
+                [13, 14],
+                [15, 16],
+            ],
         };
 
         // Populate cache
@@ -1578,10 +1617,28 @@ mod tests {
     fn test_epu_cache_invalidate_all() {
         let cache = super::EpuCache::new();
         let config1 = EpuConfig {
-            layers: [1, 0, 0, 0, 0, 0, 0, 0],
+            layers: [
+                [1, 0],
+                [0, 0],
+                [0, 0],
+                [0, 0],
+                [0, 0],
+                [0, 0],
+                [0, 0],
+                [0, 0],
+            ],
         };
         let config2 = EpuConfig {
-            layers: [2, 0, 0, 0, 0, 0, 0, 0],
+            layers: [
+                [2, 0],
+                [0, 0],
+                [0, 0],
+                [0, 0],
+                [0, 0],
+                [0, 0],
+                [0, 0],
+                [0, 0],
+            ],
         };
 
         // Populate cache for multiple envs
@@ -1602,10 +1659,28 @@ mod tests {
     fn test_epu_cache_multiple_env_ids() {
         let cache = super::EpuCache::new();
         let config_a = EpuConfig {
-            layers: [0xA, 0, 0, 0, 0, 0, 0, 0],
+            layers: [
+                [0xA, 0],
+                [0, 0],
+                [0, 0],
+                [0, 0],
+                [0, 0],
+                [0, 0],
+                [0, 0],
+                [0, 0],
+            ],
         };
         let config_b = EpuConfig {
-            layers: [0xB, 0, 0, 0, 0, 0, 0, 0],
+            layers: [
+                [0xB, 0],
+                [0, 0],
+                [0, 0],
+                [0, 0],
+                [0, 0],
+                [0, 0],
+                [0, 0],
+                [0, 0],
+            ],
         };
 
         // Different env IDs should have independent cache entries
@@ -1618,7 +1693,16 @@ mod tests {
 
         // Changing one doesn't affect the other
         let config_a_modified = EpuConfig {
-            layers: [0xAA, 0, 0, 0, 0, 0, 0, 0],
+            layers: [
+                [0xAA, 0],
+                [0, 0],
+                [0, 0],
+                [0, 0],
+                [0, 0],
+                [0, 0],
+                [0, 0],
+                [0, 0],
+            ],
         };
         assert!(cache.needs_rebuild(10, &config_a_modified));
         assert!(!cache.needs_rebuild(20, &config_b)); // Still cached

@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use glam::{Mat4, Vec3};
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 
 use zx_common::ZXDataPack;
 
@@ -12,6 +12,8 @@ use super::{
     PendingKeyframes, PendingMesh, PendingMeshPacked, PendingSkeleton, PendingTexture,
     SkeletonData, SkeletonGpuInfo, StatePool, ZXInitConfig,
 };
+
+use crate::graphics::epu::{AmbientCube, EpuConfig};
 
 // Re-export submodules
 mod material;
@@ -160,6 +162,14 @@ pub struct ZXFFIState {
     // Diagnostics (reset each frame)
     pub mvp_shading_overflowed_this_frame: bool,
     pub mvp_shading_overflow_count: u32,
+
+    // EPU (Environment Processing Unit) state - instruction-based API
+    /// EPU configurations indexed by env_id (0-255)
+    pub epu_configs: HashMap<u32, EpuConfig>,
+    /// Set of env_ids that have been modified and need GPU rebuild
+    pub epu_dirty_envs: HashSet<u32>,
+    /// Cached ambient cube data per env_id (computed by GPU, read back for FFI)
+    pub epu_ambient_cubes: HashMap<u32, AmbientCube>,
 }
 
 impl Default for ZXFFIState {
@@ -244,6 +254,10 @@ impl Default for ZXFFIState {
             quad_batches: Vec::new(),
             mvp_shading_overflowed_this_frame: false,
             mvp_shading_overflow_count: 0,
+            // EPU (instruction-based) state
+            epu_configs: HashMap::new(),
+            epu_dirty_envs: HashSet::new(),
+            epu_ambient_cubes: HashMap::new(),
         }
     }
 }

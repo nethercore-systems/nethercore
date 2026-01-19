@@ -633,68 +633,162 @@ light_range(index: u32, range: f32) void
 
 ---
 
-## Environment (EPU)
+## Environment Processing Unit (EPU) v2
+
+The EPU provides procedural environment backgrounds and ambient lighting via a 128-byte instruction-based configuration (8 layers x 16 bytes per layer).
+
+### Direct Set API
 
 {{#tabs global="lang"}}
 
 {{#tab name="Rust"}}
 ```rust
-// 8 Environment Modes (layer: 0=base, 1=overlay)
-env_gradient(layer, zenith, sky_h, ground_h, nadir, rotation, shift, sun_elev, disk, halo, intensity, haze, warmth, cloudiness, cloud_phase)  // Mode 0
-env_cells(layer, family, variant, density, size_min, size_max, intensity, shape, motion, parallax, height_bias, clustering, color_a, color_b, axis_x, axis_y, axis_z, phase, seed)  // Mode 1
-env_lines(layer, variant, line_type, thickness, spacing, fade, parallax, color_primary, color_accent, accent_every, phase, profile, warp, wobble, glow, axis_x, axis_y, axis_z, seed)  // Mode 2
-env_silhouette(layer, family, jaggedness, layer_count, color_near, color_far, sky_zenith, sky_horizon, parallax_rate, seed, phase, fog, wind)  // Mode 3
-env_nebula(layer, family, coverage, softness, intensity, scale, detail, warp, flow, parallax, height_bias, contrast, color_a, color_b, axis_x, axis_y, axis_z, phase, seed)  // Mode 4
-env_room(layer, color_ceiling, color_floor, color_walls, panel_size, panel_gap, light_x, light_y, light_z, light_intensity, light_tint, corner_darken, room_scale, viewer_x, viewer_y, viewer_z, accent, accent_mode, roughness, phase)  // Mode 5
-env_veil(layer, family, density, width, taper, curvature, edge_soft, height_min, height_max, color_near, color_far, glow, parallax, axis_x, axis_y, axis_z, phase, seed)  // Mode 6
-env_rings(layer, family, ring_count, thickness, color_a, color_b, center_color, center_falloff, spiral_twist, axis_x, axis_y, axis_z, phase, wobble, noise, dash, glow, seed)  // Mode 7
+// Configure environment (8 x [u64; 2] = 128 bytes)
+epu_set(env_id, config_ptr)           // Upload config to slot (0-255)
 
-// Blending and rendering
-env_blend(mode)               // 0=alpha, 1=add, 2=mul, 3=screen
-draw_env()                    // Call first in render()
-matcap_set(slot, texture)     // Slot 1-3 (Mode 1 only)
+// Draw environment background
+epu_draw(env_id)                      // Render background for env slot
+
+// Sample ambient lighting
+epu_get_ambient(env_id, nx, ny, nz) -> u32  // Returns 0xRRGGBB00
+
+// Legacy compatibility
+draw_env()                            // Draws env_id 0
 ```
 {{#endtab}}
 
 {{#tab name="C/C++"}}
 ```c
-// 8 Environment Modes (layer: 0=base, 1=overlay)
-void env_gradient(u32 layer, u32 zenith, u32 sky_h, u32 ground_h, u32 nadir, f32 rotation, f32 shift, f32 sun_elev, u32 disk, u32 halo, u32 intensity, u32 haze, u32 warmth, u32 cloudiness, u32 cloud_phase);  // Mode 0
-void env_cells(u32 layer, u32 family, u32 variant, u32 density, u32 size_min, u32 size_max, u32 intensity, u32 shape, u32 motion, u32 parallax, u32 height_bias, u32 clustering, u32 color_a, u32 color_b, f32 axis_x, f32 axis_y, f32 axis_z, u32 phase, u32 seed);  // Mode 1
-void env_lines(u32 layer, u32 variant, u32 line_type, u32 thickness, f32 spacing, f32 fade, u32 parallax, u32 color_primary, u32 color_accent, u32 accent_every, u32 phase, u32 profile, u32 warp, u32 wobble, u32 glow, f32 axis_x, f32 axis_y, f32 axis_z, u32 seed);  // Mode 2
-void env_silhouette(u32 layer, u32 family, u32 jaggedness, u32 layer_count, u32 color_near, u32 color_far, u32 sky_zenith, u32 sky_horizon, u32 parallax_rate, u32 seed, u32 phase, u32 fog, u32 wind);  // Mode 3
-void env_nebula(u32 layer, u32 family, u32 coverage, u32 softness, u32 intensity, u32 scale, u32 detail, u32 warp, u32 flow, u32 parallax, u32 height_bias, u32 contrast, u32 color_a, u32 color_b, f32 axis_x, f32 axis_y, f32 axis_z, u32 phase, u32 seed);  // Mode 4
-void env_room(u32 layer, u32 color_ceiling, u32 color_floor, u32 color_walls, f32 panel_size, u32 panel_gap, f32 light_x, f32 light_y, f32 light_z, u32 light_intensity, u32 light_tint, u32 corner_darken, f32 room_scale, i32 viewer_x, i32 viewer_y, i32 viewer_z, u32 accent, u32 accent_mode, u32 roughness, u32 phase);  // Mode 5
-void env_veil(u32 layer, u32 family, u32 density, u32 width, u32 taper, u32 curvature, u32 edge_soft, u32 height_min, u32 height_max, u32 color_near, u32 color_far, u32 glow, u32 parallax, f32 axis_x, f32 axis_y, f32 axis_z, u32 phase, u32 seed);  // Mode 6
-void env_rings(u32 layer, u32 family, u32 ring_count, u32 thickness, u32 color_a, u32 color_b, u32 center_color, u32 center_falloff, f32 spiral_twist, f32 axis_x, f32 axis_y, f32 axis_z, u32 phase, u32 wobble, u32 noise, u32 dash, u32 glow, u32 seed);  // Mode 7
+// Configure environment (8 x 128-bit = 128 bytes, passed as [u64; 16])
+void epu_set(uint8_t env_id, const uint64_t* config);
 
-// Blending and rendering
-void env_blend(uint32_t mode);                    // 0=alpha, 1=add, 2=mul, 3=screen
-void draw_env(void);                              // Call first in render()
-void matcap_set(uint32_t slot, uint32_t texture); // Slot 1-3 (Mode 1 only)
+// Draw environment background
+void epu_draw(uint32_t env_id);
+
+// Sample ambient lighting (returns 0xRRGGBB00)
+uint32_t epu_get_ambient(uint32_t env_id, float nx, float ny, float nz);
+
+// Legacy compatibility
+void draw_env(void);                  // Draws env_id 0
 ```
 {{#endtab}}
 
 {{#tab name="Zig"}}
 ```zig
-// 8 Environment Modes (layer: 0=base, 1=overlay)
-env_gradient(layer: u32, zenith: u32, sky_h: u32, ground_h: u32, nadir: u32, rotation: f32, shift: f32, sun_elev: f32, disk: u32, halo: u32, intensity: u32, haze: u32, warmth: u32, cloudiness: u32, cloud_phase: u32) void  // Mode 0
-env_cells(layer: u32, family: u32, variant: u32, density: u32, size_min: u32, size_max: u32, intensity: u32, shape: u32, motion: u32, parallax: u32, height_bias: u32, clustering: u32, color_a: u32, color_b: u32, axis_x: f32, axis_y: f32, axis_z: f32, phase: u32, seed: u32) void  // Mode 1
-env_lines(layer: u32, variant: u32, line_type: u32, thickness: u32, spacing: f32, fade: f32, parallax: u32, color_primary: u32, color_accent: u32, accent_every: u32, phase: u32, profile: u32, warp: u32, wobble: u32, glow: u32, axis_x: f32, axis_y: f32, axis_z: f32, seed: u32) void  // Mode 2
-env_silhouette(layer: u32, family: u32, jaggedness: u32, layer_count: u32, color_near: u32, color_far: u32, sky_zenith: u32, sky_horizon: u32, parallax_rate: u32, seed: u32, phase: u32, fog: u32, wind: u32) void  // Mode 3
-env_nebula(layer: u32, family: u32, coverage: u32, softness: u32, intensity: u32, scale: u32, detail: u32, warp: u32, flow: u32, parallax: u32, height_bias: u32, contrast: u32, color_a: u32, color_b: u32, axis_x: f32, axis_y: f32, axis_z: f32, phase: u32, seed: u32) void  // Mode 4
-env_room(layer: u32, color_ceiling: u32, color_floor: u32, color_walls: u32, panel_size: f32, panel_gap: u32, light_x: f32, light_y: f32, light_z: f32, light_intensity: u32, light_tint: u32, corner_darken: u32, room_scale: f32, viewer_x: i32, viewer_y: i32, viewer_z: i32, accent: u32, accent_mode: u32, roughness: u32, phase: u32) void  // Mode 5
-env_veil(layer: u32, family: u32, density: u32, width: u32, taper: u32, curvature: u32, edge_soft: u32, height_min: u32, height_max: u32, color_near: u32, color_far: u32, glow: u32, parallax: u32, axis_x: f32, axis_y: f32, axis_z: f32, phase: u32, seed: u32) void  // Mode 6
-env_rings(layer: u32, family: u32, ring_count: u32, thickness: u32, color_a: u32, color_b: u32, center_color: u32, center_falloff: u32, spiral_twist: f32, axis_x: f32, axis_y: f32, axis_z: f32, phase: u32, wobble: u32, noise: u32, dash: u32, glow: u32, seed: u32) void  // Mode 7
+// Configure environment (8 x 128-bit = 128 bytes)
+epu_set(env_id: u8, config: [*]const u64) void
 
-// Blending and rendering
-env_blend(mode: u32) void             // 0=alpha, 1=add, 2=mul, 3=screen
-draw_env() void                       // Call first in render()
-matcap_set(slot: u32, texture: u32) void  // Slot 1-3 (Mode 1 only)
+// Draw environment background
+epu_draw(env_id: u32) void
+
+// Sample ambient lighting (returns 0xRRGGBB00)
+epu_get_ambient(env_id: u32, nx: f32, ny: f32, nz: f32) u32
+
+// Legacy compatibility
+draw_env() void                       // Draws env_id 0
 ```
 {{#endtab}}
 
 {{#endtabs}}
+
+### Builder API (Recommended)
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+epu_begin()                                      // Start building a layer
+epu_layer_opcode(opcode)                         // Set opcode (0-8)
+epu_layer_region(region)                         // Set region mask (bitfield)
+epu_layer_blend(blend)                           // Set blend mode (0-7)
+epu_layer_emissive(emissive)                     // Set emissive level (0-15)
+epu_layer_color_a(r, g, b)                       // Primary RGB24 color
+epu_layer_color_b(r, g, b)                       // Secondary RGB24 color
+epu_layer_alpha_a(alpha)                         // Primary alpha (0-15)
+epu_layer_alpha_b(alpha)                         // Secondary alpha (0-15)
+epu_layer_intensity(intensity)                   // Layer brightness (0-255)
+epu_layer_params(a, b, c, d)                     // Opcode-specific params
+epu_layer_direction(x, y, z)                     // Direction vector (i16 x 3)
+epu_finish(env_id, layer_index)                  // Commit layer to env slot
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+void epu_begin(void);                            // Start building a layer
+void epu_layer_opcode(uint8_t opcode);           // Set opcode (0-8)
+void epu_layer_region(uint8_t region);           // Set region mask (bitfield)
+void epu_layer_blend(uint8_t blend);             // Set blend mode (0-7)
+void epu_layer_emissive(uint8_t emissive);       // Set emissive level (0-15)
+void epu_layer_color_a(uint8_t r, uint8_t g, uint8_t b);   // Primary RGB24
+void epu_layer_color_b(uint8_t r, uint8_t g, uint8_t b);   // Secondary RGB24
+void epu_layer_alpha_a(uint8_t alpha);           // Primary alpha (0-15)
+void epu_layer_alpha_b(uint8_t alpha);           // Secondary alpha (0-15)
+void epu_layer_intensity(uint8_t intensity);     // Layer brightness (0-255)
+void epu_layer_params(uint8_t a, uint8_t b, uint8_t c, uint8_t d);  // Params
+void epu_layer_direction(int16_t x, int16_t y, int16_t z);  // Direction
+void epu_finish(uint8_t env_id, uint8_t layer_index);       // Commit layer
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+epu_begin() void                                 // Start building a layer
+epu_layer_opcode(opcode: u8) void                // Set opcode (0-8)
+epu_layer_region(region: u8) void                // Set region mask (bitfield)
+epu_layer_blend(blend: u8) void                  // Set blend mode (0-7)
+epu_layer_emissive(emissive: u8) void            // Set emissive level (0-15)
+epu_layer_color_a(r: u8, g: u8, b: u8) void      // Primary RGB24
+epu_layer_color_b(r: u8, g: u8, b: u8) void      // Secondary RGB24
+epu_layer_alpha_a(alpha: u8) void                // Primary alpha (0-15)
+epu_layer_alpha_b(alpha: u8) void                // Secondary alpha (0-15)
+epu_layer_intensity(intensity: u8) void          // Layer brightness (0-255)
+epu_layer_params(a: u8, b: u8, c: u8, d: u8) void  // Params
+epu_layer_direction(x: i16, y: i16, z: i16) void // Direction
+epu_finish(env_id: u8, layer_index: u8) void     // Commit layer
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+### v2 Instruction Layout (128-bit per layer)
+
+```
+u64 hi [bits 127..64]:
+  [127:123] opcode     (5)  - 32 opcodes (RAMP=1, LOBE=2, etc.)
+  [122:120] region     (3)  - Bitfield: SKY=4, WALLS=2, FLOOR=1, ALL=7
+  [119:117] blend      (3)  - 8 modes (ADD=0, MULTIPLY=1, MAX=2, etc.)
+  [116:113] emissive   (4)  - L_light0 contribution (0=none, 15=full)
+  [112]     reserved   (1)
+  [111:88]  color_a    (24) - RGB24 primary color
+  [87:64]   color_b    (24) - RGB24 secondary color
+
+u64 lo [bits 63..0]:
+  [63:56]   intensity  (8)  - Layer brightness
+  [55:48]   param_a    (8)  - Opcode-specific
+  [47:40]   param_b    (8)  - Opcode-specific
+  [39:32]   param_c    (8)  - Opcode-specific
+  [31:24]   param_d    (8)  - Opcode-specific (NEW in v2)
+  [23:8]    direction  (16) - Octahedral encoded direction
+  [7:4]     alpha_a    (4)  - color_a alpha (0-15)
+  [3:0]     alpha_b    (4)  - color_b alpha (0-15)
+```
+
+### Constants
+
+| Opcodes | Region Mask | Blend Modes |
+|---------|-------------|-------------|
+| NOP=0 | SKY=4 | ADD=0 |
+| RAMP=1 | WALLS=2 | MULTIPLY=1 |
+| LOBE=2 | FLOOR=1 | MAX=2 |
+| BAND=3 | ALL=7 | LERP=3 |
+| FOG=4 | SKY_WALLS=6 | SCREEN=4 |
+| DECAL=5 | SKY_FLOOR=5 | HSV_MOD=5 |
+| GRID=6 | WALLS_FLOOR=3 | MIN=6 |
+| SCATTER=7 | NONE=0 | OVERLAY=7 |
+| FLOW=8 | | |
+
+See [EPU API Reference](api/epu.md) for detailed opcode parameters and the [EPU RFC](../../../EPU%20RFC.md) for full specification.
 
 ---
 

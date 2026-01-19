@@ -1,43 +1,12 @@
 //! Environment drawing and utility functions
 //!
-//! This module contains functions for rendering configured environments,
-//! setting blend modes, and binding matcap textures.
+//! This module contains functions for rendering configured environments
+//! and binding matcap textures.
 
 use tracing::warn;
 use wasmtime::Caller;
 
 use crate::ffi::ZXGameContext;
-
-/// Set the blend mode for combining base and overlay layers
-///
-/// # Arguments
-/// * `mode` — Blend mode (0-3)
-///
-/// # Blend Modes
-/// - 0: Alpha — Standard alpha blending: lerp(base, overlay, overlay.a)
-/// - 1: Add — Additive blending: base + overlay
-/// - 2: Multiply — Multiplicative: base * overlay
-/// - 3: Screen — Screen blending: 1 - (1-base) * (1-overlay)
-///
-/// Controls how the overlay layer composites onto the base layer.
-///
-/// **Examples:**
-/// - Alpha (default): Overlay covers base based on alpha
-/// - Add: Bright overlays add to base (good for glow effects)
-/// - Multiply: Dark overlays darken base (good for vignettes)
-/// - Screen: Light overlays brighten base (good for fog/haze)
-pub(crate) fn env_blend(mut caller: Caller<'_, ZXGameContext>, mode: u32) {
-    let state = &mut caller.data_mut().ffi;
-
-    // Validate mode
-    if mode > 3 {
-        warn!("env_blend: invalid mode {} (must be 0-3), clamping", mode);
-    }
-
-    state.current_environment_state.set_blend_mode(mode.min(3));
-
-    state.environment_dirty = true;
-}
 
 /// Bind a matcap texture to a slot (Mode 1 only)
 ///

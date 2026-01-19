@@ -1,6 +1,0 @@
-[game]
-id = "env-veil-inspector"
-title = "Env Veil Inspector"
-author = "Nethercore Examples"
-version = "0.1.0"
-render_mode = 2

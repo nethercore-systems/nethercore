@@ -355,3 +355,65 @@ fn test_dither_offset_clamping() {
     assert_eq!(x, 3);
     assert_eq!(y, 3);
 }
+
+// ========================================================================
+// EPU State Integration Tests
+// ========================================================================
+
+#[test]
+fn test_epu_configs_storage() {
+    use crate::graphics::epu::EpuConfig;
+
+    let mut state = ZXFFIState::default();
+
+    // Initially empty
+    assert!(state.epu_configs.is_empty());
+    assert!(state.epu_dirty_envs.is_empty());
+
+    // Store a config (zeroed layers - exact values don't matter for storage test)
+    let config = EpuConfig {
+        layers: [[0u64; 2]; 8],
+    };
+    state.epu_configs.insert(0, config);
+    state.epu_dirty_envs.insert(0);
+
+    assert_eq!(state.epu_configs.len(), 1);
+    assert!(state.epu_configs.contains_key(&0));
+    assert!(state.epu_dirty_envs.contains(&0));
+}
+
+#[test]
+fn test_clear_frame_clears_epu_dirty_envs() {
+    let mut state = ZXFFIState::default();
+
+    // Mark some environments as dirty
+    state.epu_dirty_envs.insert(0);
+    state.epu_dirty_envs.insert(1);
+    state.epu_dirty_envs.insert(5);
+
+    assert_eq!(state.epu_dirty_envs.len(), 3);
+
+    // Clear frame should clear the dirty set
+    state.clear_frame();
+
+    assert!(state.epu_dirty_envs.is_empty());
+}
+
+#[test]
+fn test_clear_frame_preserves_epu_configs() {
+    use crate::graphics::epu::EpuConfig;
+
+    let mut state = ZXFFIState::default();
+
+    // Store a config (zeroed layers - exact values don't matter for persistence test)
+    let config = EpuConfig {
+        layers: [[0u64; 2]; 8],
+    };
+    state.epu_configs.insert(0, config);
+
+    // Clear frame should NOT clear the configs (they persist)
+    state.clear_frame();
+
+    assert_eq!(state.epu_configs.len(), 1);
+    assert!(state.epu_configs.contains_key(&0));
+}

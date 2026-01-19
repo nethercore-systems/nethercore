@@ -1,12 +1,13 @@
 // ============================================================================
 // EPU COMPUTE: ENVIRONMENT EVALUATION
 // Builds EnvSharp and EnvLight0 for all active environments.
+// EPU v2: 128-bit instructions with embedded RGB24 colors (no palette)
 // ============================================================================
 
-// PackedEnvironmentState: 8 layers stored as pairs of u32 (lo, hi) for u64 emulation
-// Each layer is 64 bits, stored as [lo0, hi0, lo1, hi1, ..., lo7, hi7]
+// PackedEnvironmentState: 8 layers stored as vec4u (128-bit per instruction)
+// Each layer is 128 bits: [w0, w1, w2, w3] where w3 contains opcode/region/blend
 struct PackedEnvironmentState {
-    layers: array<vec2u, 8>,
+    layers: array<vec4u, 8>,
 }
 
 struct FrameUniforms {
@@ -16,18 +17,19 @@ struct FrameUniforms {
     _pad0: u32,
 }
 
-@group(0) @binding(0) var<storage, read> epu_palette: array<vec4f>;
-@group(0) @binding(1) var<storage, read> epu_states: array<PackedEnvironmentState>;
-@group(0) @binding(2) var<storage, read> epu_active_env_ids: array<u32>;
-@group(0) @binding(3) var<uniform> epu_frame: FrameUniforms;
+// Bindings (v2): No palette buffer - colors are embedded in instructions
+@group(0) @binding(0) var<storage, read> epu_states: array<PackedEnvironmentState>;
+@group(0) @binding(1) var<storage, read> epu_active_env_ids: array<u32>;
+@group(0) @binding(2) var<uniform> epu_frame: FrameUniforms;
 
-@group(0) @binding(4) var epu_out_sharp: texture_storage_2d_array<rgba16float, write>;
-@group(0) @binding(5) var epu_out_light0: texture_storage_2d_array<rgba16float, write>;
+@group(0) @binding(3) var epu_out_sharp: texture_storage_2d_array<rgba16float, write>;
+@group(0) @binding(4) var epu_out_light0: texture_storage_2d_array<rgba16float, write>;
 
-fn feature_is_emissive(lo: u32, hi: u32) -> bool {
-    // Policy: emissive iff ADD blend.
-    return instr_blend(lo, hi) == BLEND_ADD;
-}
+// EPU v2 emissive policy:
+// - emissive = 0: Layer doesn't contribute to L_light0 (decorative only)
+// - emissive = 1-14: Scaled contribution (6.7% - 93.3%)
+// - emissive = 15: Full contribution (100%)
+// Returns the emissive scale factor (0-1) for this instruction.
 
 struct DualRadiance {
     sharp: vec3f,
@@ -37,30 +39,30 @@ struct DualRadiance {
 fn evaluate_env_dual(dir: vec3f, st: PackedEnvironmentState, time: f32) -> DualRadiance {
     // Layer 0 is assumed to be RAMP for enclosure weights (recommended).
     let layer0 = st.layers[0];
-    let enc = enclosure_from_ramp(layer0.x, layer0.y);
+    let enc = enclosure_from_ramp(layer0);
     let regions = compute_region_weights(dir, enc);
 
     var sharp = vec3f(0.0);
     var light0 = vec3f(0.0);
 
     for (var i = 0u; i < 8u; i++) {
-        let layer = st.layers[i];
-        let lo = layer.x;
-        let hi = layer.y;
-        let opcode = instr_opcode(lo, hi);
+        let instr = st.layers[i];
+        let opcode = instr_opcode(instr);
         if opcode == OP_NOP { continue; }
 
-        let blend = instr_blend(lo, hi);
-
-        let sample = evaluate_layer(dir, lo, hi, enc, regions, time, &epu_palette);
+        let blend = instr_blend(instr);
+        let sample = evaluate_layer(dir, instr, enc, regions, time);
 
         // Sharp always receives all layers.
         sharp = apply_blend(sharp, sample, blend);
 
-        // Light0 receives bounds + emissive features only.
-        let is_feature = opcode >= OP_DECAL;
-        if !is_feature || feature_is_emissive(lo, hi) {
-            light0 = apply_blend(light0, sample, blend);
+        // Light0 contribution is scaled by the emissive field.
+        // emissive=0 means no contribution, emissive=15 means full contribution.
+        let emissive_scale = instr_emissive_f32(instr);
+        if emissive_scale > 0.0 {
+            // Scale the sample weight by emissive factor for light0
+            let scaled_sample = LayerSample(sample.rgb, sample.w * emissive_scale);
+            light0 = apply_blend(light0, scaled_sample, blend);
         }
     }
 

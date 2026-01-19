@@ -131,6 +131,9 @@ impl ZXGraphics {
                 VRPCommand::Environment {
                     viewport, pass_id, ..
                 } => CommandSortKey::environment(*pass_id, *viewport),
+                VRPCommand::EpuEnvironment {
+                    viewport, pass_id, ..
+                } => CommandSortKey::environment(*pass_id, *viewport),
             });
 
         // =================================================================
@@ -251,6 +254,10 @@ impl ZXGraphics {
                 } => (self.unit_quad_format, *cull_mode, *pass_id),
                 VRPCommand::Environment { pass_id, .. } => {
                     // Environment uses its own pipeline, but we need values for bind group layout
+                    (0, CullMode::None, *pass_id)
+                }
+                VRPCommand::EpuEnvironment { pass_id, .. } => {
+                    // EPU environment uses its own pipeline
                     (0, CullMode::None, *pass_id)
                 }
             };
@@ -514,7 +521,8 @@ impl ZXGraphics {
                 VRPCommand::Mesh { pass_id, .. }
                 | VRPCommand::IndexedMesh { pass_id, .. }
                 | VRPCommand::Quad { pass_id, .. }
-                | VRPCommand::Environment { pass_id, .. } => *pass_id,
+                | VRPCommand::Environment { pass_id, .. }
+                | VRPCommand::EpuEnvironment { pass_id, .. } => *pass_id,
             };
             let first_pass_config = z_state
                 .pass_configs
@@ -666,6 +674,19 @@ impl ZXGraphics {
                         BufferSource::Quad,          // Environment renders as a fullscreen quad
                         false,
                         true,
+                        false,
+                    ),
+                    VRPCommand::EpuEnvironment {
+                        viewport, pass_id, ..
+                    } => (
+                        *viewport,
+                        *pass_id,
+                        self.unit_quad_format, // EPU environment uses unit quad mesh
+                        super::super::render_state::CullMode::None,
+                        [TextureHandle::INVALID; 4], // Default textures (unused)
+                        BufferSource::Quad,          // Environment renders as a fullscreen quad
+                        false,
+                        true, // is_environment = true for EPU
                         false,
                     ),
                 };
@@ -949,6 +970,14 @@ impl ZXGraphics {
                         // Draw fullscreen triangle (3 vertices, no vertex buffer)
                         // Uses shading_state_index as instance range to pass index to shader
                         render_pass.draw(0..3, *shading_state_index..*shading_state_index + 1);
+                    }
+                    VRPCommand::EpuEnvironment { env_id, .. } => {
+                        // EPU environment rendering: Fullscreen triangle with procedural background
+                        // Uses the new instruction-based EPU compute pipeline
+
+                        // Draw fullscreen triangle (3 vertices, no vertex buffer)
+                        // Uses env_id as instance range to pass env_id to shader
+                        render_pass.draw(0..3, *env_id..*env_id + 1);
                     }
                 }
 

@@ -111,6 +111,9 @@ impl ZXFFIState {
         self.pass_configs
             .push(crate::graphics::PassConfig::default());
 
+        // Clear EPU dirty set - environments have been rebuilt
+        self.epu_dirty_envs.clear();
+
         // Note: color and shading state already rebuild each frame via add_shading_state()
     }
 }

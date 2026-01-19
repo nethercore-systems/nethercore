@@ -418,14 +418,6 @@ impl ZXGraphics {
             .build_envs(&self.device, &self.queue, encoder, configs, time);
     }
 
-    /// Upload EPU palette data.
-    ///
-    /// # Arguments
-    /// * `palette` - Array of 256 RGBA colors in linear space
-    pub fn upload_epu_palette(&self, palette: &[[f32; 4]; 256]) {
-        self.epu_runtime.upload_palette(&self.queue, palette);
-    }
-
     // =================================================================
     // UNIFIED BUFFER: STATIC UPLOAD METHODS
     // =================================================================

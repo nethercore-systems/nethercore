@@ -1,52 +1,620 @@
-# Environment Processing Unit (EPU)
+# Environment Processing Unit (EPU) v2
 
-The Environment Processing Unit is ZX’s procedural background + ambient environment system. It renders an infinite “environment” when you call `draw_env()` and is also sampled by lit shaders for sky/ambient.
+The Environment Processing Unit is ZX's GPU-driven procedural environment system. It renders backgrounds when you call `epu_draw()` and provides ambient lighting data for lit shaders.
 
 ## Overview
 
-Multi-Environment v4 provides:
-- **8 environment modes** — Gradient, Cells, Lines, Silhouette, Nebula, Room, Veil, Rings
-- **Dual-layer system** — Configure base (`layer=0`) and overlay (`layer=1`) independently
-- **Same-mode layering** — Base and overlay may use the same mode with different parameters
-- **Blend modes** — `env_blend(0..3)` controls how overlay composites onto base
-- **Loopable animation** — Most modes take a `phase` that wraps cleanly (0–65535)
+The EPU uses a **128-byte** instruction-based configuration (8 x 128-bit instructions) evaluated by GPU compute shaders into octahedral environment maps. This provides:
 
-For mode selection and example recipes, see [EPU Environments](../guides/epu-environments.md).
+- Procedural backgrounds (sky/walls/void)
+- Ambient lighting data for objects (diffuse ambient + reflection color)
+- Multi-environment support via `env_id` indexing
+- Animation via instruction parameters
+- Direct RGB24 colors (no palette indirection)
+- Explicit emissive control for lighting contribution
 
-All environments are rendered by calling `draw_env()` in your `render()` function.
+## v2 Changes Summary
 
-## Quick Use
+| Aspect | v1 | v2 |
+|--------|----|----|
+| Instruction size | 64-bit | 128-bit |
+| Environment size | 64 bytes | 128 bytes |
+| Opcode bits | 4-bit (16 opcodes) | 5-bit (32 opcodes) |
+| Region | 2-bit enum | 3-bit combinable mask |
+| Blend modes | 4 modes | 8 modes (+SCREEN, HSV_MOD, MIN, OVERLAY) |
+| Color | 8-bit palette index | RGB24 x 2 per layer |
+| Emissive | Implicit (ADD=emissive) | Explicit 4-bit (0-15) |
+| Alpha | None | 4-bit x 2 (Bayer-friendly) |
+| Parameters | 3 (param_a/b/c) | 4 (+param_d) |
+| Palette buffer | Required | **REMOVED** |
+
+---
+
+## FFI Functions
+
+### epu_set
+
+Upload an environment configuration to a slot.
 
 {{#tabs global="lang"}}
 
 {{#tab name="Rust"}}
 ```rust
+/// Set an EPU environment configuration.
+///
+/// # Arguments
+/// * `env_id` - Environment slot ID (0-255)
+/// * `config_ptr` - Pointer to 16 u64 values (128 bytes total)
+///                  First 8 values are high words, next 8 are low words
+fn epu_set(env_id: u32, config_ptr: *const u64)
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+/// Set an EPU environment configuration.
+///
+/// @param env_id Environment slot ID (0-255)
+/// @param config_ptr Pointer to 16 u64 values (128 bytes total)
+void epu_set(uint32_t env_id, const uint64_t* config_ptr);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+/// Set an EPU environment configuration.
+/// env_id: Environment slot ID (0-255)
+/// config_ptr: Pointer to 16 u64 values (128 bytes total)
+pub extern fn epu_set(env_id: u32, config_ptr: [*]const u64) void;
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+### epu_draw
+
+Draw the background using the specified EPU environment.
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+/// Draw the background using the specified EPU environment.
+///
+/// # Arguments
+/// * `env_id` - Environment slot ID (0-255)
+fn epu_draw(env_id: u32)
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+/// Draw the background using the specified EPU environment.
+///
+/// @param env_id Environment slot ID (0-255)
+void epu_draw(uint32_t env_id);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+/// Draw the background using the specified EPU environment.
+/// env_id: Environment slot ID (0-255)
+pub extern fn epu_draw(env_id: u32) void;
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+Call this **first** in your `render()` function, before any 3D geometry.
+
+### epu_get_ambient
+
+Sample the ambient cube for diffuse lighting from an EPU environment.
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+/// Sample the ambient cube for diffuse lighting.
+///
+/// # Arguments
+/// * `env_id` - Environment slot ID (0-255)
+/// * `normal_x`, `normal_y`, `normal_z` - Surface normal direction (normalized)
+///
+/// # Returns
+/// Packed RGB color as u32 in 0xRRGGBB00 format (alpha unused)
+fn epu_get_ambient(env_id: u32, normal_x: f32, normal_y: f32, normal_z: f32) -> u32
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+/// Sample the ambient cube for diffuse lighting.
+///
+/// @param env_id Environment slot ID (0-255)
+/// @param normal_x, normal_y, normal_z Surface normal direction (normalized)
+/// @return Packed RGB color as u32 in 0xRRGGBB00 format
+uint32_t epu_get_ambient(uint32_t env_id, float normal_x, float normal_y, float normal_z);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+/// Sample the ambient cube for diffuse lighting.
+/// Returns packed RGB color as u32 in 0xRRGGBB00 format
+pub extern fn epu_get_ambient(env_id: u32, normal_x: f32, normal_y: f32, normal_z: f32) u32;
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+---
+
+## Builder API
+
+The builder API provides a safer, more ergonomic way to construct EPU layers without manual bit-packing.
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+epu_begin()                                      // Start building a new layer
+epu_layer_opcode(opcode: u8)                     // Set opcode (0-8)
+epu_layer_region(region: u8)                     // Set region mask (bitfield)
+epu_layer_blend(blend: u8)                       // Set blend mode (0-7)
+epu_layer_emissive(emissive: u8)                 // Set emissive level (0-15)
+epu_layer_color_a(r: u8, g: u8, b: u8)           // Primary RGB24 color
+epu_layer_color_b(r: u8, g: u8, b: u8)           // Secondary RGB24 color
+epu_layer_alpha_a(alpha: u8)                     // Primary alpha (0-15)
+epu_layer_alpha_b(alpha: u8)                     // Secondary alpha (0-15)
+epu_layer_intensity(intensity: u8)               // Layer brightness (0-255)
+epu_layer_params(a: u8, b: u8, c: u8, d: u8)     // Opcode-specific params
+epu_layer_direction(x: i16, y: i16, z: i16)      // Direction vector
+epu_finish(env_id: u8, layer_index: u8)          // Commit layer to env slot
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+void epu_begin(void);                            // Start building a new layer
+void epu_layer_opcode(uint8_t opcode);           // RAMP=1, LOBE=2, BAND=3, FOG=4, DECAL=5, GRID=6, SCATTER=7, FLOW=8
+void epu_layer_region(uint8_t region);           // SKY=4, WALLS=2, FLOOR=1 (bitfield, ALL=7)
+void epu_layer_blend(uint8_t blend);             // ADD=0, MULTIPLY=1, MAX=2, LERP=3, SCREEN=4, HSV_MOD=5, MIN=6, OVERLAY=7
+void epu_layer_emissive(uint8_t emissive);       // 0=decorative, 15=full lighting contribution
+void epu_layer_color_a(uint8_t r, uint8_t g, uint8_t b);   // Primary RGB24
+void epu_layer_color_b(uint8_t r, uint8_t g, uint8_t b);   // Secondary RGB24
+void epu_layer_alpha_a(uint8_t alpha);           // 0-15 (Bayer dither compatible)
+void epu_layer_alpha_b(uint8_t alpha);           // 0-15 (Bayer dither compatible)
+void epu_layer_intensity(uint8_t intensity);     // 0-255
+void epu_layer_params(uint8_t a, uint8_t b, uint8_t c, uint8_t d);
+void epu_layer_direction(int16_t x, int16_t y, int16_t z);
+void epu_finish(uint8_t env_id, uint8_t layer_index);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+pub extern fn epu_begin() void;
+pub extern fn epu_layer_opcode(opcode: u8) void;
+pub extern fn epu_layer_region(region: u8) void;
+pub extern fn epu_layer_blend(blend: u8) void;
+pub extern fn epu_layer_emissive(emissive: u8) void;
+pub extern fn epu_layer_color_a(r: u8, g: u8, b: u8) void;
+pub extern fn epu_layer_color_b(r: u8, g: u8, b: u8) void;
+pub extern fn epu_layer_alpha_a(alpha: u8) void;
+pub extern fn epu_layer_alpha_b(alpha: u8) void;
+pub extern fn epu_layer_intensity(intensity: u8) void;
+pub extern fn epu_layer_params(a: u8, b: u8, c: u8, d: u8) void;
+pub extern fn epu_layer_direction(x: i16, y: i16, z: i16) void;
+pub extern fn epu_finish(env_id: u8, layer_index: u8) void;
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+### Builder API Example
+
+{{#tabs global="lang"}}
+
+{{#tab name="C/C++"}}
+```c
+void setup_sunset_environment(void) {
+    // Layer 0: RAMP base gradient
+    epu_begin();
+    epu_layer_opcode(1);                    // RAMP
+    epu_layer_region(7);                    // ALL regions
+    epu_layer_blend(0);                     // ADD
+    epu_layer_emissive(10);                 // Moderate lighting
+    epu_layer_color_a(255, 140, 80);        // Sky: sunset orange
+    epu_layer_color_b(30, 20, 40);          // Floor: dark purple
+    epu_layer_alpha_a(15);
+    epu_layer_alpha_b(15);
+    epu_layer_intensity(200);
+    epu_layer_params(180, 100, 0x84, 120);  // Wall: pink-ish
+    epu_layer_direction(0, 32767, 0);       // Up = +Y
+    epu_finish(0, 0);
+
+    // Layer 1: Sun LOBE
+    epu_begin();
+    epu_layer_opcode(2);                    // LOBE
+    epu_layer_region(4);                    // SKY only
+    epu_layer_blend(0);                     // ADD
+    epu_layer_emissive(15);                 // Full emissive
+    epu_layer_color_a(255, 200, 100);       // Core: warm yellow
+    epu_layer_color_b(255, 100, 50);        // Edge: deep orange
+    epu_layer_alpha_a(15);
+    epu_layer_alpha_b(10);
+    epu_layer_intensity(255);
+    epu_layer_params(200, 0, 0, 80);        // Sharp falloff
+    epu_layer_direction(16384, 8192, 0);    // Sun position
+    epu_finish(0, 1);
+}
+```
+{{#endtab}}
+
+{{#tab name="Rust"}}
+```rust
+fn setup_sunset_environment() {
+    // Layer 0: RAMP base gradient
+    epu_begin();
+    epu_layer_opcode(1);                    // RAMP
+    epu_layer_region(7);                    // ALL regions
+    epu_layer_blend(0);                     // ADD
+    epu_layer_emissive(10);
+    epu_layer_color_a(255, 140, 80);        // Sky: sunset orange
+    epu_layer_color_b(30, 20, 40);          // Floor: dark purple
+    epu_layer_alpha_a(15);
+    epu_layer_alpha_b(15);
+    epu_layer_intensity(200);
+    epu_layer_params(180, 100, 0x84, 120);
+    epu_layer_direction(0, 32767, 0);
+    epu_finish(0, 0);
+
+    // Layer 1: Sun LOBE
+    epu_begin();
+    epu_layer_opcode(2);                    // LOBE
+    epu_layer_region(4);                    // SKY only
+    epu_layer_blend(0);                     // ADD
+    epu_layer_emissive(15);
+    epu_layer_color_a(255, 200, 100);
+    epu_layer_color_b(255, 100, 50);
+    epu_layer_alpha_a(15);
+    epu_layer_alpha_b(10);
+    epu_layer_intensity(255);
+    epu_layer_params(200, 0, 0, 80);
+    epu_layer_direction(16384, 8192, 0);
+    epu_finish(0, 1);
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+fn setup_sunset_environment() void {
+    // Layer 0: RAMP base gradient
+    epu_begin();
+    epu_layer_opcode(1);
+    epu_layer_region(7);
+    epu_layer_blend(0);
+    epu_layer_emissive(10);
+    epu_layer_color_a(255, 140, 80);
+    epu_layer_color_b(30, 20, 40);
+    epu_layer_alpha_a(15);
+    epu_layer_alpha_b(15);
+    epu_layer_intensity(200);
+    epu_layer_params(180, 100, 0x84, 120);
+    epu_layer_direction(0, 32767, 0);
+    epu_finish(0, 0);
+
+    // Layer 1: Sun LOBE
+    epu_begin();
+    epu_layer_opcode(2);
+    epu_layer_region(4);
+    epu_layer_blend(0);
+    epu_layer_emissive(15);
+    epu_layer_color_a(255, 200, 100);
+    epu_layer_color_b(255, 100, 50);
+    epu_layer_alpha_a(15);
+    epu_layer_alpha_b(10);
+    epu_layer_intensity(255);
+    epu_layer_params(200, 0, 0, 80);
+    epu_layer_direction(16384, 8192, 0);
+    epu_finish(0, 1);
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+---
+
+## Configuration Layout
+
+Each environment is exactly **8 x 128-bit instructions** (128 bytes total):
+
+| Slot | Type | Recommended Use |
+|------|------|------------------|
+| 0 | Bounds | `RAMP` enclosure + base colors |
+| 1 | Bounds | `LOBE` (sun/neon spill) |
+| 2 | Bounds | `BAND` (horizon ring) |
+| 3 | Bounds | `FOG` (absorption/haze) |
+| 4 | Feature | `DECAL` (sun disk, signage, portals) |
+| 5 | Feature | `GRID` (panels, architectural lines) |
+| 6 | Feature | `SCATTER` (stars, dust, windows) |
+| 7 | Feature | `FLOW` (clouds, rain, caustics) |
+
+---
+
+## Instruction Bit Layout (128-bit)
+
+Each instruction is packed as two `u64` values:
+
+### High Word (bits 127..64)
+
+```
+bits 127..123: opcode     (5)  - Which algorithm to run
+bits 122..120: region     (3)  - Bitfield: SKY=0b100, WALLS=0b010, FLOOR=0b001
+bits 119..117: blend      (3)  - How to combine layer output (8 modes)
+bits 116..113: emissive   (4)  - L_light0 contribution (0=none, 15=full)
+bit  112:      reserved   (1)  - Future use
+bits 111..88:  color_a    (24) - RGB24 primary color
+bits 87..64:   color_b    (24) - RGB24 secondary color
+```
+
+### Low Word (bits 63..0)
+
+```
+bits 63..56:   intensity  (8)  - Layer brightness
+bits 55..48:   param_a    (8)  - Opcode-specific
+bits 47..40:   param_b    (8)  - Opcode-specific
+bits 39..32:   param_c    (8)  - Opcode-specific
+bits 31..24:   param_d    (8)  - Opcode-specific
+bits 23..8:    direction  (16) - Octahedral-encoded direction (u8,u8)
+bits 7..4:     alpha_a    (4)  - color_a alpha (0=transparent, 15=opaque)
+bits 3..0:     alpha_b    (4)  - color_b alpha (0=transparent, 15=opaque)
+```
+
+---
+
+## Opcodes
+
+| Opcode | Name | Kind | Purpose |
+|--------|------|------|---------|
+| `0x00` | `NOP` | Any | Disable layer |
+| `0x01` | `RAMP` | Bounds | Enclosure gradient (sky/walls/floor) |
+| `0x02` | `LOBE` | Bounds | Directional glow (sun, lamp, neon spill) |
+| `0x03` | `BAND` | Bounds | Horizon band / ring |
+| `0x04` | `FOG` | Bounds | Atmospheric absorption |
+| `0x05` | `DECAL` | Feature | Sharp SDF shape (disk/ring/rect/line) |
+| `0x06` | `GRID` | Feature | Repeating lines/panels |
+| `0x07` | `SCATTER` | Feature | Point field (stars/dust/bubbles) |
+| `0x08` | `FLOW` | Feature | Animated noise/streaks/caustics |
+| `0x09..0x1F` | Reserved | - | Future expansion |
+
+---
+
+## Region Mask (3-bit bitfield)
+
+Regions are combinable using bitwise OR:
+
+| Value | Binary | Name | Meaning |
+|-------|--------|------|---------|
+| 7 | `0b111` | `ALL` | Apply to sky + walls + floor |
+| 4 | `0b100` | `SKY` | Sky/ceiling only |
+| 2 | `0b010` | `WALLS` | Wall/horizon belt only |
+| 1 | `0b001` | `FLOOR` | Floor/ground only |
+| 6 | `0b110` | `SKY_WALLS` | Sky + walls |
+| 5 | `0b101` | `SKY_FLOOR` | Sky + floor |
+| 3 | `0b011` | `WALLS_FLOOR` | Walls + floor |
+| 0 | `0b000` | `NONE` | Layer disabled |
+
+---
+
+## Blend Modes (3-bit, 8 modes)
+
+| Value | Name | Formula |
+|-------|------|---------|
+| 0 | `ADD` | `dst + src * a` |
+| 1 | `MULTIPLY` | `dst * mix(1, src, a)` |
+| 2 | `MAX` | `max(dst, src * a)` |
+| 3 | `LERP` | `mix(dst, src, a)` |
+| 4 | `SCREEN` | `1 - (1-dst)*(1-src*a)` |
+| 5 | `HSV_MOD` | HSV shift dst by src |
+| 6 | `MIN` | `min(dst, src * a)` |
+| 7 | `OVERLAY` | Photoshop-style overlay |
+
+---
+
+## Emissive Field (4-bit)
+
+The emissive field controls how much a layer contributes to lighting:
+
+| Value | Contribution |
+|-------|--------------|
+| 0 | Decorative only (no lighting contribution) |
+| 1-14 | Scaled contribution (value/15 * layer output) |
+| 15 | Full emissive (100% lighting contribution) |
+
+This allows explicit control over whether a visually bright element lights the scene.
+
+---
+
+## Dual-Color System
+
+Each layer has two RGB24 colors (`color_a` and `color_b`) with independent 4-bit alpha:
+
+| Opcode | color_a | color_b |
+|--------|---------|---------|
+| `RAMP` | Sky color | Floor color (wall via params) |
+| `LOBE` | Core glow | Edge tint |
+| `BAND` | Center color | Edge gradient |
+| `FOG` | Fog tint | Horizon tint |
+| `DECAL` | Fill color | Outline color |
+| `GRID` | Line color | Cell background |
+| `SCATTER` | Base color | Color variation |
+| `FLOW` | Primary color | Secondary color |
+
+---
+
+## Per-Opcode Parameter Reference
+
+### RAMP (Enclosure Gradient)
+
+| Field | Purpose |
+|-------|---------|
+| `color_a` | Sky/ceiling color |
+| `color_b` | Floor/ground color |
+| `param_a` | Wall color R |
+| `param_b` | Wall color G |
+| `param_c[7:4]` | Ceiling Y threshold (0-15) |
+| `param_c[3:0]` | Floor Y threshold (0-15) |
+| `param_d` | Wall color B |
+| `intensity` | Softness (gradient smoothness) |
+| `direction` | Up vector |
+
+### LOBE (Directional Glow)
+
+| Field | Purpose |
+|-------|---------|
+| `color_a` | Core glow color |
+| `color_b` | Edge tint color |
+| `intensity` | Brightness |
+| `param_a` | Exponent (sharpness, 0-255 maps to 1-64) |
+| `param_b` | Animation speed |
+| `param_c` | Animation mode (0=none, 1=pulse, 2=flicker) |
+| `param_d` | Edge blend amount |
+| `direction` | Lobe center direction |
+
+### BAND (Horizon Ring)
+
+| Field | Purpose |
+|-------|---------|
+| `color_a` | Center color |
+| `color_b` | Edge gradient color |
+| `intensity` | Brightness |
+| `param_a` | Width |
+| `param_b` | Vertical offset |
+| `param_c` | Scroll speed |
+| `param_d` | Gradient sharpness |
+| `direction` | Band normal axis |
+
+### FOG (Atmospheric Absorption)
+
+| Field | Purpose |
+|-------|---------|
+| `color_a` | Fog tint color |
+| `color_b` | Horizon tint color |
+| `intensity` | Density |
+| `param_a` | Vertical bias |
+| `param_b` | Falloff curve |
+| `param_c` | Horizon blend amount |
+| `direction` | Up vector |
+
+Use `blend = MULTIPLY` for fog.
+
+### DECAL (Sharp SDF Shape)
+
+| Field | Purpose |
+|-------|---------|
+| `color_a` | Fill color |
+| `color_b` | Outline color |
+| `intensity` | Brightness |
+| `param_a[7:4]` | Shape (0=disk, 1=ring, 2=rect, 3=line) |
+| `param_a[3:0]` | Edge softness |
+| `param_b` | Size |
+| `param_c` | Pulse animation speed |
+| `param_d` | Outline width |
+| `direction` | Shape center |
+| `alpha_a` | Fill alpha |
+| `alpha_b` | Outline alpha |
+
+### GRID (Repeating Lines)
+
+| Field | Purpose |
+|-------|---------|
+| `color_a` | Line color |
+| `color_b` | Cell background color |
+| `intensity` | Brightness |
+| `param_a` | Scale (repetition count) |
+| `param_b` | Line thickness |
+| `param_c[7:4]` | Pattern (0=stripes, 1=grid, 2=checker) |
+| `param_c[3:0]` | Scroll speed |
+| `param_d` | Cell fill amount |
+| `alpha_a` | Line alpha |
+| `alpha_b` | Background alpha |
+
+### SCATTER (Point Field)
+
+| Field | Purpose |
+|-------|---------|
+| `color_a` | Base point color |
+| `color_b` | Color variation |
+| `intensity` | Brightness |
+| `param_a` | Density |
+| `param_b` | Point size |
+| `param_c[7:4]` | Twinkle amount |
+| `param_c[3:0]` | Random seed |
+| `param_d` | Color variation amount |
+| `alpha_a` | Point alpha |
+
+### FLOW (Animated Noise)
+
+| Field | Purpose |
+|-------|---------|
+| `color_a` | Primary color |
+| `color_b` | Secondary color |
+| `intensity` | Brightness |
+| `param_a` | Scale |
+| `param_b` | Animation speed |
+| `param_c[7:4]` | Noise octaves (0-4) |
+| `param_c[3:0]` | Pattern (0=noise, 1=streaks, 2=caustic) |
+| `param_d` | Color blend amount |
+| `direction` | Flow direction |
+| `alpha_a` | Flow alpha |
+
+---
+
+## Quick Start
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+use glam::Vec3;
+
+fn init() {
+    let mut builder = epu_begin();
+
+    // Sky gradient with direct RGB colors
+    builder.ramp_enclosure(
+        Vec3::Y,                        // up vector
+        Rgb24::new(135, 206, 235),      // sky: light blue
+        Rgb24::new(255, 200, 150),      // wall: warm horizon
+        Rgb24::new(34, 139, 34),        // floor: forest green
+        10,                             // ceil_y threshold
+        5,                              // floor_y threshold
+        180,                            // softness
+        15,                             // emissive (full lighting)
+    );
+
+    // Sun glow
+    let sun_dir = Vec3::new(0.5, 0.7, 0.3).normalize();
+    builder.lobe(
+        sun_dir,
+        Rgb24::new(255, 255, 200),      // core: warm white
+        Rgb24::new(255, 180, 100),      // edge: orange
+        180, 32, 0, 0, 128, 15,
+    );
+
+    let config = builder.finish();
+    unsafe { epu_set(0, config.layers_hi.as_ptr()); }
+}
+
 fn render() {
     unsafe {
-        // Base layer
-        env_gradient(
-            0,
-            0x2E65FFFF, 0xA9D8FFFF, 0x4D8B4DFF, 0x102010FF,
-            0.35, 0.00, 0.95,
-            10, 72, 230, 32, 24, 40,
-            0,
-        );
-
-        // Overlay layer (example)
-        env_rings(
-            1,
-            0, // Portal
-            48, 28,
-            0x2EE7FFFF, 0x0B2B4CFF,
-            0xE8FFFFFF, 190,
-            25.0,
-            0.0, 0.0, 1.0,
-            0,
-            9000, 32, 24, 160, 41,
-        );
-        env_blend(3); // Screen
-
-        draw_env();
+        epu_draw(0);  // Draw environment background
+        // ... draw scene geometry
     }
 }
 ```
@@ -54,1049 +622,50 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-NCZX_EXPORT void render(void) {
-    env_gradient(
-        0,
-        0x2E65FFFF, 0xA9D8FFFF, 0x4D8B4DFF, 0x102010FF,
-        0.35f, 0.00f, 0.95f,
-        10u, 72u, 230u, 32u, 24u, 40u,
-        0u
-    );
+static uint64_t env_config[16];  // 8 hi words + 8 lo words
 
-    env_rings(
-        1,
-        0u, // Portal
-        48u, 28u,
-        0x2EE7FFFFu, 0x0B2B4CFFu,
-        0xE8FFFFFFu, 190u,
-        25.0f,
-        0.0f, 0.0f, 1.0f,
-        0u,
-        9000u, 32u, 24u, 160u, 41u
-    );
-    env_blend(3u); // Screen
+void init(void) {
+    // Build environment config (see EPU RFC for encoding)
+    // ...
+    epu_set(0, env_config);
+}
 
-    draw_env();
+void render(void) {
+    epu_draw(0);  // Draw environment background
+    // ... draw scene geometry
 }
 ```
 {{#endtab}}
 
 {{#tab name="Zig"}}
 ```zig
+var env_config: [16]u64 = undefined;  // 8 hi + 8 lo words
+
+export fn init() void {
+    // Build environment config (see EPU RFC for encoding)
+    // ...
+    epu_set(0, &env_config);
+}
+
 export fn render() void {
-    env_gradient(
-        0,
-        0x2E65FFFF, 0xA9D8FFFF, 0x4D8B4DFF, 0x102010FF,
-        0.35, 0.00, 0.95,
-        10, 72, 230, 32, 24, 40,
-        0,
-    );
-
-    env_rings(
-        1,
-        0,
-        48, 28,
-        0x2EE7FFFF, 0x0B2B4CFF,
-        0xE8FFFFFF, 190,
-        25.0,
-        0.0, 0.0, 1.0,
-        0,
-        9000, 32, 24, 160, 41,
-    );
-    env_blend(3);
-
-    draw_env();
+    epu_draw(0);  // Draw environment background
+    // ... draw scene geometry
 }
 ```
 {{#endtab}}
 
 {{#endtabs}}
 
-## Conventions
-
-- `layer` is always `0` (base) or `1` (overlay). Each `env_*()` call sets the mode for that layer.
-- Colors are usually `0xRRGGBBAA`. For parameters documented as `0xRRGGBB00`, the low byte is reserved/overwritten; use `00` for clarity.
-- Many integer parameters are packed to 8 bits (or fewer). Values outside the documented range may be truncated/clamped.
-- `phase` is treated as a wrapping 16-bit value (0–65535). Advance it with `wrapping_add()` for seamless looping.
-- For `axis_x/y/z`, pass a normalized direction. If near-zero, ZX falls back to a sensible default per mode.
-
-## GPU Snapshot (v4 / 64 bytes)
-
-The packed environment state sent to the GPU is **exactly 64 bytes** (16-byte aligned):
-
-- `header: u32` — base mode (bits 0–2), overlay mode (bits 3–5), blend mode (bits 6–7)
-- `data: [u32; 14]` — 7 words per layer:
-  - base layer: `data[0..7)` → `w0..w6`
-  - overlay layer: `data[7..14)` → `w0..w6`
-
-Per-mode word layouts are documented below; packers must **zero unused/reserved bytes** to avoid stale-byte leaks across mode switches.
-
 ---
 
-## env_blend
+## Legacy Compatibility
 
-Sets the blend mode used to composite overlay onto base.
-
-Blend modes:
-- `0` — Alpha (`lerp(base, overlay, overlay.a)`)
-- `1` — Add (`base + overlay`)
-- `2` — Multiply (`base * overlay`)
-- `3` — Screen (`1 - (1-base) * (1-overlay)`)
-
-{{#tabs global="lang"}}
-
-{{#tab name="Rust"}}
-```rust
-fn env_blend(mode: u32)
-```
-{{#endtab}}
-
-{{#tab name="C/C++"}}
-```c
-NCZX_IMPORT void env_blend(uint32_t mode);
-```
-{{#endtab}}
-
-{{#tab name="Zig"}}
-```zig
-pub extern fn env_blend(mode: u32) void;
-```
-{{#endtab}}
-
-{{#endtabs}}
-
----
-
-## Mode 0: Gradient (Featured Sky)
-
-4-color sky/ground gradient plus featured sky controls (sun disc + halo, horizon haze, stylized cloud bands). Shader is trig-free; CPU packs sun direction.
-
-### env_gradient
-
-{{#tabs global="lang"}}
-
-{{#tab name="Rust"}}
-```rust
-fn env_gradient(
-    layer: u32,
-    zenith: u32,
-    sky_horizon: u32,
-    ground_horizon: u32,
-    nadir: u32,
-    rotation: f32,
-    shift: f32,
-    sun_elevation: f32,
-    sun_disk: u32,
-    sun_halo: u32,
-    sun_intensity: u32,
-    horizon_haze: u32,
-    sun_warmth: u32,
-    cloudiness: u32,
-    cloud_phase: u32,
-)
-```
-{{#endtab}}
-
-{{#tab name="C/C++"}}
-```c
-NCZX_IMPORT void env_gradient(
-    uint32_t layer,
-    uint32_t zenith,
-    uint32_t sky_horizon,
-    uint32_t ground_horizon,
-    uint32_t nadir,
-    float rotation,
-    float shift,
-    float sun_elevation,
-    uint32_t sun_disk,
-    uint32_t sun_halo,
-    uint32_t sun_intensity,
-    uint32_t horizon_haze,
-    uint32_t sun_warmth,
-    uint32_t cloudiness,
-    uint32_t cloud_phase
-);
-```
-{{#endtab}}
-
-{{#tab name="Zig"}}
-```zig
-pub extern fn env_gradient(
-    layer: u32,
-    zenith: u32,
-    sky_horizon: u32,
-    ground_horizon: u32,
-    nadir: u32,
-    rotation: f32,
-    shift: f32,
-    sun_elevation: f32,
-    sun_disk: u32,
-    sun_halo: u32,
-    sun_intensity: u32,
-    horizon_haze: u32,
-    sun_warmth: u32,
-    cloudiness: u32,
-    cloud_phase: u32,
-) void;
-```
-{{#endtab}}
-
-{{#endtabs}}
-
-Packed layout (per layer):
-- `w0..w3`: `zenith`, `sky_horizon`, `ground_horizon`, `nadir` (RGBA8)
-- `w4`: `cloud_phase:u16 (low16) | shift:f16 (high16)`
-- `w5`: `sun_dir_oct16 (low16) | sun_disk:u8 | sun_halo:u8`
-- `w6`: `sun_intensity:u8 | horizon_haze:u8 | sun_warmth:u8 | cloudiness:u8`
-
----
-
-## Mode 1: Cells (Particles / Tiles / Lights)
-
-Unified cell generator with two families:
-- Family `0`: particles (stars/snow/rain/embers/bubbles/warp)
-- Family `1`: tiles/lights (Mondrian/Truchet, buildings, bands, panels)
-
-Enums:
-- `family`: `0`=Particles, `1`=Tiles/Lights
-- `variant` (Family `0`): `0`=Stars/Fireflies, `1`=Fall (Rain/Snow), `2`=Drift (Embers/Dust/Bubbles), `3`=Warp (Hyperspace/Burst)
-- `variant` (Family `1`): `0`=Abstract (Mondrian/Truchet), `1`=Buildings (Windows), `2`=Bands (Signage Floors), `3`=Panels (UI Grids)
-
-### env_cells
-
-{{#tabs global="lang"}}
-
-{{#tab name="Rust"}}
-```rust
-fn env_cells(
-    layer: u32,
-    family: u32,
-    variant: u32,
-    density: u32,
-    size_min: u32,
-    size_max: u32,
-    intensity: u32,
-    shape: u32,
-    motion: u32,
-    parallax: u32,
-    height_bias: u32,
-    clustering: u32,
-    color_a: u32,
-    color_b: u32,
-    axis_x: f32,
-    axis_y: f32,
-    axis_z: f32,
-    phase: u32,
-    seed: u32,
-)
-```
-{{#endtab}}
-
-{{#tab name="C/C++"}}
-```c
-NCZX_IMPORT void env_cells(
-    uint32_t layer,
-    uint32_t family,
-    uint32_t variant,
-    uint32_t density,
-    uint32_t size_min,
-    uint32_t size_max,
-    uint32_t intensity,
-    uint32_t shape,
-    uint32_t motion,
-    uint32_t parallax,
-    uint32_t height_bias,
-    uint32_t clustering,
-    uint32_t color_a,
-    uint32_t color_b,
-    float axis_x,
-    float axis_y,
-    float axis_z,
-    uint32_t phase,
-    uint32_t seed
-);
-```
-{{#endtab}}
-
-{{#tab name="Zig"}}
-```zig
-pub extern fn env_cells(
-    layer: u32,
-    family: u32,
-    variant: u32,
-    density: u32,
-    size_min: u32,
-    size_max: u32,
-    intensity: u32,
-    shape: u32,
-    motion: u32,
-    parallax: u32,
-    height_bias: u32,
-    clustering: u32,
-    color_a: u32,
-    color_b: u32,
-    axis_x: f32,
-    axis_y: f32,
-    axis_z: f32,
-    phase: u32,
-    seed: u32,
-) void;
-```
-{{#endtab}}
-
-{{#endtabs}}
-
-Notes:
-- `phase` is treated as `u16` (wraps). Avoid using `phase` directly as a hash input; animation is designed to be loopable and shimmer-free.
-- `axis_x/y/z` is a world-space axis/flow direction (normalized; if near-zero, falls back to Y-up, except Particles/Fall defaults to Y-down).
-- `parallax` also selects bounded internal depth slices for **Family 0: Particles**: `0–95` → 1 slice, `96–191` → 2 slices, `192–255` → 3 slices (farthest slices are smaller + less parallax-biased).
-- `seed=0` means “auto”: derive a deterministic seed from the packed payload.
-
-Packed layout (per layer):
-- `w0`: `family:u8 | variant:u8 | density:u8 | intensity:u8`
-- `w1`: `size_min:u8 | size_max:u8 | shape:u8 | motion:u8`
-- `w2..w3`: `color_a`, `color_b` (RGBA8)
-- `w4`: `parallax:u8 | reserved:u8 | axis_oct16:u16` (**reserved must be zero**)
-- `w5`: `phase:u16 (low16) | height_bias:u8 | clustering:u8`
-- `w6`: `seed:u32` (`0` = auto)
-
----
-
-## Mode 2: Lines (Grid / Lanes / Scanlines / Bands)
-
-Anti-aliased line patterns for floors, ceilings, or a spherical wrap.
-
-Enums:
-- `variant`: `0`=Floor, `1`=Ceiling, `2`=Sphere
-- `line_type`: `0`=Horizontal, `1`=Vertical, `2`=Grid
-- `profile`: `0`=Grid, `1`=Lanes, `2`=Scanlines, `3`=Caustic Bands
-
-### env_lines
-
-{{#tabs global="lang"}}
-
-{{#tab name="Rust"}}
-```rust
-fn env_lines(
-    layer: u32,
-    variant: u32,
-    line_type: u32,
-    thickness: u32,
-    spacing: f32,
-    fade_distance: f32,
-    parallax: u32,
-    color_primary: u32,
-    color_accent: u32,
-    accent_every: u32,
-    phase: u32,
-    profile: u32,
-    warp: u32,
-    wobble: u32,
-    glow: u32,
-    axis_x: f32,
-    axis_y: f32,
-    axis_z: f32,
-    seed: u32,
-)
-```
-{{#endtab}}
-
-{{#tab name="C/C++"}}
-```c
-NCZX_IMPORT void env_lines(
-    uint32_t layer,
-    uint32_t variant,
-    uint32_t line_type,
-    uint32_t thickness,
-    float spacing,
-    float fade_distance,
-    uint32_t parallax,
-    uint32_t color_primary,
-    uint32_t color_accent,
-    uint32_t accent_every,
-    uint32_t phase,
-    uint32_t profile,
-    uint32_t warp,
-    uint32_t wobble,
-    uint32_t glow,
-    float axis_x,
-    float axis_y,
-    float axis_z,
-    uint32_t seed
-);
-```
-{{#endtab}}
-
-{{#tab name="Zig"}}
-```zig
-pub extern fn env_lines(
-    layer: u32,
-    variant: u32,
-    line_type: u32,
-    thickness: u32,
-    spacing: f32,
-    fade_distance: f32,
-    parallax: u32,
-    color_primary: u32,
-    color_accent: u32,
-    accent_every: u32,
-    phase: u32,
-    profile: u32,
-    warp: u32,
-    wobble: u32,
-    glow: u32,
-    axis_x: f32,
-    axis_y: f32,
-    axis_z: f32,
-    seed: u32,
-) void;
-```
-{{#endtab}}
-
-{{#endtabs}}
-
-Notes:
-- `phase` is treated as `u16` (wraps). Avoid using `phase` directly as a hash input; scrolling and wobble are designed to be loopable and shimmer-free.
-- `parallax` also selects bounded internal depth slices: `0–95` → 1 slice, `96–191` → 2 slices, `192–255` → 3 slices (extra slices are offset and less dominant).
-- `seed=0` means “auto”: derive a deterministic seed from the packed payload.
-
-Packed layout (per layer):
-- `w0`: `variant:u2 | line_type:u2 | thickness:u8 | accent_every:u8 | parallax:u8 | reserved:u4`
-- `w1`: `spacing:f16 | fade_distance:f16`
-- `w2..w3`: `color_primary`, `color_accent` (RGBA8)
-- `w4`: `phase:u16 (low16) | axis_oct16:u16 (high16)`
-- `w5`: `warp:u8 | glow:u8 | wobble:u8 | profile:u8`
-- `w6`: `seed:u32` (`0` = auto)
-
----
-
-## Mode 3: Silhouette (Horizon Shapes)
-
-Layered horizon silhouettes (mountains/city/forest/waves) with bounded depth layers (≤3). Works as an anchor (includes sky) or as an overlay (set sky alpha to 0 and blend with Alpha).
-
-Enums:
-- `family`: `0`=Mountains, `1`=City skyline, `2`=Forest canopy, `3`=Waves/Coral
-
-### env_silhouette
-
-{{#tabs global="lang"}}
-
-{{#tab name="Rust"}}
-```rust
-fn env_silhouette(
-    layer: u32,
-    family: u32,
-    jaggedness: u32,
-    layer_count: u32,
-    color_near: u32,
-    color_far: u32,
-    sky_zenith: u32,
-    sky_horizon: u32,
-    parallax_rate: u32,
-    seed: u32,
-    phase: u32,
-    fog: u32,
-    wind: u32,
-)
-```
-{{#endtab}}
-
-{{#tab name="C/C++"}}
-```c
-NCZX_IMPORT void env_silhouette(
-    uint32_t layer,
-    uint32_t family,
-    uint32_t jaggedness,
-    uint32_t layer_count,
-    uint32_t color_near,
-    uint32_t color_far,
-    uint32_t sky_zenith,
-    uint32_t sky_horizon,
-    uint32_t parallax_rate,
-    uint32_t seed,
-    uint32_t phase,
-    uint32_t fog,
-    uint32_t wind
-);
-```
-{{#endtab}}
-
-{{#tab name="Zig"}}
-```zig
-pub extern fn env_silhouette(
-    layer: u32,
-    family: u32,
-    jaggedness: u32,
-    layer_count: u32,
-    color_near: u32,
-    color_far: u32,
-    sky_zenith: u32,
-    sky_horizon: u32,
-    parallax_rate: u32,
-    seed: u32,
-    phase: u32,
-    fog: u32,
-    wind: u32,
-) void;
-```
-{{#endtab}}
-
-{{#endtabs}}
-
-Notes:
-- `layer_count` is clamped to `1..=3`.
-- `phase` is treated as `u16` (wraps). Use `phase_rate` in your game to control motion speed.
-- `seed=0` means “auto”: derive from the packed payload.
-
-Packed layout (per layer):
-- `w0`: `family:u8 | jaggedness:u8 | layer_count:u8 | parallax_rate:u8`
-- `w1..w4`: `color_near`, `color_far`, `sky_zenith`, `sky_horizon` (RGBA8)
-- `w5`: `seed:u32` (`0` = auto)
-- `w6`: `phase:u16 (low16) | fog:u8 | wind:u8`
-
----
-
-## Mode 4: Nebula (Fog / Clouds / Aurora / Ink / Plasma / Kaleido)
-
-Continuous soft fields with bounded noise cost (≤2 octaves). Designed for haze/fog layers and “gallery” abstract looks.
-
-Enums:
-- `family`: `0`=Fog, `1`=Clouds, `2`=Aurora, `3`=Ink, `4`=Plasma/Blobs, `5`=Kaleido
-
-### env_nebula
-
-{{#tabs global="lang"}}
-
-{{#tab name="Rust"}}
-```rust
-fn env_nebula(
-    layer: u32,
-    family: u32,
-    coverage: u32,
-    softness: u32,
-    intensity: u32,
-    scale: u32,
-    detail: u32,
-    warp: u32,
-    flow: u32,
-    parallax: u32,
-    height_bias: u32,
-    contrast: u32,
-    color_a: u32,
-    color_b: u32,
-    axis_x: f32,
-    axis_y: f32,
-    axis_z: f32,
-    phase: u32,
-    seed: u32,
-)
-```
-{{#endtab}}
-
-{{#tab name="C/C++"}}
-```c
-NCZX_IMPORT void env_nebula(
-    uint32_t layer,
-    uint32_t family,
-    uint32_t coverage,
-    uint32_t softness,
-    uint32_t intensity,
-    uint32_t scale,
-    uint32_t detail,
-    uint32_t warp,
-    uint32_t flow,
-    uint32_t parallax,
-    uint32_t height_bias,
-    uint32_t contrast,
-    uint32_t color_a,
-    uint32_t color_b,
-    float axis_x,
-    float axis_y,
-    float axis_z,
-    uint32_t phase,
-    uint32_t seed
-);
-```
-{{#endtab}}
-
-{{#tab name="Zig"}}
-```zig
-pub extern fn env_nebula(
-    layer: u32,
-    family: u32,
-    coverage: u32,
-    softness: u32,
-    intensity: u32,
-    scale: u32,
-    detail: u32,
-    warp: u32,
-    flow: u32,
-    parallax: u32,
-    height_bias: u32,
-    contrast: u32,
-    color_a: u32,
-    color_b: u32,
-    axis_x: f32,
-    axis_y: f32,
-    axis_z: f32,
-    phase: u32,
-    seed: u32,
-) void;
-```
-{{#endtab}}
-
-{{#endtabs}}
-
-Notes:
-- Projection (no trig): axis-oriented oct-UV for all Nebula families (including `family=2` Aurora).
-- `phase` is treated as `u16` (wraps); motion is designed to be loopable (closed path) rather than “scroll forever”.
-- `parallax` also selects bounded internal depth slices: `0–95` → 1 slice, `96–191` → 2 slices, `192–255` → 3 slices (far slices are calmer + less emissive).
-- `seed=0` means “auto”: derive from the packed payload.
-
-Packed layout (per layer):
-- `w0`: `family:u8 | coverage:u8 | softness:u8 | intensity:u8`
-- `w1`: `scale:u8 | detail:u8 | warp:u8 | flow:u8`
-- `w2..w3`: `color_a`, `color_b` (RGBA8)
-- `w4`: `height_bias:u8 | contrast:u8 | parallax:u8 | reserved:u8` (**reserved must be zero**)
-- `w5`: `axis_oct16 (low16) | phase:u16 (high16)`
-- `w6`: `seed:u32` (`0` = auto)
-
----
-
-## Mode 5: Room (Interior Box)
-
-Interior volume mode: ray-box mapping from a packed viewer position, with directional lighting, seams/panels, and loopable animated accents.
-
-Enums:
-- `accent_mode`: `0`=Seams, `1`=Sweep, `2`=Seams+Sweep, `3`=Pulse
-
-### env_room
-
-{{#tabs global="lang"}}
-
-{{#tab name="Rust"}}
-```rust
-fn env_room(
-    layer: u32,
-    color_ceiling: u32,
-    color_floor: u32,
-    color_walls: u32,
-    panel_size: f32,
-    panel_gap: u32,
-    light_dir_x: f32,
-    light_dir_y: f32,
-    light_dir_z: f32,
-    light_intensity: u32,
-    light_tint: u32,
-    corner_darken: u32,
-    room_scale: f32,
-    viewer_x: i32,
-    viewer_y: i32,
-    viewer_z: i32,
-    accent: u32,
-    accent_mode: u32,
-    roughness: u32,
-    phase: u32,
-)
-```
-{{#endtab}}
-
-{{#tab name="C/C++"}}
-```c
-NCZX_IMPORT void env_room(
-    uint32_t layer,
-    uint32_t color_ceiling,
-    uint32_t color_floor,
-    uint32_t color_walls,
-    float panel_size,
-    uint32_t panel_gap,
-    float light_dir_x,
-    float light_dir_y,
-    float light_dir_z,
-    uint32_t light_intensity,
-    uint32_t light_tint,
-    uint32_t corner_darken,
-    float room_scale,
-    int32_t viewer_x,
-    int32_t viewer_y,
-    int32_t viewer_z,
-    uint32_t accent,
-    uint32_t accent_mode,
-    uint32_t roughness,
-    uint32_t phase
-);
-```
-{{#endtab}}
-
-{{#tab name="Zig"}}
-```zig
-pub extern fn env_room(
-    layer: u32,
-    color_ceiling: u32,
-    color_floor: u32,
-    color_walls: u32,
-    panel_size: f32,
-    panel_gap: u32,
-    light_dir_x: f32,
-    light_dir_y: f32,
-    light_dir_z: f32,
-    light_intensity: u32,
-    light_tint: u32,
-    corner_darken: u32,
-    room_scale: f32,
-    viewer_x: i32,
-    viewer_y: i32,
-    viewer_z: i32,
-    accent: u32,
-    accent_mode: u32,
-    roughness: u32,
-    phase: u32,
-) void;
-```
-{{#endtab}}
-
-{{#endtabs}}
-
-Notes:
-- `color_*` and `light_tint` are `0xRRGGBB00` (alpha byte is not used as color alpha).
-- `viewer_x/y/z` are snorm8-ish offsets: `-128..127` maps to roughly `-1..1` inside the room.
-- `phase` is treated as `u16` (wraps).
-
-Packed layout (per layer):
-- `w0`: `color_ceiling_RGB(24) | viewer_x_snorm8(8)`
-- `w1`: `color_floor_RGB(24) | viewer_y_snorm8(8)`
-- `w2`: `color_walls_RGB(24) | viewer_z_snorm8(8)`
-- `w3`: `panel_size:f16 (low16) | panel_gap:u8 | corner_darken:u8`
-- `w4`: `light_dir_oct16 (low16) | light_intensity:u8 | room_scale_u8`
-- `w5`: `accent_mode:u8 | accent:u8 | phase:u16 (high16)`
-- `w6`: `light_tint_RGB(24) | roughness:u8`
-
----
-
-## Mode 6: Veil (Bands / Pillars / Drapes / Shards)
-
-Direction-based SDF bands with bounded depth slices (1–3) and fwidth-based AA.
-
-Enums:
-- `family`: `0`=Pillars/Trunks, `1`=Drapes/Ribbons, `2`=Shards/Crystals, `3`=Soft Veils
-
-### env_veil
-
-{{#tabs global="lang"}}
-
-{{#tab name="Rust"}}
-```rust
-fn env_veil(
-    layer: u32,
-    family: u32,
-    density: u32,
-    width: u32,
-    taper: u32,
-    curvature: u32,
-    edge_soft: u32,
-    height_min: u32,
-    height_max: u32,
-    color_near: u32,
-    color_far: u32,
-    glow: u32,
-    parallax: u32,
-    axis_x: f32,
-    axis_y: f32,
-    axis_z: f32,
-    phase: u32,
-    seed: u32,
-)
-```
-{{#endtab}}
-
-{{#tab name="C/C++"}}
-```c
-NCZX_IMPORT void env_veil(
-    uint32_t layer,
-    uint32_t family,
-    uint32_t density,
-    uint32_t width,
-    uint32_t taper,
-    uint32_t curvature,
-    uint32_t edge_soft,
-    uint32_t height_min,
-    uint32_t height_max,
-    uint32_t color_near,
-    uint32_t color_far,
-    uint32_t glow,
-    uint32_t parallax,
-    float axis_x,
-    float axis_y,
-    float axis_z,
-    uint32_t phase,
-    uint32_t seed
-);
-```
-{{#endtab}}
-
-{{#tab name="Zig"}}
-```zig
-pub extern fn env_veil(
-    layer: u32,
-    family: u32,
-    density: u32,
-    width: u32,
-    taper: u32,
-    curvature: u32,
-    edge_soft: u32,
-    height_min: u32,
-    height_max: u32,
-    color_near: u32,
-    color_far: u32,
-    glow: u32,
-    parallax: u32,
-    axis_x: f32,
-    axis_y: f32,
-    axis_z: f32,
-    phase: u32,
-    seed: u32,
-) void;
-```
-{{#endtab}}
-
-{{#endtabs}}
-
-Notes:
-- `density=0` disables the layer (alpha=0).
-- `axis_x`/`axis_y`/`axis_z` is a normalized world-space direction (packed as `axis_oct16`) used to orient the veil.
-- `height_min`/`height_max` gate by dot-height along `axis`; if min > max, they are swapped.
-- `parallax` selects 1–3 bounded depth slices (see inspector presets).
-- `seed=0` means “auto”: derive from the packed payload.
-
-Packed layout (per layer):
-- `w0`: `family:u8 | density:u8 | width:u8 | taper:u8`
-- `w1`: `curvature:u8 | edge_soft:u8 | height_min:u8 | height_max:u8`
-- `w2..w3`: `color_near`, `color_far` (RGBA8)
-- `w4`: `glow:u8 | parallax:u8 | reserved:u16` (**reserved must be zero**)
-- `w5`: `axis_oct16 (low16) | phase:u16 (high16)`
-- `w6`: `seed:u32` (`0` = auto)
-
----
-
-## Mode 7: Rings (Portals / Tunnels / Vortex / Radar)
-
-Crisp focal rings with trig-free radial distance + pseudo-azimuth mapping, plus secondary motion knobs.
-
-Enums:
-- `family`: `0`=Portal, `1`=Tunnel, `2`=Hypnotic, `3`=Radar
-
-### env_rings
-
-{{#tabs global="lang"}}
-
-{{#tab name="Rust"}}
-```rust
-fn env_rings(
-    layer: u32,
-    family: u32,
-    ring_count: u32,
-    thickness: u32,
-    color_a: u32,
-    color_b: u32,
-    center_color: u32,
-    center_falloff: u32,
-    spiral_twist: f32,
-    axis_x: f32,
-    axis_y: f32,
-    axis_z: f32,
-    phase: u32,
-    wobble: u32,
-    noise: u32,
-    dash: u32,
-    glow: u32,
-    seed: u32,
-)
-```
-{{#endtab}}
-
-{{#tab name="C/C++"}}
-```c
-NCZX_IMPORT void env_rings(
-    uint32_t layer,
-    uint32_t family,
-    uint32_t ring_count,
-    uint32_t thickness,
-    uint32_t color_a,
-    uint32_t color_b,
-    uint32_t center_color,
-    uint32_t center_falloff,
-    float spiral_twist,
-    float axis_x,
-    float axis_y,
-    float axis_z,
-    uint32_t phase,
-    uint32_t wobble,
-    uint32_t noise,
-    uint32_t dash,
-    uint32_t glow,
-    uint32_t seed
-);
-```
-{{#endtab}}
-
-{{#tab name="Zig"}}
-```zig
-pub extern fn env_rings(
-    layer: u32,
-    family: u32,
-    ring_count: u32,
-    thickness: u32,
-    color_a: u32,
-    color_b: u32,
-    center_color: u32,
-    center_falloff: u32,
-    spiral_twist: f32,
-    axis_x: f32,
-    axis_y: f32,
-    axis_z: f32,
-    phase: u32,
-    wobble: u32,
-    noise: u32,
-    dash: u32,
-    glow: u32,
-    seed: u32,
-) void;
-```
-{{#endtab}}
-
-{{#endtabs}}
-
-Notes:
-- `phase` is treated as `u16` (wraps).
-- `wobble` is treated as `u16` (wraps).
-- `seed` is stored as `u8`; `seed=0` means “auto”.
-
-Packed layout (per layer):
-- `w0`: `ring_count:u8 | thickness:u8 | center_falloff:u8 | family:u8`
-- `w1..w3`: `color_a`, `color_b`, `center_color` (RGBA8)
-- `w4`: `spiral_twist:f16 (low16) | axis_oct16 (high16)`
-- `w5`: `phase:u16 (low16) | wobble:u16 (high16)`
-- `w6`: `noise:u8 | dash:u8 | glow:u8 | seed:u8`
-
----
-
-## Curated Presets (Small Starter Set)
-
-These are directly from the mode sheets (see the inspector examples for full preset sets and UI controls).
-
-```rust
-// Mode 0: Gradient — Clear Day
-env_gradient(0, 0x2E65FFFF, 0xA9D8FFFF, 0x4D8B4DFF, 0x102010FF, 0.35, 0.00, 0.95, 10, 72, 230, 32, 24, 40, 0);
-
-// Mode 1: Cells — Starfield Calm (Particles/Stars)
-env_cells(1, 0, 0, 120, 2, 10, 200, 220, 64, 140, 100, 40, 0xDDE6FFFF, 0xFFF2C0FF, 0.0, 1.0, 0.0, 0, 0);
-
-// Mode 2: Lines — Synth Grid
-env_lines(1, 0, 2, 18, 2.25, 80.0, 0, 0x00FFB0C0, 0xFF3AF0FF, 8, 0, 0, 24, 0, 96, 0.0, 0.0, 1.0, 0x4D2F5A10);
-
-// Mode 3: Silhouette — Mountain Range (Dusk Layers)
-env_silhouette(0, 0, 170, 3, 0x141422FF, 0x2B2E45FF, 0x0B1538FF, 0xD9774FFF, 170, 0, 0, 160, 0);
-
-// Mode 4: Nebula — Foggy Dawn
-env_nebula(1, 0, 170, 220, 10, 190, 40, 30, 70, 0, 128, 35, 0xA9B9C7FF, 0xF2B59CFF, 0.0, 1.0, 0.0, 0, 0);
-
-// Mode 5: Room — Sterile Lab
-env_room(0, 0xEAF4FF00, 0xC7CCD200, 0xE2E6EA00, 0.65, 42, 0.0, -1.0, 0.0, 210, 0xD8F4FF00, 35, 2.6, 0, 0, 0, 80, 0, 90, 0);
-
-// Mode 6: Veil — Neon Drapes
-env_veil(1, 1, 140, 28, 190, 170, 80, 88, 248, 0xFF2BD6FF, 0x00E5FFFF, 220, 200, 0.15, 0.97, 0.18, 0, 0);
-
-// Mode 7: Rings — Stargate Portal
-env_rings(1, 0, 48, 28, 0x2EE7FFFF, 0x0B2B4CFF, 0xE8FFFFFF, 190, 25.0, 0.0, 0.0, 1.0, 0, 9000, 32, 24, 160, 41);
-```
-
----
-
-## Rust Presets
-
-The EPU provides factory functions for common environment types. These return ready-to-use `EpuConfig` values that can be used directly with the EPU runtime.
-
-### Available Presets
-
-| Preset | Description | Key Features |
-|--------|-------------|--------------|
-| `void_with_stars()` | Black void with twinkling stars | RAMP (black) + SCATTER (emissive stars) |
-| `sunny_meadow()` | Blue sky, green ground, sun disk | RAMP + LOBE + DECAL (sun) + FLOW (clouds) |
-| `cyberpunk_alley()` | Neon-lit urban with fog and rain | Dual LOBEs + FOG + GRID + SCATTER (windows) |
-| `underwater_cave()` | Deep blue with caustics and bubbles | RAMP + LOBE + FOG + FLOW (caustics) + SCATTER |
-| `space_station()` | Industrial panels, overhead lighting | RAMP + LOBE + BAND + GRID + DECAL + SCATTER |
-| `sunset_beach()` | Warm horizon, sun near horizon | RAMP + LOBE + DECAL (sun) + FLOW (clouds) |
-| `haunted_forest()` | Dark forest with fog and fireflies | RAMP + LOBE + FOG + SCATTER (wisps) |
-| `lava_cave()` | Hot glowing environment with lava | RAMP + LOBE + FOG + FLOW (lava) + SCATTER (embers) |
-
-### Example Usage (Rust)
-
-```rust
-use nethercore_zx::graphics::epu::presets;
-
-// Get a ready-to-use environment
-let config = presets::sunny_meadow();
-
-// Or import directly
-use nethercore_zx::graphics::epu::void_with_stars;
-let stars = void_with_stars();
-```
-
-### Preset Layer Structure
-
-All presets follow the recommended slot usage:
-
-- **Slots 0-3 (Bounds):** RAMP, LOBE, BAND, FOG
-- **Slots 4-7 (Features):** DECAL, GRID, SCATTER, FLOW
-
-#### Void with Stars
-```
-B0: RAMP (black enclosure)
-F0: SCATTER (emissive twinkling stars)
-```
-
-#### Sunny Meadow
-```
-B0: RAMP (sky/horizon/ground gradient)
-B1: LOBE (sun glow)
-F0: DECAL (sun disk, emissive)
-F1: FLOW (slow cloud drift, visual-only)
-```
-
-#### Cyberpunk Alley
-```
-B0: RAMP (dark urban enclosure)
-B1: LOBE (left neon spill, magenta)
-B2: LOBE (right neon spill, cyan)
-B3: FOG (atmospheric haze)
-F0: GRID (building panels)
-F1: DECAL (neon sign)
-F2: FLOW (rain streaks, visual-only)
-F3: SCATTER (lit windows)
-```
-
-#### Underwater Cave
-```
-B0: RAMP (deep blue/teal enclosure)
-B1: LOBE (light from above)
-B2: FOG (water absorption)
-F0: FLOW (caustic patterns, emissive)
-F1: SCATTER (rising bubbles)
-```
-
-#### Space Station
-```
-B0: RAMP (metallic gray enclosure)
-B1: LOBE (overhead fluorescent)
-B2: BAND (horizon accent strip)
-F0: GRID (wall panels)
-F1: DECAL (warning light, pulsing)
-F2: SCATTER (indicator lights)
-```
+The `draw_env()` function is retained for backwards compatibility and draws `env_id = 0`.
 
 ---
 
 ## See Also
 
-- [EPU Environments Guide](../guides/epu-environments.md) - Quick-start guide with mode overview and recipes
-- [EPU Architecture Overview](../architecture/epu-overview.md) - Underlying architecture, compute pipeline, and data model
+- [EPU Environments Guide](../guides/epu-environments.md) - Recipes and examples
+- [EPU Architecture Overview](../architecture/epu-overview.md) - Compute pipeline details
+- [EPU RFC](../../../../EPU%20RFC.md) - Full specification with WGSL code

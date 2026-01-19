@@ -1,11 +1,43 @@
 //! Debug Environment helpers (Multi-Environment v4).
 //!
-//! This module is a small convenience layer for examples. It is not part of the
-//! stable ZX FFI surface; the canonical env_* API lives in `nethercore/include/zx.rs`.
+//! This module provides environment configuration for examples using the new
+//! EPU (Environment Processing Unit) API. The legacy env_* functions have been
+//! removed; use epu_set() and epu_draw() instead.
+//!
+//! # EPU v2 Format (128-bit instructions)
+//!
+//! Each environment is 128 bytes (8 x 128-bit instructions). Each 128-bit
+//! instruction is stored as two u64 values `[hi, lo]`:
+//!
+//! ```text
+//! u64 hi [bits 127..64]:
+//!   bits 63..59: opcode     (5)   - NOP=0, RAMP=1, LOBE=2, BAND=3, FOG=4, DECAL=5, GRID=6, SCATTER=7, FLOW=8
+//!   bits 58..56: region     (3)   - Bitfield: SKY=0b100, WALLS=0b010, FLOOR=0b001, ALL=0b111
+//!   bits 55..53: blend      (3)   - ADD=0, MULTIPLY=1, MAX=2, LERP=3, SCREEN=4, HSV_MOD=5, MIN=6, OVERLAY=7
+//!   bits 52..49: emissive   (4)   - L_light0 contribution (0=decorative, 15=full)
+//!   bit  48:     reserved   (1)
+//!   bits 47..24: color_a    (24)  - RGB24 primary color
+//!   bits 23..0:  color_b    (24)  - RGB24 secondary color
+//!
+//! u64 lo [bits 63..0]:
+//!   bits 63..56: intensity  (8)
+//!   bits 55..48: param_a    (8)
+//!   bits 47..40: param_b    (8)
+//!   bits 39..32: param_c    (8)
+//!   bits 31..24: param_d    (8)
+//!   bits 23..8:  direction  (16)  - Octahedral encoded
+//!   bits 7..4:   alpha_a    (4)   - color_a alpha (0-15)
+//!   bits 3..0:   alpha_b    (4)   - color_b alpha (0-15)
+//! ```
+//!
+//! Slots 0-3: Bounds layers (RAMP, LOBE, BAND, FOG)
+//! Slots 4-7: Feature layers (DECAL, GRID, SCATTER, FLOW)
 
 use crate::ffi::*;
 
 /// Environment mode constants (0–7).
+/// Note: These are kept for compatibility but the underlying implementation
+/// now uses EPU presets instead of the legacy env_* functions.
 pub mod env_mode {
     pub const GRADIENT: u32 = 0;
     pub const CELLS: u32 = 1;
@@ -23,6 +55,7 @@ pub mod env_mode {
 }
 
 /// Blend mode constants for environment layering.
+/// Note: EPU uses different blend semantics; these are kept for API compatibility.
 pub mod blend_mode {
     pub const ALPHA: u32 = 0;
     pub const ADD: u32 = 1;
@@ -281,6 +314,184 @@ impl Default for DebugEnvironment {
     }
 }
 
+// =============================================================================
+// EPU v2 Helper Functions (const-friendly)
+// =============================================================================
+
+// EPU Opcodes (v2 spec: 5-bit)
+// Not all opcodes are currently used in presets, but they are available.
+#[allow(dead_code)]
+const OP_NOP: u64 = 0x00;
+const OP_RAMP: u64 = 0x01;
+const OP_LOBE: u64 = 0x02;
+const OP_BAND: u64 = 0x03;
+#[allow(dead_code)]
+const OP_FOG: u64 = 0x04;
+const OP_DECAL: u64 = 0x05;
+const OP_GRID: u64 = 0x06;
+const OP_SCATTER: u64 = 0x07;
+#[allow(dead_code)]
+const OP_FLOW: u64 = 0x08;
+
+// Region masks (3-bit bitfield)
+const REGION_ALL: u64 = 0b111;
+const REGION_SKY: u64 = 0b100;
+const REGION_WALLS: u64 = 0b010;
+const REGION_FLOOR: u64 = 0b001;
+
+// Blend modes (3-bit)
+// Not all blend modes are currently used in presets, but they are available.
+const BLEND_ADD: u64 = 0;
+#[allow(dead_code)]
+const BLEND_MULTIPLY: u64 = 1;
+#[allow(dead_code)]
+const BLEND_MAX: u64 = 2;
+#[allow(dead_code)]
+const BLEND_LERP: u64 = 3;
+#[allow(dead_code)]
+const BLEND_SCREEN: u64 = 4;
+
+// Common directions (octahedral encoded: u8, v8)
+const DIR_UP: u64 = 0x80FF; // +Y direction
+
+/// Build v2 hi word: opcode(5), region(3), blend(3), emissive(4), reserved(1), color_a(24), color_b(24)
+const fn epu_hi(
+    opcode: u64,
+    region: u64,
+    blend: u64,
+    emissive: u64,
+    color_a: u64,
+    color_b: u64,
+) -> u64 {
+    ((opcode & 0x1F) << 59)
+        | ((region & 0x7) << 56)
+        | ((blend & 0x7) << 53)
+        | ((emissive & 0xF) << 49)
+        | ((color_a & 0xFFFFFF) << 24)
+        | (color_b & 0xFFFFFF)
+}
+
+/// Build v2 lo word: intensity(8), param_a(8), param_b(8), param_c(8), param_d(8), direction(16), alpha_a(4), alpha_b(4)
+const fn epu_lo(
+    intensity: u64,
+    param_a: u64,
+    param_b: u64,
+    param_c: u64,
+    param_d: u64,
+    direction: u64,
+    alpha_a: u64,
+    alpha_b: u64,
+) -> u64 {
+    ((intensity & 0xFF) << 56)
+        | ((param_a & 0xFF) << 48)
+        | ((param_b & 0xFF) << 40)
+        | ((param_c & 0xFF) << 32)
+        | ((param_d & 0xFF) << 24)
+        | ((direction & 0xFFFF) << 8)
+        | ((alpha_a & 0xF) << 4)
+        | (alpha_b & 0xF)
+}
+
+/// NOP layer (disabled)
+const NOP_LAYER: [u64; 2] = [0, 0];
+
+// =============================================================================
+// EPU v2 Preset Configurations (128-bit per layer)
+// =============================================================================
+
+/// Simple blue sky gradient (RAMP only)
+/// sky = light blue (0x6496DC), floor = dark green (0x285028)
+static EPU_GRADIENT: [[u64; 2]; 8] = [
+    // RAMP: sky/wall/floor gradient with blue sky and green ground
+    [
+        epu_hi(OP_RAMP, REGION_ALL, BLEND_ADD, 8, 0x6496DC, 0x285028),
+        epu_lo(180, 200, 180, 0xA5, 0, DIR_UP, 15, 15),
+    ],
+    NOP_LAYER,
+    NOP_LAYER,
+    NOP_LAYER,
+    NOP_LAYER,
+    NOP_LAYER,
+    NOP_LAYER,
+    NOP_LAYER,
+];
+
+/// Starfield with scatter points (black void + white stars)
+static EPU_CELLS: [[u64; 2]; 8] = [
+    // RAMP: black void
+    [
+        epu_hi(OP_RAMP, REGION_ALL, BLEND_ADD, 0, 0x000008, 0x000010),
+        epu_lo(20, 0, 0, 0xF0, 0, DIR_UP, 15, 15),
+    ],
+    NOP_LAYER,
+    NOP_LAYER,
+    NOP_LAYER,
+    // SCATTER: white stars (emissive)
+    [
+        epu_hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 15, 0xFFFFFF, 0xAABBFF),
+        epu_lo(255, 180, 15, 0x83, 0, 0, 15, 10),
+    ],
+    // SCATTER: blue distant stars
+    [
+        epu_hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 10, 0x8888FF, 0x4444AA),
+        epu_lo(160, 250, 6, 0x41, 0, 0, 12, 8),
+    ],
+    NOP_LAYER,
+    NOP_LAYER,
+];
+
+/// Grid lines pattern (dark background + neon grid)
+static EPU_LINES: [[u64; 2]; 8] = [
+    // RAMP: dark purple/blue background
+    [
+        epu_hi(OP_RAMP, REGION_ALL, BLEND_ADD, 0, 0x101030, 0x080818),
+        epu_lo(80, 20, 20, 0xA5, 0, DIR_UP, 15, 15),
+    ],
+    NOP_LAYER,
+    NOP_LAYER,
+    NOP_LAYER,
+    // GRID: cyan neon lines on floor
+    [
+        epu_hi(OP_GRID, REGION_FLOOR, BLEND_ADD, 12, 0x00FFAA, 0x008866),
+        epu_lo(180, 48, 8, 0x00, 0, 0, 15, 10),
+    ],
+    // GRID: magenta accent on walls
+    [
+        epu_hi(OP_GRID, REGION_WALLS, BLEND_ADD, 10, 0xFF00FF, 0x880088),
+        epu_lo(120, 32, 4, 0x00, 0, 0, 12, 8),
+    ],
+    NOP_LAYER,
+    NOP_LAYER,
+];
+
+/// Rings/portal pattern (black void + blue glow + cyan band)
+static EPU_RINGS: [[u64; 2]; 8] = [
+    // RAMP: black void
+    [
+        epu_hi(OP_RAMP, REGION_ALL, BLEND_ADD, 0, 0x000008, 0x000010),
+        epu_lo(20, 0, 0, 0xF0, 0, DIR_UP, 15, 15),
+    ],
+    // LOBE: blue glow (emissive)
+    [
+        epu_hi(OP_LOBE, REGION_ALL, BLEND_ADD, 14, 0x2288FF, 0x0044AA),
+        epu_lo(200, 28, 0, 0, 0, 0x80C0, 15, 12),
+    ],
+    // BAND: cyan accent ring
+    [
+        epu_hi(OP_BAND, REGION_ALL, BLEND_ADD, 10, 0x00FFFF, 0x008888),
+        epu_lo(160, 0x20, 0x10, 0, 0, DIR_UP, 15, 10),
+    ],
+    NOP_LAYER,
+    // DECAL: bright center disk
+    [
+        epu_hi(OP_DECAL, REGION_SKY, BLEND_ADD, 15, 0xFFFFFF, 0x88DDFF),
+        epu_lo(255, 0x02, 16, 0, 0, 0x8080, 15, 15),
+    ],
+    NOP_LAYER,
+    NOP_LAYER,
+    NOP_LAYER,
+];
+
 impl DebugEnvironment {
     /// Advance loop phases (call in `update()`).
     pub fn tick(&mut self, delta_speed: f32) {
@@ -290,203 +501,31 @@ impl DebugEnvironment {
         self.rings.phase = self.rings.phase.wrapping_add(delta);
     }
 
-    /// Apply environment settings (call in `render()` before `draw_env()`).
+    /// Apply environment settings using EPU (call in `render()` before `epu_draw()`).
+    ///
+    /// This implementation uses pre-built EPU v2 configurations (128-bit per layer)
+    /// that approximate the legacy env_* modes. For full control, use epu_set() directly.
     pub fn apply(&self) {
         unsafe {
-            env_blend(self.blend_mode);
-
-            // Base layer
-            match self.base_mode {
-                env_mode::GRADIENT => {
-                    env_gradient(
-                        0,
-                        self.gradient.zenith,
-                        self.gradient.sky_horizon,
-                        self.gradient.ground_horizon,
-                        self.gradient.nadir,
-                        self.gradient.rotation,
-                        self.gradient.shift,
-                        self.gradient.sun_elevation,
-                        self.gradient.sun_disk,
-                        self.gradient.sun_halo,
-                        self.gradient.sun_intensity,
-                        self.gradient.horizon_haze,
-                        self.gradient.sun_warmth,
-                        self.gradient.cloudiness,
-                        self.gradient.cloud_phase,
-                    );
-                }
-                env_mode::CELLS => {
-                    env_cells(
-                        0,
-                        self.cells.family,
-                        self.cells.variant,
-                        self.cells.density,
-                        self.cells.size_min,
-                        self.cells.size_max,
-                        self.cells.intensity,
-                        self.cells.shape,
-                        self.cells.motion,
-                        self.cells.parallax,
-                        self.cells.height_bias,
-                        self.cells.clustering,
-                        self.cells.color_a,
-                        self.cells.color_b,
-                        self.cells.axis_x,
-                        self.cells.axis_y,
-                        self.cells.axis_z,
-                        self.cells.phase as u32,
-                        self.cells.seed,
-                    );
-                }
-                env_mode::LINES => {
-                    env_lines(
-                        0,
-                        self.lines.variant,
-                        self.lines.line_type,
-                        self.lines.thickness,
-                        self.lines.spacing,
-                        self.lines.fade_distance,
-                        self.lines.parallax,
-                        self.lines.color_primary,
-                        self.lines.color_accent,
-                        self.lines.accent_every,
-                        self.lines.phase as u32,
-                        self.lines.profile,
-                        self.lines.warp,
-                        self.lines.wobble,
-                        self.lines.glow,
-                        self.lines.axis_x,
-                        self.lines.axis_y,
-                        self.lines.axis_z,
-                        self.lines.seed,
-                    );
-                }
-                env_mode::RINGS => {
-                    env_rings(
-                        0,
-                        self.rings.family,
-                        self.rings.ring_count,
-                        self.rings.thickness,
-                        self.rings.color_a,
-                        self.rings.color_b,
-                        self.rings.center_color,
-                        self.rings.center_falloff,
-                        self.rings.spiral_twist,
-                        self.rings.axis_x,
-                        self.rings.axis_y,
-                        self.rings.axis_z,
-                        self.rings.phase as u32,
-                        self.rings.wobble as u32,
-                        self.rings.noise,
-                        self.rings.dash,
-                        self.rings.glow,
-                        self.rings.seed,
-                    );
-                }
-                _ => {
-                    // Not covered by this small helper.
-                    env_gradient(
-                        0,
-                        self.gradient.zenith,
-                        self.gradient.sky_horizon,
-                        self.gradient.ground_horizon,
-                        self.gradient.nadir,
-                        self.gradient.rotation,
-                        self.gradient.shift,
-                        self.gradient.sun_elevation,
-                        self.gradient.sun_disk,
-                        self.gradient.sun_halo,
-                        self.gradient.sun_intensity,
-                        self.gradient.horizon_haze,
-                        self.gradient.sun_warmth,
-                        self.gradient.cloudiness,
-                        self.gradient.cloud_phase,
-                    );
-                }
-            }
-
-            // Overlay layer (only the implemented subset; others fall back to "disabled")
-            match self.overlay_mode {
-                env_mode::CELLS => {
-                    env_cells(
-                        1,
-                        self.cells.family,
-                        self.cells.variant,
-                        self.cells.density,
-                        self.cells.size_min,
-                        self.cells.size_max,
-                        self.cells.intensity,
-                        self.cells.shape,
-                        self.cells.motion,
-                        self.cells.parallax,
-                        self.cells.height_bias,
-                        self.cells.clustering,
-                        self.cells.color_a,
-                        self.cells.color_b,
-                        self.cells.axis_x,
-                        self.cells.axis_y,
-                        self.cells.axis_z,
-                        self.cells.phase as u32,
-                        self.cells.seed,
-                    );
-                }
-                env_mode::LINES => {
-                    env_lines(
-                        1,
-                        self.lines.variant,
-                        self.lines.line_type,
-                        self.lines.thickness,
-                        self.lines.spacing,
-                        self.lines.fade_distance,
-                        self.lines.parallax,
-                        self.lines.color_primary,
-                        self.lines.color_accent,
-                        self.lines.accent_every,
-                        self.lines.phase as u32,
-                        self.lines.profile,
-                        self.lines.warp,
-                        self.lines.wobble,
-                        self.lines.glow,
-                        self.lines.axis_x,
-                        self.lines.axis_y,
-                        self.lines.axis_z,
-                        self.lines.seed,
-                    );
-                }
-                env_mode::RINGS => {
-                    env_rings(
-                        1,
-                        self.rings.family,
-                        self.rings.ring_count,
-                        self.rings.thickness,
-                        self.rings.color_a,
-                        self.rings.color_b,
-                        self.rings.center_color,
-                        self.rings.center_falloff,
-                        self.rings.spiral_twist,
-                        self.rings.axis_x,
-                        self.rings.axis_y,
-                        self.rings.axis_z,
-                        self.rings.phase as u32,
-                        self.rings.wobble as u32,
-                        self.rings.noise,
-                        self.rings.dash,
-                        self.rings.glow,
-                        self.rings.seed,
-                    );
-                }
-                _ => {
-                    // Leave overlay as-is (caller can set it explicitly).
-                }
-            }
+            // Select EPU preset based on base_mode
+            // v2 format: [[u64; 2]; 8] = 128 bytes (8 x 128-bit layers)
+            let preset: &[[u64; 2]; 8] = match self.base_mode {
+                env_mode::GRADIENT => &EPU_GRADIENT,
+                env_mode::CELLS => &EPU_CELLS,
+                env_mode::LINES => &EPU_LINES,
+                env_mode::RINGS => &EPU_RINGS,
+                _ => &EPU_GRADIENT, // Default to gradient for unsupported modes
+            };
+            // Cast to *const u64 for FFI (the memory layout is contiguous)
+            epu_set(0, preset.as_ptr() as *const u64);
         }
     }
 
+    /// Apply and draw the environment
     pub fn apply_and_draw(&self) {
         self.apply();
         unsafe {
-            draw_env();
+            epu_draw(0);
         }
     }
 }

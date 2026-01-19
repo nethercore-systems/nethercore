@@ -1,7 +1,7 @@
 //! EPU (Environment Processing Unit) Rust API
 //!
 //! This module provides the Rust-side EPU types and builder API that encode
-//! semantic environment configuration into the 64-byte packed format consumed
+//! semantic environment configuration into the 128-byte packed format consumed
 //! by the GPU compute shaders.
 //!
 //! # Architecture
@@ -10,17 +10,22 @@
 //! - `L_sharp`: Bounds + all Features (for background + glossy reflections)
 //! - `L_light0`: Bounds + emissive Features (for lighting/blur pyramid)
 //!
+//! # v2 Format (128-bit instructions)
+//!
+//! Each environment is 128 bytes (8 x 128-bit instructions). The 128-bit format
+//! provides direct RGB colors, explicit emissive control, per-color alpha, and
+//! region masks for more flexible compositing.
+//!
 //! # Example
 //!
 //! ```ignore
 //! let mut e = epu_begin();
-//! e.ramp_enclosure(Vec3::Y, 24, 40, 52, 10, 5, 180);
-//! e.lobe(sun_dir, 20, 180, 32, 0, 0);
+//! e.ramp_enclosure(RampParams { ... });
+//! e.lobe(LobeParams { ... });
 //! e.decal(DecalParams { ... });
 //! let config = epu_finish(e);
 //! ```
 
-pub mod presets;
 pub mod runtime;
 
 #[cfg(test)]
@@ -28,13 +33,8 @@ mod tests;
 
 // Re-export runtime types
 pub use runtime::{
-    ActiveEnvList, EPU_MAP_SIZE, EpuRuntime, MAX_ACTIVE_ENVS, MAX_ENV_STATES, collect_active_envs,
-};
-
-// Re-export preset environment configurations
-pub use presets::{
-    cyberpunk_alley, haunted_forest, lava_cave, space_station, sunny_meadow, sunset_beach,
-    underwater_cave, void_with_stars,
+    ActiveEnvList, AmbientCube, EPU_MAP_SIZE, EpuRuntime, MAX_ACTIVE_ENVS, MAX_ENV_STATES,
+    collect_active_envs,
 };
 
 use glam::Vec3;
@@ -43,7 +43,7 @@ use glam::Vec3;
 // Enums
 // =============================================================================
 
-/// EPU instruction opcodes
+/// EPU instruction opcodes (5-bit, supports up to 32 opcodes)
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum EpuOpcode {
@@ -68,34 +68,65 @@ pub enum EpuOpcode {
     Flow = 0x8,
 }
 
-/// EPU region mask for features
+// =============================================================================
+// Region Mask Constants (v2 3-bit bitfield)
+// =============================================================================
+
+/// Sky/ceiling region bit
+pub const REGION_SKY: u8 = 0b100;
+/// Wall/horizon belt region bit
+pub const REGION_WALLS: u8 = 0b010;
+/// Floor/ground region bit
+pub const REGION_FLOOR: u8 = 0b001;
+/// All regions combined (sky + walls + floor)
+pub const REGION_ALL: u8 = 0b111;
+/// No regions (layer disabled)
+pub const REGION_NONE: u8 = 0b000;
+
+/// EPU region mask for features (v1 compatibility enum, maps to v2 mask)
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum EpuRegion {
     /// Apply everywhere
     #[default]
-    All = 0b00,
+    All = 0b111,
     /// Sky/ceiling only
-    Sky = 0b01,
+    Sky = 0b100,
     /// Wall/horizon belt only
-    Walls = 0b10,
+    Walls = 0b010,
     /// Floor/ground only
-    Floor = 0b11,
+    Floor = 0b001,
 }
 
-/// EPU blend mode
+impl EpuRegion {
+    /// Convert to v2 region mask
+    #[inline]
+    pub fn to_mask(self) -> u8 {
+        self as u8
+    }
+}
+
+/// EPU blend mode (v2: 3-bit, 8 modes)
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum EpuBlend {
-    /// dst += src (emissive features use this to contribute to lighting)
+    /// dst += src * a (additive blending)
     #[default]
-    Add = 0b00,
-    /// dst *= src (absorption/tint)
-    Multiply = 0b01,
-    /// dst = max(dst, src)
-    Max = 0b10,
-    /// dst = mix(dst, src, a)
-    Lerp = 0b11,
+    Add = 0,
+    /// dst *= mix(1, src, a) (multiplicative/absorption)
+    Multiply = 1,
+    /// dst = max(dst, src * a)
+    Max = 2,
+    /// dst = mix(dst, src, a) (alpha blend)
+    Lerp = 3,
+    /// 1 - (1-dst)*(1-src*a) (screen blend)
+    Screen = 4,
+    /// HSV shift dst by src
+    HsvMod = 5,
+    /// dst = min(dst, src * a)
+    Min = 6,
+    /// Photoshop-style overlay
+    Overlay = 7,
 }
 
 /// Decal shape types
@@ -145,17 +176,34 @@ pub enum FlowPattern {
 
 /// A single EPU instruction layer (unpacked form for building).
 ///
-/// Use `encode()` to convert to the 64-bit packed format.
+/// Use `encode()` to convert to the 128-bit packed format (two u64 values).
+///
+/// # v2 Format
+///
+/// The v2 format uses 128 bits per layer, providing:
+/// - Direct RGB colors (no palette)
+/// - Explicit emissive control (4-bit)
+/// - Per-color alpha (4-bit each)
+/// - Region masks (3-bit, combinable)
+/// - 8 blend modes
 #[derive(Clone, Copy, Debug)]
 pub struct EpuLayer {
-    /// Which algorithm to run
+    /// Which algorithm to run (5-bit opcode)
     pub opcode: EpuOpcode,
-    /// Feature mask: ALL / SKY / WALLS / FLOOR
-    pub region: EpuRegion,
-    /// How to combine layer output
+    /// Region mask (3-bit bitfield: SKY=4, WALLS=2, FLOOR=1)
+    pub region_mask: u8,
+    /// How to combine layer output (3-bit, 8 modes)
     pub blend: EpuBlend,
-    /// Palette index (0..255)
-    pub color_index: u8,
+    /// Emissive contribution to L_light0 (0-15, 0=decorative only)
+    pub emissive: u8,
+    /// Primary RGB color
+    pub color_a: [u8; 3],
+    /// Secondary RGB color
+    pub color_b: [u8; 3],
+    /// Primary alpha (0-15)
+    pub alpha_a: u8,
+    /// Secondary alpha (0-15)
+    pub alpha_b: u8,
     /// Opcode-specific (usually brightness)
     pub intensity: u8,
     /// Opcode-specific parameter A
@@ -164,6 +212,8 @@ pub struct EpuLayer {
     pub param_b: u8,
     /// Opcode-specific parameter C
     pub param_c: u8,
+    /// Opcode-specific parameter D
+    pub param_d: u8,
     /// Octahedral-encoded direction (u8,u8)
     pub direction: u16,
 }
@@ -180,53 +230,92 @@ impl EpuLayer {
     pub fn nop() -> Self {
         Self {
             opcode: EpuOpcode::Nop,
-            region: EpuRegion::All,
+            region_mask: REGION_ALL,
             blend: EpuBlend::Add,
-            color_index: 0,
+            emissive: 0,
+            color_a: [0, 0, 0],
+            color_b: [0, 0, 0],
+            alpha_a: 15,
+            alpha_b: 15,
             intensity: 0,
             param_a: 0,
             param_b: 0,
             param_c: 0,
+            param_d: 0,
             direction: 0,
         }
     }
 
-    /// Encode this layer to the 64-bit packed format.
+    /// Encode this layer to the 128-bit packed format.
     ///
-    /// Bit layout:
+    /// Returns `[hi, lo]` where:
+    ///
     /// ```text
-    ///   63..60  opcode        (4)
-    ///   59..58  region_mask   (2)
-    ///   57..56  blend_mode    (2)
-    ///   55..48  color_index   (8)
-    ///   47..40  intensity     (8)
-    ///   39..32  param_a       (8)
-    ///   31..24  param_b       (8)
-    ///   23..16  param_c       (8)
-    ///   15..0   direction     (16)
+    /// u64 hi [bits 127..64]:
+    ///   bits 63..59: opcode     (5)
+    ///   bits 58..56: region     (3)
+    ///   bits 55..53: blend      (3)
+    ///   bits 52..49: emissive   (4)
+    ///   bit  48:     reserved   (1)
+    ///   bits 47..24: color_a    (24) RGB
+    ///   bits 23..0:  color_b    (24) RGB
+    ///
+    /// u64 lo [bits 63..0]:
+    ///   bits 63..56: intensity  (8)
+    ///   bits 55..48: param_a    (8)
+    ///   bits 47..40: param_b    (8)
+    ///   bits 39..32: param_c    (8)
+    ///   bits 31..24: param_d    (8)
+    ///   bits 23..8:  direction  (16)
+    ///   bits 7..4:   alpha_a    (4)
+    ///   bits 3..0:   alpha_b    (4)
     /// ```
     #[inline]
-    pub fn encode(self) -> u64 {
-        let opcode = (self.opcode as u64) & 0xF;
-        let region = (self.region as u64) & 0x3;
-        let blend = (self.blend as u64) & 0x3;
+    pub fn encode(self) -> [u64; 2] {
+        // Pack color_a as RGB24
+        let color_a_packed = ((self.color_a[0] as u64) << 16)
+            | ((self.color_a[1] as u64) << 8)
+            | (self.color_a[2] as u64);
 
-        (opcode << 60)
-            | (region << 58)
-            | (blend << 56)
-            | ((self.color_index as u64) << 48)
-            | ((self.intensity as u64) << 40)
-            | ((self.param_a as u64) << 32)
-            | ((self.param_b as u64) << 24)
-            | ((self.param_c as u64) << 16)
-            | (self.direction as u64)
+        // Pack color_b as RGB24
+        let color_b_packed = ((self.color_b[0] as u64) << 16)
+            | ((self.color_b[1] as u64) << 8)
+            | (self.color_b[2] as u64);
+
+        // Build hi word
+        let hi = ((self.opcode as u64 & 0x1F) << 59)
+            | ((self.region_mask as u64 & 0x7) << 56)
+            | ((self.blend as u64 & 0x7) << 53)
+            | ((self.emissive as u64 & 0xF) << 49)
+            // bit 48 reserved
+            | (color_a_packed << 24)
+            | color_b_packed;
+
+        // Build lo word
+        let lo = ((self.intensity as u64) << 56)
+            | ((self.param_a as u64) << 48)
+            | ((self.param_b as u64) << 40)
+            | ((self.param_c as u64) << 32)
+            | ((self.param_d as u64) << 24)
+            | ((self.direction as u64) << 8)
+            | ((self.alpha_a as u64 & 0xF) << 4)
+            | (self.alpha_b as u64 & 0xF);
+
+        [hi, lo]
+    }
+
+    /// Create a layer with the given region (using EpuRegion enum for v1 compatibility)
+    #[inline]
+    pub fn with_region(mut self, region: EpuRegion) -> Self {
+        self.region_mask = region.to_mask();
+        self
     }
 }
 
-/// Packed EPU configuration (64 bytes = 8 x u64 instructions).
+/// Packed EPU configuration (128 bytes = 8 x 128-bit instructions).
 ///
 /// This is the GPU-consumable format. Each environment state is exactly
-/// 8 layers packed into 64 bytes.
+/// 8 layers packed into 128 bytes (each layer is 2 x u64 = 16 bytes).
 ///
 /// Recommended slot usage:
 /// - Slots 0-3: Bounds (RAMP, LOBE, BAND, FOG)
@@ -234,12 +323,12 @@ impl EpuLayer {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct EpuConfig {
-    /// 8 packed 64-bit instructions
-    pub layers: [u64; 8],
+    /// 8 packed 128-bit instructions (each as [hi, lo])
+    pub layers: [[u64; 2]; 8],
 }
 
 impl EpuConfig {
-    /// Compute stable hash of the 64-byte config for dirty-state caching.
+    /// Compute stable hash of the 128-byte config for dirty-state caching.
     ///
     /// This hash is used to detect when an environment configuration has changed
     /// and needs to be rebuilt on the GPU.
@@ -257,10 +346,12 @@ impl EpuConfig {
     /// that depend on the time uniform (e.g., pulsing, scrolling, twinkling).
     /// Time-dependent environments must be rebuilt every frame.
     pub fn is_time_dependent(&self) -> bool {
-        for layer in &self.layers {
-            let opcode = (layer >> 60) & 0xF;
-            let param_b = ((layer >> 24) & 0xFF) as u8;
-            let param_c = ((layer >> 16) & 0xFF) as u8;
+        for [hi, lo] in &self.layers {
+            // Extract opcode from hi word bits 63..59
+            let opcode = (hi >> 59) & 0x1F;
+            // Extract params from lo word
+            let param_b = ((lo >> 40) & 0xFF) as u8;
+            let param_c = ((lo >> 32) & 0xFF) as u8;
 
             match opcode {
                 // LOBE: anim_mode in param_c (0=none, 1=pulse, 2=flicker)
@@ -435,13 +526,18 @@ impl EpuBuilder {
     pub fn ramp_enclosure(&mut self, p: RampParams) {
         let layer = EpuLayer {
             opcode: EpuOpcode::Ramp,
-            region: EpuRegion::All,
+            region_mask: REGION_ALL,
             blend: EpuBlend::Add,
-            color_index: p.wall_color,
+            emissive: p.emissive,
+            color_a: p.sky_color,
+            color_b: p.floor_color,
+            alpha_a: 15,
+            alpha_b: 15,
             intensity: p.softness,
-            param_a: p.sky_color,
-            param_b: p.floor_color,
-            param_c: pack_thresholds(p.ceil_q, p.floor_q),
+            param_a: p.wall_color[0], // Wall R (for gradient mixing)
+            param_b: p.wall_color[1], // Wall G
+            param_c: p.wall_color[2], // Wall B
+            param_d: pack_thresholds(p.ceil_q, p.floor_q),
             direction: encode_direction_u16(p.up),
         };
         // RAMP always goes to slot 0
@@ -453,7 +549,7 @@ impl EpuBuilder {
     ///
     /// # Arguments
     /// * `dir` - Lobe center direction
-    /// * `color` - Palette index for glow color
+    /// * `color` - RGB color for glow
     /// * `intensity` - Brightness (0..255)
     /// * `exponent` - Sharpness (0..255 maps to 1..64)
     /// * `anim_speed` - Animation speed (0..255 maps to 0..10)
@@ -461,7 +557,7 @@ impl EpuBuilder {
     pub fn lobe(
         &mut self,
         dir: Vec3,
-        color: u8,
+        color: [u8; 3],
         intensity: u8,
         exponent: u8,
         anim_speed: u8,
@@ -469,13 +565,18 @@ impl EpuBuilder {
     ) {
         self.push_bounds(EpuLayer {
             opcode: EpuOpcode::Lobe,
-            region: EpuRegion::All,
+            region_mask: REGION_ALL,
             blend: EpuBlend::Add,
-            color_index: color,
+            emissive: 15, // Lobes are emissive by default
+            color_a: color,
+            color_b: [0, 0, 0], // Edge tint (unused for now)
+            alpha_a: 15,
+            alpha_b: 15,
             intensity,
             param_a: exponent,
             param_b: anim_speed,
             param_c: anim_mode,
+            param_d: 0,
             direction: encode_direction_u16(dir),
         });
     }
@@ -484,7 +585,7 @@ impl EpuBuilder {
     ///
     /// # Arguments
     /// * `normal` - Band normal axis
-    /// * `color` - Palette index for band color
+    /// * `color` - RGB color for band
     /// * `intensity` - Brightness (0..255)
     /// * `width` - Band width (0..255 maps to 0.005..0.5)
     /// * `offset` - Vertical offset (0..255 maps to -0.5..0.5)
@@ -492,7 +593,7 @@ impl EpuBuilder {
     pub fn band(
         &mut self,
         normal: Vec3,
-        color: u8,
+        color: [u8; 3],
         intensity: u8,
         width: u8,
         offset: u8,
@@ -500,13 +601,18 @@ impl EpuBuilder {
     ) {
         self.push_bounds(EpuLayer {
             opcode: EpuOpcode::Band,
-            region: EpuRegion::All,
+            region_mask: REGION_ALL,
             blend: EpuBlend::Add,
-            color_index: color,
+            emissive: 8, // Moderate emissive by default
+            color_a: color,
+            color_b: [0, 0, 0],
+            alpha_a: 15,
+            alpha_b: 15,
             intensity,
             param_a: width,
             param_b: offset,
             param_c: scroll_speed,
+            param_d: 0,
             direction: encode_direction_u16(normal),
         });
     }
@@ -517,20 +623,32 @@ impl EpuBuilder {
     ///
     /// # Arguments
     /// * `up` - Up vector for vertical bias
-    /// * `fog_color` - Palette index for fog tint
+    /// * `fog_color` - RGB color for fog tint
     /// * `density` - Fog density (0..255)
     /// * `vertical_bias` - Vertical bias (0..255 maps to -1..1)
     /// * `falloff` - Falloff curve (0..255 maps to 0.5..4.0)
-    pub fn fog(&mut self, up: Vec3, fog_color: u8, density: u8, vertical_bias: u8, falloff: u8) {
+    pub fn fog(
+        &mut self,
+        up: Vec3,
+        fog_color: [u8; 3],
+        density: u8,
+        vertical_bias: u8,
+        falloff: u8,
+    ) {
         self.push_bounds(EpuLayer {
             opcode: EpuOpcode::Fog,
-            region: EpuRegion::All,
+            region_mask: REGION_ALL,
             blend: EpuBlend::Multiply,
-            color_index: fog_color,
+            emissive: 0, // Fog is not emissive
+            color_a: fog_color,
+            color_b: [255, 255, 255], // Clear color for fog
+            alpha_a: 15,
+            alpha_b: 15,
             intensity: density,
             param_a: vertical_bias,
             param_b: falloff,
             param_c: 0,
+            param_d: 0,
             direction: encode_direction_u16(up),
         });
     }
@@ -541,79 +659,99 @@ impl EpuBuilder {
 
     /// Add a decal shape (DECAL).
     ///
-    /// Features are emissive (contribute to lighting) when `blend = Add`.
+    /// Emissive contribution is controlled by the `emissive` field in DecalParams.
     pub fn decal(&mut self, p: DecalParams) {
         let param_a = ((p.shape as u8) << 4) | (p.softness_q & 0x0F);
         self.push_feature(EpuLayer {
             opcode: EpuOpcode::Decal,
-            region: p.region,
+            region_mask: p.region.to_mask(),
             blend: p.blend,
-            color_index: p.color,
+            emissive: p.emissive,
+            color_a: p.color,
+            color_b: p.color_b,
+            alpha_a: p.alpha,
+            alpha_b: 15,
             intensity: p.intensity,
             param_a,
             param_b: p.size,
             param_c: p.pulse_speed,
+            param_d: 0,
             direction: encode_direction_u16(p.dir),
         });
     }
 
     /// Add scattered points (SCATTER).
     ///
-    /// Features are emissive (contribute to lighting) when `blend = Add`.
+    /// Emissive contribution is controlled by the `emissive` field in ScatterParams.
     pub fn scatter(&mut self, p: ScatterParams) {
         let param_c = ((p.twinkle_q & 0x0F) << 4) | (p.seed & 0x0F);
         self.push_feature(EpuLayer {
             opcode: EpuOpcode::Scatter,
-            region: p.region,
+            region_mask: p.region.to_mask(),
             blend: p.blend,
-            color_index: p.color,
+            emissive: p.emissive,
+            color_a: p.color,
+            color_b: [0, 0, 0],
+            alpha_a: 15,
+            alpha_b: 15,
             intensity: p.intensity,
             param_a: p.density,
             param_b: p.size,
             param_c,
+            param_d: 0,
             direction: 0,
         });
     }
 
     /// Add a grid pattern (GRID).
     ///
-    /// Features are emissive (contribute to lighting) when `blend = Add`.
+    /// Emissive contribution is controlled by the `emissive` field in GridParams.
     pub fn grid(&mut self, p: GridParams) {
         let param_c = ((p.pattern as u8) << 4) | (p.scroll_q & 0x0F);
         self.push_feature(EpuLayer {
             opcode: EpuOpcode::Grid,
-            region: p.region,
+            region_mask: p.region.to_mask(),
             blend: p.blend,
-            color_index: p.color,
+            emissive: p.emissive,
+            color_a: p.color,
+            color_b: [0, 0, 0],
+            alpha_a: 15,
+            alpha_b: 15,
             intensity: p.intensity,
             param_a: p.scale,
             param_b: p.thickness,
             param_c,
+            param_d: 0,
             direction: 0,
         });
     }
 
     /// Add animated flow (FLOW).
     ///
-    /// Features are emissive (contribute to lighting) when `blend = Add`.
+    /// Emissive contribution is controlled by the `emissive` field in FlowParams.
     pub fn flow(&mut self, p: FlowParams) {
         let param_c = ((p.octaves & 0x0F) << 4) | ((p.pattern as u8) & 0x0F);
         self.push_feature(EpuLayer {
             opcode: EpuOpcode::Flow,
-            region: p.region,
+            region_mask: p.region.to_mask(),
             blend: p.blend,
-            color_index: p.color,
+            emissive: p.emissive,
+            color_a: p.color,
+            color_b: [0, 0, 0],
+            alpha_a: 15,
+            alpha_b: 15,
             intensity: p.intensity,
             param_a: p.scale,
             param_b: p.speed,
             param_c,
+            param_d: 0,
             direction: encode_direction_u16(p.dir),
         });
     }
 }
 
 // =============================================================================
-// Parameter Structs
+// Parameter Structs (v2 - RGB colors)
 // =============================================================================
 
 /// Parameters for RAMP enclosure.
@@ -621,30 +759,33 @@ impl EpuBuilder {
 pub struct RampParams {
     /// Up vector defining the enclosure orientation
     pub up: Vec3,
-    /// Palette index for wall/horizon color
-    pub wall_color: u8,
-    /// Palette index for sky/ceiling color
-    pub sky_color: u8,
-    /// Palette index for floor/ground color
-    pub floor_color: u8,
+    /// RGB color for wall/horizon
+    pub wall_color: [u8; 3],
+    /// RGB color for sky/ceiling
+    pub sky_color: [u8; 3],
+    /// RGB color for floor/ground
+    pub floor_color: [u8; 3],
     /// Ceiling threshold (0..15 maps to -1..1)
     pub ceil_q: u8,
     /// Floor threshold (0..15 maps to -1..1)
     pub floor_q: u8,
     /// Transition softness (0..255)
     pub softness: u8,
+    /// Emissive contribution (0-15, 0=decorative only)
+    pub emissive: u8,
 }
 
 impl Default for RampParams {
     fn default() -> Self {
         Self {
             up: Vec3::Y,
-            wall_color: 0,
-            sky_color: 0,
-            floor_color: 0,
+            wall_color: [0, 0, 0],
+            sky_color: [0, 0, 0],
+            floor_color: [0, 0, 0],
             ceil_q: 8,
             floor_q: 8,
             softness: 128,
+            emissive: 0,
         }
     }
 }
@@ -654,14 +795,16 @@ impl Default for RampParams {
 pub struct DecalParams {
     /// Region mask
     pub region: EpuRegion,
-    /// Blend mode (Add = emissive, Lerp/Max = visual-only)
+    /// Blend mode
     pub blend: EpuBlend,
     /// Shape type
     pub shape: DecalShape,
     /// Shape center direction
     pub dir: Vec3,
-    /// Palette index for shape color
-    pub color: u8,
+    /// RGB color for shape (primary)
+    pub color: [u8; 3],
+    /// RGB color for outline/glow (secondary)
+    pub color_b: [u8; 3],
     /// Brightness (0..255)
     pub intensity: u8,
     /// Edge softness (0..15)
@@ -670,6 +813,10 @@ pub struct DecalParams {
     pub size: u8,
     /// Pulse animation speed (0..255 maps to 0..10)
     pub pulse_speed: u8,
+    /// Emissive contribution (0-15, 0=decorative only)
+    pub emissive: u8,
+    /// Alpha (0-15)
+    pub alpha: u8,
 }
 
 impl Default for DecalParams {
@@ -679,11 +826,14 @@ impl Default for DecalParams {
             blend: EpuBlend::Add,
             shape: DecalShape::Disk,
             dir: Vec3::Y,
-            color: 0,
+            color: [255, 255, 255],
+            color_b: [0, 0, 0],
             intensity: 255,
             softness_q: 2,
             size: 20,
             pulse_speed: 0,
+            emissive: 15,
+            alpha: 15,
         }
     }
 }
@@ -693,10 +843,10 @@ impl Default for DecalParams {
 pub struct ScatterParams {
     /// Region mask
     pub region: EpuRegion,
-    /// Blend mode (Add = emissive stars, Lerp/Max = visual-only)
+    /// Blend mode
     pub blend: EpuBlend,
-    /// Palette index for point color
-    pub color: u8,
+    /// RGB color for points
+    pub color: [u8; 3],
     /// Brightness (0..255)
     pub intensity: u8,
     /// Point density (0..255 maps to 1..256)
@@ -707,6 +857,8 @@ pub struct ScatterParams {
     pub twinkle_q: u8,
     /// Random seed (0..15)
     pub seed: u8,
+    /// Emissive contribution (0-15, 0=decorative only)
+    pub emissive: u8,
 }
 
 impl Default for ScatterParams {
@@ -714,12 +866,13 @@ impl Default for ScatterParams {
         Self {
             region: EpuRegion::All,
             blend: EpuBlend::Add,
-            color: 15,
+            color: [255, 255, 255],
             intensity: 255,
             density: 200,
             size: 20,
             twinkle_q: 8,
             seed: 0,
+            emissive: 15,
         }
     }
 }
@@ -731,8 +884,8 @@ pub struct GridParams {
     pub region: EpuRegion,
     /// Blend mode
     pub blend: EpuBlend,
-    /// Palette index for line color
-    pub color: u8,
+    /// RGB color for lines
+    pub color: [u8; 3],
     /// Brightness (0..255)
     pub intensity: u8,
     /// Grid scale (0..255 maps to 1..64)
@@ -743,6 +896,8 @@ pub struct GridParams {
     pub pattern: GridPattern,
     /// Scroll speed (0..15 maps to 0..2)
     pub scroll_q: u8,
+    /// Emissive contribution (0-15, 0=decorative only)
+    pub emissive: u8,
 }
 
 impl Default for GridParams {
@@ -750,12 +905,13 @@ impl Default for GridParams {
         Self {
             region: EpuRegion::Walls,
             blend: EpuBlend::Add,
-            color: 64,
+            color: [64, 64, 64],
             intensity: 128,
             scale: 32,
             thickness: 20,
             pattern: GridPattern::Grid,
             scroll_q: 0,
+            emissive: 8,
         }
     }
 }
@@ -769,8 +925,8 @@ pub struct FlowParams {
     pub blend: EpuBlend,
     /// Flow direction
     pub dir: Vec3,
-    /// Palette index for flow color
-    pub color: u8,
+    /// RGB color for flow
+    pub color: [u8; 3],
     /// Brightness (0..255)
     pub intensity: u8,
     /// Noise scale (0..255 maps to 1..16)
@@ -781,6 +937,8 @@ pub struct FlowParams {
     pub octaves: u8,
     /// Pattern type
     pub pattern: FlowPattern,
+    /// Emissive contribution (0-15, 0=decorative only)
+    pub emissive: u8,
 }
 
 impl Default for FlowParams {
@@ -789,12 +947,13 @@ impl Default for FlowParams {
             region: EpuRegion::Sky,
             blend: EpuBlend::Lerp,
             dir: Vec3::X,
-            color: 15,
+            color: [128, 128, 128],
             intensity: 60,
             scale: 32,
             speed: 20,
             octaves: 2,
             pattern: FlowPattern::Noise,
+            emissive: 0,
         }
     }
 }

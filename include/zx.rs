@@ -894,315 +894,126 @@ extern "C" {
     pub fn matcap_set(slot: u32, texture: u32);
 
     // =========================================================================
-    // Environment Processing Unit (EPU) — Multi-Environment v4
+    // Environment Processing Unit (EPU) — Instruction-Based API (v2)
     // =========================================================================
 
-    /// Configure gradient environment (Mode 0).
+    /// Set an EPU environment configuration (v2 128-byte format).
     ///
-    /// Creates a 4-color gradient background with vertical blending.
-    ///
-    /// # Arguments
-    /// * `layer` — Target layer: 0 = base layer, 1 = overlay layer
-    /// * `zenith` — Color directly overhead (0xRRGGBBAA)
-    /// * `sky_horizon` — Sky color at horizon level (0xRRGGBBAA)
-    /// * `ground_horizon` — Ground color at horizon level (0xRRGGBBAA)
-    /// * `nadir` — Color directly below (0xRRGGBBAA)
-    /// * `rotation` — Sun azimuth around Y axis in radians (0 = +Z, π/2 = +X)
-    /// * `shift` — Horizon vertical shift (-1.0 to 1.0, 0.0 = equator)
-    /// * `sun_elevation` — Sun elevation in radians (0 = horizon, π/2 = zenith)
-    /// * `sun_disk` — Sun disc size (0-255)
-    /// * `sun_halo` — Sun halo size (0-255)
-    /// * `sun_intensity` — Sun intensity (0 disables sun)
-    /// * `horizon_haze` — Haze near the horizon (0-255)
-    /// * `sun_warmth` — Sun color warmth (0 = neutral/white, 255 = warm/orange)
-    /// * `cloudiness` — Stylized cloud bands (0 disables, 255 = strongest)
-    ///
-    /// The gradient interpolates: zenith → sky_horizon (Y > 0), sky_horizon → ground_horizon (at Y = 0 + shift), ground_horizon → nadir (Y < 0).
-    ///
-    /// You can configure the same mode on both layers with different parameters for creative effects.
-    pub fn env_gradient(
-        layer: u32,
-        zenith: u32,
-        sky_horizon: u32,
-        ground_horizon: u32,
-        nadir: u32,
-        rotation: f32,
-        shift: f32,
-        sun_elevation: f32,
-        sun_disk: u32,
-        sun_halo: u32,
-        sun_intensity: u32,
-        horizon_haze: u32,
-        sun_warmth: u32,
-        cloudiness: u32,
-        cloud_phase: u32,
-    );
-
-    /// Configure cells environment (Mode 1).
-    ///
-    /// Unified cell generator with two families:
-    /// - Family 0: Particles (stars/snow/rain/embers/bubbles/warp)
-    /// - Family 1: Tiles/Lights (Mondrian/Truchet, buildings, bands, panels)
+    /// Uploads a 128-byte (8 x 128-bit = 16 x u64) environment configuration to
+    /// the specified slot. The configuration contains 8 packed instruction layers
+    /// that are evaluated by the GPU compute shader to generate octahedral
+    /// environment maps.
     ///
     /// # Arguments
-    /// * `layer`  Target layer: 0 = base layer, 1 = overlay layer
-    /// * `family`  0=Particles, 1=Tiles/Lights
-    /// * `variant`  Depends on `family`:
-    ///   - Family 0: 0=Stars/Fireflies, 1=Fall (Rain/Snow), 2=Drift (Embers/Dust/Bubbles), 3=Warp (Hyperspace/Burst)
-    ///   - Family 1: 0=Abstract (Mondrian/Truchet), 1=Buildings (Windows), 2=Bands (Signage Floors), 3=Panels (UI Grids)
-    /// * `density`  Spawn/occupancy amount (0-255)
-    /// * `size_min`/`size_max`  Size range (0-255; mapped to a mode-specific radius/extent)
-    /// * `intensity`  Emissive energy multiplier (0-255; affects RGB more than alpha)
-    /// * `shape`  Variant-specific profile/hardness knob (0-255)
-    /// * `motion`  Variant-specific animation strength knob (0-255; loops cleanly over `phase`)
-    /// * `parallax`  Depth/perspective strength (0-255). For Particles, also selects bounded internal depth slices:
-    ///   0-95=1 slice, 96-191=2 slices, 192-255=3 slices.
-    /// * `height_bias`  Placement/zoning bias (0-255)
-    /// * `clustering`  Grouping/districting bias (0-255)
-    /// * `color_a`/`color_b`  Palette endpoints (0xRRGGBBAA); `color_b` is variation/twinkle/accent
-    /// * `axis_x/y/z`  World-space axis/flow direction (normalized; if near-zero, falls back to Y-up, except Particles/Fall defaults to Y-down)
-    /// * `phase`  Loopable animation driver (treated as u16; wraps). Avoid using `phase` directly as a hash input.
-    /// * `seed`  Deterministic variation seed (0 derives from packed payload)
-    pub fn env_cells(
-        layer: u32,
-        family: u32,
-        variant: u32,
-        density: u32,
-        size_min: u32,
-        size_max: u32,
-        intensity: u32,
-        shape: u32,
-        motion: u32,
-        parallax: u32,
-        height_bias: u32,
-        clustering: u32,
-        color_a: u32,
-        color_b: u32,
-        axis_x: f32,
-        axis_y: f32,
-        axis_z: f32,
-        phase: u32,
-        seed: u32,
-    );
-
-    /// Configure lines environment (Mode 2: synthwave grid, racing track).
+    /// * `env_id` — Environment slot ID (0-255)
+    /// * `config_ptr` — Pointer to 16 u64 values (128 bytes total) in WASM memory
     ///
-    /// Creates an infinite procedural grid.
+    /// # Configuration Layout
+    /// Each environment is exactly 8 x 128-bit instructions (each stored as [hi, lo]):
+    /// - Slots 0-3: Bounds layers (RAMP, LOBE, BAND, FOG)
+    /// - Slots 4-7: Feature layers (DECAL, GRID, SCATTER, FLOW)
     ///
-    /// # Arguments
-    /// * `layer` — Target layer: 0 = base layer, 1 = overlay layer
-    /// * `variant` — 0=Floor, 1=Ceiling, 2=Sphere
-    /// * `line_type` — 0=Horizontal, 1=Vertical, 2=Grid
-    /// * `thickness` — Line thickness (0-255)
-    /// * `spacing` — Distance between lines in world units
-    /// * `fade_distance` — Distance where lines start fading in world units
-    /// * `parallax` — Horizon band perspective bias + bounded internal depth slices (`0–95` → 1 slice, `96–191` → 2 slices, `192–255` → 3 slices)
-    /// * `color_primary` — Main line color (0xRRGGBBAA)
-    /// * `color_accent` — Accent line color (0xRRGGBBAA)
-    /// * `accent_every` — Make every Nth line use accent color
-    /// * `phase` — Scroll phase (0-65535, wraps for seamless looping)
-    /// * `profile` — Style family: 0=Grid, 1=Lanes, 2=Scanlines, 3=Caustic Bands
-    /// * `warp` — Static domain warp amount (0-255)
-    /// * `wobble` — Phase-driven wobble strength (0-255)
-    /// * `glow` — Emissive energy boost (0-255)
-    /// * `axis_x/y/z` — World-space scroll axis / orientation (normalized; falls back if near-zero)
-    /// * `seed` — Deterministic variation seed (0 derives from params)
-    pub fn env_lines(
-        layer: u32,
-        variant: u32,
-        line_type: u32,
-        thickness: u32,
-        spacing: f32,
-        fade_distance: f32,
-        parallax: u32,
-        color_primary: u32,
-        color_accent: u32,
-        accent_every: u32,
-        phase: u32,
-        profile: u32,
-        warp: u32,
-        wobble: u32,
-        glow: u32,
-        axis_x: f32,
-        axis_y: f32,
-        axis_z: f32,
-        seed: u32,
-    );
-
-    /// Configure silhouette environment (Mode 3: mountains, cityscape).
+    /// # Instruction Bit Layout (per 128-bit = 2 x u64)
+    /// ```text
+    /// u64 hi [bits 127..64]:
+    ///   63..59  opcode     (5)   Which algorithm to run (32 opcodes)
+    ///   58..56  region     (3)   Bitfield: SKY=0b100, WALLS=0b010, FLOOR=0b001
+    ///   55..53  blend      (3)   8 blend modes
+    ///   52..49  emissive   (4)   L_light0 contribution (0=none, 15=full)
+    ///   48      reserved   (1)   Future flag
+    ///   47..24  color_a    (24)  RGB24 primary color
+    ///   23..0   color_b    (24)  RGB24 secondary color
     ///
-    /// Creates layered terrain silhouettes with procedural noise.
+    /// u64 lo [bits 63..0]:
+    ///   63..56  intensity  (8)   Layer brightness
+    ///   55..48  param_a    (8)   Opcode-specific
+    ///   47..40  param_b    (8)   Opcode-specific
+    ///   39..32  param_c    (8)   Opcode-specific
+    ///   31..24  param_d    (8)   Opcode-specific
+    ///   23..8   direction  (16)  Octahedral-encoded direction
+    ///   7..4    alpha_a    (4)   color_a alpha (0-15)
+    ///   3..0    alpha_b    (4)   color_b alpha (0-15)
+    /// ```
     ///
-    /// # Arguments
-    /// * `layer` — Target layer: 0 = base layer, 1 = overlay layer
-    /// * `jaggedness` — Terrain roughness (0-255, 0=smooth hills, 255=sharp peaks)
-    /// * `layer_count` — Number of depth layers (1-3)
-    /// * `color_near` — Nearest silhouette color (0xRRGGBBAA)
-    /// * `color_far` — Farthest silhouette color (0xRRGGBBAA)
-    /// * `sky_zenith` — Sky color at zenith behind silhouettes (0xRRGGBBAA)
-    /// * `sky_horizon` — Sky color at horizon behind silhouettes (0xRRGGBBAA)
-    /// * `parallax_rate` — Layer separation amount (0-255)
-    /// * `seed` — Noise seed for terrain shape
-    pub fn env_silhouette(
-        layer: u32,
-        family: u32,
-        jaggedness: u32,
-        layer_count: u32,
-        color_near: u32,
-        color_far: u32,
-        sky_zenith: u32,
-        sky_horizon: u32,
-        parallax_rate: u32,
-        seed: u32,
-        phase: u32,
-        fog: u32,
-        wind: u32,
-    );
-
-    /// Configure nebula environment (Mode 4).
-    ///
-    /// Soft fields: fog/clouds/aurora/ink/plasma/kaleido.
-    ///
-    /// Notes:
-    /// - Projection (no trig): axis-oriented oct-UV for all Nebula families (including `family=2` Aurora).
-    /// - `phase` is treated as `u16` (wraps); motion is designed to be loopable (closed path) rather than “scroll forever”.
-    /// - `parallax` selects bounded internal depth slices (`0–95` → 1 slice, `96–191` → 2 slices, `192–255` → 3 slices).
-    /// - `seed=0` means “auto”: derive a deterministic seed from the packed payload.
-    pub fn env_nebula(
-        layer: u32,
-        family: u32,
-        coverage: u32,
-        softness: u32,
-        intensity: u32,
-        scale: u32,
-        detail: u32,
-        warp: u32,
-        flow: u32,
-        parallax: u32,
-        height_bias: u32,
-        contrast: u32,
-        color_a: u32,
-        color_b: u32,
-        axis_x: f32,
-        axis_y: f32,
-        axis_z: f32,
-        phase: u32,
-        seed: u32,
-    );
-
-    /// Configure room environment (Mode 5: interior spaces).
-    ///
-    /// Creates interior of a 3D box with directional lighting.
-    ///
-    /// # Arguments
-    /// * `layer` — Target layer: 0 = base layer, 1 = overlay layer
-    /// * `color_ceiling` — Ceiling color (0xRRGGBB00)
-    /// * `color_floor` — Floor color (0xRRGGBB00)
-    /// * `color_walls` — Wall color (0xRRGGBB00)
-    /// * `panel_size` — Size of wall panel pattern in world units
-    /// * `panel_gap` — Gap between panels (0-255)
-    /// * `light_dir_x`, `light_dir_y`, `light_dir_z` — Light direction
-    /// * `light_intensity` — Directional light strength (0-255)
-    /// * `corner_darken` — Corner/edge darkening amount (0-255)
-    /// * `room_scale` — Room size multiplier
-    /// * `viewer_x`, `viewer_y`, `viewer_z` — Viewer position in room (-128 to 127 = -1.0 to 1.0)
-    pub fn env_room(
-        layer: u32,
-        color_ceiling: u32,
-        color_floor: u32,
-        color_walls: u32,
-        panel_size: f32,
-        panel_gap: u32,
-        light_dir_x: f32,
-        light_dir_y: f32,
-        light_dir_z: f32,
-        light_intensity: u32,
-        light_tint: u32,
-        corner_darken: u32,
-        room_scale: f32,
-        viewer_x: i32,
-        viewer_y: i32,
-        viewer_z: i32,
-        accent: u32,
-        accent_mode: u32,
-        roughness: u32,
-        phase: u32,
-    );
-
-    /// Configure veil environment (Mode 6).
-    ///
-    /// Direction-based SDF ribbons/pillars with bounded depth slices.
-    pub fn env_veil(
-        layer: u32,
-        family: u32,
-        density: u32,
-        width: u32,
-        taper: u32,
-        curvature: u32,
-        edge_soft: u32,
-        height_min: u32,
-        height_max: u32,
-        color_near: u32,
-        color_far: u32,
-        glow: u32,
-        parallax: u32,
-        axis_x: f32,
-        axis_y: f32,
-        axis_z: f32,
-        phase: u32,
-        seed: u32,
-    );
-
-    /// Configure rings environment (Mode 7: portals, tunnels, vortex).
-    ///
-    /// Creates concentric rings for portals or vortex effects.
-    ///
-    /// # Arguments
-    /// * `layer` — Target layer: 0 = base layer, 1 = overlay layer
-    /// * `ring_count` — Number of rings (1-255)
-    /// * `thickness` — Ring thickness (0-255)
-    /// * `color_a` — First alternating color (0xRRGGBBAA)
-    /// * `color_b` — Second alternating color (0xRRGGBBAA)
-    /// * `center_color` — Bright center color (0xRRGGBBAA)
-    /// * `center_falloff` — Center glow falloff (0-255)
-    /// * `spiral_twist` — Spiral rotation in degrees (0=concentric)
-    /// * `axis_x`, `axis_y`, `axis_z` — Ring axis direction (normalized)
-    /// * `phase` — Rotation phase (0-65535 = 0°-360°, wraps for seamless)
-    pub fn env_rings(
-        layer: u32,
-        family: u32,
-        ring_count: u32,
-        thickness: u32,
-        color_a: u32,
-        color_b: u32,
-        center_color: u32,
-        center_falloff: u32,
-        spiral_twist: f32,
-        axis_x: f32,
-        axis_y: f32,
-        axis_z: f32,
-        phase: u32,
-        wobble: u32,
-        noise: u32,
-        dash: u32,
-        glow: u32,
-        seed: u32,
-    );
-
-    /// Set the blend mode for combining base and overlay layers.
-    ///
-    /// # Arguments
-    /// * `mode` — Blend mode (0-3)
+    /// # Opcodes
+    /// - 0x00: NOP (disable layer)
+    /// - 0x01: RAMP (enclosure gradient)
+    /// - 0x02: LOBE (directional glow)
+    /// - 0x03: BAND (horizon ring)
+    /// - 0x04: FOG (atmospheric absorption)
+    /// - 0x05: DECAL (sharp SDF shape)
+    /// - 0x06: GRID (repeating lines/panels)
+    /// - 0x07: SCATTER (point field)
+    /// - 0x08: FLOW (animated noise/streaks)
     ///
     /// # Blend Modes
-    /// * 0 — Alpha: Standard alpha blending
-    /// * 1 — Add: Additive blending
-    /// * 2 — Multiply: Multiplicative blending
-    /// * 3 — Screen: Screen blending
+    /// - 0: ADD (dst + src * a)
+    /// - 1: MULTIPLY (dst * mix(1, src, a))
+    /// - 2: MAX (max(dst, src * a))
+    /// - 3: LERP (mix(dst, src, a))
+    /// - 4: SCREEN (1 - (1-dst)*(1-src*a))
+    /// - 5: HSV_MOD (HSV shift dst by src)
+    /// - 6: MIN (min(dst, src * a))
+    /// - 7: OVERLAY (Photoshop-style overlay)
+    pub fn epu_set(env_id: u32, config_ptr: *const u64);
+
+    /// Draw the background using the specified EPU environment.
     ///
-    /// Controls how the overlay layer composites onto the base layer.
-    /// Use this to create different visual effects when layering environments.
-    pub fn env_blend(mode: u32);
+    /// Renders the procedural environment background for the given environment ID.
+    /// The environment must have been configured via `epu_set()` first.
+    ///
+    /// # Arguments
+    /// * `env_id` — Environment slot ID (0-255)
+    ///
+    /// # Usage
+    /// Call this **first** in your `render()` function, before any 3D geometry:
+    /// ```rust,ignore
+    /// fn render() {
+    ///     // Set up environment (usually once, or when it changes)
+    ///     epu_set(0, config.as_ptr());
+    ///
+    ///     // Draw environment background
+    ///     epu_draw(0);
+    ///
+    ///     // Then draw scene geometry
+    ///     draw_mesh(terrain);
+    ///     draw_mesh(player);
+    /// }
+    /// ```
+    ///
+    /// # Notes
+    /// - Environment always renders behind all geometry (at far plane)
+    /// - Multiple viewports can use different env_ids for split-screen
+    /// - The EPU compute pass runs automatically before rendering
+    pub fn epu_draw(env_id: u32);
+
+    /// Sample the ambient cube for diffuse lighting from an EPU environment.
+    ///
+    /// Returns the diffuse irradiance approximation for a given surface normal direction.
+    /// The ambient cube is extracted from the most blurred environment light level.
+    ///
+    /// # Arguments
+    /// * `env_id` — Environment slot ID (0-255)
+    /// * `normal_x`, `normal_y`, `normal_z` — Surface normal direction (normalized)
+    ///
+    /// # Returns
+    /// Packed RGB color as u32 in 0xRRGGBB00 format (alpha channel unused).
+    ///
+    /// # Usage
+    /// Use this for custom lighting calculations when you need environment-aware
+    /// diffuse lighting on objects:
+    /// ```rust,ignore
+    /// let ambient = epu_get_ambient(0, normal.x, normal.y, normal.z);
+    /// let r = ((ambient >> 24) & 0xFF) as f32 / 255.0;
+    /// let g = ((ambient >> 16) & 0xFF) as f32 / 255.0;
+    /// let b = ((ambient >> 8) & 0xFF) as f32 / 255.0;
+    /// ```
+    ///
+    /// # Notes
+    /// - Returns black (0x00000000) if env_id is invalid or not configured
+    /// - The ambient cube uses 6-direction sampling (+X, -X, +Y, -Y, +Z, -Z)
+    /// - For most use cases, the automatic EPU lighting is sufficient
+    pub fn epu_get_ambient(env_id: u32, normal_x: f32, normal_y: f32, normal_z: f32) -> u32;
 
     // =========================================================================
     // Material Functions (Mode 2/3)

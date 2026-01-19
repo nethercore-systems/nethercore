@@ -491,7 +491,7 @@ export fn render() void {
 
 ## Common Setup
 
-All lit modes benefit from proper environment and light setup:
+All lit modes benefit from proper environment and light setup. See the [EPU Environments Guide](epu-environments.md) for details on the new instruction-based EPU API.
 
 {{#tabs global="lang"}}
 
@@ -500,28 +500,16 @@ All lit modes benefit from proper environment and light setup:
 // nether.toml: render_mode = 1, 2, or 3
 
 fn init() {
-    // Set up environment (provides ambient light)
-    env_gradient(
-        0,           // layer (0=base)
-        0x3366B2FF,  // zenith (top)
-        0xB2D8F2FF,  // sky horizon
-        0xB2D8F2FF,  // ground horizon
-        0x3366B2FF,  // nadir (bottom)
-        0.0,         // sun azimuth
-        0.0,         // horizon shift
-        0.0,         // sun elevation
-        0,           // sun disk
-        0,           // sun halo
-        0,           // sun intensity (disabled)
-        0,           // horizon haze
-        0,           // sun warmth
-        0,           // cloudiness
-        0            // cloud_phase
-    );
+    // Set up environment using the EPU builder API (provides ambient light)
+    // See EPU RFC for full builder API documentation
+    let config = epu_begin()
+        .ramp_enclosure(Vec3::Y, /*wall*/24, /*sky*/40, /*floor*/24, 10, 5, 180)
+        .finish();
+    unsafe { epu_set(0, config.layers.as_ptr()); }
 }
 
 fn render() {
-    draw_env();
+    unsafe { epu_draw(0); }  // Draw environment background
 
     // Main directional light
     light_set(0, 0.5, -0.7, 0.5);
@@ -544,29 +532,17 @@ fn render() {
 ```c
 // nether.toml: render_mode = 1, 2, or 3
 
+static uint64_t env_config[8];
+
 NCZX_EXPORT void init(void) {
-    // Set up environment (provides ambient light)
-    env_gradient(
-        0,           // layer (0=base)
-        0x3366B2FF,  // zenith (top)
-        0xB2D8F2FF,  // sky horizon
-        0xB2D8F2FF,  // ground horizon
-        0x3366B2FF,  // nadir (bottom)
-        0.0f,        // sun azimuth
-        0.0f,        // horizon shift
-        0.0f,        // sun elevation
-        0u,          // sun disk
-        0u,          // sun halo
-        0u,          // sun intensity (disabled)
-        0u,          // horizon haze
-        0u,          // sun warmth
-        0u,          // cloudiness
-        0u           // cloud_phase
-    );
+    // Set up environment config (provides ambient light)
+    // See EPU RFC for instruction encoding
+    // ...
+    epu_set(0, env_config);
 }
 
 NCZX_EXPORT void render(void) {
-    draw_env();
+    epu_draw(0);  // Draw environment background
 
     // Main directional light
     light_set(0, 0.5f, -0.7f, 0.5f);
@@ -589,29 +565,17 @@ NCZX_EXPORT void render(void) {
 ```zig
 // nether.toml: render_mode = 1, 2, or 3
 
+var env_config: [8]u64 = undefined;
+
 export fn init() void {
-    // Set up environment (provides ambient light)
-    env_gradient(
-        0,           // layer (0=base)
-        0x3366B2FF,  // zenith (top)
-        0xB2D8F2FF,  // sky horizon
-        0xB2D8F2FF,  // ground horizon
-        0x3366B2FF,  // nadir (bottom)
-        0.0,         // sun azimuth
-        0.0,         // horizon shift
-        0.0,         // sun elevation
-        0,           // sun disk
-        0,           // sun halo
-        0,           // sun intensity (disabled)
-        0,           // horizon haze
-        0,           // sun warmth
-        0,           // cloudiness
-        0            // cloud_phase
-    );
+    // Set up environment config (provides ambient light)
+    // See EPU RFC for instruction encoding
+    // ...
+    epu_set(0, &env_config);
 }
 
 export fn render() void {
-    draw_env();
+    epu_draw(0);  // Draw environment background
 
     // Main directional light
     light_set(0, 0.5, -0.7, 0.5);

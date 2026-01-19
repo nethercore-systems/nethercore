@@ -300,28 +300,23 @@ fn format_float(val: f32, buf: &mut [u8]) -> usize {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
-        // Configure and draw environment (always draw first, before any geometry)
-        env_gradient(
-            0,            // base layer
-            0x264D99FF,   // Zenith: darker blue
-            0x99BFD9FF,   // Sky horizon: light blue
-            0x99BFD9FF,   // Ground horizon: light blue
-            0x2A2A2AFF,   // Nadir: dark
-            0.0,          // sun azimuth
-            0.0,          // horizon shift
-            0.0,          // sun elevation
-            0,            // sun disk
-            0,            // sun halo
-            0,            // sun intensity (disabled)
-            0,            // horizon haze
-            0,            // sun warmth
-            0,            // cloudiness
-            0             // cloud_phase
-        );
+        // Configure and draw environment using EPU (always draw first, before any geometry)
+        // Simple blue sky gradient configuration
+        static EPU_SKY: [u64; 8] = [
+            0x100A_B428_34A5_8080, // RAMP: blue sky gradient
+            0x0000_0000_0000_0000, // NOP
+            0x0000_0000_0000_0000, // NOP
+            0x0000_0000_0000_0000, // NOP
+            0x0000_0000_0000_0000, // NOP
+            0x0000_0000_0000_0000, // NOP
+            0x0000_0000_0000_0000, // NOP
+            0x0000_0000_0000_0000, // NOP
+        ];
+        epu_set(0, EPU_SKY.as_ptr());
         light_set(0, -0.7, -0.2, -0.7);  // Direction: rays from sun near horizon
         light_color(0, 0xFFFAF0FF);      // Color: warm white
         light_intensity(0, 1.0);
-        draw_env();
+        epu_draw(0);
 
         // Update camera position to orbit around the sphere
         let orbit_radius = 4.0;

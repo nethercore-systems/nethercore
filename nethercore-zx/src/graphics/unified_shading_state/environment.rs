@@ -36,8 +36,10 @@ const _: () = assert!(core::mem::size_of::<PackedEnvironmentState>() == 64);
 const _: () = assert!(core::mem::align_of::<PackedEnvironmentState>() >= 4);
 
 /// Number of packed `u32` words per layer payload.
+#[allow(dead_code)] // Part of the public API contract even if not used internally
 pub const ENV_LAYER_WORDS: usize = 7;
 /// Packed `u32` word offset for the overlay layer payload.
+#[allow(dead_code)] // Part of the public API contract even if not used internally
 pub const ENV_OVERLAY_OFFSET: usize = ENV_LAYER_WORDS;
 
 /// Environment mode constants

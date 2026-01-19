@@ -1,6 +1,0 @@
-[game]
-id = "env-lines-inspector"
-title = "Env Lines Inspector"
-author = "Nethercore Examples"
-version = "0.1.0"
-render_mode = 2

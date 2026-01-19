@@ -1,5 +1,5 @@
 [package]
-name = "env-veil-inspector"
+name = "epu-inspector"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,7 +8,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 libm = "0.2"
-examples-common = { path = "../../examples-common" }
 
 [profile.release]
 opt-level = "s"

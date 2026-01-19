@@ -1,6 +1,12 @@
 //! Debug Sky - Sky and sun controls with debug integration
 //!
 //! Provides sky gradient and sun configuration with debug inspector integration.
+//! Now uses the EPU v2 (Environment Processing Unit) API with 128-bit instructions.
+//!
+//! # EPU v2 Format
+//!
+//! Each layer is 128 bits (2 x u64) with direct RGB colors and explicit emissive control.
+//! See `environment.rs` for the full format documentation.
 
 use crate::color;
 use crate::ffi::*;
@@ -50,8 +56,8 @@ impl DebugSky {
     /// Create a sunset sky preset
     pub fn sunset() -> Self {
         Self {
-            horizon: 0xFF804DFF,   // Orange
-            zenith: 0x4D1A80FF,    // Purple
+            horizon: 0xFF804DFF, // Orange
+            zenith: 0x4D1A80FF,  // Purple
             sun_dir_x: 0.8,
             sun_dir_y: -0.2,
             sun_dir_z: 0.0,
@@ -63,8 +69,8 @@ impl DebugSky {
     /// Create a night sky preset
     pub fn night() -> Self {
         Self {
-            horizon: 0x0D0D1AFF,   // Very dark blue
-            zenith: 0x03030DFF,    // Almost black
+            horizon: 0x0D0D1AFF, // Very dark blue
+            zenith: 0x03030DFF,  // Almost black
             sun_dir_x: 0.0,
             sun_dir_y: -1.0,
             sun_dir_z: 0.0,
@@ -74,64 +80,104 @@ impl DebugSky {
     }
 
     /// Apply sky settings and draw (call in render())
+    ///
+    /// Uses EPU v2 API with a simple RAMP layer for sky gradient.
     pub fn apply_and_draw(&self) {
+        // Use the shared EPU_SKY preset
         unsafe {
-            // Use env_gradient for a 2-color sky (zenith -> horizon for sky, horizon -> same for ground).
-            env_gradient(
-                0,
-                self.zenith,
-                self.horizon,
-                self.horizon,
-                self.zenith,
-                0.0, // sun azimuth
-                0.0, // horizon shift
-                0.0, // sun elevation
-                0,   // sun disk
-                0,   // sun halo
-                0,   // sun intensity (disabled)
-                0,   // horizon haze
-                0,   // sun warmth
-                0,   // cloudiness
-                0,   // cloud_phase
-            );
+            epu_set(0, EPU_SKY.as_ptr() as *const u64);
 
-            // Use new lighting API.
+            // Use lighting API
             light_set(0, self.sun_dir_x, self.sun_dir_y, self.sun_dir_z);
             light_color(0, self.sun_color);
             light_intensity(0, 1.0);
 
-            draw_env();
+            epu_draw(0);
         }
     }
 
     /// Just apply settings without drawing (for lighting calculations)
     pub fn apply(&self) {
         unsafe {
-            env_gradient(
-                0,
-                self.zenith,
-                self.horizon,
-                self.horizon,
-                self.zenith,
-                0.0, // sun azimuth
-                0.0, // horizon shift
-                0.0, // sun elevation
-                0,   // sun disk
-                0,   // sun halo
-                0,   // sun intensity (disabled)
-                0,   // horizon haze
-                0,   // sun warmth
-                0,   // cloudiness
-                0,   // cloud_phase
-            );
+            epu_set(0, EPU_SKY.as_ptr() as *const u64);
 
-            // Use new lighting API.
+            // Use lighting API
             light_set(0, self.sun_dir_x, self.sun_dir_y, self.sun_dir_z);
             light_color(0, self.sun_color);
             light_intensity(0, 1.0);
         }
     }
 }
+
+// =============================================================================
+// EPU v2 Preset for DebugSky
+// =============================================================================
+
+// EPU v2 helper functions (same as in environment.rs)
+const fn epu_hi(
+    opcode: u64,
+    region: u64,
+    blend: u64,
+    emissive: u64,
+    color_a: u64,
+    color_b: u64,
+) -> u64 {
+    ((opcode & 0x1F) << 59)
+        | ((region & 0x7) << 56)
+        | ((blend & 0x7) << 53)
+        | ((emissive & 0xF) << 49)
+        | ((color_a & 0xFFFFFF) << 24)
+        | (color_b & 0xFFFFFF)
+}
+
+const fn epu_lo(
+    intensity: u64,
+    param_a: u64,
+    param_b: u64,
+    param_c: u64,
+    param_d: u64,
+    direction: u64,
+    alpha_a: u64,
+    alpha_b: u64,
+) -> u64 {
+    ((intensity & 0xFF) << 56)
+        | ((param_a & 0xFF) << 48)
+        | ((param_b & 0xFF) << 40)
+        | ((param_c & 0xFF) << 32)
+        | ((param_d & 0xFF) << 24)
+        | ((direction & 0xFFFF) << 8)
+        | ((alpha_a & 0xF) << 4)
+        | (alpha_b & 0xF)
+}
+
+// Opcodes
+const OP_RAMP: u64 = 0x01;
+
+// Region masks
+const REGION_ALL: u64 = 0b111;
+
+// Blend modes
+const BLEND_ADD: u64 = 0;
+
+// Direction for +Y (up)
+const DIR_UP: u64 = 0x80FF;
+
+/// EPU v2 sky preset: blue sky (0x6496DC) to green ground (0x285028)
+/// 8 x 128-bit layers, each as [hi, lo]
+static EPU_SKY: [[u64; 2]; 8] = [
+    // Layer 0: RAMP gradient
+    [
+        epu_hi(OP_RAMP, REGION_ALL, BLEND_ADD, 8, 0x6496DC, 0x285028),
+        epu_lo(180, 200, 180, 0xA5, 0, DIR_UP, 15, 15),
+    ],
+    [0, 0], // NOP
+    [0, 0], // NOP
+    [0, 0], // NOP
+    [0, 0], // NOP
+    [0, 0], // NOP
+    [0, 0], // NOP
+    [0, 0], // NOP
+];
 
 /// Register sky debug values
 ///
@@ -158,4 +204,3 @@ pub unsafe fn register_sky_debug(
     debug_register_f32(b"sharpness".as_ptr(), 9, sun_sharpness as *const u8);
     debug_group_end();
 }
-

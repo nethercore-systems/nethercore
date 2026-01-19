@@ -262,28 +262,23 @@ pub extern "C" fn render() {
         // Apply camera
         CAMERA.apply();
 
-        // Configure and draw environment
-        env_gradient(
-            0,
-            ZENITH_COLOR,
-            HORIZON_COLOR,
-            HORIZON_COLOR,
-            0x2A2A2AFF,
-            0.0, // sun azimuth
-            0.0, // horizon shift
-            0.0, // sun elevation
-            0,   // sun disk
-            0,   // sun halo
-            0,   // sun intensity (disabled)
-            0,   // horizon haze
-            0,   // sun warmth
-            0,   // cloudiness
-            0,   // cloud_phase
-        );
+        // Configure and draw environment using EPU
+        // Simple blue sky gradient configuration
+        static EPU_SKY: [u64; 8] = [
+            0x100A_B428_34A5_8080, // RAMP: blue sky gradient
+            0x0000_0000_0000_0000, // NOP
+            0x0000_0000_0000_0000, // NOP
+            0x0000_0000_0000_0000, // NOP
+            0x0000_0000_0000_0000, // NOP
+            0x0000_0000_0000_0000, // NOP
+            0x0000_0000_0000_0000, // NOP
+            0x0000_0000_0000_0000, // NOP
+        ];
+        epu_set(0, EPU_SKY.as_ptr());
         light_set(0, SUN_DIR_X, SUN_DIR_Y, SUN_DIR_Z);
         light_color(0, SUN_COLOR);
         light_intensity(0, 1.0);
-        draw_env();
+        epu_draw(0);
 
         // Apply lights
         apply_lights();
