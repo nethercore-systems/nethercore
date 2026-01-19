@@ -67,11 +67,17 @@ fn nibble_to_signed_1(v4: u32) -> f32 {
 // OCTAHEDRAL ENCODING
 // ============================================================================
 
+// WGSL `sign()` returns 0 for 0 inputs, which breaks octahedral fold math on the
+// axes (producing visible "plus" seams). Use a non-zero sign instead.
+fn sign_not_zero(v: vec2f) -> vec2f {
+    return vec2f(select(-1.0, 1.0, v.x >= 0.0), select(-1.0, 1.0, v.y >= 0.0));
+}
+
 // Encode unit direction to octahedral [-1, 1]^2 coordinates.
 fn octahedral_encode(dir: vec3f) -> vec2f {
     let n = dir / (abs(dir.x) + abs(dir.y) + abs(dir.z));
     if n.z < 0.0 {
-        return (1.0 - abs(n.yx)) * sign(n.xy);
+        return (1.0 - abs(n.yx)) * sign_not_zero(n.xy);
     }
     return n.xy;
 }
@@ -80,7 +86,7 @@ fn octahedral_encode(dir: vec3f) -> vec2f {
 fn octahedral_decode(oct: vec2f) -> vec3f {
     var n = vec3f(oct.xy, 1.0 - abs(oct.x) - abs(oct.y));
     if n.z < 0.0 {
-        n = vec3f((1.0 - abs(n.yx)) * sign(n.xy), n.z);
+        n = vec3f((1.0 - abs(n.yx)) * sign_not_zero(n.xy), n.z);
     }
     return normalize(n);
 }

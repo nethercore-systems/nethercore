@@ -26,10 +26,16 @@ struct IrradUniforms {
 @group(0) @binding(7) var<uniform> epu_irrad: IrradUniforms;
 
 // Octahedral encode for sampling - duplicated here for standalone compute shader
+// WGSL `sign()` returns 0 for 0 inputs, which breaks octahedral fold math on the
+// axes (producing visible "plus" seams). Use a non-zero sign instead.
+fn sign_not_zero(v: vec2f) -> vec2f {
+    return vec2f(select(-1.0, 1.0, v.x >= 0.0), select(-1.0, 1.0, v.y >= 0.0));
+}
+
 fn oct_encode_local(dir: vec3f) -> vec2f {
     let n = dir / (abs(dir.x) + abs(dir.y) + abs(dir.z));
     if n.z < 0.0 {
-        return (1.0 - abs(n.yx)) * sign(n.xy);
+        return (1.0 - abs(n.yx)) * sign_not_zero(n.xy);
     }
     return n.xy;
 }

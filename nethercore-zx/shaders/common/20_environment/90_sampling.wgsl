@@ -53,10 +53,19 @@ fn sample_environment_ambient(env_index: u32, direction: vec3<f32>) -> vec3<f32>
 // Used for background rendering (env_template.wgsl).
 
 // Octahedral encode for EPU texture sampling (direction -> UV)
+// WGSL `sign()` returns 0 for 0 inputs, which breaks octahedral fold math on the
+// axes (producing visible "plus" seams). Use a non-zero sign instead.
+fn sign_not_zero(v: vec2<f32>) -> vec2<f32> {
+    return vec2<f32>(
+        select(-1.0, 1.0, v.x >= 0.0),
+        select(-1.0, 1.0, v.y >= 0.0)
+    );
+}
+
 fn epu_octahedral_encode(dir: vec3<f32>) -> vec2<f32> {
     let n = dir / (abs(dir.x) + abs(dir.y) + abs(dir.z));
     if n.z < 0.0 {
-        return (1.0 - abs(n.yx)) * sign(n.xy);
+        return (1.0 - abs(n.yx)) * sign_not_zero(n.xy);
     }
     return n.xy;
 }

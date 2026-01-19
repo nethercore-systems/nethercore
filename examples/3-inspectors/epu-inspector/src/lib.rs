@@ -90,15 +90,15 @@ const fn lo(intensity: u64, param_a: u64, param_b: u64, param_c: u64, param_d: u
         | (alpha_b & 0xF)
 }
 
-// Opcodes (v2 spec: 0x00=RAMP, 0x01=LOBE, 0x02=BAND, 0x03=FOG, 0x04=DECAL, 0x05=GRID, 0x06=SCATTER, 0x07=FLOW)
-const OP_RAMP: u64 = 0x00;
-const OP_LOBE: u64 = 0x01;
-const OP_BAND: u64 = 0x02;
-const OP_FOG: u64 = 0x03;
-const OP_DECAL: u64 = 0x04;
-const OP_GRID: u64 = 0x05;
-const OP_SCATTER: u64 = 0x06;
-const OP_FLOW: u64 = 0x07;
+// Opcodes (v2 spec: 0x00=NOP, 0x01=RAMP, 0x02=LOBE, 0x03=BAND, 0x04=FOG, 0x05=DECAL, 0x06=GRID, 0x07=SCATTER, 0x08=FLOW)
+const OP_RAMP: u64 = 0x01;
+const OP_LOBE: u64 = 0x02;
+const OP_BAND: u64 = 0x03;
+const OP_FOG: u64 = 0x04;
+const OP_DECAL: u64 = 0x05;
+const OP_GRID: u64 = 0x06;
+const OP_SCATTER: u64 = 0x07;
+const OP_FLOW: u64 = 0x08;
 
 // Regions
 const REGION_ALL: u64 = 0b111;
