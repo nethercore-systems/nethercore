@@ -14,14 +14,13 @@ use super::ZXGameContext;
 
 // Re-export functions for registration
 pub(crate) use draw::{draw_env, matcap_set};
-pub(crate) use epu::{epu_draw, epu_get_ambient, epu_set};
+pub(crate) use epu::{epu_draw, epu_set};
 
 /// Register EPU FFI functions
 pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     // EPU instruction-based API
     linker.func_wrap("env", "epu_set", epu_set)?;
     linker.func_wrap("env", "epu_draw", epu_draw)?;
-    linker.func_wrap("env", "epu_get_ambient", epu_get_ambient)?;
 
     // Legacy functions kept for compatibility
     linker.func_wrap("env", "matcap_set", matcap_set)?;

@@ -51,11 +51,15 @@ const EPU_COMPUTE_IRRAD: &str = include_str!(concat!(
     "/shaders/epu/epu_compute_irrad.wgsl"
 ));
 
-/// Output map size in texels (64x64 octahedral).
-pub const EPU_MAP_SIZE: u32 = 64;
+/// Output map size in texels (128x128 octahedral for improved quality).
+pub const EPU_MAP_SIZE: u32 = 128;
 
 /// Maximum number of environment states that can be processed.
 pub const MAX_ENV_STATES: u32 = 256;
+
+/// Initial number of texture array layers (grows on demand).
+/// Starting small saves VRAM - most games use < 16 environments.
+const EPU_INITIAL_LAYERS: u32 = 8;
 
 /// Maximum number of active environments per dispatch.
 pub const MAX_ACTIVE_ENVS: u32 = 32;
@@ -301,13 +305,19 @@ impl From<&EpuConfig> for GpuEnvironmentState {
 /// octahedral maps from EPU configurations.
 ///
 /// v2: Palette buffer removed - colors are embedded in 128-bit instructions.
+///
+/// # Texture Array Growth
+///
+/// The EPU textures use growable array layers starting at `EPU_INITIAL_LAYERS` (8)
+/// and growing to `MAX_ENV_STATES` (256) on demand. This reduces VRAM usage for
+/// games that only use a few environments while still supporting the full range.
 pub struct EpuRuntime {
     // GPU buffers
     env_states_buffer: wgpu::Buffer,
     active_env_ids_buffer: wgpu::Buffer,
     frame_uniforms_buffer: wgpu::Buffer,
 
-    // Output textures (64x64 octahedral, 256 array layers)
+    // Output textures (128x128 octahedral, growable array layers)
     env_sharp_texture: wgpu::Texture,
     env_light0_texture: wgpu::Texture,
     env_light1_texture: wgpu::Texture,
@@ -319,8 +329,12 @@ pub struct EpuRuntime {
     env_light1_view: wgpu::TextureView,
     env_light2_view: wgpu::TextureView,
 
+    // Current texture array layer capacity (grows on demand)
+    env_layer_capacity: u32,
+
     // Pipeline resources
     pipeline: wgpu::ComputePipeline,
+    bind_group_layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
 
     // Blur pipeline resources
@@ -370,13 +384,13 @@ impl EpuRuntime {
             mapped_at_creation: false,
         });
 
-        // Create EnvSharp texture (64x64 RGBA16Float, 256 array layers)
+        // Create EnvSharp texture (128x128 RGBA16Float, initial layers - grows on demand)
         let env_sharp_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("EPU EnvSharp"),
             size: wgpu::Extent3d {
                 width: EPU_MAP_SIZE,
                 height: EPU_MAP_SIZE,
-                depth_or_array_layers: MAX_ENV_STATES,
+                depth_or_array_layers: EPU_INITIAL_LAYERS,
             },
             mip_level_count: 1,
             sample_count: 1,
@@ -386,13 +400,13 @@ impl EpuRuntime {
             view_formats: &[],
         });
 
-        // Create EnvLight0 texture (64x64 RGBA16Float, 256 array layers)
+        // Create EnvLight0 texture (128x128 RGBA16Float, initial layers - grows on demand)
         let env_light0_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("EPU EnvLight0"),
             size: wgpu::Extent3d {
                 width: EPU_MAP_SIZE,
                 height: EPU_MAP_SIZE,
-                depth_or_array_layers: MAX_ENV_STATES,
+                depth_or_array_layers: EPU_INITIAL_LAYERS,
             },
             mip_level_count: 1,
             sample_count: 1,
@@ -402,13 +416,13 @@ impl EpuRuntime {
             view_formats: &[],
         });
 
-        // Create EnvLight1 texture (64x64 RGBA16Float, 256 array layers) - first blur level
+        // Create EnvLight1 texture (128x128 RGBA16Float, initial layers) - first blur level
         let env_light1_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("EPU EnvLight1"),
             size: wgpu::Extent3d {
                 width: EPU_MAP_SIZE,
                 height: EPU_MAP_SIZE,
-                depth_or_array_layers: MAX_ENV_STATES,
+                depth_or_array_layers: EPU_INITIAL_LAYERS,
             },
             mip_level_count: 1,
             sample_count: 1,
@@ -418,13 +432,13 @@ impl EpuRuntime {
             view_formats: &[],
         });
 
-        // Create EnvLight2 texture (64x64 RGBA16Float, 256 array layers) - second blur level
+        // Create EnvLight2 texture (128x128 RGBA16Float, initial layers) - second blur level
         let env_light2_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("EPU EnvLight2"),
             size: wgpu::Extent3d {
                 width: EPU_MAP_SIZE,
                 height: EPU_MAP_SIZE,
-                depth_or_array_layers: MAX_ENV_STATES,
+                depth_or_array_layers: EPU_INITIAL_LAYERS,
             },
             mip_level_count: 1,
             sample_count: 1,
@@ -797,7 +811,9 @@ impl EpuRuntime {
             env_light0_view,
             env_light1_view,
             env_light2_view,
+            env_layer_capacity: EPU_INITIAL_LAYERS,
             pipeline,
+            bind_group_layout,
             bind_group,
             blur_pipeline,
             blur_uniforms_buffer,
@@ -838,6 +854,123 @@ impl EpuRuntime {
     /// This forces all environments to be rebuilt on the next `build_envs()` call.
     pub fn invalidate_all_caches(&self) {
         self.cache.invalidate_all();
+    }
+
+    /// Get the current texture array layer capacity.
+    pub fn layer_capacity(&self) -> u32 {
+        self.env_layer_capacity
+    }
+
+    /// Ensure EPU textures have sufficient layer capacity.
+    ///
+    /// If the required capacity exceeds current capacity, all 4 textures
+    /// (EnvSharp, EnvLight0, EnvLight1, EnvLight2) are recreated with a
+    /// larger layer count. The new capacity is the next power of two that
+    /// fits the required count, capped at MAX_ENV_STATES (256).
+    ///
+    /// # Arguments
+    /// * `device` - The wgpu device for creating textures
+    /// * `required` - Minimum number of layers needed
+    ///
+    /// # Returns
+    /// `true` if textures were recreated, `false` if no change was needed.
+    pub fn ensure_layer_capacity(&mut self, device: &wgpu::Device, required: u32) -> bool {
+        if required <= self.env_layer_capacity {
+            return false;
+        }
+
+        // Grow to next power of two, capped at MAX_ENV_STATES
+        let new_capacity = (required.max(1))
+            .checked_next_power_of_two()
+            .unwrap_or(MAX_ENV_STATES)
+            .min(MAX_ENV_STATES);
+
+        tracing::debug!(
+            "Growing EPU texture layers: {} → {}",
+            self.env_layer_capacity,
+            new_capacity
+        );
+
+        // Helper to create a texture with the given label
+        let create_texture = |label: &str| {
+            device.create_texture(&wgpu::TextureDescriptor {
+                label: Some(label),
+                size: wgpu::Extent3d {
+                    width: EPU_MAP_SIZE,
+                    height: EPU_MAP_SIZE,
+                    depth_or_array_layers: new_capacity,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba16Float,
+                usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            })
+        };
+
+        // Recreate all 4 textures with new layer count
+        self.env_sharp_texture = create_texture("EPU EnvSharp");
+        self.env_light0_texture = create_texture("EPU EnvLight0");
+        self.env_light1_texture = create_texture("EPU EnvLight1");
+        self.env_light2_texture = create_texture("EPU EnvLight2");
+
+        // Recreate texture views
+        self.env_sharp_view = self.env_sharp_texture.create_view(&wgpu::TextureViewDescriptor {
+            label: Some("EPU EnvSharp View"),
+            dimension: Some(wgpu::TextureViewDimension::D2Array),
+            ..Default::default()
+        });
+        self.env_light0_view = self.env_light0_texture.create_view(&wgpu::TextureViewDescriptor {
+            label: Some("EPU EnvLight0 View"),
+            dimension: Some(wgpu::TextureViewDimension::D2Array),
+            ..Default::default()
+        });
+        self.env_light1_view = self.env_light1_texture.create_view(&wgpu::TextureViewDescriptor {
+            label: Some("EPU EnvLight1 View"),
+            dimension: Some(wgpu::TextureViewDimension::D2Array),
+            ..Default::default()
+        });
+        self.env_light2_view = self.env_light2_texture.create_view(&wgpu::TextureViewDescriptor {
+            label: Some("EPU EnvLight2 View"),
+            dimension: Some(wgpu::TextureViewDimension::D2Array),
+            ..Default::default()
+        });
+
+        // Recreate main bind group with new texture views
+        self.bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("EPU Bind Group"),
+            layout: &self.bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: self.env_states_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: self.active_env_ids_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: self.frame_uniforms_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(&self.env_sharp_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::TextureView(&self.env_light0_view),
+                },
+            ],
+        });
+
+        self.env_layer_capacity = new_capacity;
+
+        // Invalidate cache since textures were recreated
+        self.cache.invalidate_all();
+
+        true
     }
 
     /// Dispatch a blur pass from input texture to output texture.
@@ -1092,14 +1225,20 @@ impl EpuRuntime {
     /// Call `advance_frame()` once per frame before this method to ensure proper
     /// cache behavior for time-dependent environments.
     ///
+    /// # Texture Growth
+    ///
+    /// If any `env_id` in `configs` exceeds the current texture array capacity,
+    /// the textures will be automatically grown to accommodate it. This is a
+    /// one-time cost that happens rarely as games typically use few environments.
+    ///
     /// # Arguments
-    /// * `device` - The wgpu device for creating bind groups
+    /// * `device` - The wgpu device for creating bind groups (and textures if growing)
     /// * `queue` - The wgpu queue for buffer writes
     /// * `encoder` - Command encoder to record compute pass
     /// * `configs` - Slice of (env_id, config) pairs to evaluate
     /// * `time` - Current time for animation (in seconds)
     pub fn build_envs(
-        &self,
+        &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
@@ -1109,6 +1248,11 @@ impl EpuRuntime {
         if configs.is_empty() {
             return;
         }
+
+        // Ensure texture arrays have enough layers for all env_ids
+        // The +1 is because env_id is 0-indexed, so env_id=7 needs 8 layers
+        let max_env_id = configs.iter().map(|(id, _)| *id).max().unwrap_or(0);
+        self.ensure_layer_capacity(device, max_env_id + 1);
 
         // Filter configs to only those that need rebuilding (cache miss or time-dependent)
         let dirty_configs: Vec<(u32, &EpuConfig)> = configs

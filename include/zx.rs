@@ -987,33 +987,8 @@ extern "C" {
     /// - The EPU compute pass runs automatically before rendering
     pub fn epu_draw(env_id: u32);
 
-    /// Sample the ambient cube for diffuse lighting from an EPU environment.
-    ///
-    /// Returns the diffuse irradiance approximation for a given surface normal direction.
-    /// The ambient cube is extracted from the most blurred environment light level.
-    ///
-    /// # Arguments
-    /// * `env_id` — Environment slot ID (0-255)
-    /// * `normal_x`, `normal_y`, `normal_z` — Surface normal direction (normalized)
-    ///
-    /// # Returns
-    /// Packed RGB color as u32 in 0xRRGGBB00 format (alpha channel unused).
-    ///
-    /// # Usage
-    /// Use this for custom lighting calculations when you need environment-aware
-    /// diffuse lighting on objects:
-    /// ```rust,ignore
-    /// let ambient = epu_get_ambient(0, normal.x, normal.y, normal.z);
-    /// let r = ((ambient >> 24) & 0xFF) as f32 / 255.0;
-    /// let g = ((ambient >> 16) & 0xFF) as f32 / 255.0;
-    /// let b = ((ambient >> 8) & 0xFF) as f32 / 255.0;
-    /// ```
-    ///
-    /// # Notes
-    /// - Returns black (0x00000000) if env_id is invalid or not configured
-    /// - The ambient cube uses 6-direction sampling (+X, -X, +Y, -Y, +Z, -Z)
-    /// - For most use cases, the automatic EPU lighting is sufficient
-    pub fn epu_get_ambient(env_id: u32, normal_x: f32, normal_y: f32, normal_z: f32) -> u32;
+    // NOTE: epu_get_ambient() was removed - GPU readback would break rollback determinism.
+    // Ambient lighting is computed and applied entirely on the GPU side.
 
     // =========================================================================
     // Material Functions (Mode 2/3)

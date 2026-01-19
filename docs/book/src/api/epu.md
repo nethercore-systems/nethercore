@@ -108,46 +108,8 @@ pub extern fn epu_draw(env_id: u32) void;
 
 Call this **first** in your `render()` function, before any 3D geometry.
 
-### epu_get_ambient
-
-Sample the ambient cube for diffuse lighting from an EPU environment.
-
-{{#tabs global="lang"}}
-
-{{#tab name="Rust"}}
-```rust
-/// Sample the ambient cube for diffuse lighting.
-///
-/// # Arguments
-/// * `env_id` - Environment slot ID (0-255)
-/// * `normal_x`, `normal_y`, `normal_z` - Surface normal direction (normalized)
-///
-/// # Returns
-/// Packed RGB color as u32 in 0xRRGGBB00 format (alpha unused)
-fn epu_get_ambient(env_id: u32, normal_x: f32, normal_y: f32, normal_z: f32) -> u32
-```
-{{#endtab}}
-
-{{#tab name="C/C++"}}
-```c
-/// Sample the ambient cube for diffuse lighting.
-///
-/// @param env_id Environment slot ID (0-255)
-/// @param normal_x, normal_y, normal_z Surface normal direction (normalized)
-/// @return Packed RGB color as u32 in 0xRRGGBB00 format
-uint32_t epu_get_ambient(uint32_t env_id, float normal_x, float normal_y, float normal_z);
-```
-{{#endtab}}
-
-{{#tab name="Zig"}}
-```zig
-/// Sample the ambient cube for diffuse lighting.
-/// Returns packed RGB color as u32 in 0xRRGGBB00 format
-pub extern fn epu_get_ambient(env_id: u32, normal_x: f32, normal_y: f32, normal_z: f32) u32;
-```
-{{#endtab}}
-
-{{#endtabs}}
+> **Note:** Ambient lighting is computed entirely on the GPU and applied automatically to 3D geometry.
+> There is no CPU-accessible ambient query function because GPU readback would break rollback determinism.
 
 ---
 

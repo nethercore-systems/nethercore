@@ -496,40 +496,10 @@ draw_scene();
 
 ## Ambient Lighting
 
-Use `epu_get_ambient()` for custom lighting calculations:
+Ambient lighting is computed entirely on the GPU and applied automatically to 3D geometry via the `emissive` field on each layer. Layers with `emissive > 0` contribute to the ambient cube that lights the scene.
 
-{{#tabs global="lang"}}
-
-{{#tab name="Rust"}}
-```rust
-let ambient = unsafe { epu_get_ambient(0, normal.x, normal.y, normal.z) };
-let r = ((ambient >> 24) & 0xFF) as f32 / 255.0;
-let g = ((ambient >> 16) & 0xFF) as f32 / 255.0;
-let b = ((ambient >> 8) & 0xFF) as f32 / 255.0;
-```
-{{#endtab}}
-
-{{#tab name="C/C++"}}
-```c
-uint32_t ambient = epu_get_ambient(0, normal.x, normal.y, normal.z);
-float r = (float)((ambient >> 24) & 0xFF) / 255.0f;
-float g = (float)((ambient >> 16) & 0xFF) / 255.0f;
-float b = (float)((ambient >> 8) & 0xFF) / 255.0f;
-```
-{{#endtab}}
-
-{{#tab name="Zig"}}
-```zig
-const ambient = epu_get_ambient(0, normal.x, normal.y, normal.z);
-const r = @intToFloat(f32, (ambient >> 24) & 0xFF) / 255.0;
-const g = @intToFloat(f32, (ambient >> 16) & 0xFF) / 255.0;
-const b = @intToFloat(f32, (ambient >> 8) & 0xFF) / 255.0;
-```
-{{#endtab}}
-
-{{#endtabs}}
-
-For most use cases, the automatic EPU lighting is sufficient.
+> **Note:** There is no CPU-accessible ambient query function because GPU readback would break rollback determinism.
+> For custom lighting effects, use the `emissive` field to control how much each layer contributes to scene lighting.
 
 ---
 

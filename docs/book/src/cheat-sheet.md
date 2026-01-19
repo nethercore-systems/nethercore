@@ -649,9 +649,6 @@ epu_set(env_id, config_ptr)           // Upload config to slot (0-255)
 // Draw environment background
 epu_draw(env_id)                      // Render background for env slot
 
-// Sample ambient lighting
-epu_get_ambient(env_id, nx, ny, nz) -> u32  // Returns 0xRRGGBB00
-
 // Legacy compatibility
 draw_env()                            // Draws env_id 0
 ```
@@ -665,9 +662,6 @@ void epu_set(uint8_t env_id, const uint64_t* config);
 // Draw environment background
 void epu_draw(uint32_t env_id);
 
-// Sample ambient lighting (returns 0xRRGGBB00)
-uint32_t epu_get_ambient(uint32_t env_id, float nx, float ny, float nz);
-
 // Legacy compatibility
 void draw_env(void);                  // Draws env_id 0
 ```
@@ -680,9 +674,6 @@ epu_set(env_id: u8, config: [*]const u64) void
 
 // Draw environment background
 epu_draw(env_id: u32) void
-
-// Sample ambient lighting (returns 0xRRGGBB00)
-epu_get_ambient(env_id: u32, nx: f32, ny: f32, nz: f32) u32
 
 // Legacy compatibility
 draw_env() void                       // Draws env_id 0

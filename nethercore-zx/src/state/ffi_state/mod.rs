@@ -13,7 +13,7 @@ use super::{
     SkeletonData, SkeletonGpuInfo, StatePool, ZXInitConfig,
 };
 
-use crate::graphics::epu::{AmbientCube, EpuConfig};
+use crate::graphics::epu::EpuConfig;
 
 // Re-export submodules
 mod material;
@@ -166,10 +166,11 @@ pub struct ZXFFIState {
     // EPU (Environment Processing Unit) state - instruction-based API
     /// EPU configurations indexed by env_id (0-255)
     pub epu_configs: HashMap<u32, EpuConfig>,
-    /// Set of env_ids that have been modified and need GPU rebuild
+    /// Set of env_ids that have been modified and need GPU rebuild.
+    /// NOTE: Currently vestigial - dirty tracking happens in EpuCache via hash comparison.
+    /// Kept for potential future use (e.g., incremental updates, debug tooling).
     pub epu_dirty_envs: HashSet<u32>,
-    /// Cached ambient cube data per env_id (computed by GPU, read back for FFI)
-    pub epu_ambient_cubes: HashMap<u32, AmbientCube>,
+    // NOTE: epu_ambient_cubes was removed - GPU readback would break rollback determinism
 }
 
 impl Default for ZXFFIState {
@@ -257,7 +258,6 @@ impl Default for ZXFFIState {
             // EPU (instruction-based) state
             epu_configs: HashMap::new(),
             epu_dirty_envs: HashSet::new(),
-            epu_ambient_cubes: HashMap::new(),
         }
     }
 }

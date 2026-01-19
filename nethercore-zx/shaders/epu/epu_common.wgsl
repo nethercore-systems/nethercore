@@ -320,7 +320,8 @@ fn apply_blend(dst: vec3f, s: LayerSample, blend: u32) -> vec3f {
     let a = saturate(s.w);
     switch blend {
         case BLEND_ADD: {
-            return dst + src * a;
+            // Clamp to prevent washed-out colors from additive accumulation
+            return saturate3(dst + src * a);
         }
         case BLEND_MULTIPLY: {
             // Absorption/tint: lerp towards multiplying by src.
@@ -335,7 +336,8 @@ fn apply_blend(dst: vec3f, s: LayerSample, blend: u32) -> vec3f {
         }
         case BLEND_SCREEN: {
             // Screen blend: 1 - (1-dst)*(1-src*a)
-            return vec3f(1.0) - (vec3f(1.0) - dst) * (vec3f(1.0) - src * a);
+            // Clamp to handle edge cases with extreme values
+            return saturate3(vec3f(1.0) - (vec3f(1.0) - dst) * (vec3f(1.0) - src * a));
         }
         case BLEND_HSV_MOD: {
             // HSV modulation placeholder - shifts hue/sat/val by src
@@ -352,10 +354,12 @@ fn apply_blend(dst: vec3f, s: LayerSample, blend: u32) -> vec3f {
             let lo = 2.0 * dst * src;
             let hi = vec3f(1.0) - 2.0 * (vec3f(1.0) - dst) * (vec3f(1.0) - src);
             let overlay = select(hi, lo, dst < vec3f(0.5));
-            return mix(dst, overlay, a);
+            // Clamp to handle edge cases
+            return saturate3(mix(dst, overlay, a));
         }
         default: {
-            return dst + src * a;
+            // Clamp default additive blend
+            return saturate3(dst + src * a);
         }
     }
 }

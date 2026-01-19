@@ -409,7 +409,7 @@ impl ZXGraphics {
     /// * `configs` - Slice of (env_id, config) pairs to evaluate
     /// * `time` - Current time for animation (in seconds)
     pub fn build_epu_environments(
-        &self,
+        &mut self,
         encoder: &mut wgpu::CommandEncoder,
         configs: &[(u32, &crate::graphics::epu::EpuConfig)],
         time: f32,

@@ -745,33 +745,8 @@ NCZX_IMPORT void epu_set(uint32_t env_id, const uint64_t* config_ptr);
 /** - The EPU compute pass runs automatically before rendering */
 NCZX_IMPORT void epu_draw(uint32_t env_id);
 
-/** Sample the ambient cube for diffuse lighting from an EPU environment. */
-/**  */
-/** Returns the diffuse irradiance approximation for a given surface normal direction. */
-/** The ambient cube is extracted from the most blurred environment light level. */
-/**  */
-/** # Arguments */
-/** * `env_id` — Environment slot ID (0-255) */
-/** * `normal_x`, `normal_y`, `normal_z` — Surface normal direction (normalized) */
-/**  */
-/** # Returns */
-/** Packed RGB color as u32 in 0xRRGGBB00 format (alpha channel unused). */
-/**  */
-/** # Usage */
-/** Use this for custom lighting calculations when you need environment-aware */
-/** diffuse lighting on objects: */
-/** ```rust,ignore */
-/** let ambient = epu_get_ambient(0, normal.x, normal.y, normal.z); */
-/** let r = ((ambient >> 24) & 0xFF) as f32 / 255.0; */
-/** let g = ((ambient >> 16) & 0xFF) as f32 / 255.0; */
-/** let b = ((ambient >> 8) & 0xFF) as f32 / 255.0; */
-/** ``` */
-/**  */
-/** # Notes */
-/** - Returns black (0x00000000) if env_id is invalid or not configured */
-/** - The ambient cube uses 6-direction sampling (+X, -X, +Y, -Y, +Z, -Z) */
-/** - For most use cases, the automatic EPU lighting is sufficient */
-NCZX_IMPORT uint32_t epu_get_ambient(uint32_t env_id, float normal_x, float normal_y, float normal_z);
+/* NOTE: epu_get_ambient() was removed - GPU readback would break rollback determinism. */
+/* Ambient lighting is computed and applied entirely on the GPU side. */
 
 /** Bind an MRE texture (Metallic-Roughness-Emissive) to slot 1. */
 NCZX_IMPORT void material_mre(uint32_t texture);
