@@ -1,12 +1,12 @@
 //! Bind group cache key for frame bind groups
 //!
-//! The frame bind group only needs recreation when buffer capacities change
-//! or render mode changes. This module provides the key type for cache invalidation.
+//! The frame bind group only needs recreation when buffer capacities change,
+//! render mode changes, or EPU render-bound resources are recreated.
 
 use std::hash::{Hash, Hasher};
 
 /// Key for detecting when frame bind group needs recreation.
-/// When any buffer capacity or render mode changes, the bind group must be recreated.
+/// When any buffer capacity, render mode, or EPU resource version changes, the bind group must be recreated.
 #[derive(Hash, PartialEq, Eq)]
 pub(super) struct BindGroupKey {
     pub unified_transforms_capacity: usize,
@@ -15,6 +15,7 @@ pub(super) struct BindGroupKey {
     pub mvp_indices_capacity: usize,
     pub render_mode: u8,
     pub quad_instance_capacity: u64,
+    pub epu_resource_version: u64,
 }
 
 impl BindGroupKey {

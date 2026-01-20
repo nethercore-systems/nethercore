@@ -5,7 +5,7 @@
 //!
 //! # EPU v2 Format
 //!
-//! Each layer is 128 bits (2 x u64) with direct RGB colors and explicit emissive control.
+//! Each layer is 128 bits (2 x u64) with direct RGB colors.
 //! See `environment.rs` for the full format documentation.
 
 use crate::color;
@@ -118,14 +118,13 @@ const fn epu_hi(
     opcode: u64,
     region: u64,
     blend: u64,
-    emissive: u64,
     color_a: u64,
     color_b: u64,
 ) -> u64 {
     ((opcode & 0x1F) << 59)
         | ((region & 0x7) << 56)
         | ((blend & 0x7) << 53)
-        | ((emissive & 0xF) << 49)
+        // bits 52..49 reserved
         | ((color_a & 0xFFFFFF) << 24)
         | (color_b & 0xFFFFFF)
 }
@@ -167,7 +166,7 @@ const DIR_UP: u64 = 0x80FF;
 static EPU_SKY: [[u64; 2]; 8] = [
     // Layer 0: RAMP gradient
     [
-        epu_hi(OP_RAMP, REGION_ALL, BLEND_ADD, 8, 0x6496DC, 0x285028),
+        epu_hi(OP_RAMP, REGION_ALL, BLEND_ADD, 0x6496DC, 0x285028),
         epu_lo(180, 200, 180, 0xA5, 0, DIR_UP, 15, 15),
     ],
     [0, 0], // NOP

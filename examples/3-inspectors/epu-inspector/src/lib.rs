@@ -7,7 +7,7 @@
 //! # v2 Format (128-bit instructions)
 //!
 //! Each layer is 128 bits (2 x u64) with the following layout:
-//! - hi word: opcode(5), region(3), blend(3), emissive(4), reserved(1), color_a(24), color_b(24)
+//! - hi word: opcode(5), region(3), blend(3), reserved4(4), reserved(1), color_a(24), color_b(24)
 //! - lo word: intensity(8), param_a(8), param_b(8), param_c(8), param_d(8), direction(16), alpha_a(4), alpha_b(4)
 //!
 //! Features:
@@ -50,7 +50,7 @@ use ffi::*;
 //   bits 63..59: opcode     (5)   - NOP=0, RAMP=1, LOBE=2, BAND=3, FOG=4, DECAL=5, GRID=6, SCATTER=7, FLOW=8
 //   bits 58..56: region     (3)   - Bitfield: SKY=0b100, WALLS=0b010, FLOOR=0b001, ALL=0b111
 //   bits 55..53: blend      (3)   - ADD=0, MULTIPLY=1, MAX=2, LERP=3, SCREEN=4, HSV_MOD=5, MIN=6, OVERLAY=7
-//   bits 52..49: emissive   (4)   - L_light0 contribution (0=decorative, 15=full)
+//   bits 52..49: reserved   (4)
 //   bit  48:     reserved   (1)
 //   bits 47..24: color_a    (24)  - RGB24 primary color
 //   bits 23..0:  color_b    (24)  - RGB24 secondary color
@@ -69,11 +69,11 @@ use ffi::*;
 // Slots 4-7: Feature layers (DECAL, GRID, SCATTER, FLOW)
 
 // Helper to build v2 hi word
-const fn hi(opcode: u64, region: u64, blend: u64, emissive: u64, color_a: u64, color_b: u64) -> u64 {
+const fn hi(opcode: u64, region: u64, blend: u64, _reserved4: u64, color_a: u64, color_b: u64) -> u64 {
     ((opcode & 0x1F) << 59)
         | ((region & 0x7) << 56)
         | ((blend & 0x7) << 53)
-        | ((emissive & 0xF) << 49)
+        // bits 52..49 reserved
         | ((color_a & 0xFFFFFF) << 24)
         | (color_b & 0xFFFFFF)
 }
@@ -132,11 +132,11 @@ const NOP_LAYER: [u64; 2] = [0, 0];
 const PRESET_SUNNY_MEADOW: [[u64; 2]; 8] = [
     // RAMP: sky=blue, floor=green
     [hi(OP_RAMP, REGION_ALL, BLEND_ADD, 0, 0x6496DC, 0x508C50), lo(180, 200, 180, 150, 0xA5, DIR_UP, 15, 15)],
-    // LOBE: warm sun glow, emissive=15
+    // LOBE: warm sun glow
     [hi(OP_LOBE, REGION_ALL, BLEND_ADD, 15, 0xFFF0C8, 0xFFE8B0), lo(180, 32, 0, 0, 0, DIR_SUN, 15, 12)],
     NOP_LAYER,
     NOP_LAYER,
-    // DECAL: sun disk, emissive=15
+    // DECAL: sun disk
     [hi(OP_DECAL, REGION_SKY, BLEND_ADD, 15, 0xFFFFFF, 0xFFDCB4), lo(255, 0x02, 12, 0, 0, DIR_SUN, 15, 15)],
     // FLOW: clouds (LERP)
     [hi(OP_FLOW, REGION_SKY, BLEND_LERP, 0, 0xFFFFFF, 0xE0E8F0), lo(60, 32, 20, 0x20, 0, DIR_UP, 15, 8)],
@@ -171,7 +171,7 @@ const PRESET_VOID_STARS: [[u64; 2]; 8] = [
     NOP_LAYER,
     NOP_LAYER,
     NOP_LAYER,
-    // SCATTER: white stars, emissive=15
+    // SCATTER: white stars
     [hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 15, 0xFFFFFF, 0xAABBFF), lo(255, 200, 20, 0x83, 0, 0, 15, 10)],
     // SCATTER: blue distant stars
     [hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 12, 0x8888FF, 0x4444AA), lo(180, 300, 8, 0x41, 0, 0, 12, 8)],
@@ -223,7 +223,7 @@ const PRESET_STORM_FRONT: [[u64; 2]; 8] = [
     [hi(OP_BAND, REGION_SKY, BLEND_MULTIPLY, 0, 0x101820, 0x081018), lo(120, 60, 140, 0, 0, DIR_UP, 15, 12)],
     // FOG: mist
     [hi(OP_FOG, REGION_ALL, BLEND_LERP, 0, 0x404850, 0x303840), lo(100, 120, 80, 0, 0, DIR_UP, 10, 8)],
-    // SCATTER: lightning flashes, high emissive
+    // SCATTER: lightning flashes
     [hi(OP_SCATTER, REGION_SKY, BLEND_ADD, 15, 0xFFFFFF, 0xCCDDFF), lo(255, 10, 80, 0xF2, 0, 0, 15, 12)],
     // FLOW: rain
     [hi(OP_FLOW, REGION_ALL, BLEND_LERP, 0, 0x606880, 0x404860), lo(60, 80, 200, 0x11, 0, 0x7F80, 12, 8)],
@@ -542,6 +542,8 @@ static mut SPHERE_MESH: u32 = 0;
 static mut TORUS_MESH: u32 = 0;
 static mut CUBE_MESH: u32 = 0;
 static mut SHAPE_INDEX: i32 = 0;
+static mut MATERIAL_METALLIC_U8: i32 = 77; // ~0.30 * 255
+static mut MATERIAL_ROUGHNESS_U8: i32 = 128; // ~0.50 * 255
 
 const SHAPE_COUNT: i32 = 3;
 const SHAPE_NAMES: [&str; 3] = ["Sphere", "Cube", "Torus"];
@@ -574,16 +576,20 @@ pub extern "C" fn init() {
         debug_register_i32(
             b"index".as_ptr(),
             5,
-            &PRESET_INDEX as *const i32 as *const u8,
+            &raw const PRESET_INDEX as *const i32 as *const u8,
         );
         debug_group_end();
 
         debug_group_begin(b"camera".as_ptr(), 6);
-        debug_register_f32(b"angle".as_ptr(), 5, &CAM_ANGLE as *const f32 as *const u8);
+        debug_register_f32(
+            b"angle".as_ptr(),
+            5,
+            &raw const CAM_ANGLE as *const f32 as *const u8,
+        );
         debug_register_f32(
             b"elevation".as_ptr(),
             9,
-            &CAM_ELEVATION as *const f32 as *const u8,
+            &raw const CAM_ELEVATION as *const f32 as *const u8,
         );
         debug_group_end();
 
@@ -591,7 +597,20 @@ pub extern "C" fn init() {
         debug_register_i32(
             b"index".as_ptr(),
             5,
-            &SHAPE_INDEX as *const i32 as *const u8,
+            &raw const SHAPE_INDEX as *const i32 as *const u8,
+        );
+        debug_group_end();
+
+        debug_group_begin(b"material".as_ptr(), 8);
+        debug_register_i32(
+            b"metallic_u8".as_ptr(),
+            11,
+            &raw const MATERIAL_METALLIC_U8 as *const i32 as *const u8,
+        );
+        debug_register_i32(
+            b"roughness_u8".as_ptr(),
+            12,
+            &raw const MATERIAL_ROUGHNESS_U8 as *const i32 as *const u8,
         );
         debug_group_end();
     }
@@ -624,6 +643,18 @@ pub extern "C" fn on_debug_change() {
         } else {
             CAM_ELEVATION
         };
+
+        // Clamp material parameters (0..255)
+        if MATERIAL_METALLIC_U8 < 0 {
+            MATERIAL_METALLIC_U8 = 0;
+        } else if MATERIAL_METALLIC_U8 > 255 {
+            MATERIAL_METALLIC_U8 = 255;
+        }
+        if MATERIAL_ROUGHNESS_U8 < 0 {
+            MATERIAL_ROUGHNESS_U8 = 0;
+        } else if MATERIAL_ROUGHNESS_U8 > 255 {
+            MATERIAL_ROUGHNESS_U8 = 255;
+        }
 
         // Update EPU configuration
         epu_set(0, PRESETS[PRESET_INDEX as usize].as_ptr() as *const u64);
@@ -689,8 +720,8 @@ pub extern "C" fn render() {
         // Draw a shape to show lighting from the environment
         push_identity();
         set_color(0x888899FF);
-        material_metallic(0.3);
-        material_roughness(0.5);
+        material_metallic((MATERIAL_METALLIC_U8 as f32) / 255.0);
+        material_roughness((MATERIAL_ROUGHNESS_U8 as f32) / 255.0);
 
         let mesh = match SHAPE_INDEX {
             0 => SPHERE_MESH,

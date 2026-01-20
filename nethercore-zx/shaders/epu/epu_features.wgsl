@@ -48,7 +48,7 @@ fn eval_decal(
     if region_w < 0.001 { return LayerSample(vec3f(0.0), 0.0); }
 
     let center = decode_dir16(instr_dir16(instr));
-    let angle = acos(saturate(dot(dir, center)));
+    let angle = acos(epu_saturate(dot(dir, center)));
 
     let pa = instr_a(instr);
     let shape_type = (pa >> 4u) & 0xFu;
@@ -236,7 +236,7 @@ fn eval_scatter(
     }
     let point_dir = normalize(v);
 
-    let dist = acos(saturate(dot(dir, point_dir)));
+    let dist = acos(epu_saturate(dot(dir, point_dir)));
     let point = smoothstep(size, size * 0.3, dist);
 
     let tw = select(1.0, (0.5 + 0.5 * sin(h.w * TAU + time * twinkle_speed)), twinkle > 0.001);
@@ -265,7 +265,7 @@ fn eval_scatter(
 //   direction: Flow direction (oct-u16)
 // ============================================================================
 
-fn hash21(p: vec2f) -> f32 {
+fn epu_hash21(p: vec2f) -> f32 {
     let h = dot(p, vec2f(127.1, 311.7));
     return fract(sin(h) * 43758.5453123);
 }
@@ -273,10 +273,10 @@ fn hash21(p: vec2f) -> f32 {
 fn value_noise(p: vec2f) -> f32 {
     let i = floor(p);
     let f = fract(p);
-    let a = hash21(i + vec2f(0.0, 0.0));
-    let b = hash21(i + vec2f(1.0, 0.0));
-    let c = hash21(i + vec2f(0.0, 1.0));
-    let d = hash21(i + vec2f(1.0, 1.0));
+    let a = epu_hash21(i + vec2f(0.0, 0.0));
+    let b = epu_hash21(i + vec2f(1.0, 0.0));
+    let c = epu_hash21(i + vec2f(0.0, 1.0));
+    let d = epu_hash21(i + vec2f(1.0, 1.0));
     let u = f * f * (3.0 - 2.0 * f); // smoothstep
     return mix(mix(a, b, u.x), mix(c, d, u.x), u.y) * 2.0 - 1.0;
 }

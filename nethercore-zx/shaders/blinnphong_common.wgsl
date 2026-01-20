@@ -147,10 +147,10 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     // Mode 2: direct from value1, Mode 3: derived from shininess
     //FS_MODE2_3_ROUGHNESS
 
-    // Diffuse ambient (normal direction) - use EPU ambient cube
+    // Diffuse ambient (normal direction) - use EPU SH9
     let diffuse_env = sample_epu_ambient(shading.environment_index, N);
 
-    // Specular reflection (reflection direction) - use EPU blur pyramid
+    // Specular reflection (reflection direction) - use EPU radiance mip pyramid
     let R = reflect(-view_dir, N);
     let specular_env = sample_epu_reflection(shading.environment_index, R, roughness);
 

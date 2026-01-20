@@ -102,52 +102,64 @@ const ENV_BLEND_SCREEN: u32 = 3u;    // 1 - (1-base) * (1-overlay)
 // (not declared here - only used by quad shader)
 
 // ============================================================================
-// EPU (Environment Processing Unit) Textures - Binding 6-7
+// EPU (Environment Processing Unit) Texture - Binding 6-7
 // ============================================================================
-// Precomputed octahedral environment maps from EPU compute pipeline.
-// EnvSharp: Full resolution procedural environment for background rendering.
+// Precomputed octahedral environment radiance maps from EPU compute pipeline.
+// The texture is mip-mapped, enabling continuous roughness -> LOD sampling for
+// reflections.
 
-// Binding 6: EPU EnvSharp texture array (64x64 octahedral, 256 layers)
-@group(0) @binding(6) var epu_env_sharp: texture_2d_array<f32>;
+// Binding 6: EPU EnvRadiance texture array (octahedral, 256 layers)
+@group(0) @binding(6) var epu_env_radiance: texture_2d_array<f32>;
 
 // Binding 7: EPU linear sampler for environment map sampling
 @group(0) @binding(7) var epu_sampler: sampler;
 
 // ============================================================================
-// EPU Blur Pyramid Textures - Binding 8-10
+// EPU STATE + FRAME UNIFORMS (Bindings 8-9)
 // ============================================================================
-// Pre-blurred environment maps for roughness-based reflection sampling.
-// EnvLight0: Sharp lighting (minimal blur)
-// EnvLight1: Medium blur level
-// EnvLight2: Heavy blur level (diffuse-like)
+// These enable procedural evaluation of the EPU per-fragment for sky/background
+// and for specular high-frequency residuals.
 
-// Binding 8: EPU EnvLight0 texture array (64x64 octahedral, 256 layers)
-@group(0) @binding(8) var epu_env_light0: texture_2d_array<f32>;
-
-// Binding 9: EPU EnvLight1 texture array (64x64 octahedral, 256 layers)
-@group(0) @binding(9) var epu_env_light1: texture_2d_array<f32>;
-
-// Binding 10: EPU EnvLight2 texture array (64x64 octahedral, 256 layers)
-@group(0) @binding(10) var epu_env_light2: texture_2d_array<f32>;
-
-// ============================================================================
-// EPU Ambient Cubes Buffer - Binding 11
-// ============================================================================
-// Pre-computed 6-direction ambient cube irradiance samples from EnvLight2.
-// Used for efficient diffuse lighting (avoids expensive texture sampling).
-
-// Ambient cube storage for 6-direction diffuse irradiance samples (96 bytes)
-struct EpuAmbientCube {
-    pos_x: vec3f, _pad0: f32,
-    neg_x: vec3f, _pad1: f32,
-    pos_y: vec3f, _pad2: f32,
-    neg_y: vec3f, _pad3: f32,
-    pos_z: vec3f, _pad4: f32,
-    neg_z: vec3f, _pad5: f32,
+// Packed EPU environment state (128 bytes): 8 x 128-bit layers as vec4<u32>.
+struct EpuPackedEnvironmentState {
+    layers: array<vec4u, 8>,
 }
 
-// Binding 11: EPU ambient cubes storage buffer (256 entries)
-@group(0) @binding(11) var<storage, read> epu_ambient_cubes: array<EpuAmbientCube>;
+// Binding 8: Packed EPU environment states (256 entries)
+@group(0) @binding(8) var<storage, read> epu_states: array<EpuPackedEnvironmentState>;
+
+// Frame uniforms shared between compute and render EPU evaluation.
+struct EpuFrameUniforms {
+    time: f32,
+    active_count: u32,
+    map_size: u32,
+    _pad0: u32,
+}
+
+// Binding 9: EPU frame uniforms (time + map sizing)
+@group(0) @binding(9) var<uniform> epu_frame: EpuFrameUniforms;
+
+// ============================================================================
+// EPU SH9 Buffer - Binding 11
+// ============================================================================
+// Pre-computed L2 (9-coefficient) spherical harmonics for diffuse irradiance.
+// Much smoother on curved surfaces than the 6-direction ambient cube.
+
+// SH9 storage for L2 diffuse irradiance (9 x vec3 padded to vec4 = 144 bytes)
+struct EpuSh9 {
+    c0: vec3f, _pad0: f32,
+    c1: vec3f, _pad1: f32,
+    c2: vec3f, _pad2: f32,
+    c3: vec3f, _pad3: f32,
+    c4: vec3f, _pad4: f32,
+    c5: vec3f, _pad5: f32,
+    c6: vec3f, _pad6: f32,
+    c7: vec3f, _pad7: f32,
+    c8: vec3f, _pad8: f32,
+}
+
+// Binding 11: EPU SH9 storage buffer (256 entries)
+@group(0) @binding(11) var<storage, read> epu_sh9: array<EpuSh9>;
 
 // Helper to expand 3x4 bone matrix → 4x4 for skinning calculations
 // Input is row-major, output is column-major (WGSL mat4x4 convention)

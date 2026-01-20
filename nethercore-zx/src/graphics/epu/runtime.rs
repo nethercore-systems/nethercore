@@ -1,13 +1,14 @@
 //! EPU GPU Runtime (v2 - 128-bit instructions)
 //!
 //! This module provides the GPU infrastructure to execute EPU compute shaders
-//! and produce EnvSharp and EnvLight0 octahedral maps.
+//! and produce an EnvRadiance octahedral map with a true mip pyramid, plus SH9
+//! coefficients for diffuse ambient lighting.
 //!
 //! # Architecture
 //!
 //! The EPU runtime manages:
 //! - GPU buffers for environment states and frame uniforms
-//! - Storage textures for EnvSharp and EnvLight0 output
+//! - Storage texture for EnvRadiance output (mip-mapped)
 //! - Compute pipeline and bind groups
 //!
 //! # v2 Changes
@@ -51,8 +52,124 @@ const EPU_COMPUTE_IRRAD: &str = include_str!(concat!(
     "/shaders/epu/epu_compute_irrad.wgsl"
 ));
 
-/// Output map size in texels (128x128 octahedral for improved quality).
+/// Default output map size in texels (octahedral).
+///
+/// Override via [`EpuRuntimeSettings`] or `NETHERCORE_EPU_MAP_SIZE`.
 pub const EPU_MAP_SIZE: u32 = 128;
+
+/// Minimum mip size for the EPU radiance pyramid.
+///
+/// Mips smaller than this provide little value for stylized IBL and can be
+/// disproportionately expensive to manage (more passes, tiny dispatches).
+///
+/// Override via [`EpuRuntimeSettings`] or `NETHERCORE_EPU_MIN_MIP_SIZE`.
+pub const EPU_MIN_MIP_SIZE: u32 = 4;
+
+/// Target mip size for diffuse irradiance (SH9) extraction.
+///
+/// The SH9 pass samples many directions; using a coarser mip reduces noise and
+/// better matches "diffuse = low frequency".
+const EPU_IRRAD_TARGET_SIZE: u32 = 16;
+
+/// Runtime knobs for EPU radiance generation.
+///
+/// `map_size` and `min_mip_size` are intentionally exposed to make it easy to
+/// experiment with quality/perf tradeoffs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EpuRuntimeSettings {
+    /// Base EnvRadiance resolution (width == height).
+    pub map_size: u32,
+    /// Smallest mip level to generate (inclusive).
+    pub min_mip_size: u32,
+}
+
+impl Default for EpuRuntimeSettings {
+    fn default() -> Self {
+        Self {
+            map_size: EPU_MAP_SIZE,
+            min_mip_size: EPU_MIN_MIP_SIZE,
+        }
+    }
+}
+
+impl EpuRuntimeSettings {
+    /// Read runtime overrides from environment variables:
+    /// - `NETHERCORE_EPU_MAP_SIZE`
+    /// - `NETHERCORE_EPU_MIN_MIP_SIZE`
+    ///
+    /// Invalid values fall back to defaults.
+    pub fn from_env() -> Self {
+        fn parse_u32(var: &str) -> Option<u32> {
+            std::env::var(var).ok()?.parse::<u32>().ok()
+        }
+
+        let mut settings = Self::default();
+
+        if let Some(v) = parse_u32("NETHERCORE_EPU_MAP_SIZE") {
+            settings.map_size = v;
+        }
+        if let Some(v) = parse_u32("NETHERCORE_EPU_MIN_MIP_SIZE") {
+            settings.min_mip_size = v;
+        }
+
+        settings.sanitized()
+    }
+
+    /// Clamp/repair settings into a valid state (power-of-two, min<=base).
+    #[must_use]
+    pub fn sanitized(self) -> Self {
+        let mut out = self;
+
+        if out.map_size < 1 {
+            out.map_size = EPU_MAP_SIZE;
+        }
+        if out.min_mip_size < 1 {
+            out.min_mip_size = EPU_MIN_MIP_SIZE;
+        }
+
+        if !out.map_size.is_power_of_two() {
+            out.map_size = out.map_size.next_power_of_two().max(1);
+        }
+        if !out.min_mip_size.is_power_of_two() {
+            out.min_mip_size = out.min_mip_size.next_power_of_two().max(1);
+        }
+
+        if out.min_mip_size > out.map_size {
+            out.min_mip_size = out.map_size;
+        }
+
+        out
+    }
+}
+
+fn calc_mip_sizes(base_size: u32, min_size: u32) -> Vec<u32> {
+    debug_assert!(base_size >= 1);
+    debug_assert!(min_size >= 1);
+    debug_assert!(
+        base_size.is_power_of_two() && min_size.is_power_of_two(),
+        "EPU mip pyramid assumes power-of-two sizing (base={base_size}, min={min_size})"
+    );
+    debug_assert!(
+        min_size <= base_size,
+        "min mip size must be <= base size (base={base_size}, min={min_size})"
+    );
+
+    let mut sizes = vec![base_size];
+    let mut size = base_size;
+    while size > min_size {
+        size /= 2;
+        sizes.push(size);
+    }
+    sizes
+}
+
+fn choose_irrad_mip_level(mip_sizes: &[u32], target_size: u32) -> u32 {
+    debug_assert!(!mip_sizes.is_empty());
+    mip_sizes
+        .iter()
+        .position(|&s| s <= target_size)
+        .unwrap_or(mip_sizes.len().saturating_sub(1)) as u32
+}
 
 /// Maximum number of environment states that can be processed.
 pub const MAX_ENV_STATES: u32 = 256;
@@ -218,16 +335,6 @@ struct FrameUniforms {
     _pad0: u32,
 }
 
-/// Blur uniforms structure matching the WGSL `BlurUniforms` struct.
-#[repr(C)]
-#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct BlurUniforms {
-    active_count: u32,
-    map_size: u32,
-    blur_offset: f32,
-    _pad0: u32,
-}
-
 /// Irradiance uniforms structure matching the WGSL `IrradUniforms` struct.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -238,31 +345,32 @@ struct IrradUniforms {
     _pad2: u32,
 }
 
-/// Ambient cube storage for 6-direction diffuse irradiance samples.
+/// SH9 (L2) diffuse irradiance coefficients.
 ///
-/// Stores irradiance sampled from the most blurred environment map level
-/// in 6 axis-aligned directions for efficient diffuse lighting.
+/// These are Lambertian-convolved coefficients in the real SH basis, stored in
+/// the following order:
+/// `[Y00, Y1-1, Y10, Y11, Y2-2, Y2-1, Y20, Y21, Y22]`.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct AmbientCube {
-    /// Irradiance in +X direction
-    pub pos_x: [f32; 3],
+pub struct EpuSh9 {
+    pub c0: [f32; 3],
     _pad0: f32,
-    /// Irradiance in -X direction
-    pub neg_x: [f32; 3],
+    pub c1: [f32; 3],
     _pad1: f32,
-    /// Irradiance in +Y direction
-    pub pos_y: [f32; 3],
+    pub c2: [f32; 3],
     _pad2: f32,
-    /// Irradiance in -Y direction
-    pub neg_y: [f32; 3],
+    pub c3: [f32; 3],
     _pad3: f32,
-    /// Irradiance in +Z direction
-    pub pos_z: [f32; 3],
+    pub c4: [f32; 3],
     _pad4: f32,
-    /// Irradiance in -Z direction
-    pub neg_z: [f32; 3],
+    pub c5: [f32; 3],
     _pad5: f32,
+    pub c6: [f32; 3],
+    _pad6: f32,
+    pub c7: [f32; 3],
+    _pad7: f32,
+    pub c8: [f32; 3],
+    _pad8: f32,
 }
 
 /// GPU representation of an EPU environment state (v2 128-bit format).
@@ -301,8 +409,8 @@ impl From<&EpuConfig> for GpuEnvironmentState {
 
 /// EPU GPU runtime for environment map generation (v2).
 ///
-/// Manages GPU resources and compute pipeline for generating EnvSharp and EnvLight0
-/// octahedral maps from EPU configurations.
+/// Manages GPU resources and compute pipeline for generating EnvRadiance
+/// octahedral maps (with a downsample mip pyramid) from EPU configurations.
 ///
 /// v2: Palette buffer removed - colors are embedded in 128-bit instructions.
 ///
@@ -312,22 +420,29 @@ impl From<&EpuConfig> for GpuEnvironmentState {
 /// and growing to `MAX_ENV_STATES` (256) on demand. This reduces VRAM usage for
 /// games that only use a few environments while still supporting the full range.
 pub struct EpuRuntime {
+    settings: EpuRuntimeSettings,
+    /// Incremented whenever any render-bound EPU resources are recreated.
+    resource_version: u64,
     // GPU buffers
     env_states_buffer: wgpu::Buffer,
     active_env_ids_buffer: wgpu::Buffer,
     frame_uniforms_buffer: wgpu::Buffer,
 
-    // Output textures (128x128 octahedral, growable array layers)
-    env_sharp_texture: wgpu::Texture,
-    env_light0_texture: wgpu::Texture,
-    env_light1_texture: wgpu::Texture,
-    env_light2_texture: wgpu::Texture,
+    // Output texture: octahedral radiance map with a true mip-style pyramid.
+    // The texture is a 2D array indexed by env_id.
+    env_radiance_texture: wgpu::Texture,
 
-    // Texture views for binding
-    env_sharp_view: wgpu::TextureView,
-    env_light0_view: wgpu::TextureView,
-    env_light1_view: wgpu::TextureView,
-    env_light2_view: wgpu::TextureView,
+    // Full view (all mips) for sampling in render.
+    env_radiance_view: wgpu::TextureView,
+
+    // Per-mip views (single mip) for compute passes (build + downsample chain).
+    env_radiance_mip_views: Vec<wgpu::TextureView>,
+
+    // Cached mip sizes for dispatch (level 0 is base resolution).
+    env_mip_sizes: Vec<u32>,
+
+    // Mip level used as source for SH9 irradiance extraction.
+    irrad_source_mip: u32,
 
     // Current texture array layer capacity (grows on demand)
     env_layer_capacity: u32,
@@ -337,14 +452,15 @@ pub struct EpuRuntime {
     bind_group_layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
 
-    // Blur pipeline resources
-    blur_pipeline: wgpu::ComputePipeline,
-    blur_uniforms_buffer: wgpu::Buffer,
-    blur_sampler: wgpu::Sampler,
-    blur_bind_group_layout: wgpu::BindGroupLayout,
+    // Mip pyramid generation resources (downsample chain).
+    mip_pipeline: wgpu::ComputePipeline,
+    mip_bind_group_layout: wgpu::BindGroupLayout,
+
+    // Compute sampler shared by irradiance extraction (and any compute sampling).
+    compute_sampler: wgpu::Sampler,
 
     // Irradiance extraction resources
-    ambient_cubes_buffer: wgpu::Buffer,
+    sh9_buffer: wgpu::Buffer,
     irrad_pipeline: wgpu::ComputePipeline,
     irrad_uniforms_buffer: wgpu::Buffer,
     irrad_bind_group_layout: wgpu::BindGroupLayout,
@@ -359,6 +475,11 @@ impl EpuRuntime {
     /// # Arguments
     /// * `device` - The wgpu device to create resources on
     pub fn new(device: &wgpu::Device) -> Self {
+        Self::new_with_settings(device, EpuRuntimeSettings::from_env())
+    }
+
+    pub fn new_with_settings(device: &wgpu::Device, settings: EpuRuntimeSettings) -> Self {
+        let settings = settings.sanitized();
         // Create environment states buffer (256 environments x 128 bytes = 32KB)
         // v2: Each environment is 128 bytes (8 layers x 16 bytes per 128-bit instruction)
         let env_states_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -384,15 +505,19 @@ impl EpuRuntime {
             mapped_at_creation: false,
         });
 
-        // Create EnvSharp texture (128x128 RGBA16Float, initial layers - grows on demand)
-        let env_sharp_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("EPU EnvSharp"),
+        // Create octahedral radiance texture with a downsampled mip pyramid.
+        let env_mip_sizes = calc_mip_sizes(settings.map_size, settings.min_mip_size);
+        let mip_level_count = env_mip_sizes.len() as u32;
+        let irrad_source_mip = choose_irrad_mip_level(&env_mip_sizes, EPU_IRRAD_TARGET_SIZE);
+
+        let env_radiance_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("EPU EnvRadiance"),
             size: wgpu::Extent3d {
-                width: EPU_MAP_SIZE,
-                height: EPU_MAP_SIZE,
+                width: settings.map_size,
+                height: settings.map_size,
                 depth_or_array_layers: EPU_INITIAL_LAYERS,
             },
-            mip_level_count: 1,
+            mip_level_count,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba16Float,
@@ -400,78 +525,24 @@ impl EpuRuntime {
             view_formats: &[],
         });
 
-        // Create EnvLight0 texture (128x128 RGBA16Float, initial layers - grows on demand)
-        let env_light0_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("EPU EnvLight0"),
-            size: wgpu::Extent3d {
-                width: EPU_MAP_SIZE,
-                height: EPU_MAP_SIZE,
-                depth_or_array_layers: EPU_INITIAL_LAYERS,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba16Float,
-            usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
-        });
-
-        // Create EnvLight1 texture (128x128 RGBA16Float, initial layers) - first blur level
-        let env_light1_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("EPU EnvLight1"),
-            size: wgpu::Extent3d {
-                width: EPU_MAP_SIZE,
-                height: EPU_MAP_SIZE,
-                depth_or_array_layers: EPU_INITIAL_LAYERS,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba16Float,
-            usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
-        });
-
-        // Create EnvLight2 texture (128x128 RGBA16Float, initial layers) - second blur level
-        let env_light2_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("EPU EnvLight2"),
-            size: wgpu::Extent3d {
-                width: EPU_MAP_SIZE,
-                height: EPU_MAP_SIZE,
-                depth_or_array_layers: EPU_INITIAL_LAYERS,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba16Float,
-            usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
-        });
-
-        // Create texture views
-        let env_sharp_view = env_sharp_texture.create_view(&wgpu::TextureViewDescriptor {
-            label: Some("EPU EnvSharp View"),
+        // Full view (all mips) for sampling in render.
+        let env_radiance_view = env_radiance_texture.create_view(&wgpu::TextureViewDescriptor {
+            label: Some("EPU EnvRadiance View"),
             dimension: Some(wgpu::TextureViewDimension::D2Array),
             ..Default::default()
         });
 
-        let env_light0_view = env_light0_texture.create_view(&wgpu::TextureViewDescriptor {
-            label: Some("EPU EnvLight0 View"),
-            dimension: Some(wgpu::TextureViewDimension::D2Array),
-            ..Default::default()
-        });
-
-        let env_light1_view = env_light1_texture.create_view(&wgpu::TextureViewDescriptor {
-            label: Some("EPU EnvLight1 View"),
-            dimension: Some(wgpu::TextureViewDimension::D2Array),
-            ..Default::default()
-        });
-
-        let env_light2_view = env_light2_texture.create_view(&wgpu::TextureViewDescriptor {
-            label: Some("EPU EnvLight2 View"),
-            dimension: Some(wgpu::TextureViewDimension::D2Array),
-            ..Default::default()
-        });
+        // Per-mip views (single mip) for compute passes.
+        let env_radiance_mip_views: Vec<wgpu::TextureView> = (0..mip_level_count)
+            .map(|mip| {
+                env_radiance_texture.create_view(&wgpu::TextureViewDescriptor {
+                    dimension: Some(wgpu::TextureViewDimension::D2Array),
+                    base_mip_level: mip,
+                    mip_level_count: Some(1),
+                    ..Default::default()
+                })
+            })
+            .collect();
 
         // Concatenate shader sources in order
         let shader_source =
@@ -483,7 +554,7 @@ impl EpuRuntime {
             source: wgpu::ShaderSource::Wgsl(shader_source.into()),
         });
 
-        // Create bind group layout (v2: no palette buffer, bindings 0-4)
+        // Create bind group layout (v2: no palette buffer, bindings 0-3)
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("EPU Bind Group Layout"),
             entries: &[
@@ -531,21 +602,10 @@ impl EpuRuntime {
                     },
                     count: None,
                 },
-                // @binding(4) epu_out_light0: storage texture 2d array (write)
-                wgpu::BindGroupLayoutEntry {
-                    binding: 4,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::StorageTexture {
-                        access: wgpu::StorageTextureAccess::WriteOnly,
-                        format: wgpu::TextureFormat::Rgba16Float,
-                        view_dimension: wgpu::TextureViewDimension::D2Array,
-                    },
-                    count: None,
-                },
             ],
         });
 
-        // Create bind group (v2: no palette, bindings 0-4)
+        // Create bind group (v2: no palette, bindings 0-3)
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("EPU Bind Group"),
             layout: &bind_group_layout,
@@ -564,11 +624,7 @@ impl EpuRuntime {
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
-                    resource: wgpu::BindingResource::TextureView(&env_sharp_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: wgpu::BindingResource::TextureView(&env_light0_view),
+                    resource: wgpu::BindingResource::TextureView(&env_radiance_mip_views[0]),
                 },
             ],
         });
@@ -591,20 +647,12 @@ impl EpuRuntime {
         });
 
         // =====================================================================
-        // Blur pipeline resources
+        // Mip pyramid generation resources (downsample chain)
         // =====================================================================
 
-        // Create blur uniforms buffer (16 bytes)
-        let blur_uniforms_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("EPU Blur Uniforms"),
-            size: std::mem::size_of::<BlurUniforms>() as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        // Create linear filtering sampler for blur
-        let blur_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("EPU Blur Sampler"),
+        // Sampler for compute sampling (used by irradiance extraction).
+        let compute_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("EPU Compute Sampler"),
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
@@ -614,10 +662,10 @@ impl EpuRuntime {
             ..Default::default()
         });
 
-        // Create blur bind group layout matching epu_compute_blur.wgsl bindings
-        let blur_bind_group_layout =
+        // Create mip bind group layout matching epu_compute_blur.wgsl bindings
+        let mip_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("EPU Blur Bind Group Layout"),
+                label: Some("EPU Mip Bind Group Layout"),
                 entries: &[
                     // @binding(2) epu_active_env_ids: storage buffer of u32
                     wgpu::BindGroupLayoutEntry {
@@ -652,46 +700,28 @@ impl EpuRuntime {
                         },
                         count: None,
                     },
-                    // @binding(6) epu_samp: sampler
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 6,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                    // @binding(7) epu_blur: uniform buffer
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 7,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
                 ],
             });
 
-        // Create blur shader module
-        let blur_shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("EPU Compute Blur Shader"),
+        // Create mip shader module
+        let mip_shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("EPU Compute Mip Shader"),
             source: wgpu::ShaderSource::Wgsl(EPU_COMPUTE_BLUR.into()),
         });
 
-        // Create blur pipeline layout
-        let blur_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("EPU Blur Pipeline Layout"),
-            bind_group_layouts: &[&blur_bind_group_layout],
+        // Create mip pipeline layout
+        let mip_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("EPU Mip Pipeline Layout"),
+            bind_group_layouts: &[&mip_bind_group_layout],
             push_constant_ranges: &[],
         });
 
-        // Create blur compute pipeline
-        let blur_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("EPU Compute Blur Pipeline"),
-            layout: Some(&blur_pipeline_layout),
-            module: &blur_shader_module,
-            entry_point: Some("epu_kawase_blur"),
+        // Create mip compute pipeline
+        let mip_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("EPU Compute Mip Pipeline"),
+            layout: Some(&mip_pipeline_layout),
+            module: &mip_shader_module,
+            entry_point: Some("epu_downsample_mip"),
             compilation_options: Default::default(),
             cache: None,
         });
@@ -700,10 +730,10 @@ impl EpuRuntime {
         // Irradiance extraction pipeline resources
         // =====================================================================
 
-        // Create ambient cubes storage buffer (MAX_ENV_STATES * 96 bytes)
-        let ambient_cubes_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("EPU Ambient Cubes"),
-            size: (MAX_ENV_STATES as usize * std::mem::size_of::<AmbientCube>()) as u64,
+        // Create SH9 storage buffer (MAX_ENV_STATES * 144 bytes)
+        let sh9_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("EPU SH9"),
+            size: (MAX_ENV_STATES as usize * std::mem::size_of::<EpuSh9>()) as u64,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });
@@ -732,7 +762,7 @@ impl EpuRuntime {
                         },
                         count: None,
                     },
-                    // @binding(4) epu_blurred: texture_2d_array<f32> (EnvLight2)
+                    // @binding(4) epu_blurred: texture_2d_array<f32> (coarse EnvRadiance mip)
                     wgpu::BindGroupLayoutEntry {
                         binding: 4,
                         visibility: wgpu::ShaderStages::COMPUTE,
@@ -750,7 +780,7 @@ impl EpuRuntime {
                         ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                         count: None,
                     },
-                    // @binding(6) epu_ambient: storage buffer (read_write)
+                    // @binding(6) epu_sh9: storage buffer (read_write)
                     wgpu::BindGroupLayoutEntry {
                         binding: 6,
                         visibility: wgpu::ShaderStages::COMPUTE,
@@ -794,32 +824,30 @@ impl EpuRuntime {
             label: Some("EPU Compute Irrad Pipeline"),
             layout: Some(&irrad_pipeline_layout),
             module: &irrad_shader_module,
-            entry_point: Some("epu_extract_ambient"),
+            entry_point: Some("epu_extract_sh9"),
             compilation_options: Default::default(),
             cache: None,
         });
 
         Self {
+            settings,
+            resource_version: 0,
             env_states_buffer,
             active_env_ids_buffer,
             frame_uniforms_buffer,
-            env_sharp_texture,
-            env_light0_texture,
-            env_light1_texture,
-            env_light2_texture,
-            env_sharp_view,
-            env_light0_view,
-            env_light1_view,
-            env_light2_view,
+            env_radiance_texture,
+            env_radiance_view,
+            env_radiance_mip_views,
+            env_mip_sizes,
+            irrad_source_mip,
             env_layer_capacity: EPU_INITIAL_LAYERS,
             pipeline,
             bind_group_layout,
             bind_group,
-            blur_pipeline,
-            blur_uniforms_buffer,
-            blur_sampler,
-            blur_bind_group_layout,
-            ambient_cubes_buffer,
+            mip_pipeline,
+            mip_bind_group_layout,
+            compute_sampler,
+            sh9_buffer,
             irrad_pipeline,
             irrad_uniforms_buffer,
             irrad_bind_group_layout,
@@ -863,10 +891,10 @@ impl EpuRuntime {
 
     /// Ensure EPU textures have sufficient layer capacity.
     ///
-    /// If the required capacity exceeds current capacity, all 4 textures
-    /// (EnvSharp, EnvLight0, EnvLight1, EnvLight2) are recreated with a
-    /// larger layer count. The new capacity is the next power of two that
-    /// fits the required count, capped at MAX_ENV_STATES (256).
+    /// If the required capacity exceeds current capacity, the radiance texture
+    /// array is recreated with a larger layer count (keeping the mip pyramid
+    /// structure). The new capacity is the next power of two that fits the
+    /// required count, capped at MAX_ENV_STATES (256).
     ///
     /// # Arguments
     /// * `device` - The wgpu device for creating textures
@@ -891,51 +919,44 @@ impl EpuRuntime {
             new_capacity
         );
 
-        // Helper to create a texture with the given label
-        let create_texture = |label: &str| {
-            device.create_texture(&wgpu::TextureDescriptor {
-                label: Some(label),
-                size: wgpu::Extent3d {
-                    width: EPU_MAP_SIZE,
-                    height: EPU_MAP_SIZE,
-                    depth_or_array_layers: new_capacity,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba16Float,
-                usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
-                view_formats: &[],
+        // Recreate radiance texture with new layer count
+        self.env_radiance_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("EPU EnvRadiance"),
+            size: wgpu::Extent3d {
+                width: self.settings.map_size,
+                height: self.settings.map_size,
+                depth_or_array_layers: new_capacity,
+            },
+            mip_level_count: self.env_mip_sizes.len() as u32,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba16Float,
+            usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+
+        // Recreate full sampling view (all mips)
+        self.env_radiance_view =
+            self.env_radiance_texture
+                .create_view(&wgpu::TextureViewDescriptor {
+                    label: Some("EPU EnvRadiance View"),
+                    dimension: Some(wgpu::TextureViewDimension::D2Array),
+                    ..Default::default()
+                });
+
+        // Recreate per-mip views (single mip each)
+        let mip_level_count = self.env_mip_sizes.len() as u32;
+        self.env_radiance_mip_views = (0..mip_level_count)
+            .map(|mip| {
+                self.env_radiance_texture
+                    .create_view(&wgpu::TextureViewDescriptor {
+                        dimension: Some(wgpu::TextureViewDimension::D2Array),
+                        base_mip_level: mip,
+                        mip_level_count: Some(1),
+                        ..Default::default()
+                    })
             })
-        };
-
-        // Recreate all 4 textures with new layer count
-        self.env_sharp_texture = create_texture("EPU EnvSharp");
-        self.env_light0_texture = create_texture("EPU EnvLight0");
-        self.env_light1_texture = create_texture("EPU EnvLight1");
-        self.env_light2_texture = create_texture("EPU EnvLight2");
-
-        // Recreate texture views
-        self.env_sharp_view = self.env_sharp_texture.create_view(&wgpu::TextureViewDescriptor {
-            label: Some("EPU EnvSharp View"),
-            dimension: Some(wgpu::TextureViewDimension::D2Array),
-            ..Default::default()
-        });
-        self.env_light0_view = self.env_light0_texture.create_view(&wgpu::TextureViewDescriptor {
-            label: Some("EPU EnvLight0 View"),
-            dimension: Some(wgpu::TextureViewDimension::D2Array),
-            ..Default::default()
-        });
-        self.env_light1_view = self.env_light1_texture.create_view(&wgpu::TextureViewDescriptor {
-            label: Some("EPU EnvLight1 View"),
-            dimension: Some(wgpu::TextureViewDimension::D2Array),
-            ..Default::default()
-        });
-        self.env_light2_view = self.env_light2_texture.create_view(&wgpu::TextureViewDescriptor {
-            label: Some("EPU EnvLight2 View"),
-            dimension: Some(wgpu::TextureViewDimension::D2Array),
-            ..Default::default()
-        });
+            .collect();
 
         // Recreate main bind group with new texture views
         self.bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -956,16 +977,13 @@ impl EpuRuntime {
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
-                    resource: wgpu::BindingResource::TextureView(&self.env_sharp_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: wgpu::BindingResource::TextureView(&self.env_light0_view),
+                    resource: wgpu::BindingResource::TextureView(&self.env_radiance_mip_views[0]),
                 },
             ],
         });
 
         self.env_layer_capacity = new_capacity;
+        self.resource_version = self.resource_version.wrapping_add(1);
 
         // Invalidate cache since textures were recreated
         self.cache.invalidate_all();
@@ -973,47 +991,22 @@ impl EpuRuntime {
         true
     }
 
-    /// Dispatch a blur pass from input texture to output texture.
+    /// Dispatch a single downsample pass from mip i to mip i+1.
     ///
-    /// This creates a dynamic bind group with the specified input/output textures
-    /// and dispatches the Kawase blur compute shader.
-    ///
-    /// # Arguments
-    /// * `device` - The wgpu device for creating bind groups
-    /// * `queue` - The wgpu queue for buffer writes
-    /// * `encoder` - Command encoder to record compute pass
-    /// * `input_view` - Input texture view to sample from
-    /// * `output_view` - Output storage texture view to write to
-    /// * `blur_offset` - Blur kernel offset (1.0 for first pass, 2.0 for second)
-    /// * `active_count` - Number of active environments to process
-    #[allow(clippy::too_many_arguments)]
-    fn dispatch_blur_pass(
+    /// The source and destination are views of the same radiance texture at
+    /// different mip levels.
+    fn dispatch_mip_pass(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         input_view: &wgpu::TextureView,
         output_view: &wgpu::TextureView,
-        blur_offset: f32,
+        output_size: u32,
         active_count: u32,
     ) {
-        // Update blur uniforms
-        let blur_uniforms = BlurUniforms {
-            active_count,
-            map_size: EPU_MAP_SIZE,
-            blur_offset,
-            _pad0: 0,
-        };
-        queue.write_buffer(
-            &self.blur_uniforms_buffer,
-            0,
-            bytemuck::cast_slice(&[blur_uniforms]),
-        );
-
-        // Create dynamic bind group with input/output textures
-        let blur_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("EPU Blur Bind Group"),
-            layout: &self.blur_bind_group_layout,
+        let mip_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("EPU Mip Bind Group"),
+            layout: &self.mip_bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 2,
@@ -1027,36 +1020,26 @@ impl EpuRuntime {
                     binding: 5,
                     resource: wgpu::BindingResource::TextureView(output_view),
                 },
-                wgpu::BindGroupEntry {
-                    binding: 6,
-                    resource: wgpu::BindingResource::Sampler(&self.blur_sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 7,
-                    resource: self.blur_uniforms_buffer.as_entire_binding(),
-                },
             ],
         });
 
-        // Create blur compute pass
         let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("EPU Blur Pass"),
+            label: Some("EPU Mip Pass"),
             timestamp_writes: None,
         });
 
-        compute_pass.set_pipeline(&self.blur_pipeline);
-        compute_pass.set_bind_group(0, &blur_bind_group, &[]);
+        compute_pass.set_pipeline(&self.mip_pipeline);
+        compute_pass.set_bind_group(0, &mip_bind_group, &[]);
 
-        // Dispatch compute (8x8 workgroups)
-        let workgroups_x = EPU_MAP_SIZE.div_ceil(8);
-        let workgroups_y = EPU_MAP_SIZE.div_ceil(8);
+        let workgroups_x = output_size.div_ceil(8);
+        let workgroups_y = output_size.div_ceil(8);
         compute_pass.dispatch_workgroups(workgroups_x, workgroups_y, active_count);
     }
 
     /// Dispatch the irradiance extraction pass.
     ///
-    /// This extracts 6-direction ambient cube samples from the most blurred
-    /// light level (EnvLight2) and stores them in the ambient cubes buffer.
+    /// This extracts SH9 coefficients from a coarse radiance mip level and
+    /// stores them in the SH9 buffer.
     ///
     /// # Arguments
     /// * `device` - The wgpu device for creating bind groups
@@ -1084,6 +1067,7 @@ impl EpuRuntime {
         );
 
         // Create irrad bind group
+        let irrad_source_view = &self.env_radiance_mip_views[self.irrad_source_mip as usize];
         let irrad_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("EPU Irrad Bind Group"),
             layout: &self.irrad_bind_group_layout,
@@ -1094,15 +1078,15 @@ impl EpuRuntime {
                 },
                 wgpu::BindGroupEntry {
                     binding: 4,
-                    resource: wgpu::BindingResource::TextureView(&self.env_light2_view),
+                    resource: wgpu::BindingResource::TextureView(irrad_source_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 5,
-                    resource: wgpu::BindingResource::Sampler(&self.blur_sampler),
+                    resource: wgpu::BindingResource::Sampler(&self.compute_sampler),
                 },
                 wgpu::BindGroupEntry {
                     binding: 6,
-                    resource: self.ambient_cubes_buffer.as_entire_binding(),
+                    resource: self.sh9_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 7,
@@ -1126,9 +1110,8 @@ impl EpuRuntime {
 
     /// Build environment maps for a single environment configuration.
     ///
-    /// This dispatches the compute shader to generate EnvSharp, EnvLight0,
-    /// EnvLight1, and EnvLight2 octahedral maps for the given configuration.
-    /// The Light1 and Light2 textures are generated via Kawase blur pyramid.
+    /// This dispatches the compute shader to generate EnvRadiance (mip 0) and then builds
+    /// a downsampled mip pyramid from that radiance.
     ///
     /// # Arguments
     /// * `device` - The wgpu device for creating bind groups
@@ -1156,7 +1139,7 @@ impl EpuRuntime {
         let frame_uniforms = FrameUniforms {
             time,
             active_count: 1,
-            map_size: EPU_MAP_SIZE,
+            map_size: self.settings.map_size,
             _pad0: 0,
         };
         queue.write_buffer(
@@ -1185,41 +1168,33 @@ impl EpuRuntime {
 
             // Dispatch compute (8x8 workgroup, ceil(64/8)=8 workgroups per axis)
             // For a single environment (active_count=1), we dispatch (8, 8, 1)
-            let workgroups_x = EPU_MAP_SIZE.div_ceil(8);
-            let workgroups_y = EPU_MAP_SIZE.div_ceil(8);
+            let workgroups_x = self.settings.map_size.div_ceil(8);
+            let workgroups_y = self.settings.map_size.div_ceil(8);
             let workgroups_z = 1; // Single environment
             compute_pass.dispatch_workgroups(workgroups_x, workgroups_y, workgroups_z);
         }
 
-        // Blur pyramid: Light0 -> Light1 (offset 1.0) -> Light2 (offset 2.0)
-        self.dispatch_blur_pass(
-            device,
-            queue,
-            encoder,
-            &self.env_light0_view,
-            &self.env_light1_view,
-            1.0,
-            1,
-        );
-        self.dispatch_blur_pass(
-            device,
-            queue,
-            encoder,
-            &self.env_light1_view,
-            &self.env_light2_view,
-            2.0,
-            1,
-        );
+        // Mip pyramid: mip0 -> mip1 -> ...
+        for mip in 0..self.env_mip_sizes.len().saturating_sub(1) {
+            let output_size = self.env_mip_sizes[mip + 1];
+            self.dispatch_mip_pass(
+                device,
+                encoder,
+                &self.env_radiance_mip_views[mip],
+                &self.env_radiance_mip_views[mip + 1],
+                output_size,
+                1,
+            );
+        }
 
-        // Extract ambient cube irradiance from EnvLight2
+        // Extract SH9 diffuse irradiance from a coarse radiance mip
         self.dispatch_irrad_pass(device, queue, encoder, 1);
     }
 
     /// Build environment maps for multiple environments.
     ///
-    /// This dispatches the compute shader to generate EnvSharp, EnvLight0,
-    /// EnvLight1, and EnvLight2 octahedral maps for the given configurations.
-    /// The Light1 and Light2 textures are generated via Kawase blur pyramid.
+    /// This dispatches the compute shader to generate radiance (mip 0) and then
+    /// builds a downsampled mip pyramid for rough reflections and diffuse SH9.
     ///
     /// Uses dirty-state caching to skip rebuilding unchanged static environments.
     /// Call `advance_frame()` once per frame before this method to ensure proper
@@ -1262,6 +1237,20 @@ impl EpuRuntime {
             .copied()
             .collect();
 
+        // Always upload frame uniforms for rendering; procedural sky/reflections
+        // consume the same time value as the compute pass.
+        let frame_uniforms = FrameUniforms {
+            time,
+            active_count: dirty_configs.len() as u32,
+            map_size: self.settings.map_size,
+            _pad0: 0,
+        };
+        queue.write_buffer(
+            &self.frame_uniforms_buffer,
+            0,
+            bytemuck::cast_slice(&[frame_uniforms]),
+        );
+
         // Early exit if all environments are cached
         if dirty_configs.is_empty() {
             return;
@@ -1279,19 +1268,6 @@ impl EpuRuntime {
                 bytemuck::cast_slice(&[gpu_state]),
             );
         }
-
-        // Upload frame uniforms
-        let frame_uniforms = FrameUniforms {
-            time,
-            active_count,
-            map_size: EPU_MAP_SIZE,
-            _pad0: 0,
-        };
-        queue.write_buffer(
-            &self.frame_uniforms_buffer,
-            0,
-            bytemuck::cast_slice(&[frame_uniforms]),
-        );
 
         // Upload active environment IDs (only dirty ones)
         let active_ids: Vec<u32> = dirty_configs.iter().map(|(id, _)| *id).collect();
@@ -1312,81 +1288,71 @@ impl EpuRuntime {
             compute_pass.set_bind_group(0, &self.bind_group, &[]);
 
             // Dispatch compute with z = active_count (only dirty envs)
-            let workgroups_x = EPU_MAP_SIZE.div_ceil(8);
-            let workgroups_y = EPU_MAP_SIZE.div_ceil(8);
+            let workgroups_x = self.settings.map_size.div_ceil(8);
+            let workgroups_y = self.settings.map_size.div_ceil(8);
             compute_pass.dispatch_workgroups(workgroups_x, workgroups_y, active_count);
         }
 
-        // Blur pyramid: Light0 -> Light1 (offset 1.0) -> Light2 (offset 2.0)
-        self.dispatch_blur_pass(
-            device,
-            queue,
-            encoder,
-            &self.env_light0_view,
-            &self.env_light1_view,
-            1.0,
-            active_count,
-        );
-        self.dispatch_blur_pass(
-            device,
-            queue,
-            encoder,
-            &self.env_light1_view,
-            &self.env_light2_view,
-            2.0,
-            active_count,
-        );
+        // Mip pyramid: mip0 -> mip1 -> ...
+        for mip in 0..self.env_mip_sizes.len().saturating_sub(1) {
+            let output_size = self.env_mip_sizes[mip + 1];
+            self.dispatch_mip_pass(
+                device,
+                encoder,
+                &self.env_radiance_mip_views[mip],
+                &self.env_radiance_mip_views[mip + 1],
+                output_size,
+                active_count,
+            );
+        }
 
-        // Extract ambient cube irradiance from EnvLight2
+        // Extract SH9 diffuse irradiance from a coarse radiance mip
         self.dispatch_irrad_pass(device, queue, encoder, active_count);
     }
 
-    /// Get a reference to the EnvSharp texture for sampling.
-    pub fn env_sharp_texture(&self) -> &wgpu::Texture {
-        &self.env_sharp_texture
+    /// Get a reference to the radiance texture (mip-mapped) for sampling.
+    pub fn env_radiance_texture(&self) -> &wgpu::Texture {
+        &self.env_radiance_texture
     }
 
-    /// Get a reference to the EnvLight0 texture for sampling.
-    pub fn env_light0_texture(&self) -> &wgpu::Texture {
-        &self.env_light0_texture
+    /// Get the radiance view for binding to render pipelines (includes all mips).
+    pub fn env_radiance_view(&self) -> &wgpu::TextureView {
+        &self.env_radiance_view
     }
 
-    /// Get the EnvSharp texture view for binding to render pipelines.
-    pub fn env_sharp_view(&self) -> &wgpu::TextureView {
-        &self.env_sharp_view
+    /// Get a single-mip radiance view (useful for debug/inspection tooling).
+    pub fn env_radiance_mip_view(&self, mip: u32) -> Option<&wgpu::TextureView> {
+        self.env_radiance_mip_views.get(mip as usize)
     }
 
-    /// Get the EnvLight0 texture view for binding to render pipelines.
-    pub fn env_light0_view(&self) -> &wgpu::TextureView {
-        &self.env_light0_view
-    }
-
-    /// Get a reference to the EnvLight1 texture for sampling.
-    pub fn env_light1_texture(&self) -> &wgpu::Texture {
-        &self.env_light1_texture
-    }
-
-    /// Get the EnvLight1 texture view for binding to render pipelines.
-    pub fn env_light1_view(&self) -> &wgpu::TextureView {
-        &self.env_light1_view
-    }
-
-    /// Get a reference to the EnvLight2 texture for sampling.
-    pub fn env_light2_texture(&self) -> &wgpu::Texture {
-        &self.env_light2_texture
-    }
-
-    /// Get the EnvLight2 texture view for binding to render pipelines.
-    pub fn env_light2_view(&self) -> &wgpu::TextureView {
-        &self.env_light2_view
-    }
-
-    /// Get a reference to the ambient cubes storage buffer.
+    /// Get a reference to the SH9 storage buffer.
     ///
-    /// This buffer contains the 6-direction ambient cube irradiance samples
-    /// extracted from EnvLight2 for each environment.
-    pub fn ambient_cubes_buffer(&self) -> &wgpu::Buffer {
-        &self.ambient_cubes_buffer
+    /// This buffer contains the L2 diffuse irradiance SH coefficients extracted
+    /// from a coarse radiance mip for each environment.
+    pub fn sh9_buffer(&self) -> &wgpu::Buffer {
+        &self.sh9_buffer
+    }
+
+    /// Get the current runtime settings (map size and mip configuration).
+    pub fn settings(&self) -> EpuRuntimeSettings {
+        self.settings
+    }
+
+    /// Resource version for render-bindable EPU outputs.
+    ///
+    /// This changes when the EnvRadiance texture/view is recreated (e.g. layer growth).
+    pub fn resource_version(&self) -> u64 {
+        self.resource_version
+    }
+
+    /// Get a reference to the packed environment states buffer (read-only in render).
+    pub fn env_states_buffer(&self) -> &wgpu::Buffer {
+        &self.env_states_buffer
+    }
+
+    /// Get a reference to the frame uniforms buffer (time + map sizing).
+    pub fn frame_uniforms_buffer(&self) -> &wgpu::Buffer {
+        &self.frame_uniforms_buffer
     }
 }
 
@@ -1405,13 +1371,36 @@ mod tests {
     }
 
     #[test]
-    fn test_blur_uniforms_size() {
-        // BlurUniforms must be exactly 16 bytes (4 x u32/f32)
-        assert_eq!(
-            std::mem::size_of::<BlurUniforms>(),
-            16,
-            "BlurUniforms must be 16 bytes"
-        );
+    fn test_calc_mip_sizes() {
+        let sizes = calc_mip_sizes(128, 4);
+        assert_eq!(sizes, vec![128, 64, 32, 16, 8, 4]);
+        assert!(sizes.iter().all(|&s| s.is_power_of_two()));
+        assert!(sizes.windows(2).all(|w| w[0] > w[1]));
+    }
+
+    #[test]
+    fn test_choose_irrad_mip_level() {
+        let sizes = calc_mip_sizes(128, 4);
+        assert_eq!(choose_irrad_mip_level(&sizes, 16), 3);
+        assert_eq!(choose_irrad_mip_level(&sizes, 8), 4);
+        assert_eq!(choose_irrad_mip_level(&sizes, 4), 5);
+        // If target is smaller than the smallest generated mip, clamp to last.
+        assert_eq!(choose_irrad_mip_level(&sizes, 2), 5);
+        // If target is larger than base, pick mip 0.
+        assert_eq!(choose_irrad_mip_level(&sizes, 256), 0);
+    }
+
+    #[test]
+    fn test_settings_sanitized_power_of_two() {
+        let s = EpuRuntimeSettings {
+            map_size: 300,
+            min_mip_size: 7,
+        }
+        .sanitized();
+
+        assert!(s.map_size.is_power_of_two());
+        assert!(s.min_mip_size.is_power_of_two());
+        assert!(s.min_mip_size <= s.map_size);
     }
 
     #[test]
@@ -1474,12 +1463,12 @@ mod tests {
     }
 
     #[test]
-    fn test_ambient_cube_size() {
-        // AmbientCube must be exactly 96 bytes (6 directions x 16 bytes each)
+    fn test_sh9_size() {
+        // EpuSh9 must be exactly 144 bytes (9 coefficients x 16 bytes each)
         assert_eq!(
-            std::mem::size_of::<AmbientCube>(),
-            96,
-            "AmbientCube must be 96 bytes"
+            std::mem::size_of::<EpuSh9>(),
+            144,
+            "EpuSh9 must be 144 bytes"
         );
     }
 

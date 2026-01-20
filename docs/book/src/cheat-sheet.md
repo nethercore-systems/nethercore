@@ -692,7 +692,6 @@ epu_begin()                                      // Start building a layer
 epu_layer_opcode(opcode)                         // Set opcode (0-8)
 epu_layer_region(region)                         // Set region mask (bitfield)
 epu_layer_blend(blend)                           // Set blend mode (0-7)
-epu_layer_emissive(emissive)                     // Set emissive level (0-15)
 epu_layer_color_a(r, g, b)                       // Primary RGB24 color
 epu_layer_color_b(r, g, b)                       // Secondary RGB24 color
 epu_layer_alpha_a(alpha)                         // Primary alpha (0-15)
@@ -710,7 +709,6 @@ void epu_begin(void);                            // Start building a layer
 void epu_layer_opcode(uint8_t opcode);           // Set opcode (0-8)
 void epu_layer_region(uint8_t region);           // Set region mask (bitfield)
 void epu_layer_blend(uint8_t blend);             // Set blend mode (0-7)
-void epu_layer_emissive(uint8_t emissive);       // Set emissive level (0-15)
 void epu_layer_color_a(uint8_t r, uint8_t g, uint8_t b);   // Primary RGB24
 void epu_layer_color_b(uint8_t r, uint8_t g, uint8_t b);   // Secondary RGB24
 void epu_layer_alpha_a(uint8_t alpha);           // Primary alpha (0-15)
@@ -728,7 +726,6 @@ epu_begin() void                                 // Start building a layer
 epu_layer_opcode(opcode: u8) void                // Set opcode (0-8)
 epu_layer_region(region: u8) void                // Set region mask (bitfield)
 epu_layer_blend(blend: u8) void                  // Set blend mode (0-7)
-epu_layer_emissive(emissive: u8) void            // Set emissive level (0-15)
 epu_layer_color_a(r: u8, g: u8, b: u8) void      // Primary RGB24
 epu_layer_color_b(r: u8, g: u8, b: u8) void      // Secondary RGB24
 epu_layer_alpha_a(alpha: u8) void                // Primary alpha (0-15)
@@ -749,7 +746,7 @@ u64 hi [bits 127..64]:
   [127:123] opcode     (5)  - 32 opcodes (RAMP=1, LOBE=2, etc.)
   [122:120] region     (3)  - Bitfield: SKY=4, WALLS=2, FLOOR=1, ALL=7
   [119:117] blend      (3)  - 8 modes (ADD=0, MULTIPLY=1, MAX=2, etc.)
-  [116:113] emissive   (4)  - L_light0 contribution (0=none, 15=full)
+  [116:113] reserved   (4)
   [112]     reserved   (1)
   [111:88]  color_a    (24) - RGB24 primary color
   [87:64]   color_b    (24) - RGB24 secondary color

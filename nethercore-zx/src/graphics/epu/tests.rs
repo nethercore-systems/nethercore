@@ -57,16 +57,16 @@ fn test_epu_layer_encode_blend_position() {
 }
 
 #[test]
-fn test_epu_layer_encode_emissive_position() {
-    // Test that emissive is in bits 52..49 of hi word
+fn test_epu_layer_encode_reserved4_is_zero() {
+    // Bits 52..49 of the hi word are reserved and must be 0.
     let layer = EpuLayer {
-        emissive: 12,
+        opcode: EpuOpcode::Flow,
         ..EpuLayer::nop()
     };
     let [hi, _lo] = layer.encode();
 
-    let emissive = (hi >> 49) & 0xF;
-    assert_eq!(emissive, 12);
+    let reserved4 = (hi >> 49) & 0xF;
+    assert_eq!(reserved4, 0);
 }
 
 #[test]
@@ -165,10 +165,9 @@ fn test_epu_layer_encode_alpha() {
 fn test_epu_layer_encode_full() {
     // Test a fully populated layer
     let layer = EpuLayer {
-        opcode: EpuOpcode::Decal, // 0x5
-        region_mask: REGION_SKY,  // 0b100
-        blend: EpuBlend::Add,     // 0
-        emissive: 15,
+        opcode: EpuOpcode::Decal,    // 0x5
+        region_mask: REGION_SKY,     // 0b100
+        blend: EpuBlend::Add,        // 0
         color_a: [0xFF, 0x00, 0x00], // red
         color_b: [0x00, 0xFF, 0x00], // green
         alpha_a: 15,
@@ -186,7 +185,7 @@ fn test_epu_layer_encode_full() {
     assert_eq!((hi >> 59) & 0x1F, 0x5); // opcode
     assert_eq!((hi >> 56) & 0x7, 0b100); // region (SKY)
     assert_eq!((hi >> 53) & 0x7, 0); // blend (ADD)
-    assert_eq!((hi >> 49) & 0xF, 15); // emissive
+    assert_eq!((hi >> 49) & 0xF, 0); // reserved4
     assert_eq!((hi >> 24) & 0xFFFFFF, 0xFF0000); // color_a (red)
     assert_eq!(hi & 0xFFFFFF, 0x00FF00); // color_b (green)
 
@@ -328,7 +327,6 @@ fn test_builder_ramp_enclosure() {
         ceil_q: 10,
         floor_q: 5,
         softness: 180,
-        emissive: 4,
     });
     let config = epu_finish(builder);
 
@@ -338,9 +336,9 @@ fn test_builder_ramp_enclosure() {
     let opcode = (hi >> 59) & 0x1F;
     assert_eq!(opcode, EpuOpcode::Ramp as u64);
 
-    // Check emissive
-    let emissive = (hi >> 49) & 0xF;
-    assert_eq!(emissive, 4);
+    // Check reserved bits are 0
+    let reserved4 = (hi >> 49) & 0xF;
+    assert_eq!(reserved4, 0);
 
     // Check sky color (color_a)
     let color_a = (hi >> 24) & 0xFFFFFF;
@@ -378,9 +376,9 @@ fn test_builder_lobe() {
     let color_a = (hi >> 24) & 0xFFFFFF;
     assert_eq!(color_a, 0xFFC864); // [255, 200, 100]
 
-    // Check emissive (default 15 for lobes)
-    let emissive = (hi >> 49) & 0xF;
-    assert_eq!(emissive, 15);
+    // Check reserved bits are 0
+    let reserved4 = (hi >> 49) & 0xF;
+    assert_eq!(reserved4, 0);
 
     let intensity = (lo >> 56) & 0xFF;
     assert_eq!(intensity, 180);
@@ -436,7 +434,6 @@ fn test_builder_decal() {
         softness_q: 2,
         size: 12,
         pulse_speed: 0,
-        emissive: 15,
         alpha: 15,
     });
     let config = epu_finish(builder);
@@ -450,9 +447,9 @@ fn test_builder_decal() {
     let region = (hi >> 56) & 0x7;
     assert_eq!(region, REGION_SKY as u64);
 
-    // Check emissive
-    let emissive = (hi >> 49) & 0xF;
-    assert_eq!(emissive, 15);
+    // Check reserved bits are 0
+    let reserved4 = (hi >> 49) & 0xF;
+    assert_eq!(reserved4, 0);
 
     // Check alpha_a
     let alpha_a = (lo >> 4) & 0xF;
@@ -482,7 +479,6 @@ fn test_builder_scatter() {
         size: 20,
         twinkle_q: 8,
         seed: 3,
-        emissive: 15,
     });
     let config = epu_finish(builder);
 
@@ -512,7 +508,6 @@ fn test_builder_grid() {
         thickness: 20,
         pattern: GridPattern::Grid,
         scroll_q: 5,
-        emissive: 8,
     });
     let config = epu_finish(builder);
 
@@ -546,7 +541,6 @@ fn test_builder_flow() {
         speed: 20,
         octaves: 2,
         pattern: FlowPattern::Caustic,
-        emissive: 0,
     });
     let config = epu_finish(builder);
 
@@ -558,9 +552,9 @@ fn test_builder_flow() {
     let blend = (hi >> 53) & 0x7;
     assert_eq!(blend, EpuBlend::Lerp as u64);
 
-    // Check emissive is 0
-    let emissive = (hi >> 49) & 0xF;
-    assert_eq!(emissive, 0);
+    // Check reserved bits are 0
+    let reserved4 = (hi >> 49) & 0xF;
+    assert_eq!(reserved4, 0);
 
     // Check param_c packing
     let param_c = (lo >> 32) & 0xFF;
@@ -684,10 +678,9 @@ fn test_void_with_stars() {
         ceil_q: 15,
         floor_q: 0,
         softness: 10,
-        emissive: 0,
     });
 
-    // Stars are the only light source: full emissive.
+    // Stars.
     e.scatter(ScatterParams {
         region: EpuRegion::All,
         blend: EpuBlend::Add,
@@ -697,7 +690,6 @@ fn test_void_with_stars() {
         size: 20,
         twinkle_q: 8,
         seed: 3,
-        emissive: 15,
     });
 
     let config = epu_finish(e);
@@ -711,9 +703,9 @@ fn test_void_with_stars() {
         EpuOpcode::Scatter as u64
     );
 
-    // Verify scatter has full emissive
-    let emissive = (config.layers[4][0] >> 49) & 0xF;
-    assert_eq!(emissive, 15);
+    // Verify reserved bits are 0
+    let reserved4 = (config.layers[4][0] >> 49) & 0xF;
+    assert_eq!(reserved4, 0);
 }
 
 #[test]
@@ -731,12 +723,11 @@ fn test_sunny_meadow() {
         ceil_q: 10,
         floor_q: 5,
         softness: 180,
-        emissive: 0,
     });
 
     e.lobe(sun_dir, [255, 240, 200], 180, 32, 0, 0);
 
-    // Sun disk: emissive feature.
+    // Sun disk.
     e.decal(DecalParams {
         region: EpuRegion::Sky,
         blend: EpuBlend::Add,
@@ -748,7 +739,6 @@ fn test_sunny_meadow() {
         softness_q: 2,
         size: 12,
         pulse_speed: 0,
-        emissive: 15,
         alpha: 15,
     });
 

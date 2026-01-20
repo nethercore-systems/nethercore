@@ -278,6 +278,7 @@ impl ZXGraphics {
                 mvp_indices_capacity: self.mvp_indices_capacity,
                 render_mode: self.current_render_mode,
                 quad_instance_capacity: self.buffer_manager.quad_instance_capacity(),
+                epu_resource_version: self.epu_runtime.resource_version(),
             }
             .hash_value();
 
@@ -309,9 +310,8 @@ impl ZXGraphics {
                     // 3: Animation (unified_animation)
                     // 4: Environment (environment_states) - Multi-Environment v4
                     // 5: Quad rendering (quad_instances)
-                    // 6-7: EPU textures (env_sharp, sampler)
-                    // 8-10: EPU blur pyramid (env_light0, env_light1, env_light2)
-                    // 11: EPU ambient cubes (diffuse irradiance)
+                    // 6-7: EPU textures (env_radiance, sampler)
+                    // 11: EPU SH9 (diffuse irradiance)
                     let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                         label: Some("Frame Bind Group (Unified)"),
                         layout: &pipeline_entry.bind_group_layout_frame,
@@ -346,7 +346,7 @@ impl ZXGraphics {
                             wgpu::BindGroupEntry {
                                 binding: 6,
                                 resource: wgpu::BindingResource::TextureView(
-                                    self.epu_runtime.env_sharp_view(),
+                                    self.epu_runtime.env_radiance_view(),
                                 ),
                             },
                             wgpu::BindGroupEntry {
@@ -355,28 +355,18 @@ impl ZXGraphics {
                             },
                             wgpu::BindGroupEntry {
                                 binding: 8,
-                                resource: wgpu::BindingResource::TextureView(
-                                    self.epu_runtime.env_light0_view(),
-                                ),
+                                resource: self.epu_runtime.env_states_buffer().as_entire_binding(),
                             },
                             wgpu::BindGroupEntry {
                                 binding: 9,
-                                resource: wgpu::BindingResource::TextureView(
-                                    self.epu_runtime.env_light1_view(),
-                                ),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 10,
-                                resource: wgpu::BindingResource::TextureView(
-                                    self.epu_runtime.env_light2_view(),
-                                ),
+                                resource: self
+                                    .epu_runtime
+                                    .frame_uniforms_buffer()
+                                    .as_entire_binding(),
                             },
                             wgpu::BindGroupEntry {
                                 binding: 11,
-                                resource: self
-                                    .epu_runtime
-                                    .ambient_cubes_buffer()
-                                    .as_entire_binding(),
+                                resource: self.epu_runtime.sh9_buffer().as_entire_binding(),
                             },
                         ],
                     });
@@ -407,9 +397,8 @@ impl ZXGraphics {
                 // 3: Animation (unified_animation)
                 // 4: Environment (environment_states) - Multi-Environment v4
                 // 5: Quad rendering (quad_instances)
-                // 6-7: EPU textures (env_sharp, sampler)
-                // 8-10: EPU blur pyramid (env_light0, env_light1, env_light2)
-                // 11: EPU ambient cubes (diffuse irradiance)
+                // 6-7: EPU textures (env_radiance, sampler)
+                // 11: EPU SH9 (diffuse irradiance)
                 let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some("Frame Bind Group (Unified)"),
                     layout: &pipeline_entry.bind_group_layout_frame,
@@ -444,7 +433,7 @@ impl ZXGraphics {
                         wgpu::BindGroupEntry {
                             binding: 6,
                             resource: wgpu::BindingResource::TextureView(
-                                self.epu_runtime.env_sharp_view(),
+                                self.epu_runtime.env_radiance_view(),
                             ),
                         },
                         wgpu::BindGroupEntry {
@@ -453,25 +442,15 @@ impl ZXGraphics {
                         },
                         wgpu::BindGroupEntry {
                             binding: 8,
-                            resource: wgpu::BindingResource::TextureView(
-                                self.epu_runtime.env_light0_view(),
-                            ),
+                            resource: self.epu_runtime.env_states_buffer().as_entire_binding(),
                         },
                         wgpu::BindGroupEntry {
                             binding: 9,
-                            resource: wgpu::BindingResource::TextureView(
-                                self.epu_runtime.env_light1_view(),
-                            ),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 10,
-                            resource: wgpu::BindingResource::TextureView(
-                                self.epu_runtime.env_light2_view(),
-                            ),
+                            resource: self.epu_runtime.frame_uniforms_buffer().as_entire_binding(),
                         },
                         wgpu::BindGroupEntry {
                             binding: 11,
-                            resource: self.epu_runtime.ambient_cubes_buffer().as_entire_binding(),
+                            resource: self.epu_runtime.sh9_buffer().as_entire_binding(),
                         },
                     ],
                 });

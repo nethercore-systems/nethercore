@@ -6,15 +6,16 @@
 //!
 //! # Architecture
 //!
-//! The EPU produces two directional radiance signals per environment:
-//! - `L_sharp`: Bounds + all Features (for background + glossy reflections)
-//! - `L_light0`: Bounds + emissive Features (for lighting/blur pyramid)
+//! The EPU produces a single directional radiance signal per environment.
+//! That radiance is stored in `EnvRadiance` (mip 0) and then downsampled into
+//! a true mip pyramid for roughness-based reflections. Diffuse ambient uses
+//! SH9 coefficients extracted from a coarse mip level.
 //!
 //! # v2 Format (128-bit instructions)
 //!
 //! Each environment is 128 bytes (8 x 128-bit instructions). The 128-bit format
-//! provides direct RGB colors, explicit emissive control, per-color alpha, and
-//! region masks for more flexible compositing.
+//! provides direct RGB colors, per-color alpha, and region masks for more
+//! flexible compositing.
 //!
 //! # Example
 //!
@@ -33,8 +34,8 @@ mod tests;
 
 // Re-export runtime types
 pub use runtime::{
-    ActiveEnvList, AmbientCube, EPU_MAP_SIZE, EpuRuntime, MAX_ACTIVE_ENVS, MAX_ENV_STATES,
-    collect_active_envs,
+    ActiveEnvList, EPU_MAP_SIZE, EPU_MIN_MIP_SIZE, EpuRuntime, EpuRuntimeSettings, EpuSh9,
+    MAX_ACTIVE_ENVS, MAX_ENV_STATES, collect_active_envs,
 };
 
 use glam::Vec3;
@@ -182,7 +183,6 @@ pub enum FlowPattern {
 ///
 /// The v2 format uses 128 bits per layer, providing:
 /// - Direct RGB colors (no palette)
-/// - Explicit emissive control (4-bit)
 /// - Per-color alpha (4-bit each)
 /// - Region masks (3-bit, combinable)
 /// - 8 blend modes
@@ -194,8 +194,6 @@ pub struct EpuLayer {
     pub region_mask: u8,
     /// How to combine layer output (3-bit, 8 modes)
     pub blend: EpuBlend,
-    /// Emissive contribution to L_light0 (0-15, 0=decorative only)
-    pub emissive: u8,
     /// Primary RGB color
     pub color_a: [u8; 3],
     /// Secondary RGB color
@@ -232,7 +230,6 @@ impl EpuLayer {
             opcode: EpuOpcode::Nop,
             region_mask: REGION_ALL,
             blend: EpuBlend::Add,
-            emissive: 0,
             color_a: [0, 0, 0],
             color_b: [0, 0, 0],
             alpha_a: 15,
@@ -255,7 +252,7 @@ impl EpuLayer {
     ///   bits 63..59: opcode     (5)
     ///   bits 58..56: region     (3)
     ///   bits 55..53: blend      (3)
-    ///   bits 52..49: emissive   (4)
+    ///   bits 52..49: reserved   (4)
     ///   bit  48:     reserved   (1)
     ///   bits 47..24: color_a    (24) RGB
     ///   bits 23..0:  color_b    (24) RGB
@@ -286,7 +283,7 @@ impl EpuLayer {
         let hi = ((self.opcode as u64 & 0x1F) << 59)
             | ((self.region_mask as u64 & 0x7) << 56)
             | ((self.blend as u64 & 0x7) << 53)
-            | ((self.emissive as u64 & 0xF) << 49)
+            // bits 52..49 reserved
             // bit 48 reserved
             | (color_a_packed << 24)
             | color_b_packed;
@@ -528,7 +525,6 @@ impl EpuBuilder {
             opcode: EpuOpcode::Ramp,
             region_mask: REGION_ALL,
             blend: EpuBlend::Add,
-            emissive: p.emissive,
             color_a: p.sky_color,
             color_b: p.floor_color,
             alpha_a: 15,
@@ -567,7 +563,6 @@ impl EpuBuilder {
             opcode: EpuOpcode::Lobe,
             region_mask: REGION_ALL,
             blend: EpuBlend::Add,
-            emissive: 15, // Lobes are emissive by default
             color_a: color,
             color_b: [0, 0, 0], // Edge tint (unused for now)
             alpha_a: 15,
@@ -603,7 +598,6 @@ impl EpuBuilder {
             opcode: EpuOpcode::Band,
             region_mask: REGION_ALL,
             blend: EpuBlend::Add,
-            emissive: 8, // Moderate emissive by default
             color_a: color,
             color_b: [0, 0, 0],
             alpha_a: 15,
@@ -639,7 +633,6 @@ impl EpuBuilder {
             opcode: EpuOpcode::Fog,
             region_mask: REGION_ALL,
             blend: EpuBlend::Multiply,
-            emissive: 0, // Fog is not emissive
             color_a: fog_color,
             color_b: [255, 255, 255], // Clear color for fog
             alpha_a: 15,
@@ -658,15 +651,12 @@ impl EpuBuilder {
     // =========================================================================
 
     /// Add a decal shape (DECAL).
-    ///
-    /// Emissive contribution is controlled by the `emissive` field in DecalParams.
     pub fn decal(&mut self, p: DecalParams) {
         let param_a = ((p.shape as u8) << 4) | (p.softness_q & 0x0F);
         self.push_feature(EpuLayer {
             opcode: EpuOpcode::Decal,
             region_mask: p.region.to_mask(),
             blend: p.blend,
-            emissive: p.emissive,
             color_a: p.color,
             color_b: p.color_b,
             alpha_a: p.alpha,
@@ -681,15 +671,12 @@ impl EpuBuilder {
     }
 
     /// Add scattered points (SCATTER).
-    ///
-    /// Emissive contribution is controlled by the `emissive` field in ScatterParams.
     pub fn scatter(&mut self, p: ScatterParams) {
         let param_c = ((p.twinkle_q & 0x0F) << 4) | (p.seed & 0x0F);
         self.push_feature(EpuLayer {
             opcode: EpuOpcode::Scatter,
             region_mask: p.region.to_mask(),
             blend: p.blend,
-            emissive: p.emissive,
             color_a: p.color,
             color_b: [0, 0, 0],
             alpha_a: 15,
@@ -704,15 +691,12 @@ impl EpuBuilder {
     }
 
     /// Add a grid pattern (GRID).
-    ///
-    /// Emissive contribution is controlled by the `emissive` field in GridParams.
     pub fn grid(&mut self, p: GridParams) {
         let param_c = ((p.pattern as u8) << 4) | (p.scroll_q & 0x0F);
         self.push_feature(EpuLayer {
             opcode: EpuOpcode::Grid,
             region_mask: p.region.to_mask(),
             blend: p.blend,
-            emissive: p.emissive,
             color_a: p.color,
             color_b: [0, 0, 0],
             alpha_a: 15,
@@ -727,15 +711,12 @@ impl EpuBuilder {
     }
 
     /// Add animated flow (FLOW).
-    ///
-    /// Emissive contribution is controlled by the `emissive` field in FlowParams.
     pub fn flow(&mut self, p: FlowParams) {
         let param_c = ((p.octaves & 0x0F) << 4) | ((p.pattern as u8) & 0x0F);
         self.push_feature(EpuLayer {
             opcode: EpuOpcode::Flow,
             region_mask: p.region.to_mask(),
             blend: p.blend,
-            emissive: p.emissive,
             color_a: p.color,
             color_b: [0, 0, 0],
             alpha_a: 15,
@@ -771,8 +752,6 @@ pub struct RampParams {
     pub floor_q: u8,
     /// Transition softness (0..255)
     pub softness: u8,
-    /// Emissive contribution (0-15, 0=decorative only)
-    pub emissive: u8,
 }
 
 impl Default for RampParams {
@@ -785,7 +764,6 @@ impl Default for RampParams {
             ceil_q: 8,
             floor_q: 8,
             softness: 128,
-            emissive: 0,
         }
     }
 }
@@ -813,8 +791,6 @@ pub struct DecalParams {
     pub size: u8,
     /// Pulse animation speed (0..255 maps to 0..10)
     pub pulse_speed: u8,
-    /// Emissive contribution (0-15, 0=decorative only)
-    pub emissive: u8,
     /// Alpha (0-15)
     pub alpha: u8,
 }
@@ -832,7 +808,6 @@ impl Default for DecalParams {
             softness_q: 2,
             size: 20,
             pulse_speed: 0,
-            emissive: 15,
             alpha: 15,
         }
     }
@@ -857,8 +832,6 @@ pub struct ScatterParams {
     pub twinkle_q: u8,
     /// Random seed (0..15)
     pub seed: u8,
-    /// Emissive contribution (0-15, 0=decorative only)
-    pub emissive: u8,
 }
 
 impl Default for ScatterParams {
@@ -872,7 +845,6 @@ impl Default for ScatterParams {
             size: 20,
             twinkle_q: 8,
             seed: 0,
-            emissive: 15,
         }
     }
 }
@@ -896,8 +868,6 @@ pub struct GridParams {
     pub pattern: GridPattern,
     /// Scroll speed (0..15 maps to 0..2)
     pub scroll_q: u8,
-    /// Emissive contribution (0-15, 0=decorative only)
-    pub emissive: u8,
 }
 
 impl Default for GridParams {
@@ -911,7 +881,6 @@ impl Default for GridParams {
             thickness: 20,
             pattern: GridPattern::Grid,
             scroll_q: 0,
-            emissive: 8,
         }
     }
 }
@@ -937,8 +906,6 @@ pub struct FlowParams {
     pub octaves: u8,
     /// Pattern type
     pub pattern: FlowPattern,
-    /// Emissive contribution (0-15, 0=decorative only)
-    pub emissive: u8,
 }
 
 impl Default for FlowParams {
@@ -953,7 +920,6 @@ impl Default for FlowParams {
             speed: 20,
             octaves: 2,
             pattern: FlowPattern::Noise,
-            emissive: 0,
         }
     }
 }

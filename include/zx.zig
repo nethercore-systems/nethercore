@@ -664,7 +664,7 @@ pub extern "C" fn matcap_set(slot: u32, texture: u32) void;
 /// 63..59  opcode     (5)   Which algorithm to run (32 opcodes)
 /// 58..56  region     (3)   Bitfield: SKY=0b100, WALLS=0b010, FLOOR=0b001
 /// 55..53  blend      (3)   8 blend modes
-/// 52..49  emissive   (4)   L_light0 contribution (0=none, 15=full)
+/// 52..49  reserved   (4)
 /// 48      reserved   (1)   Future flag
 /// 47..24  color_a    (24)  RGB24 primary color
 /// 23..0   color_b    (24)  RGB24 secondary color

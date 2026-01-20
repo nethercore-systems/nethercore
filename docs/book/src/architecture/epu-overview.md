@@ -23,7 +23,7 @@ The system is designed around these hard constraints:
 | Layer count | 8 instructions (4 Bounds + 4 Features) |
 | Instruction size | 128 bits (two u64 values) |
 | Cubemaps | None (fully procedural octahedral maps) |
-| Mipmaps | None (compute blur pyramid instead) |
+| Mipmaps | Yes (compute-generated downsample pyramid) |
 | Color model | Direct RGB24 x 2 per layer |
 | Aesthetic | PS1/PS2-era stylized, quantized params |
 
@@ -37,30 +37,24 @@ CPU (immediate-mode)                              GPU
 Record draws with per-draw env_id          --->   [Compute] EPU_Build(active_env_list, time)
 Collect + deduplicate env_id list                 - For each active env_id:
 Cap to MAX_ACTIVE_ENV_STATES_PER_FRAME               - Evaluate microprogram into octahedral maps:
-                                                       - L_sharp  = Bounds + Features
-                                                       - L_light0 = Bounds + EmissiveFeatures
-                                                     - Blur pyramid from L_light0:
-                                                       - L_light1, L_light2, ...
-                                                     - Extract AmbientCube from most-blurred level
+                                                       - EnvRadiance mip0 = Bounds + Features (radiance)
+                                                     - Generate mip pyramid from EnvRadiance mip0:
+                                                       - mip1..k via 2x2 downsample chain
+                                                     - Extract SH9 from a coarse mip (e.g. 16x16)
 
 Main render (background + objects)         --->   [Render] Sample prebuilt results
-                                                 - Background: EnvSharp[env_id]
-                                                 - Specular:   EnvSharp OR EnvLight{level}[env_id]
-                                                 - Diffuse:    AmbientCube[env_id] (6-direction)
+                                                 - Background: procedural L_hi(env_id, dir) (no texture sample)
+                                                 - Specular:   EnvRadiance[env_id] (roughness -> LOD) + residual L_hi
+                                                 - Diffuse:    SH9[env_id] (L2 spherical harmonics)
 ```
 
 ---
 
-## Dual-Map Flow
+## Radiance Flow
 
-The EPU produces two directional radiance signals per environment:
-
-| Signal | Contents | Used For |
-|--------|----------|----------|
-| `L_sharp(d)` | Bounds + all Features | Background + glossy reflections |
-| `L_light0(d)` | Bounds + emissive Features (scaled by emissive field) | Blur pyramid source for lighting |
-
-The blur pyramid is built **only from `L_light0`**, ensuring rough reflections and irradiance remain stable. The 4-bit emissive field (0-15) per layer controls how much each layer contributes to `L_light0`.
+The EPU produces a single directional radiance signal per environment (`EnvRadiance`, mip 0).
+From that radiance, the runtime builds a downsample mip pyramid used for continuous
+roughness-based reflections, and extracts SH9 coefficients for diffuse ambient.
 
 ---
 
@@ -90,7 +84,7 @@ Each instruction is packed as two `u64` values:
 bits 127..123: opcode     (5)  - 32 opcodes available
 bits 122..120: region     (3)  - Bitfield: SKY=0b100, WALLS=0b010, FLOOR=0b001
 bits 119..117: blend      (3)  - 8 blend modes
-bits 116..113: emissive   (4)  - L_light0 contribution (0=none, 15=full)
+bits 116..113: reserved   (4)
 bit  112:      reserved   (1)  - Future flag
 bits 111..88:  color_a    (24) - RGB24 primary color
 bits 87..64:   color_b    (24) - RGB24 secondary color
@@ -137,29 +131,14 @@ bits 3..0:     alpha_b    (4)  - color_b alpha (0-15)
 
 ---
 
-## Emissive Control
-
-Each layer has a 4-bit `emissive` field (0-15) that controls lighting contribution:
-
-| Value | Contribution |
-|-------|--------------|
-| 0 | Decorative only (not in L_light0) |
-| 1-14 | Scaled contribution (value/15) |
-| 15 | Full emissive (100% to L_light0) |
-
-This explicit control replaces the v1 policy where blend mode implied emissive behavior.
-
----
-
 ## Compute Pipeline
 
 The EPU runtime maintains these outputs per `env_id`:
 
 | Output | Type | Purpose |
 |--------|------|---------|
-| `EnvSharp[env_id]` | octahedral 2D array | Background + glossy reflections |
-| `EnvLight0..k[env_id]` | octahedral 2D array | Blur pyramid levels |
-| `AmbientCube[env_id]` | storage buffer | 6-direction diffuse irradiance |
+| `EnvRadiance[env_id]` | mip-mapped octahedral 2D array | Background + roughness-based reflections |
+| `SH9[env_id]` | storage buffer | L2 diffuse irradiance (spherical harmonics) |
 
 ### Frame Execution Order
 
@@ -167,9 +146,9 @@ The EPU runtime maintains these outputs per `env_id`:
 2. Deduplicate `env_id` list, cap to `MAX_ACTIVE_ENV_STATES_PER_FRAME`
 3. Determine which `env_id`s are dirty (hash/time-dependent)
 4. Dispatch compute passes:
-   - Environment evaluation (build `EnvSharp` + `EnvLight0`)
-   - Blur pyramid generation (Kawase blur passes)
-   - Irradiance extraction (6-direction ambient cube)
+   - Environment evaluation (build `EnvRadiance` mip 0)
+   - Mip pyramid generation (2x2 downsample chain)
+   - Irradiance extraction (SH9)
 5. Barrier: compute to render
 6. Render background + objects (sampling by `env_id`)
 
@@ -179,28 +158,31 @@ The EPU runtime maintains these outputs per `env_id`:
 
 ### Background Sampling
 
-Sample `EnvSharp` using octahedral encoding for the view direction.
+Render sky/background by evaluating the EPU directly per pixel (`L_hi(dir)`),
+not by sampling `EnvRadiance`. This guarantees the sky is never limited by the
+`EnvRadiance` base resolution.
 
 ### Reflection Sampling
 
-To avoid "double images," sample either the sharp or blurred representation based on roughness:
+Sample `EnvRadiance` with a continuous roughness-to-LOD mapping across mip levels.
+A common mapping is:
 
-- **Low roughness** (< 0.15): sample `EnvSharp`
-- **Higher roughness**: sample `EnvLight*` levels, interpolating between blur levels
+- `lod = (roughness^2) * (mip_count - 1)`
+
+Then sample at that LOD (trilinear) or lerp between `floor(lod)` and `ceil(lod)`.
+
+To avoid hard cutoffs while still preserving mirror-quality reflections, add a
+high-frequency residual term that fades out with roughness:
+
+- `alpha = roughness^2`
+- `L_spec = L_lp + (1 - alpha) * (L_hi - L0)`
+  - `L_hi` is procedural EPU evaluation at the reflection direction
+  - `L0` is `EnvRadiance` sampled at mip 0
+  - `L_lp` is `EnvRadiance` sampled at the roughness-derived LOD
 
 ### Ambient Lighting
 
-The 6-direction ambient cube provides fast diffuse irradiance lookup:
-
-```
-ambient =
-    cube.pos_x * max(n.x, 0) +
-    cube.neg_x * max(-n.x, 0) +
-    cube.pos_y * max(n.y, 0) +
-    cube.neg_y * max(-n.y, 0) +
-    cube.pos_z * max(n.z, 0) +
-    cube.neg_z * max(-n.z, 0)
-```
+Diffuse ambient is evaluated from SH9 coefficients at the shading normal `n`.
 
 ---
 
@@ -218,8 +200,9 @@ The EPU supports multiple environments per frame through texture array indexing:
 |----------|---------------|
 | `MAX_ENV_STATES` | 256 |
 | `MAX_ACTIVE_ENV_STATES_PER_FRAME` | 32 |
-| `EPU_MAP_SIZE` | 64 |
-| `EPU_BLUR_LEVELS` | 2 |
+| `EPU_MAP_SIZE` | 128 (default; override via `NETHERCORE_EPU_MAP_SIZE`) |
+| `EPU_MIN_MIP_SIZE` | 4 (default; override via `NETHERCORE_EPU_MIN_MIP_SIZE`) |
+| `EPU_IRRAD_TARGET_SIZE` | 16 |
 
 ---
 
@@ -250,7 +233,7 @@ Update policy:
 | Region | 2-bit enum | 3-bit mask (combinable) |
 | Blend modes | 4 modes | 8 modes |
 | Color | 8-bit palette index | RGB24 x 2 per layer |
-| Emissive | Implicit (ADD=emissive) | Explicit 4-bit (0-15) |
+| Emissive | Implicit (ADD=emissive) | Reserved (future use) |
 | Alpha | None | 4-bit x 2 (per-color) |
 | Parameters | 3 (a/b/c) | 4 (+param_d) |
 

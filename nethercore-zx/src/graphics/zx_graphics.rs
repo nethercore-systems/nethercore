@@ -401,8 +401,8 @@ impl ZXGraphics {
 
     /// Build EPU environment maps for the given configurations.
     ///
-    /// This dispatches compute shaders to generate EnvSharp, EnvLight0/1/2, and
-    /// ambient cubes for the specified environment configurations.
+    /// This dispatches compute shaders to generate EnvRadiance (mip pyramid) and
+    /// SH9 diffuse irradiance for the specified environment configurations.
     ///
     /// # Arguments
     /// * `encoder` - Command encoder to record compute passes

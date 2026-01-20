@@ -48,6 +48,19 @@ pub(crate) const COMMON: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/shaders/common/20_environment/80_mode7_rings.wgsl"
     )),
+    // EPU v2 evaluation (procedural radiance for sky + specular residual)
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/epu_common.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/epu_bounds.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/epu_features.wgsl"
+    )),
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/shaders/common/20_environment/90_sampling.wgsl"

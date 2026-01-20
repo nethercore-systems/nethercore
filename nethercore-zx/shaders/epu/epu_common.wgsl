@@ -53,8 +53,8 @@ const BLEND_OVERLAY: u32 = 7u;
 // UTILITY FUNCTIONS
 // ============================================================================
 
-fn saturate(x: f32) -> f32 { return clamp(x, 0.0, 1.0); }
-fn saturate3(v: vec3f) -> vec3f { return clamp(v, vec3f(0.0), vec3f(1.0)); }
+fn epu_saturate(x: f32) -> f32 { return clamp(x, 0.0, 1.0); }
+fn epu_saturate3(v: vec3f) -> vec3f { return clamp(v, vec3f(0.0), vec3f(1.0)); }
 fn u8_to_01(x: u32) -> f32 { return f32(x) / 255.0; }
 fn u4_to_01(x: u32) -> f32 { return f32(x) / 15.0; }
 
@@ -69,7 +69,7 @@ fn nibble_to_signed_1(v4: u32) -> f32 {
 
 // WGSL `sign()` returns 0 for 0 inputs, which breaks octahedral fold math on the
 // axes (producing visible "plus" seams). Use a non-zero sign instead.
-fn sign_not_zero(v: vec2f) -> vec2f {
+fn epu_sign_not_zero(v: vec2f) -> vec2f {
     return vec2f(select(-1.0, 1.0, v.x >= 0.0), select(-1.0, 1.0, v.y >= 0.0));
 }
 
@@ -77,7 +77,7 @@ fn sign_not_zero(v: vec2f) -> vec2f {
 fn octahedral_encode(dir: vec3f) -> vec2f {
     let n = dir / (abs(dir.x) + abs(dir.y) + abs(dir.z));
     if n.z < 0.0 {
-        return (1.0 - abs(n.yx)) * sign_not_zero(n.xy);
+        return (1.0 - abs(n.yx)) * epu_sign_not_zero(n.xy);
     }
     return n.xy;
 }
@@ -86,7 +86,7 @@ fn octahedral_encode(dir: vec3f) -> vec2f {
 fn octahedral_decode(oct: vec2f) -> vec3f {
     var n = vec3f(oct.xy, 1.0 - abs(oct.x) - abs(oct.y));
     if n.z < 0.0 {
-        n = vec3f((1.0 - abs(n.yx)) * sign_not_zero(n.xy), n.z);
+        n = vec3f((1.0 - abs(n.yx)) * epu_sign_not_zero(n.xy), n.z);
     }
     return normalize(n);
 }
@@ -110,7 +110,7 @@ fn decode_dir16(encoded: u32) -> vec3f {
 //   bits 127..123: opcode     (5)  - 32 opcodes
 //   bits 122..120: region     (3)  - Bitfield: SKY=0b100, WALLS=0b010, FLOOR=0b001
 //   bits 119..117: blend      (3)  - 8 blend modes
-//   bits 116..113: emissive   (4)  - L_light0 contribution (0=none, 15=full)
+//   bits 116..113: reserved   (4)  - Future use
 //   bit  112:      reserved   (1)  - Future flag
 //   bits 111..88:  color_a    (24) - RGB24 primary color
 //   bits 87..64:   color_b    (24) - RGB24 secondary color
@@ -141,8 +141,8 @@ fn instr_blend(instr: vec4u) -> u32 {
     return (instr.w >> 21u) & 0x7u;
 }
 
-// Extract 4-bit emissive from bits 116..113 (w3 bits 20..17)
-fn instr_emissive(instr: vec4u) -> u32 {
+// Extract reserved bits 116..113 (w3 bits 20..17)
+fn instr_reserved4(instr: vec4u) -> u32 {
     return (instr.w >> 17u) & 0xFu;
 }
 
@@ -241,11 +241,6 @@ fn instr_alpha_b_f32(instr: vec4u) -> f32 {
     return u4_to_01(instr_alpha_b(instr));
 }
 
-// Get emissive as f32 (0-1 range for scaling contribution to L_light0)
-fn instr_emissive_f32(instr: vec4u) -> f32 {
-    return u4_to_01(instr_emissive(instr));
-}
-
 // ============================================================================
 // REGION WEIGHTS AND ENCLOSURE
 // ============================================================================
@@ -323,11 +318,11 @@ struct LayerSample {
 
 fn apply_blend(dst: vec3f, s: LayerSample, blend: u32) -> vec3f {
     let src = s.rgb;
-    let a = saturate(s.w);
+    let a = epu_saturate(s.w);
     switch blend {
         case BLEND_ADD: {
             // Clamp to prevent washed-out colors from additive accumulation
-            return saturate3(dst + src * a);
+            return epu_saturate3(dst + src * a);
         }
         case BLEND_MULTIPLY: {
             // Absorption/tint: lerp towards multiplying by src.
@@ -343,14 +338,14 @@ fn apply_blend(dst: vec3f, s: LayerSample, blend: u32) -> vec3f {
         case BLEND_SCREEN: {
             // Screen blend: 1 - (1-dst)*(1-src*a)
             // Clamp to handle edge cases with extreme values
-            return saturate3(vec3f(1.0) - (vec3f(1.0) - dst) * (vec3f(1.0) - src * a));
+            return epu_saturate3(vec3f(1.0) - (vec3f(1.0) - dst) * (vec3f(1.0) - src * a));
         }
         case BLEND_HSV_MOD: {
             // HSV modulation placeholder - shifts hue/sat/val by src
             // For now, approximate with additive hue shift via color rotation
             // Full HSV would require rgb<->hsv conversion
             let shifted = dst + (src - vec3f(0.5)) * a * 2.0;
-            return saturate3(shifted);
+            return epu_saturate3(shifted);
         }
         case BLEND_MIN: {
             return min(dst, mix(vec3f(1.0), src, a));
@@ -361,11 +356,11 @@ fn apply_blend(dst: vec3f, s: LayerSample, blend: u32) -> vec3f {
             let hi = vec3f(1.0) - 2.0 * (vec3f(1.0) - dst) * (vec3f(1.0) - src);
             let overlay = select(hi, lo, dst < vec3f(0.5));
             // Clamp to handle edge cases
-            return saturate3(mix(dst, overlay, a));
+            return epu_saturate3(mix(dst, overlay, a));
         }
         default: {
             // Clamp default additive blend
-            return saturate3(dst + src * a);
+            return epu_saturate3(dst + src * a);
         }
     }
 }

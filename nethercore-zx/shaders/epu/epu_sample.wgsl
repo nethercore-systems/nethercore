@@ -3,14 +3,17 @@
 // Used by render pipelines to sample background, reflection, and ambient.
 // ============================================================================
 
-// AmbientCube structure for ambient lighting lookup
-struct EpuAmbientCube {
-    pos_x: vec3f, _pad0: f32,
-    neg_x: vec3f, _pad1: f32,
-    pos_y: vec3f, _pad2: f32,
-    neg_y: vec3f, _pad3: f32,
-    pos_z: vec3f, _pad4: f32,
-    neg_z: vec3f, _pad5: f32,
+// SH9 structure for diffuse irradiance lookup
+struct EpuSh9 {
+    c0: vec3f, _pad0: f32,
+    c1: vec3f, _pad1: f32,
+    c2: vec3f, _pad2: f32,
+    c3: vec3f, _pad3: f32,
+    c4: vec3f, _pad4: f32,
+    c5: vec3f, _pad5: f32,
+    c6: vec3f, _pad6: f32,
+    c7: vec3f, _pad7: f32,
+    c8: vec3f, _pad8: f32,
 }
 
 // WGSL `sign()` returns 0 for 0 inputs, which breaks octahedral fold math on the
@@ -31,30 +34,25 @@ fn epu_oct_encode(dir: vec3f) -> vec2f {
 fn epu_saturate(x: f32) -> f32 { return clamp(x, 0.0, 1.0); }
 
 // ============================================================================
-// BACKGROUND SAMPLING (EnvSharp)
+// BACKGROUND SAMPLING (EnvRadiance mip 0)
 // ============================================================================
 
 fn sample_background(
-    env_sharp: texture_2d_array<f32>,
+    env_radiance: texture_2d_array<f32>,
     env_samp: sampler,
     env_id: u32,
     view_dir: vec3f
 ) -> vec3f {
     let uv = epu_oct_encode(view_dir) * 0.5 + 0.5;
-    return textureSampleLevel(env_sharp, env_samp, uv, i32(env_id), 0.0).rgb;
+    return textureSampleLevel(env_radiance, env_samp, uv, i32(env_id), 0.0).rgb;
 }
 
 // ============================================================================
-// REFLECTION SAMPLING (Roughness -> Blur Level)
-// Contract: avoid "double images" by sampling *either* EnvSharp *or* the
-// blurred EnvLight* chain.
+// REFLECTION SAMPLING (Continuous Roughness -> LOD)
 // ============================================================================
 
 fn sample_reflection(
-    env_sharp: texture_2d_array<f32>,
-    env_light0: texture_2d_array<f32>,
-    env_light1: texture_2d_array<f32>,
-    env_light2: texture_2d_array<f32>,
+    env_radiance: texture_2d_array<f32>,
     env_samp: sampler,
     env_id: u32,
     refl_dir: vec3f,
@@ -62,51 +60,56 @@ fn sample_reflection(
 ) -> vec3f {
     let uv = epu_oct_encode(refl_dir) * 0.5 + 0.5;
 
-    // Threshold chosen to avoid ghosting between sharp and blurred representations.
-    let sharp_cut = 0.15;
-    if roughness <= sharp_cut {
-        return textureSampleLevel(env_sharp, env_samp, uv, i32(env_id), 0.0).rgb;
-    }
+    // Use roughness^2 for a more perceptually linear blur ramp.
+    let r = epu_saturate(roughness);
+    let max_lod = max(0.0, f32(textureNumLevels(env_radiance) - 1));
+    let lod = (r * r) * max_lod;
 
-    // Remap [sharp_cut..1] -> [0..1] for blurred selection.
-    let r = epu_saturate((roughness - sharp_cut) / (1.0 - sharp_cut));
+    // Manual mip lerp (keeps results smooth even if sampler mipmap_filter is Nearest).
+    let lod0 = floor(lod);
+    let lod1 = min(lod0 + 1.0, max_lod);
+    let t = lod - lod0;
 
-    // 3-level example: Light0, Light1, Light2
-    let t = r * 2.0;
-    if t <= 1.0 {
-        let a = t;
-        let c0 = textureSampleLevel(env_light0, env_samp, uv, i32(env_id), 0.0).rgb;
-        let c1 = textureSampleLevel(env_light1, env_samp, uv, i32(env_id), 0.0).rgb;
-        return mix(c0, c1, a);
-    } else {
-        let a = t - 1.0;
-        let c1 = textureSampleLevel(env_light1, env_samp, uv, i32(env_id), 0.0).rgb;
-        let c2 = textureSampleLevel(env_light2, env_samp, uv, i32(env_id), 0.0).rgb;
-        return mix(c1, c2, a);
-    }
+    let c0 = textureSampleLevel(env_radiance, env_samp, uv, i32(env_id), lod0).rgb;
+    let c1 = textureSampleLevel(env_radiance, env_samp, uv, i32(env_id), lod1).rgb;
+    return mix(c0, c1, t);
 }
 
 // ============================================================================
-// AMBIENT LIGHTING (6-direction cube lookup)
+// AMBIENT LIGHTING (SH9 diffuse irradiance)
 // ============================================================================
 
 fn sample_ambient(
-    ambient_cubes: ptr<storage, array<EpuAmbientCube>, read>,
+    sh9: ptr<storage, array<EpuSh9>, read>,
     env_id: u32,
     n: vec3f
 ) -> vec3f {
-    let c = (*ambient_cubes)[env_id];
+    let c = (*sh9)[env_id];
 
-    let pos = vec3f(max(n.x, 0.0), max(n.y, 0.0), max(n.z, 0.0));
-    let neg = vec3f(max(-n.x, 0.0), max(-n.y, 0.0), max(-n.z, 0.0));
+    let nn = normalize(n);
+    let x = nn.x;
+    let y = nn.y;
+    let z = nn.z;
 
-    var a = vec3f(0.0);
-    a += c.pos_x * pos.x;
-    a += c.neg_x * neg.x;
-    a += c.pos_y * pos.y;
-    a += c.neg_y * neg.y;
-    a += c.pos_z * pos.z;
-    a += c.neg_z * neg.z;
+    let sh0 = 0.282095;
+    let sh1 = 0.488603 * y;
+    let sh2 = 0.488603 * z;
+    let sh3 = 0.488603 * x;
+    let sh4 = 1.092548 * x * y;
+    let sh5 = 1.092548 * y * z;
+    let sh6 = 0.315392 * (3.0 * z * z - 1.0);
+    let sh7 = 1.092548 * x * z;
+    let sh8 = 0.546274 * (x * x - y * y);
 
-    return a;
+    let e = c.c0 * sh0
+        + c.c1 * sh1
+        + c.c2 * sh2
+        + c.c3 * sh3
+        + c.c4 * sh4
+        + c.c5 * sh5
+        + c.c6 * sh6
+        + c.c7 * sh7
+        + c.c8 * sh8;
+
+    return max(e, vec3f(0.0));
 }

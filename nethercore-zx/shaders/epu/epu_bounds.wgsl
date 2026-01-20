@@ -54,7 +54,7 @@ fn eval_ramp(
 //   direction: Lobe center direction (oct-u16)
 // ============================================================================
 
-fn hash11(x: f32) -> f32 {
+fn epu_hash11(x: f32) -> f32 {
     return fract(sin(x) * 43758.5453123);
 }
 
@@ -64,7 +64,7 @@ fn eval_lobe(
     time: f32,
 ) -> LayerSample {
     let lobe_dir = decode_dir16(instr_dir16(instr));
-    let d = saturate(dot(dir, lobe_dir));
+    let d = epu_saturate(dot(dir, lobe_dir));
 
     let exp = mix(1.0, 64.0, u8_to_01(instr_a(instr)));
     let base = pow(d, exp);
@@ -85,7 +85,7 @@ fn eval_lobe(
     if mode == 1u && speed > 0.0 {
         anim = 0.7 + 0.3 * sin(time * speed);
     } else if mode == 2u && speed > 0.0 {
-        anim = 0.5 + 0.5 * hash11(floor(time * speed));
+        anim = 0.5 + 0.5 * epu_hash11(floor(time * speed));
     }
 
     let intensity = u8_to_01(instr_intensity(instr));
@@ -156,7 +156,7 @@ fn eval_fog(
     let vertical_bias = mix(-1.0, 1.0, u8_to_01(instr_a(instr)));
 
     // depth=0 near "up", depth=1 near "down" (with bias).
-    let depth = 1.0 - saturate(dot(dir, up) * vertical_bias + 0.5);
+    let depth = 1.0 - epu_saturate(dot(dir, up) * vertical_bias + 0.5);
 
     let density = u8_to_01(instr_intensity(instr));
     let falloff = mix(0.5, 4.0, u8_to_01(instr_b(instr)));

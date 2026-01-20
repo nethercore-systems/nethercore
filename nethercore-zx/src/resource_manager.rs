@@ -67,7 +67,7 @@ fn bone_transform_to_matrix(t: &BoneTransform) -> BoneMatrix3x4 {
 /// A simple cyan sky with gray walls and dark floor. This is used as a fallback
 /// when games don't specify their own environment configuration via epu_set().
 ///
-/// v2 format: Layer 0 is a RAMP enclosure with emissive=15, layers 1-7 are empty.
+/// v2 format: Layer 0 is a RAMP enclosure, layers 1-7 are empty.
 /// For preset examples showing full EPU capabilities, see the epu-inspector example.
 fn default_environment() -> EpuConfig {
     use glam::Vec3;
@@ -75,7 +75,6 @@ fn default_environment() -> EpuConfig {
     let mut e = epu_begin();
 
     // Simple enclosure: cyan sky, gray walls, dark gray floor
-    // Emissive=15 so the enclosure contributes to scene lighting
     e.ramp_enclosure(RampParams {
         up: Vec3::Y,
         wall_color: [128, 128, 128], // gray walls
@@ -84,7 +83,6 @@ fn default_environment() -> EpuConfig {
         ceil_q: 10,                  // ceiling threshold
         floor_q: 5,                  // floor threshold
         softness: 180,               // soft transitions
-        emissive: 15,                // full emissive - contributes to lighting
     });
 
     // Layers 1-7 remain as NOP (empty [0, 0]) from epu_begin()
@@ -398,8 +396,8 @@ impl ConsoleResourceManager for ZResourceManager {
         // EPU Compute Dispatch: Generate environment maps before rendering
         // =====================================================================
         //
-        // The EPU (Environment Processing Unit) generates EnvSharp, EnvLight0/1/2,
-        // and AmbientCubes for active environments. This must happen before
+        // The EPU (Environment Processing Unit) generates EnvRadiance (mip pyramid)
+        // and SH9 for active environments. This must happen before
         // render_frame() so the textures are valid for sampling during rendering.
 
         // Tick the EPU cache (invalidates time-dependent environments)

@@ -11,7 +11,7 @@ The EPU uses a **128-byte** instruction-based configuration (8 x 128-bit instruc
 - Multi-environment support via `env_id` indexing
 - Animation via instruction parameters
 - Direct RGB24 colors (no palette indirection)
-- Explicit emissive control for lighting contribution
+- Reserved bits for future extensions
 
 ## v2 Changes Summary
 
@@ -23,7 +23,7 @@ The EPU uses a **128-byte** instruction-based configuration (8 x 128-bit instruc
 | Region | 2-bit enum | 3-bit combinable mask |
 | Blend modes | 4 modes | 8 modes (+SCREEN, HSV_MOD, MIN, OVERLAY) |
 | Color | 8-bit palette index | RGB24 x 2 per layer |
-| Emissive | Implicit (ADD=emissive) | Explicit 4-bit (0-15) |
+| Emissive | Implicit (ADD=emissive) | Reserved (future use) |
 | Alpha | None | 4-bit x 2 (Bayer-friendly) |
 | Parameters | 3 (param_a/b/c) | 4 (+param_d) |
 | Palette buffer | Required | **REMOVED** |
@@ -125,7 +125,6 @@ epu_begin()                                      // Start building a new layer
 epu_layer_opcode(opcode: u8)                     // Set opcode (0-8)
 epu_layer_region(region: u8)                     // Set region mask (bitfield)
 epu_layer_blend(blend: u8)                       // Set blend mode (0-7)
-epu_layer_emissive(emissive: u8)                 // Set emissive level (0-15)
 epu_layer_color_a(r: u8, g: u8, b: u8)           // Primary RGB24 color
 epu_layer_color_b(r: u8, g: u8, b: u8)           // Secondary RGB24 color
 epu_layer_alpha_a(alpha: u8)                     // Primary alpha (0-15)
@@ -143,7 +142,6 @@ void epu_begin(void);                            // Start building a new layer
 void epu_layer_opcode(uint8_t opcode);           // RAMP=1, LOBE=2, BAND=3, FOG=4, DECAL=5, GRID=6, SCATTER=7, FLOW=8
 void epu_layer_region(uint8_t region);           // SKY=4, WALLS=2, FLOOR=1 (bitfield, ALL=7)
 void epu_layer_blend(uint8_t blend);             // ADD=0, MULTIPLY=1, MAX=2, LERP=3, SCREEN=4, HSV_MOD=5, MIN=6, OVERLAY=7
-void epu_layer_emissive(uint8_t emissive);       // 0=decorative, 15=full lighting contribution
 void epu_layer_color_a(uint8_t r, uint8_t g, uint8_t b);   // Primary RGB24
 void epu_layer_color_b(uint8_t r, uint8_t g, uint8_t b);   // Secondary RGB24
 void epu_layer_alpha_a(uint8_t alpha);           // 0-15 (Bayer dither compatible)
@@ -161,7 +159,6 @@ pub extern fn epu_begin() void;
 pub extern fn epu_layer_opcode(opcode: u8) void;
 pub extern fn epu_layer_region(region: u8) void;
 pub extern fn epu_layer_blend(blend: u8) void;
-pub extern fn epu_layer_emissive(emissive: u8) void;
 pub extern fn epu_layer_color_a(r: u8, g: u8, b: u8) void;
 pub extern fn epu_layer_color_b(r: u8, g: u8, b: u8) void;
 pub extern fn epu_layer_alpha_a(alpha: u8) void;
@@ -187,7 +184,6 @@ void setup_sunset_environment(void) {
     epu_layer_opcode(1);                    // RAMP
     epu_layer_region(7);                    // ALL regions
     epu_layer_blend(0);                     // ADD
-    epu_layer_emissive(10);                 // Moderate lighting
     epu_layer_color_a(255, 140, 80);        // Sky: sunset orange
     epu_layer_color_b(30, 20, 40);          // Floor: dark purple
     epu_layer_alpha_a(15);
@@ -202,7 +198,6 @@ void setup_sunset_environment(void) {
     epu_layer_opcode(2);                    // LOBE
     epu_layer_region(4);                    // SKY only
     epu_layer_blend(0);                     // ADD
-    epu_layer_emissive(15);                 // Full emissive
     epu_layer_color_a(255, 200, 100);       // Core: warm yellow
     epu_layer_color_b(255, 100, 50);        // Edge: deep orange
     epu_layer_alpha_a(15);
@@ -223,7 +218,6 @@ fn setup_sunset_environment() {
     epu_layer_opcode(1);                    // RAMP
     epu_layer_region(7);                    // ALL regions
     epu_layer_blend(0);                     // ADD
-    epu_layer_emissive(10);
     epu_layer_color_a(255, 140, 80);        // Sky: sunset orange
     epu_layer_color_b(30, 20, 40);          // Floor: dark purple
     epu_layer_alpha_a(15);
@@ -238,7 +232,6 @@ fn setup_sunset_environment() {
     epu_layer_opcode(2);                    // LOBE
     epu_layer_region(4);                    // SKY only
     epu_layer_blend(0);                     // ADD
-    epu_layer_emissive(15);
     epu_layer_color_a(255, 200, 100);
     epu_layer_color_b(255, 100, 50);
     epu_layer_alpha_a(15);
@@ -259,7 +252,6 @@ fn setup_sunset_environment() void {
     epu_layer_opcode(1);
     epu_layer_region(7);
     epu_layer_blend(0);
-    epu_layer_emissive(10);
     epu_layer_color_a(255, 140, 80);
     epu_layer_color_b(30, 20, 40);
     epu_layer_alpha_a(15);
@@ -274,7 +266,6 @@ fn setup_sunset_environment() void {
     epu_layer_opcode(2);
     epu_layer_region(4);
     epu_layer_blend(0);
-    epu_layer_emissive(15);
     epu_layer_color_a(255, 200, 100);
     epu_layer_color_b(255, 100, 50);
     epu_layer_alpha_a(15);
@@ -318,7 +309,7 @@ Each instruction is packed as two `u64` values:
 bits 127..123: opcode     (5)  - Which algorithm to run
 bits 122..120: region     (3)  - Bitfield: SKY=0b100, WALLS=0b010, FLOOR=0b001
 bits 119..117: blend      (3)  - How to combine layer output (8 modes)
-bits 116..113: emissive   (4)  - L_light0 contribution (0=none, 15=full)
+bits 116..113: reserved   (4)
 bit  112:      reserved   (1)  - Future use
 bits 111..88:  color_a    (24) - RGB24 primary color
 bits 87..64:   color_b    (24) - RGB24 secondary color
@@ -388,17 +379,10 @@ Regions are combinable using bitwise OR:
 
 ---
 
-## Emissive Field (4-bit)
+## Reserved Field (4-bit)
 
-The emissive field controls how much a layer contributes to lighting:
-
-| Value | Contribution |
-|-------|--------------|
-| 0 | Decorative only (no lighting contribution) |
-| 1-14 | Scaled contribution (value/15 * layer output) |
-| 15 | Full emissive (100% lighting contribution) |
-
-This allows explicit control over whether a visually bright element lights the scene.
+Bits 116..113 of the instruction hi word are currently reserved and must be set
+to 0. They are intended for future extensions.
 
 ---
 
@@ -557,7 +541,7 @@ fn init() {
         10,                             // ceil_y threshold
         5,                              // floor_y threshold
         180,                            // softness
-        15,                             // emissive (full lighting)
+        0,                              // reserved (set to 0)
     );
 
     // Sun glow
@@ -566,7 +550,7 @@ fn init() {
         sun_dir,
         Rgb24::new(255, 255, 200),      // core: warm white
         Rgb24::new(255, 180, 100),      // edge: orange
-        180, 32, 0, 0, 128, 15,
+        180, 32, 0, 0, 128, 0,
     );
 
     let config = builder.finish();

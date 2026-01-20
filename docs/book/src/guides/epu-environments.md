@@ -34,7 +34,7 @@ fn init() {
         Rgb24::new(34, 139, 34),        // floor: forest green
         10, 5,                          // ceil_y, floor_y thresholds
         180,                            // softness
-        15,                             // emissive (full lighting)
+        0,                              // reserved (set to 0)
     );
 
     // Sun glow with two-color lobe
@@ -47,7 +47,7 @@ fn init() {
         32,                             // exponent
         0, 0,                           // no animation
         128,                            // edge blend
-        15,                             // emissive
+        0,                              // reserved (set to 0)
     );
 
     let config = builder.finish();
@@ -156,42 +156,13 @@ builder.ramp_enclosure(
 
 ---
 
-## Emissive Control
+## Lighting Contribution
 
-The 4-bit emissive field (0-15) controls how much a layer contributes to scene lighting:
+EPU v2 no longer has a per-layer emissive field: every layer contributes to the
+single radiance signal used for reflections and diffuse ambient.
 
-| Emissive | Effect |
-|----------|--------|
-| 0 | Decorative only - no lighting contribution |
-| 1-7 | Subtle ambient contribution |
-| 8-14 | Strong light source |
-| 15 | Full emissive - lights the scene at full intensity |
-
-This separates visual appearance from lighting behavior:
-
-```rust
-// Decorative grid that does NOT light the scene
-builder.grid(GridParams {
-    region: EpuRegion::Walls,
-    blend: EpuBlend::Add,
-    emissive: 0,                     // decorative only!
-    line_color: Rgb24::new(50, 200, 255),
-    bg_color: Rgb24::new(0, 0, 0),
-    intensity: 60,
-    // ...
-});
-
-// Neon sign that DOES light the scene
-builder.decal(DecalParams {
-    region: EpuRegion::Walls,
-    blend: EpuBlend::Add,
-    emissive: 15,                    // full lighting contribution
-    fill_color: Rgb24::new(255, 0, 100),
-    outline_color: Rgb24::new(255, 100, 150),
-    intensity: 255,
-    // ...
-});
-```
+Bits 116..113 of the instruction hi word are currently reserved and should be
+set to 0.
 
 ---
 
@@ -203,7 +174,7 @@ builder.decal(DecalParams {
 | Cyberpunk alley | RAMP + LOBE x2 + FOG | GRID (panels) + DECAL (sign) + FLOW (rain) + SCATTER (windows) |
 | Underwater cave | RAMP + LOBE + FOG | FLOW (caustics) + SCATTER (bubbles) |
 | Space station | RAMP + LOBE + BAND | GRID (panels) + DECAL (warning) + SCATTER (indicators) |
-| Void + stars | RAMP (black) | SCATTER (stars, emissive=15) |
+| Void + stars | RAMP (black) | SCATTER (stars) |
 
 ---
 
@@ -235,7 +206,6 @@ fn sunny_meadow() -> EpuConfig {
     e.decal(DecalParams {
         region: EpuRegion::Sky,
         blend: EpuBlend::Add,
-        emissive: 15,
         shape: DecalShape::Disk,
         dir: sun_dir,
         fill_color: Rgb24::new(255, 255, 255),
@@ -253,7 +223,6 @@ fn sunny_meadow() -> EpuConfig {
     e.flow(FlowParams {
         region: EpuRegion::Sky,
         blend: EpuBlend::Screen,
-        emissive: 0,                    // clouds don't emit light
         dir: Vec3::X,
         primary_color: Rgb24::new(255, 255, 255),
         secondary_color: Rgb24::new(200, 200, 220),
@@ -287,11 +256,10 @@ fn void_with_stars() -> EpuConfig {
         15, 0, 10, 15,
     );
 
-    // Stars are the only light source
+    // Stars
     e.scatter(ScatterParams {
         region: EpuRegion::All,
         blend: EpuBlend::Add,
-        emissive: 15,                   // stars light the scene
         base_color: Rgb24::new(255, 255, 255),
         var_color: Rgb24::new(200, 220, 255),
         intensity: 255,
@@ -348,11 +316,10 @@ fn cyberpunk_alley() -> EpuConfig {
         40, 128, 100, 60, 0,            // fog doesn't emit
     );
 
-    // Neon grid on walls (decorative, no lighting)
+    // Neon grid on walls
     e.grid(GridParams {
         region: EpuRegion::Walls,
         blend: EpuBlend::Add,
-        emissive: 0,                    // decorative only
         line_color: Rgb24::new(50, 200, 255),
         bg_color: Rgb24::new(0, 0, 0),
         intensity: 40,
@@ -406,7 +373,6 @@ fn underwater_cave() -> EpuConfig {
     e.flow(FlowParams {
         region: EpuRegion::SkyWalls,
         blend: EpuBlend::Add,
-        emissive: 8,                    // subtle lighting contribution
         dir: Vec3::new(0.0, -1.0, 0.5).normalize(),
         primary_color: Rgb24::new(150, 220, 255),
         secondary_color: Rgb24::new(100, 180, 220),
@@ -423,7 +389,6 @@ fn underwater_cave() -> EpuConfig {
     e.scatter(ScatterParams {
         region: EpuRegion::All,
         blend: EpuBlend::Add,
-        emissive: 0,                    // bubbles don't emit
         base_color: Rgb24::new(200, 230, 255),
         var_color: Rgb24::new(150, 200, 230),
         intensity: 100,
@@ -496,10 +461,11 @@ draw_scene();
 
 ## Ambient Lighting
 
-Ambient lighting is computed entirely on the GPU and applied automatically to 3D geometry via the `emissive` field on each layer. Layers with `emissive > 0` contribute to the ambient cube that lights the scene.
+Ambient lighting is computed entirely on the GPU from the EPU’s precomputed SH9
+diffuse irradiance and applied automatically to lit 3D geometry.
 
 > **Note:** There is no CPU-accessible ambient query function because GPU readback would break rollback determinism.
-> For custom lighting effects, use the `emissive` field to control how much each layer contributes to scene lighting.
+> For custom lighting effects, author the environment’s intensity/alpha and use material controls (e.g. metallic/roughness/emissive) per object.
 
 ---
 
@@ -510,7 +476,7 @@ Ambient lighting is computed entirely on the GPU and applied automatically to 3D
 | Shimmer in reflections | Reduce high-frequency detail in features |
 | Too noisy | Reduce `intensity` or `density` parameters |
 | Features not visible | Check `region` mask matches viewing direction |
-| Features not lighting objects | Set `emissive` > 0 for layers that should contribute to lighting |
+| Features not lighting objects | Increase layer `intensity`/alpha (all layers contribute) |
 | Fog not absorbing | Use `blend = MULTIPLY` for fog layers |
 | Colors look washed out | Check alpha values (0-15, where 15 = opaque) |
 

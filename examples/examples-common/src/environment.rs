@@ -14,7 +14,7 @@
 //!   bits 63..59: opcode     (5)   - NOP=0, RAMP=1, LOBE=2, BAND=3, FOG=4, DECAL=5, GRID=6, SCATTER=7, FLOW=8
 //!   bits 58..56: region     (3)   - Bitfield: SKY=0b100, WALLS=0b010, FLOOR=0b001, ALL=0b111
 //!   bits 55..53: blend      (3)   - ADD=0, MULTIPLY=1, MAX=2, LERP=3, SCREEN=4, HSV_MOD=5, MIN=6, OVERLAY=7
-//!   bits 52..49: emissive   (4)   - L_light0 contribution (0=decorative, 15=full)
+//!   bits 52..49: reserved   (4)
 //!   bit  48:     reserved   (1)
 //!   bits 47..24: color_a    (24)  - RGB24 primary color
 //!   bits 23..0:  color_b    (24)  - RGB24 secondary color
@@ -354,19 +354,18 @@ const BLEND_SCREEN: u64 = 4;
 // Common directions (octahedral encoded: u8, v8)
 const DIR_UP: u64 = 0x80FF; // +Y direction
 
-/// Build v2 hi word: opcode(5), region(3), blend(3), emissive(4), reserved(1), color_a(24), color_b(24)
+/// Build v2 hi word: opcode(5), region(3), blend(3), reserved4(4), reserved(1), color_a(24), color_b(24)
 const fn epu_hi(
     opcode: u64,
     region: u64,
     blend: u64,
-    emissive: u64,
     color_a: u64,
     color_b: u64,
 ) -> u64 {
     ((opcode & 0x1F) << 59)
         | ((region & 0x7) << 56)
         | ((blend & 0x7) << 53)
-        | ((emissive & 0xF) << 49)
+        // bits 52..49 reserved
         | ((color_a & 0xFFFFFF) << 24)
         | (color_b & 0xFFFFFF)
 }
@@ -404,7 +403,7 @@ const NOP_LAYER: [u64; 2] = [0, 0];
 static EPU_GRADIENT: [[u64; 2]; 8] = [
     // RAMP: sky/wall/floor gradient with blue sky and green ground
     [
-        epu_hi(OP_RAMP, REGION_ALL, BLEND_ADD, 8, 0x6496DC, 0x285028),
+        epu_hi(OP_RAMP, REGION_ALL, BLEND_ADD, 0x6496DC, 0x285028),
         epu_lo(180, 200, 180, 0xA5, 0, DIR_UP, 15, 15),
     ],
     NOP_LAYER,
@@ -420,20 +419,20 @@ static EPU_GRADIENT: [[u64; 2]; 8] = [
 static EPU_CELLS: [[u64; 2]; 8] = [
     // RAMP: black void
     [
-        epu_hi(OP_RAMP, REGION_ALL, BLEND_ADD, 0, 0x000008, 0x000010),
+        epu_hi(OP_RAMP, REGION_ALL, BLEND_ADD, 0x000008, 0x000010),
         epu_lo(20, 0, 0, 0xF0, 0, DIR_UP, 15, 15),
     ],
     NOP_LAYER,
     NOP_LAYER,
     NOP_LAYER,
-    // SCATTER: white stars (emissive)
+    // SCATTER: white stars
     [
-        epu_hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 15, 0xFFFFFF, 0xAABBFF),
+        epu_hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 0xFFFFFF, 0xAABBFF),
         epu_lo(255, 180, 15, 0x83, 0, 0, 15, 10),
     ],
     // SCATTER: blue distant stars
     [
-        epu_hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 10, 0x8888FF, 0x4444AA),
+        epu_hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 0x8888FF, 0x4444AA),
         epu_lo(160, 250, 6, 0x41, 0, 0, 12, 8),
     ],
     NOP_LAYER,
@@ -444,7 +443,7 @@ static EPU_CELLS: [[u64; 2]; 8] = [
 static EPU_LINES: [[u64; 2]; 8] = [
     // RAMP: dark purple/blue background
     [
-        epu_hi(OP_RAMP, REGION_ALL, BLEND_ADD, 0, 0x101030, 0x080818),
+        epu_hi(OP_RAMP, REGION_ALL, BLEND_ADD, 0x101030, 0x080818),
         epu_lo(80, 20, 20, 0xA5, 0, DIR_UP, 15, 15),
     ],
     NOP_LAYER,
@@ -452,12 +451,12 @@ static EPU_LINES: [[u64; 2]; 8] = [
     NOP_LAYER,
     // GRID: cyan neon lines on floor
     [
-        epu_hi(OP_GRID, REGION_FLOOR, BLEND_ADD, 12, 0x00FFAA, 0x008866),
+        epu_hi(OP_GRID, REGION_FLOOR, BLEND_ADD, 0x00FFAA, 0x008866),
         epu_lo(180, 48, 8, 0x00, 0, 0, 15, 10),
     ],
     // GRID: magenta accent on walls
     [
-        epu_hi(OP_GRID, REGION_WALLS, BLEND_ADD, 10, 0xFF00FF, 0x880088),
+        epu_hi(OP_GRID, REGION_WALLS, BLEND_ADD, 0xFF00FF, 0x880088),
         epu_lo(120, 32, 4, 0x00, 0, 0, 12, 8),
     ],
     NOP_LAYER,
@@ -468,23 +467,23 @@ static EPU_LINES: [[u64; 2]; 8] = [
 static EPU_RINGS: [[u64; 2]; 8] = [
     // RAMP: black void
     [
-        epu_hi(OP_RAMP, REGION_ALL, BLEND_ADD, 0, 0x000008, 0x000010),
+        epu_hi(OP_RAMP, REGION_ALL, BLEND_ADD, 0x000008, 0x000010),
         epu_lo(20, 0, 0, 0xF0, 0, DIR_UP, 15, 15),
     ],
-    // LOBE: blue glow (emissive)
+    // LOBE: blue glow
     [
-        epu_hi(OP_LOBE, REGION_ALL, BLEND_ADD, 14, 0x2288FF, 0x0044AA),
+        epu_hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0x2288FF, 0x0044AA),
         epu_lo(200, 28, 0, 0, 0, 0x80C0, 15, 12),
     ],
     // BAND: cyan accent ring
     [
-        epu_hi(OP_BAND, REGION_ALL, BLEND_ADD, 10, 0x00FFFF, 0x008888),
+        epu_hi(OP_BAND, REGION_ALL, BLEND_ADD, 0x00FFFF, 0x008888),
         epu_lo(160, 0x20, 0x10, 0, 0, DIR_UP, 15, 10),
     ],
     NOP_LAYER,
     // DECAL: bright center disk
     [
-        epu_hi(OP_DECAL, REGION_SKY, BLEND_ADD, 15, 0xFFFFFF, 0x88DDFF),
+        epu_hi(OP_DECAL, REGION_SKY, BLEND_ADD, 0xFFFFFF, 0x88DDFF),
         epu_lo(255, 0x02, 16, 0, 0, 0x8080, 15, 15),
     ],
     NOP_LAYER,

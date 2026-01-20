@@ -112,8 +112,8 @@ pub(crate) fn create_frame_bind_group_layout(
         // EPU TEXTURES (bindings 6-7)
         // =====================================================================
 
-        // Binding 6: EPU EnvSharp texture array (64x64 octahedral, 256 layers)
-        // Used by environment shader for background rendering
+        // Binding 6: EPU EnvRadiance texture array (octahedral, 256 layers)
+        // Mip-mapped; used for background + roughness-based reflection sampling.
         wgpu::BindGroupLayoutEntry {
             binding: 6,
             visibility: wgpu::ShaderStages::FRAGMENT,
@@ -132,51 +132,38 @@ pub(crate) fn create_frame_bind_group_layout(
             count: None,
         },
         // =====================================================================
-        // EPU BLUR PYRAMID TEXTURES (bindings 8-10)
+        // EPU STATE + FRAME UNIFORMS (bindings 8-9)
         // =====================================================================
 
-        // Binding 8: EPU EnvLight0 texture array (64x64 octahedral, 256 layers)
-        // Sharp lighting level for roughness-based reflection sampling
+        // Binding 8: Packed EPU environment states (storage, read-only)
+        // Used for procedural sky/background and specular residual evaluation.
         wgpu::BindGroupLayoutEntry {
             binding: 8,
             visibility: wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Texture {
-                sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                view_dimension: wgpu::TextureViewDimension::D2Array,
-                multisampled: false,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                has_dynamic_offset: false,
+                min_binding_size: None,
             },
             count: None,
         },
-        // Binding 9: EPU EnvLight1 texture array (64x64 octahedral, 256 layers)
-        // Medium blur level for roughness-based reflection sampling
+        // Binding 9: EPU frame uniforms (uniform)
         wgpu::BindGroupLayoutEntry {
             binding: 9,
             visibility: wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Texture {
-                sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                view_dimension: wgpu::TextureViewDimension::D2Array,
-                multisampled: false,
-            },
-            count: None,
-        },
-        // Binding 10: EPU EnvLight2 texture array (64x64 octahedral, 256 layers)
-        // Heavy blur level for roughness-based reflection sampling
-        wgpu::BindGroupLayoutEntry {
-            binding: 10,
-            visibility: wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Texture {
-                sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                view_dimension: wgpu::TextureViewDimension::D2Array,
-                multisampled: false,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
             },
             count: None,
         },
         // =====================================================================
-        // EPU AMBIENT CUBES (binding 11)
+        // EPU SH9 (binding 11)
         // =====================================================================
 
-        // Binding 11: EPU ambient cubes storage buffer (256 entries, 96 bytes each)
-        // Pre-computed 6-direction diffuse irradiance samples from EnvLight2
+        // Binding 11: EPU SH9 storage buffer (256 entries, 144 bytes each)
+        // Pre-computed L2 (9 coefficient) diffuse irradiance extracted from a coarse radiance mip.
         wgpu::BindGroupLayoutEntry {
             binding: 11,
             visibility: wgpu::ShaderStages::FRAGMENT,
