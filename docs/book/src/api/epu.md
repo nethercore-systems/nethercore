@@ -122,7 +122,7 @@ The builder API provides a safer, more ergonomic way to construct EPU layers wit
 {{#tab name="Rust"}}
 ```rust
 epu_begin()                                      // Start building a new layer
-epu_layer_opcode(opcode: u8)                     // Set opcode (0-8)
+epu_layer_opcode(opcode: u8)                     // Set opcode (0-31; bounds=1..7, features=8..)
 epu_layer_region(region: u8)                     // Set region mask (bitfield)
 epu_layer_blend(blend: u8)                       // Set blend mode (0-7)
 epu_layer_color_a(r: u8, g: u8, b: u8)           // Primary RGB24 color
@@ -139,7 +139,7 @@ epu_finish(env_id: u8, layer_index: u8)          // Commit layer to env slot
 {{#tab name="C/C++"}}
 ```c
 void epu_begin(void);                            // Start building a new layer
-void epu_layer_opcode(uint8_t opcode);           // RAMP=1, LOBE=2, BAND=3, FOG=4, DECAL=5, GRID=6, SCATTER=7, FLOW=8
+void epu_layer_opcode(uint8_t opcode);           // bounds: RAMP=1, LOBE=2, BAND=3, FOG=4 (5..7 reserved) | features: DECAL=8, GRID=9, SCATTER=10, FLOW=11
 void epu_layer_region(uint8_t region);           // SKY=4, WALLS=2, FLOOR=1 (bitfield, ALL=7)
 void epu_layer_blend(uint8_t blend);             // ADD=0, MULTIPLY=1, MAX=2, LERP=3, SCREEN=4, HSV_MOD=5, MIN=6, OVERLAY=7
 void epu_layer_color_a(uint8_t r, uint8_t g, uint8_t b);   // Primary RGB24

@@ -689,7 +689,7 @@ draw_env() void                       // Draws env_id 0
 {{#tab name="Rust"}}
 ```rust
 epu_begin()                                      // Start building a layer
-epu_layer_opcode(opcode)                         // Set opcode (0-8)
+epu_layer_opcode(opcode)                         // Set opcode (0-31; bounds=1..7, features=8..)
 epu_layer_region(region)                         // Set region mask (bitfield)
 epu_layer_blend(blend)                           // Set blend mode (0-7)
 epu_layer_color_a(r, g, b)                       // Primary RGB24 color
@@ -706,7 +706,7 @@ epu_finish(env_id, layer_index)                  // Commit layer to env slot
 {{#tab name="C/C++"}}
 ```c
 void epu_begin(void);                            // Start building a layer
-void epu_layer_opcode(uint8_t opcode);           // Set opcode (0-8)
+void epu_layer_opcode(uint8_t opcode);           // Set opcode (0-31; bounds=1..7, features=8..)
 void epu_layer_region(uint8_t region);           // Set region mask (bitfield)
 void epu_layer_blend(uint8_t blend);             // Set blend mode (0-7)
 void epu_layer_color_a(uint8_t r, uint8_t g, uint8_t b);   // Primary RGB24
@@ -723,7 +723,7 @@ void epu_finish(uint8_t env_id, uint8_t layer_index);       // Commit layer
 {{#tab name="Zig"}}
 ```zig
 epu_begin() void                                 // Start building a layer
-epu_layer_opcode(opcode: u8) void                // Set opcode (0-8)
+epu_layer_opcode(opcode: u8) void                // Set opcode (0-31; bounds=1..7, features=8..)
 epu_layer_region(region: u8) void                // Set region mask (bitfield)
 epu_layer_blend(blend: u8) void                  // Set blend mode (0-7)
 epu_layer_color_a(r: u8, g: u8, b: u8) void      // Primary RGB24
@@ -771,10 +771,10 @@ u64 lo [bits 63..0]:
 | LOBE=2 | FLOOR=1 | MAX=2 |
 | BAND=3 | ALL=7 | LERP=3 |
 | FOG=4 | SKY_WALLS=6 | SCREEN=4 |
-| DECAL=5 | SKY_FLOOR=5 | HSV_MOD=5 |
-| GRID=6 | WALLS_FLOOR=3 | MIN=6 |
-| SCATTER=7 | NONE=0 | OVERLAY=7 |
-| FLOW=8 | | |
+| DECAL=8 | SKY_FLOOR=5 | HSV_MOD=5 |
+| GRID=9 | WALLS_FLOOR=3 | MIN=6 |
+| SCATTER=10 | NONE=0 | OVERLAY=7 |
+| FLOW=11 | | |
 
 See [EPU API Reference](api/epu.md) for detailed opcode parameters and the [EPU RFC](../../../EPU%20RFC.md) for full specification.
 

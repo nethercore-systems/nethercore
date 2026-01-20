@@ -11,16 +11,23 @@ const TAU: f32 = 6.283185307179586;
 // OPCODE CONSTANTS (5-bit, 32 possible)
 // ============================================================================
 
+// Opcode ranges:
+// - 0x00: NOP (universal)
+// - 0x01..0x07: bounds ops (low-frequency / enclosure)
+// - 0x08..0x1F: feature ops (high-frequency motifs)
 const OP_NOP: u32 = 0x00u;
 const OP_RAMP: u32 = 0x01u;
 const OP_LOBE: u32 = 0x02u;
 const OP_BAND: u32 = 0x03u;
 const OP_FOG: u32 = 0x04u;
-const OP_DECAL: u32 = 0x05u;
-const OP_GRID: u32 = 0x06u;
-const OP_SCATTER: u32 = 0x07u;
-const OP_FLOW: u32 = 0x08u;
-// 0x09..0x1F reserved for future opcodes
+// 0x05..0x07 reserved for future bounds ops
+
+const OP_FEATURE_MIN: u32 = 0x08u;
+const OP_DECAL: u32 = 0x08u;
+const OP_GRID: u32 = 0x09u;
+const OP_SCATTER: u32 = 0x0Au;
+const OP_FLOW: u32 = 0x0Bu;
+// 0x0C..0x1F reserved for future feature ops
 
 // ============================================================================
 // REGION MASK CONSTANTS (3-bit bitfield)

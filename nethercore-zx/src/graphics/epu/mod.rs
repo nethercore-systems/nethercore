@@ -44,7 +44,12 @@ use glam::Vec3;
 // Enums
 // =============================================================================
 
-/// EPU instruction opcodes (5-bit, supports up to 32 opcodes)
+/// EPU instruction opcodes (5-bit, 32 possible).
+///
+/// Opcode ranges:
+/// - `0x00`: NOP (universal)
+/// - `0x01..=0x07`: Bounds ops (low-frequency / enclosure)
+/// - `0x08..=0x1F`: Feature ops (high-frequency motifs)
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum EpuOpcode {
@@ -60,13 +65,13 @@ pub enum EpuOpcode {
     /// Atmospheric absorption (use MULTIPLY blend)
     Fog = 0x4,
     /// Sharp SDF shape (disk/ring/rect/line)
-    Decal = 0x5,
+    Decal = 0x8,
     /// Repeating lines/panels
-    Grid = 0x6,
+    Grid = 0x9,
     /// Point field (stars/dust/bubbles)
-    Scatter = 0x7,
+    Scatter = 0xA,
     /// Animated noise/streaks/caustics
-    Flow = 0x8,
+    Flow = 0xB,
 }
 
 // =============================================================================
@@ -352,37 +357,37 @@ impl EpuConfig {
 
             match opcode {
                 // LOBE: anim_mode in param_c (0=none, 1=pulse, 2=flicker)
-                0x2 => {
+                o if o == EpuOpcode::Lobe as u64 => {
                     if param_c != 0 {
                         return true;
                     }
                 }
                 // BAND: scroll_speed in param_c
-                0x3 => {
+                o if o == EpuOpcode::Band as u64 => {
                     if param_c != 0 {
                         return true;
                     }
                 }
                 // DECAL: pulse_speed in param_c
-                0x5 => {
+                o if o == EpuOpcode::Decal as u64 => {
                     if param_c != 0 {
                         return true;
                     }
                 }
                 // GRID: scroll_q in lower 4 bits of param_c
-                0x6 => {
+                o if o == EpuOpcode::Grid as u64 => {
                     if param_c & 0x0F != 0 {
                         return true;
                     }
                 }
                 // SCATTER: twinkle_q in upper 4 bits of param_c
-                0x7 => {
+                o if o == EpuOpcode::Scatter as u64 => {
                     if (param_c >> 4) & 0x0F != 0 {
                         return true;
                     }
                 }
                 // FLOW: speed in param_b
-                0x8 => {
+                o if o == EpuOpcode::Flow as u64 => {
                     if param_b != 0 {
                         return true;
                     }

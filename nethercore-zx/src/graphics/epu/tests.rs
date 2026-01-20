@@ -21,13 +21,13 @@ fn test_epu_layer_encode_nop() {
 fn test_epu_layer_encode_opcode_position() {
     // Test that opcode is in bits 63..59 of hi word
     let layer = EpuLayer {
-        opcode: EpuOpcode::Flow, // 0x8
+        opcode: EpuOpcode::Flow, // 0xB
         ..EpuLayer::nop()
     };
     let [hi, _lo] = layer.encode();
 
     let opcode = (hi >> 59) & 0x1F;
-    assert_eq!(opcode, 0x8);
+    assert_eq!(opcode, 0xB);
 }
 
 #[test]
@@ -165,7 +165,7 @@ fn test_epu_layer_encode_alpha() {
 fn test_epu_layer_encode_full() {
     // Test a fully populated layer
     let layer = EpuLayer {
-        opcode: EpuOpcode::Decal,    // 0x5
+        opcode: EpuOpcode::Decal,    // 0x8
         region_mask: REGION_SKY,     // 0b100
         blend: EpuBlend::Add,        // 0
         color_a: [0xFF, 0x00, 0x00], // red
@@ -182,7 +182,7 @@ fn test_epu_layer_encode_full() {
     let [hi, lo] = layer.encode();
 
     // Verify hi word fields
-    assert_eq!((hi >> 59) & 0x1F, 0x5); // opcode
+    assert_eq!((hi >> 59) & 0x1F, 0x8); // opcode
     assert_eq!((hi >> 56) & 0x7, 0b100); // region (SKY)
     assert_eq!((hi >> 53) & 0x7, 0); // blend (ADD)
     assert_eq!((hi >> 49) & 0xF, 0); // reserved4

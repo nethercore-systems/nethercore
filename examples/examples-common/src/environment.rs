@@ -11,7 +11,7 @@
 //!
 //! ```text
 //! u64 hi [bits 127..64]:
-//!   bits 63..59: opcode     (5)   - NOP=0, RAMP=1, LOBE=2, BAND=3, FOG=4, DECAL=5, GRID=6, SCATTER=7, FLOW=8
+//!   bits 63..59: opcode     (5)   - NOP=0, bounds=1..7 (RAMP=1, LOBE=2, BAND=3, FOG=4; 5..7 reserved), features=8.. (DECAL=8, GRID=9, SCATTER=10, FLOW=11)
 //!   bits 58..56: region     (3)   - Bitfield: SKY=0b100, WALLS=0b010, FLOOR=0b001, ALL=0b111
 //!   bits 55..53: blend      (3)   - ADD=0, MULTIPLY=1, MAX=2, LERP=3, SCREEN=4, HSV_MOD=5, MIN=6, OVERLAY=7
 //!   bits 52..49: reserved   (4)
@@ -327,11 +327,12 @@ const OP_LOBE: u64 = 0x02;
 const OP_BAND: u64 = 0x03;
 #[allow(dead_code)]
 const OP_FOG: u64 = 0x04;
-const OP_DECAL: u64 = 0x05;
-const OP_GRID: u64 = 0x06;
-const OP_SCATTER: u64 = 0x07;
+// 0x05..0x07 reserved for future bounds ops
+const OP_DECAL: u64 = 0x08;
+const OP_GRID: u64 = 0x09;
+const OP_SCATTER: u64 = 0x0A;
 #[allow(dead_code)]
-const OP_FLOW: u64 = 0x08;
+const OP_FLOW: u64 = 0x0B;
 
 // Region masks (3-bit bitfield)
 const REGION_ALL: u64 = 0b111;
