@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use glam::{Mat4, Vec3};
-use hashbrown::{HashMap, HashSet};
+use hashbrown::HashMap;
 
 use zx_common::ZXDataPack;
 
@@ -163,13 +163,21 @@ pub struct ZXFFIState {
     pub mvp_shading_overflowed_this_frame: bool,
     pub mvp_shading_overflow_count: u32,
 
-    // EPU (Environment Processing Unit) state - instruction-based API
-    /// EPU configurations indexed by env_id (0-255)
-    pub epu_configs: HashMap<u32, EpuConfig>,
-    /// Set of env_ids that have been modified and need GPU rebuild.
-    /// NOTE: Currently vestigial - dirty tracking happens in EpuCache via hash comparison.
-    /// Kept for potential future use (e.g., incremental updates, debug tooling).
-    pub epu_dirty_envs: HashSet<u32>,
+    // EPU (Environment Processing Unit) state - instruction-based API (push-only)
+    /// Last `epu_draw()` config captured for this frame (only the last call wins).
+    ///
+    /// If the game doesn't call `epu_draw()` in a frame, the renderer falls back
+    /// to a built-in default environment config.
+    pub epu_frame_config: Option<EpuConfig>,
+    /// EPU draw requests for this frame.
+    ///
+    /// Keyed by (viewport, pass_id) so split-screen and multi-pass rendering can
+    /// request an environment draw per pass. If `epu_draw()` is called multiple
+    /// times for the same key, only the last call wins.
+    ///
+    /// The value is an index into `mvp_shading_indices` (instance_index) so the
+    /// environment shader uses the correct view/proj + shading state.
+    pub epu_frame_draws: HashMap<(crate::graphics::Viewport, u32), u32>,
     // NOTE: epu_ambient_cubes was removed - GPU readback would break rollback determinism
 }
 
@@ -255,9 +263,9 @@ impl Default for ZXFFIState {
             quad_batches: Vec::new(),
             mvp_shading_overflowed_this_frame: false,
             mvp_shading_overflow_count: 0,
-            // EPU (instruction-based) state
-            epu_configs: HashMap::new(),
-            epu_dirty_envs: HashSet::new(),
+            // EPU (instruction-based) state (push-only)
+            epu_frame_config: None,
+            epu_frame_draws: HashMap::new(),
         }
     }
 }

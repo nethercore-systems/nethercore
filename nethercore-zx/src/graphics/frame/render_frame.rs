@@ -940,23 +940,20 @@ impl ZXGraphics {
                             *buffer_index..*buffer_index + 1,
                         );
                     }
-                    VRPCommand::Environment {
-                        shading_state_index,
-                        ..
-                    } => {
+                    VRPCommand::Environment { mvp_index, .. } => {
                         // Environment rendering: Fullscreen triangle with procedural background
 
                         // Draw fullscreen triangle (3 vertices, no vertex buffer)
-                        // Uses shading_state_index as instance range to pass index to shader
-                        render_pass.draw(0..3, *shading_state_index..*shading_state_index + 1);
+                        // Uses mvp_index as instance range (indexes mvp_shading_indices)
+                        render_pass.draw(0..3, *mvp_index..*mvp_index + 1);
                     }
-                    VRPCommand::EpuEnvironment { env_id, .. } => {
+                    VRPCommand::EpuEnvironment { mvp_index, .. } => {
                         // EPU environment rendering: Fullscreen triangle with procedural background
                         // Uses the new instruction-based EPU compute pipeline
 
                         // Draw fullscreen triangle (3 vertices, no vertex buffer)
-                        // Uses env_id as instance range to pass env_id to shader
-                        render_pass.draw(0..3, *env_id..*env_id + 1);
+                        // Uses mvp_index as instance range (indexes mvp_shading_indices)
+                        render_pass.draw(0..3, *mvp_index..*mvp_index + 1);
                     }
                 }
 

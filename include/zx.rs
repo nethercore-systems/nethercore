@@ -899,13 +899,13 @@ extern "C" {
 
     /// Set an EPU environment configuration (v2 128-byte format).
     ///
-    /// Uploads a 128-byte (8 x 128-bit = 16 x u64) environment configuration to
-    /// the specified slot. The configuration contains 8 packed instruction layers
-    /// that are evaluated by the GPU compute shader to generate octahedral
-    /// environment maps.
+    /// Draw the background using an EPU v2 config (push-only).
+    ///
+    /// Reads a 128-byte (8 x 128-bit = 16 x u64) environment configuration from
+    /// WASM memory and renders the procedural background for the current viewport
+    /// and render pass.
     ///
     /// # Arguments
-    /// * `env_id` — Environment slot ID (0-255)
     /// * `config_ptr` — Pointer to 16 u64 values (128 bytes total) in WASM memory
     ///
     /// # Configuration Layout
@@ -955,25 +955,16 @@ extern "C" {
     /// - 5: HSV_MOD (HSV shift dst by src)
     /// - 6: MIN (min(dst, src * a))
     /// - 7: OVERLAY (Photoshop-style overlay)
-    pub fn epu_set(env_id: u32, config_ptr: *const u64);
-
-    /// Draw the background using the specified EPU environment.
+    /// Draw the environment background.
     ///
-    /// Renders the procedural environment background for the given environment ID.
-    /// The environment must have been configured via `epu_set()` first.
-    ///
-    /// # Arguments
-    /// * `env_id` — Environment slot ID (0-255)
+    /// Renders the procedural environment background for the current viewport and pass.
     ///
     /// # Usage
     /// Call this **first** in your `render()` function, before any 3D geometry:
     /// ```rust,ignore
     /// fn render() {
-    ///     // Set up environment (usually once, or when it changes)
-    ///     epu_set(0, config.as_ptr());
-    ///
     ///     // Draw environment background
-    ///     epu_draw(0);
+    ///     epu_draw(config.as_ptr());
     ///
     ///     // Then draw scene geometry
     ///     draw_mesh(terrain);
@@ -983,9 +974,9 @@ extern "C" {
     ///
     /// # Notes
     /// - Environment always renders behind all geometry (at far plane)
-    /// - Multiple viewports can use different env_ids for split-screen
+    /// - For split-screen, set `viewport(...)` and call `epu_draw(...)` per viewport
     /// - The EPU compute pass runs automatically before rendering
-    pub fn epu_draw(env_id: u32);
+    pub fn epu_draw(config_ptr: *const u64);
 
     // NOTE: epu_get_ambient() was removed - GPU readback would break rollback determinism.
     // Ambient lighting is computed and applied entirely on the GPU side.

@@ -361,59 +361,44 @@ fn test_dither_offset_clamping() {
 // ========================================================================
 
 #[test]
-fn test_epu_configs_storage() {
-    use crate::graphics::epu::EpuConfig;
+fn test_epu_frame_config_storage() {
+    use crate::graphics::Viewport;
 
     let mut state = ZXFFIState::default();
 
     // Initially empty
-    assert!(state.epu_configs.is_empty());
-    assert!(state.epu_dirty_envs.is_empty());
+    assert!(state.epu_frame_config.is_none());
+    assert!(state.epu_frame_draws.is_empty());
 
     // Store a config (zeroed layers - exact values don't matter for storage test)
-    let config = EpuConfig {
+    let config = crate::graphics::epu::EpuConfig {
         layers: [[0u64; 2]; 8],
     };
-    state.epu_configs.insert(0, config);
-    state.epu_dirty_envs.insert(0);
+    state.epu_frame_config = Some(config);
+    state.epu_frame_draws.insert((Viewport::FULLSCREEN, 0), 123);
 
-    assert_eq!(state.epu_configs.len(), 1);
-    assert!(state.epu_configs.contains_key(&0));
-    assert!(state.epu_dirty_envs.contains(&0));
+    let stored = state
+        .epu_frame_config
+        .expect("epu_frame_config should be set");
+    assert_eq!(stored.layers, config.layers);
+    assert_eq!(state.epu_frame_draws.get(&(Viewport::FULLSCREEN, 0)), Some(&123));
 }
 
 #[test]
-fn test_clear_frame_clears_epu_dirty_envs() {
-    let mut state = ZXFFIState::default();
-
-    // Mark some environments as dirty
-    state.epu_dirty_envs.insert(0);
-    state.epu_dirty_envs.insert(1);
-    state.epu_dirty_envs.insert(5);
-
-    assert_eq!(state.epu_dirty_envs.len(), 3);
-
-    // Clear frame should clear the dirty set
-    state.clear_frame();
-
-    assert!(state.epu_dirty_envs.is_empty());
-}
-
-#[test]
-fn test_clear_frame_preserves_epu_configs() {
-    use crate::graphics::epu::EpuConfig;
+fn test_clear_frame_clears_epu_frame_requests() {
+    use crate::graphics::Viewport;
 
     let mut state = ZXFFIState::default();
 
-    // Store a config (zeroed layers - exact values don't matter for persistence test)
-    let config = EpuConfig {
+    let config = crate::graphics::epu::EpuConfig {
         layers: [[0u64; 2]; 8],
     };
-    state.epu_configs.insert(0, config);
+    state.epu_frame_config = Some(config);
+    state.epu_frame_draws.insert((Viewport::FULLSCREEN, 0), 0);
 
-    // Clear frame should NOT clear the configs (they persist)
+    // Clear frame should clear the per-frame request
     state.clear_frame();
 
-    assert_eq!(state.epu_configs.len(), 1);
-    assert!(state.epu_configs.contains_key(&0));
+    assert!(state.epu_frame_config.is_none());
+    assert!(state.epu_frame_draws.is_empty());
 }

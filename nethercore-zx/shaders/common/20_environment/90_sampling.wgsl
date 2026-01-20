@@ -125,9 +125,14 @@ fn sample_epu_reflection(env_id: u32, refl_dir: vec3f, roughness: f32) -> vec3f 
     let l0 = textureSampleLevel(epu_env_radiance, epu_sampler, uv, i32(env_id), 0.0).rgb;
     let l_hi = epu_eval_hi(env_id, refl_dir);
     let alpha = r * r;
-    let l_spec = l_lp + (1.0 - alpha) * (l_hi - l0);
 
-    // Prevent negative radiance from residual subtraction.
+    // NOTE: In practice `l0` can slightly overshoot `l_hi` due to finite EnvRadiance resolution
+    // and sampler filtering, producing negative residuals. On fully metallic materials this can
+    // manifest as "peppered" black pixels at mid roughness when the residual is clamped.
+    // Treat the residual as additive energy only.
+    let residual = max(l_hi - l0, vec3f(0.0));
+    let l_spec = l_lp + (1.0 - alpha) * residual;
+
     return max(l_spec, vec3f(0.0));
 }
 

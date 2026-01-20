@@ -13,7 +13,7 @@
 //! Features:
 //! - Multiple preset environments (void+stars, sunny meadow, cyberpunk alley, etc.)
 //! - Keyboard/gamepad cycling through presets
-//! - Real-time environment background rendering via epu_set() and epu_draw()
+//! - Real-time environment background rendering via epu_draw()
 //!
 //! Controls:
 //! - A button: Cycle to next preset
@@ -79,13 +79,23 @@ const fn hi(opcode: u64, region: u64, blend: u64, _reserved4: u64, color_a: u64,
 }
 
 // Helper to build v2 lo word
+//
+// Note: direction is authored here as 0xUUVV (u in high byte, v in low byte),
+// but the engine/shader decode expects low byte = u, high byte = v.
+// Swap bytes during packing to match the runtime format.
+const fn pack_dir16_uv(direction_uv: u64) -> u64 {
+    let u = (direction_uv >> 8) & 0xFF;
+    let v = direction_uv & 0xFF;
+    (u & 0xFF) | ((v & 0xFF) << 8)
+}
+
 const fn lo(intensity: u64, param_a: u64, param_b: u64, param_c: u64, param_d: u64, direction: u64, alpha_a: u64, alpha_b: u64) -> u64 {
     ((intensity & 0xFF) << 56)
         | ((param_a & 0xFF) << 48)
         | ((param_b & 0xFF) << 40)
         | ((param_c & 0xFF) << 32)
         | ((param_d & 0xFF) << 24)
-        | ((direction & 0xFFFF) << 8)
+        | ((pack_dir16_uv(direction) & 0xFFFF) << 8)
         | ((alpha_a & 0xF) << 4)
         | (alpha_b & 0xF)
 }
@@ -123,8 +133,12 @@ const BLEND_OVERLAY: u64 = 7;
 
 // Direction for +Y (up) in octahedral encoding: u=128, v=255
 const DIR_UP: u64 = 0x80FF;
+// Direction for -Y (down) in octahedral encoding: u=128, v=0
+const DIR_DOWN: u64 = 0x8000;
 // Direction for sun (0.5, 0.7, 0.3 normalized): approximately
 const DIR_SUN: u64 = 0xC0A0;
+// Direction for a low sun near the horizon (setting sun)
+const DIR_SUNSET: u64 = 0xC190;
 
 /// NOP layer (disabled)
 const NOP_LAYER: [u64; 2] = [0, 0];
@@ -164,7 +178,7 @@ const PRESET_CYBERPUNK_ALLEY: [[u64; 2]; 8] = [
     // DECAL: pink sign
     [hi(OP_DECAL, REGION_WALLS, BLEND_ADD, 10, 0xFF88AA, 0xFF4488), lo(200, 0x04, 40, 30, 50, 0x80C0, 15, 12)],
     // FLOW: rain
-    [hi(OP_FLOW, REGION_ALL, BLEND_LERP, 0, 0x808080, 0x404050), lo(40, 64, 180, 0x11, 0, 0x6980, 10, 6)],
+    [hi(OP_FLOW, REGION_ALL, BLEND_LERP, 0, 0x808080, 0x404050), lo(40, 64, 180, 0x11, 0, DIR_DOWN, 10, 6)],
     // SCATTER: warm windows
     [hi(OP_SCATTER, REGION_WALLS, BLEND_ADD, 6, 0xFFAA44, 0xFF8822), lo(180, 120, 35, 0x23, 0, 0, 15, 12)],
 ];
@@ -189,12 +203,12 @@ const PRESET_SUNSET_DESERT: [[u64; 2]; 8] = [
     // RAMP: orange sky, tan sand
     [hi(OP_RAMP, REGION_ALL, BLEND_ADD, 0, 0xFF6030, 0xC09060), lo(200, 220, 180, 140, 0xA3, DIR_UP, 15, 15)],
     // LOBE: setting sun glow
-    [hi(OP_LOBE, REGION_ALL, BLEND_ADD, 14, 0xFFAA40, 0xFF6600), lo(240, 28, 0, 0, 0, 0xE040, 15, 12)],
+    [hi(OP_LOBE, REGION_ALL, BLEND_ADD, 14, 0xFFAA40, 0xFF6600), lo(240, 28, 0, 0, 0, DIR_SUNSET, 15, 12)],
     // FOG: dust haze
     [hi(OP_FOG, REGION_ALL, BLEND_SCREEN, 0, 0x804020, 0x603010), lo(60, 100, 80, 0, 0, DIR_UP, 10, 8)],
     NOP_LAYER,
     // DECAL: sun disk near horizon
-    [hi(OP_DECAL, REGION_SKY, BLEND_ADD, 15, 0xFF4400, 0xFF2200), lo(255, 0x04, 22, 0, 0, 0xE040, 15, 15)],
+    [hi(OP_DECAL, REGION_SKY, BLEND_ADD, 15, 0xFF4400, 0xFF2200), lo(255, 0x04, 22, 0, 0, DIR_SUNSET, 15, 15)],
     // FLOW: blowing sand
     [hi(OP_FLOW, REGION_FLOOR, BLEND_LERP, 0, 0xC09060, 0x906040), lo(50, 32, 90, 0x11, 100, 0x4080, 12, 8)],
     NOP_LAYER,
@@ -231,7 +245,7 @@ const PRESET_STORM_FRONT: [[u64; 2]; 8] = [
     // SCATTER: lightning flashes
     [hi(OP_SCATTER, REGION_SKY, BLEND_ADD, 15, 0xFFFFFF, 0xCCDDFF), lo(255, 10, 80, 0xF2, 0, 0, 15, 12)],
     // FLOW: rain
-    [hi(OP_FLOW, REGION_ALL, BLEND_LERP, 0, 0x606880, 0x404860), lo(60, 80, 200, 0x11, 0, 0x7F80, 12, 8)],
+    [hi(OP_FLOW, REGION_ALL, BLEND_LERP, 0, 0x606880, 0x404860), lo(60, 80, 200, 0x11, 0, DIR_DOWN, 12, 8)],
     NOP_LAYER,
     NOP_LAYER,
 ];
@@ -252,7 +266,7 @@ const PRESET_NEON_CITY: [[u64; 2]; 8] = [
     // DECAL: billboard
     [hi(OP_DECAL, REGION_WALLS, BLEND_ADD, 12, 0x00FFFF, 0xFF00FF), lo(220, 0x04, 60, 40, 30, 0x90B0, 15, 15)],
     // FLOW: rain haze
-    [hi(OP_FLOW, REGION_ALL, BLEND_LERP, 0, 0x606870, 0x303040), lo(50, 64, 200, 0x11, 40, 0x6980, 10, 6)],
+    [hi(OP_FLOW, REGION_ALL, BLEND_LERP, 0, 0x606870, 0x303040), lo(50, 64, 200, 0x11, 40, DIR_DOWN, 10, 6)],
 ];
 
 /// 8. Enchanted Forest - Magical woodland with glowing elements
@@ -283,7 +297,7 @@ const PRESET_ARCTIC_TUNDRA: [[u64; 2]; 8] = [
     [hi(OP_FOG, REGION_ALL, BLEND_SCREEN, 0, 0x90B8E8, 0x607090), lo(40, 80, 100, 0, 0, DIR_UP, 12, 10)],
     NOP_LAYER,
     // SCATTER: snowflakes
-    [hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 4, 0xFFFFFF, 0xDDEEFF), lo(200, 100, 72, 0x48, 0, 0, 15, 12)],
+    [hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 4, 0xFFFFFF, 0xDDEEFF), lo(200, 100, 72, 0x4C, 0, DIR_DOWN, 15, 12)],
     // FLOW: blowing snow
     [hi(OP_FLOW, REGION_ALL, BLEND_LERP, 0, 0xFFFFFF, 0xCCDDEE), lo(40, 50, 160, 0x11, 140, 0x40A0, 10, 8)],
     // FLOW: aurora
@@ -516,14 +530,14 @@ static PRESETS: [[[u64; 2]; 8]; 20] = [
 /// Preset names for display
 const PRESET_NAMES: [&str; 20] = [
     "Sunny Meadow",
-    "Cyberpunk Alley",
+    "Cyberpunk Alley (Rain)",
     "Void Stars",
     "Sunset Desert",
     "Underwater Cave",
-    "Storm Front",
+    "Storm Front (Rain)",
     "Neon City",
     "Enchanted Forest",
-    "Arctic Tundra",
+    "Arctic Tundra (Snowfall)",
     "Neon Arcade",
     "Desert Dunes",
     "Alien Planet",
@@ -569,9 +583,6 @@ pub extern "C" fn init() {
         SPHERE_MESH = sphere(1.0, 32, 24);
         CUBE_MESH = cube(1.2, 1.2, 1.2);
         TORUS_MESH = torus(1.0, 0.4, 32, 16);
-
-        // Set up initial environment
-        epu_set(0, PRESETS[0].as_ptr() as *const u64);
 
         // Register debug values
         debug_group_begin(b"preset".as_ptr(), 6);
@@ -658,8 +669,6 @@ pub extern "C" fn on_debug_change() {
             MATERIAL_ROUGHNESS_U8 = 255;
         }
 
-        // Update EPU configuration
-        epu_set(0, PRESETS[PRESET_INDEX as usize].as_ptr() as *const u64);
     }
 }
 
@@ -669,11 +678,9 @@ pub extern "C" fn update() {
         // Cycle presets with A/B buttons
         if button_pressed(0, button::A) != 0 {
             PRESET_INDEX = (PRESET_INDEX + 1) % PRESET_COUNT as i32;
-            epu_set(0, PRESETS[PRESET_INDEX as usize].as_ptr() as *const u64);
         }
         if button_pressed(0, button::B) != 0 {
             PRESET_INDEX = (PRESET_INDEX + PRESET_COUNT as i32 - 1) % PRESET_COUNT as i32;
-            epu_set(0, PRESETS[PRESET_INDEX as usize].as_ptr() as *const u64);
         }
 
         // Cycle shapes with X button
@@ -716,8 +723,8 @@ pub extern "C" fn render() {
         camera_set(cam_x, cam_y, cam_z, 0.0, 0.0, 0.0);
         camera_fov(60.0);
 
-        // Draw the EPU environment background
-        epu_draw(0);
+        // Draw the EPU environment background (push-only)
+        epu_draw(PRESETS[PRESET_INDEX as usize].as_ptr() as *const u64);
 
         // Draw a shape to show lighting from the environment
         push_identity();

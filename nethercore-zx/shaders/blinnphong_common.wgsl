@@ -37,6 +37,32 @@ fn fresnel_schlick_sg(cos_theta: f32, F0: vec3<f32>) -> vec3<f32> {
     return F0 + (1.0 - F0) * exp2((-5.55473 * cos_theta - 6.98316) * cos_theta);
 }
 
+// Approximate microfacet BRDF integration for image-based lighting (no LUT).
+//
+// We use Gotanda-normalized Blinn-Phong for *direct* lights (see `gotanda_normalization()`),
+// but environment lighting behaves differently: it needs an approximation of the BRDF
+// integral over the hemisphere, traditionally done with an EnvBRDF LUT.
+//
+// This UE4/Lazarov-style approximation returns (A, B) such that:
+//   specular_ibl ≈ prefilteredEnv * (F * A + B)
+//
+// Notes for Nethercore:
+// - This does *not* replace Gotanda normalization; it complements it for IBL only.
+// - Our EnvRadiance mip chain is a stylized blur (box-filter downsample), so this is an
+//   approximation on top of an approximation, but it avoids the "rough metals go black"
+//   failure mode from simply multiplying by (1-roughness)^2.
+fn env_brdf_approx(roughness: f32, NdotV: f32) -> vec2<f32> {
+    let r = clamp(roughness, 0.0, 1.0);
+    let NoV = clamp(NdotV, 0.0, 1.0);
+
+    let c0 = vec4<f32>(-1.0, -0.0275, -0.572, 0.022);
+    let c1 = vec4<f32>(1.0, 0.0425, 1.04, -0.04);
+    let v = r * c0 + c1;
+
+    let a004 = min(v.x * v.x, exp2(-9.28 * NoV)) * v.x + v.y;
+    return max(vec2<f32>(-1.04, 1.04) * a004 + v.zw, vec2<f32>(0.0));
+}
+
 // Normalized Blinn-Phong specular lighting
 // Convention: light_dir = direction rays travel (negate for lighting calculations)
 // No geometry term - era-authentic, classical Blinn-Phong didn't have it
@@ -154,9 +180,6 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     let R = reflect(-view_dir, N);
     let specular_env = sample_epu_reflection(shading.environment_index, R, roughness);
 
-    // Rough surfaces have dimmer reflections (energy scatters)
-    let reflection_strength = (1.0 - roughness) * (1.0 - roughness);  // squared falloff
-
     // Energy conservation factor
     let spec_norm = gotanda_normalization(shininess);
     let ambient_factor = 1.0 / sqrt(1.0 + spec_norm);
@@ -164,8 +187,11 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     // Diffuse ambient
     final_color += diffuse_env * albedo * ambient_factor * diffuse_factor * diffuse_fresnel;
 
-    // Specular environment reflection (attenuated by roughness)
-    final_color += specular_env * fresnel * reflection_strength;
+    // Specular environment reflection:
+    // - Roughness controls which EnvRadiance mip we sample (blur/LOD).
+    // - EnvBRDF approx controls intensity vs roughness/view angle (prevents rough metals going black).
+    let brdf = env_brdf_approx(roughness, NdotV);
+    final_color += specular_env * (fresnel * brdf.x + brdf.y);
 
     // Track dominant light color for rim lighting coherence
     var dominant_light_color = vec3<f32>(0.0);

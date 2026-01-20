@@ -120,7 +120,9 @@ pub enum VRPCommand {
     },
     /// Environment draw (fullscreen procedural background) - Legacy Multi-Environment v4
     Environment {
-        shading_state_index: u32, // Index into shading_states for environment data
+        /// Index into `mvp_shading_indices` (instance_index) so the environment shader uses the
+        /// correct view/proj + shading state.
+        mvp_index: u32,
         /// Viewport for split-screen rendering (captured at command creation)
         viewport: Viewport,
         /// Pass ID for render pass ordering (execution barrier)
@@ -128,8 +130,9 @@ pub enum VRPCommand {
     },
     /// EPU Environment draw (fullscreen procedural background) - New instruction-based API
     EpuEnvironment {
-        /// Environment slot ID (0-255) configured via epu_set()
-        env_id: u32,
+        /// Index into `mvp_shading_indices` (instance_index) so the environment shader uses the
+        /// correct view/proj + shading state.
+        mvp_index: u32,
         /// Viewport for split-screen rendering (captured at command creation)
         viewport: Viewport,
         /// Pass ID for render pass ordering (execution barrier)

@@ -657,13 +657,13 @@ NCZX_IMPORT void matcap_set(uint32_t slot, uint32_t texture);
 
 /** Set an EPU environment configuration (v2 128-byte format). */
 /**  */
-/** Uploads a 128-byte (8 x 128-bit = 16 x u64) environment configuration to */
-/** the specified slot. The configuration contains 8 packed instruction layers */
-/** that are evaluated by the GPU compute shader to generate octahedral */
-/** environment maps. */
+/** Draw the background using an EPU v2 config (push-only). */
+/**  */
+/** Reads a 128-byte (8 x 128-bit = 16 x u64) environment configuration from */
+/** WASM memory and renders the procedural background for the current viewport */
+/** and render pass. */
 /**  */
 /** # Arguments */
-/** * `env_id` — Environment slot ID (0-255) */
 /** * `config_ptr` — Pointer to 16 u64 values (128 bytes total) in WASM memory */
 /**  */
 /** # Configuration Layout */
@@ -713,25 +713,16 @@ NCZX_IMPORT void matcap_set(uint32_t slot, uint32_t texture);
 /** - 5: HSV_MOD (HSV shift dst by src) */
 /** - 6: MIN (min(dst, src * a)) */
 /** - 7: OVERLAY (Photoshop-style overlay) */
-NCZX_IMPORT void epu_set(uint32_t env_id, const uint64_t* config_ptr);
-
-/** Draw the background using the specified EPU environment. */
+/** Draw the environment background. */
 /**  */
-/** Renders the procedural environment background for the given environment ID. */
-/** The environment must have been configured via `epu_set()` first. */
-/**  */
-/** # Arguments */
-/** * `env_id` — Environment slot ID (0-255) */
+/** Renders the procedural environment background for the current viewport and pass. */
 /**  */
 /** # Usage */
 /** Call this **first** in your `render()` function, before any 3D geometry: */
 /** ```rust,ignore */
 /** fn render() { */
-/** // Set up environment (usually once, or when it changes) */
-/** epu_set(0, config.as_ptr()); */
-/**  */
 /** // Draw environment background */
-/** epu_draw(0); */
+/** epu_draw(config.as_ptr()); */
 /**  */
 /** // Then draw scene geometry */
 /** draw_mesh(terrain); */
@@ -741,12 +732,9 @@ NCZX_IMPORT void epu_set(uint32_t env_id, const uint64_t* config_ptr);
 /**  */
 /** # Notes */
 /** - Environment always renders behind all geometry (at far plane) */
-/** - Multiple viewports can use different env_ids for split-screen */
+/** - For split-screen, set `viewport(...)` and call `epu_draw(...)` per viewport */
 /** - The EPU compute pass runs automatically before rendering */
-NCZX_IMPORT void epu_draw(uint32_t env_id);
-
-/* NOTE: epu_get_ambient() was removed - GPU readback would break rollback determinism. */
-/* Ambient lighting is computed and applied entirely on the GPU side. */
+NCZX_IMPORT void epu_draw(const uint64_t* config_ptr);
 
 /** Bind an MRE texture (Metallic-Roughness-Emissive) to slot 1. */
 NCZX_IMPORT void material_mre(uint32_t texture);

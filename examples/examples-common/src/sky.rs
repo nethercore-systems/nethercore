@@ -85,26 +85,24 @@ impl DebugSky {
     pub fn apply_and_draw(&self) {
         // Use the shared EPU_SKY preset
         unsafe {
-            epu_set(0, EPU_SKY.as_ptr() as *const u64);
-
             // Use lighting API
             light_set(0, self.sun_dir_x, self.sun_dir_y, self.sun_dir_z);
             light_color(0, self.sun_color);
             light_intensity(0, 1.0);
 
-            epu_draw(0);
+            epu_draw(EPU_SKY.as_ptr() as *const u64);
         }
     }
 
-    /// Just apply settings without drawing (for lighting calculations)
+    /// Apply settings (also draws environment).
     pub fn apply(&self) {
         unsafe {
-            epu_set(0, EPU_SKY.as_ptr() as *const u64);
-
             // Use lighting API
             light_set(0, self.sun_dir_x, self.sun_dir_y, self.sun_dir_z);
             light_color(0, self.sun_color);
             light_intensity(0, 1.0);
+
+            epu_draw(EPU_SKY.as_ptr() as *const u64);
         }
     }
 }

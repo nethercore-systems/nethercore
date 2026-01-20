@@ -65,7 +65,7 @@ fn bone_transform_to_matrix(t: &BoneTransform) -> BoneMatrix3x4 {
 /// Default environment configuration for the resource manager.
 ///
 /// A simple cyan sky with gray walls and dark floor. This is used as a fallback
-/// when games don't specify their own environment configuration via epu_set().
+/// when games don't specify their own environment configuration via `epu_draw()`.
 ///
 /// v2 format: Layer 0 is a RAMP enclosure, layers 1-7 are empty.
 /// For preset examples showing full EPU capabilities, see the epu-inspector example.
@@ -406,24 +406,16 @@ impl ConsoleResourceManager for ZResourceManager {
         // Collect active environment IDs from the environment pool
         let env_count = state.environment_pool.len();
         if env_count > 0 {
-            let default_config: EpuConfig = default_environment();
+            // Push-only API: epu_draw(config_ptr) provides the config for this frame.
+            // If the game doesn't call epu_draw(), fall back to the default environment.
+            let config: EpuConfig = state
+                .epu_frame_config
+                .unwrap_or_else(default_environment);
 
-            // Collect configs - use stored config if present, otherwise default
-            // Games set configs via epu_set() which stores them in state.epu_configs
-            let configs: Vec<(u32, EpuConfig)> = (0..env_count as u32)
-                .map(|env_id| {
-                    let config = state
-                        .epu_configs
-                        .get(&env_id)
-                        .copied()
-                        .unwrap_or(default_config);
-                    (env_id, config)
-                })
+            // Build all active env_ids with the same config (single global environment).
+            let config_refs: Vec<(u32, &EpuConfig)> = (0..env_count as u32)
+                .map(|env_id| (env_id, &config))
                 .collect();
-
-            // Convert to reference pairs for build_epu_environments API
-            let config_refs: Vec<(u32, &EpuConfig)> =
-                configs.iter().map(|(id, cfg)| (*id, cfg)).collect();
 
             // Time parameter: use 0.0 for static environments, or derive from frame counter
             // The EPU cache handles time-dependent configs (they rebuild every frame)

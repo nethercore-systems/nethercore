@@ -354,6 +354,7 @@ impl EpuConfig {
             // Extract params from lo word
             let param_b = ((lo >> 40) & 0xFF) as u8;
             let param_c = ((lo >> 32) & 0xFF) as u8;
+            let dir16 = ((lo >> 8) & 0xFFFF) as u16;
 
             match opcode {
                 // LOBE: anim_mode in param_c (0=none, 1=pulse, 2=flicker)
@@ -382,7 +383,12 @@ impl EpuConfig {
                 }
                 // SCATTER: twinkle_q in upper 4 bits of param_c
                 o if o == EpuOpcode::Scatter as u64 => {
-                    if (param_c >> 4) & 0x0F != 0 {
+                    let twinkle_q = (param_c >> 4) & 0x0F;
+                    let twinkle_speed_q = param_c & 0x0F;
+
+                    // Time-dependent if twinkle is enabled OR the layer uses drift
+                    // (drift is enabled when a non-zero direction is provided and speed nibble is non-zero).
+                    if twinkle_q != 0 || (dir16 != 0 && twinkle_speed_q != 0) {
                         return true;
                     }
                 }

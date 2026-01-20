@@ -2,7 +2,7 @@
 //!
 //! This module provides environment configuration for examples using the new
 //! EPU (Environment Processing Unit) API. The legacy env_* functions have been
-//! removed; use epu_set() and epu_draw() instead.
+//! removed; use `epu_draw()` instead.
 //!
 //! # EPU v2 Format (128-bit instructions)
 //!
@@ -501,10 +501,10 @@ impl DebugEnvironment {
         self.rings.phase = self.rings.phase.wrapping_add(delta);
     }
 
-    /// Apply environment settings using EPU (call in `render()` before `epu_draw()`).
+    /// Apply environment settings using EPU (call in `render()`).
     ///
     /// This implementation uses pre-built EPU v2 configurations (128-bit per layer)
-    /// that approximate the legacy env_* modes. For full control, use epu_set() directly.
+    /// that approximate the legacy env_* modes.
     pub fn apply(&self) {
         unsafe {
             // Select EPU preset based on base_mode
@@ -517,15 +517,12 @@ impl DebugEnvironment {
                 _ => &EPU_GRADIENT, // Default to gradient for unsupported modes
             };
             // Cast to *const u64 for FFI (the memory layout is contiguous)
-            epu_set(0, preset.as_ptr() as *const u64);
+            epu_draw(preset.as_ptr() as *const u64);
         }
     }
 
     /// Apply and draw the environment
     pub fn apply_and_draw(&self) {
         self.apply();
-        unsafe {
-            epu_draw(0);
-        }
     }
 }

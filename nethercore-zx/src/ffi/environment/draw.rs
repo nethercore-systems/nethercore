@@ -62,15 +62,15 @@ pub(crate) fn draw_env(mut caller: Caller<'_, ZXGameContext>) {
     // Capture current pass_id for render pass ordering
     let pass_id = state.current_pass_id;
 
-    // Get or create shading state index for current environment configuration
-    // This ensures the environment data is uploaded to GPU
-    let shading_idx = state.add_shading_state();
+    // Capture view/proj + shading state for this environment draw.
+    // Instance index for the environment shader is an index into mvp_shading_indices.
+    let mvp_index = state.add_mvp_shading_state();
 
     // Add environment draw command to render pass
     state
         .render_pass
         .add_command(crate::graphics::VRPCommand::Environment {
-            shading_state_index: shading_idx.0,
+            mvp_index,
             viewport,
             pass_id,
         });

@@ -913,6 +913,35 @@ fn test_is_time_dependent_scatter_static() {
 }
 
 #[test]
+fn test_is_time_dependent_scatter_drift() {
+    // Drift is enabled by providing a non-zero direction and a non-zero speed nibble.
+    // This should be time-dependent even if twinkle_q is 0.
+    let mut config = EpuConfig::default();
+
+    let layer = EpuLayer {
+        opcode: EpuOpcode::Scatter,
+        region_mask: REGION_ALL,
+        blend: EpuBlend::Add,
+        color_a: [255, 255, 255],
+        color_b: [0, 0, 0],
+        alpha_a: 15,
+        alpha_b: 15,
+        intensity: 255,
+        param_a: 200,
+        param_b: 20,
+        // twinkle_q=0, twinkle_speed_q=5 (used as drift speed control in shader when direction != 0)
+        param_c: 0x05,
+        param_d: 0,
+        // -Y in oct-u16 (low=u=128, high=v=0)
+        direction: 0x0080,
+    };
+
+    config.layers[4] = layer.encode();
+
+    assert!(config.is_time_dependent());
+}
+
+#[test]
 fn test_is_time_dependent_flow_animated() {
     let mut e = epu_begin();
     e.flow(FlowParams {

@@ -117,6 +117,13 @@ fn get_cyl_uv(dir: vec3f) -> vec2f {
     return vec2f(u, v);
 }
 
+fn cyl_uv_to_dir(uv: vec2f) -> vec3f {
+    let theta = uv.x * TAU;
+    let y = clamp(uv.y * 2.0 - 1.0, -1.0, 1.0);
+    let r = sqrt(max(0.0, 1.0 - y * y));
+    return vec3f(sin(theta) * r, y, cos(theta) * r);
+}
+
 fn rotate_2d(uv: vec2f, angle: f32) -> vec2f {
     let c = cos(angle);
     let s = sin(angle);
@@ -199,7 +206,8 @@ fn eval_grid(
 //   param_c[7:4]: Twinkle amount (0..15 -> 0..1)
 //   param_c[3:0]: Twinkle speed (0..15 -> 0..5)
 //   param_d: Seed for randomization (0..255)
-//   direction: Drift direction (reserved for future; current impl static)
+//   direction: Drift direction (oct-u16). If non-zero, the scatter field scrolls over time
+//              using the twinkle speed nibble as the drift speed control.
 // ============================================================================
 
 fn hash3(p: vec3f) -> vec4f {
@@ -226,8 +234,31 @@ fn eval_scatter(
     // Seed from param_d
     let seed = f32(instr_d(instr));
 
+    // Optional drift: scroll the scatter field over time if direction != 0.
+    // This is intentionally "stylized" (cylindrical UV scroll) rather than a physically
+    // correct spherical advection; it keeps motion smooth and looping for effects like
+    // snowfall / rainfall particles.
+    var dir_s = dir;
+    let drift_dir16 = instr_dir16(instr);
+    if drift_dir16 != 0u && twinkle_speed > 0.001 {
+        let drift3 = decode_dir16(drift_dir16);
+        let drift_uv0 = vec2f(drift3.x, drift3.y);
+        let drift_len2 = dot(drift_uv0, drift_uv0);
+        if drift_len2 > 1e-5 {
+            let drift_uv = drift_uv0 / sqrt(drift_len2);
+            // Map twinkle_speed (0..5) -> drift speed in UV units per second.
+            // 1.0 UV unit corresponds to a full wrap (360° in U, 0..1 in V).
+            let drift_speed = twinkle_speed * 0.12;
+
+            let uv0 = get_cyl_uv(dir_s);
+            let u = fract(uv0.x + 0.5 + drift_uv.x * time * drift_speed) - 0.5;
+            let v = fract(uv0.y + drift_uv.y * time * drift_speed);
+            dir_s = cyl_uv_to_dir(vec2f(u, v));
+        }
+    }
+
     // Cell on direction sphere (cheap hash distribution).
-    let cell = floor(dir * density);
+    let cell = floor(dir_s * density);
     let h = hash3(cell + vec3f(seed));
     let point_offset = h.xyz * 2.0 - 1.0;
     var v = cell + point_offset * 0.5;
@@ -236,7 +267,7 @@ fn eval_scatter(
     }
     let point_dir = normalize(v);
 
-    let dist = acos(epu_saturate(dot(dir, point_dir)));
+    let dist = acos(epu_saturate(dot(dir_s, point_dir)));
     let point = smoothstep(size, size * 0.3, dist);
 
     let tw = select(1.0, (0.5 + 0.5 * sin(h.w * TAU + time * twinkle_speed)), twinkle > 0.001);
@@ -281,6 +312,37 @@ fn value_noise(p: vec2f) -> f32 {
     return mix(mix(a, b, u.x), mix(c, d, u.x), u.y) * 2.0 - 1.0;
 }
 
+fn epu_hash31(p: vec3f) -> f32 {
+    let h = dot(p, vec3f(127.1, 311.7, 74.7));
+    return fract(sin(h) * 43758.5453123);
+}
+
+// 3D value noise (trilinear), stable and seam-free for directional domains.
+// Returns [-1, 1].
+fn value_noise3(p: vec3f) -> f32 {
+    let i = floor(p);
+    let f = fract(p);
+    let u = f * f * (3.0 - 2.0 * f); // smoothstep
+
+    let a = epu_hash31(i + vec3f(0.0, 0.0, 0.0));
+    let b = epu_hash31(i + vec3f(1.0, 0.0, 0.0));
+    let c = epu_hash31(i + vec3f(0.0, 1.0, 0.0));
+    let d = epu_hash31(i + vec3f(1.0, 1.0, 0.0));
+    let e = epu_hash31(i + vec3f(0.0, 0.0, 1.0));
+    let f1 = epu_hash31(i + vec3f(1.0, 0.0, 1.0));
+    let g = epu_hash31(i + vec3f(0.0, 1.0, 1.0));
+    let h = epu_hash31(i + vec3f(1.0, 1.0, 1.0));
+
+    let ab = mix(a, b, u.x);
+    let cd = mix(c, d, u.x);
+    let ef = mix(e, f1, u.x);
+    let gh = mix(g, h, u.x);
+    let abcd = mix(ab, cd, u.y);
+    let efgh = mix(ef, gh, u.y);
+
+    return mix(abcd, efgh, u.z) * 2.0 - 1.0;
+}
+
 fn eval_flow(
     dir: vec3f,
     instr: vec4u,
@@ -289,8 +351,13 @@ fn eval_flow(
 ) -> LayerSample {
     if region_w < 0.001 { return LayerSample(vec3f(0.0), 0.0); }
 
-    let flow_dir = decode_dir16(instr_dir16(instr));
-    let scale = mix(1.0, 16.0, u8_to_01(instr_a(instr)));
+    let flow_dir16 = instr_dir16(instr);
+    let flow_dir = select(vec3f(0.0, -1.0, 0.0), decode_dir16(flow_dir16), flow_dir16 != 0u);
+
+    // Quantize to an integer frequency in [1, 16]. This avoids visible seams when using
+    // periodic functions around the azimuth wrap and keeps patterns stable across the sphere.
+    let scale_i = 1u + (instr_a(instr) * 15u) / 255u;
+    let scale = f32(scale_i);
     let speed = u8_to_01(instr_b(instr)) * 2.0;
 
     let pc = instr_c(instr);
@@ -300,17 +367,25 @@ fn eval_flow(
     // Turbulence from param_d - adds noise-based distortion to UV
     let turbulence = u8_to_01(instr_d(instr));
 
-    // Base UV: cheap mapping (cylindrical).
-    let uv0 = get_cyl_uv(dir);
+    // NOTE: FLOW previously used 2D UV parameterizations (cylindrical / octahedral),
+    // which necessarily introduce seams. Those seams become very noticeable once the
+    // pattern is animated (time scroll), especially for smooth trig patterns like caustics.
+    //
+    // Use a 3D domain based on the direction vector instead. This is continuous on the sphere,
+    // so it eliminates hard seams for animated environments.
+    let t = time * speed;
+    var p = dir * scale + flow_dir * (t * 1.5);
 
-    // Apply turbulence distortion
-    var uv = uv0 * scale + flow_dir.xy * (time * speed);
+    // Optional turbulence: add a small vector-valued distortion. Tie it to `speed` so
+    // speed=0 produces a truly static layer (important for EPU caching behavior).
     if turbulence > 0.001 {
-        let turb_offset = vec2f(
-            value_noise(uv0 * 4.0 + time * 0.5),
-            value_noise(uv0 * 4.0 + vec2f(17.3, 31.7) + time * 0.5)
-        ) * turbulence * 0.5;
-        uv += turb_offset;
+        let p2 = p * 2.0;
+        let wobble = vec3f(
+            value_noise3(p2 + vec3f(0.0, 0.0, t * 0.2)),
+            value_noise3(p2 + vec3f(17.3, 31.7, t * 0.2)),
+            value_noise3(p2 + vec3f(41.0, 12.0, t * 0.2))
+        );
+        p += wobble * turbulence * 0.5;
     }
 
     var pat: f32 = 0.0;
@@ -320,30 +395,68 @@ fn eval_flow(
         case 0u: { // NOISE
             var amp = 1.0;
             var freq = 1.0;
+            var sum = 0.0;
+            var norm = 0.0;
             for (var i = 0u; i < octaves; i++) {
-                pat += value_noise(uv * freq) * amp;
+                sum += value_noise3(p * freq) * amp;
+                norm += amp;
                 freq *= 2.0;
                 amp *= 0.5;
             }
-            pat = pat * 0.5 + 0.5;
+            let n = sum / max(norm, 1e-6);
+            pat = n * 0.5 + 0.5;
             color_mix = pat;
         }
         case 1u: { // STREAKS
-            let d = normalize(flow_dir);
-            let streak_coord = dot(dir, d) * scale + time * speed;
-            let perp = length(dir - d * dot(dir, d));
-            pat = fract(streak_coord) * smoothstep(0.1, 0.0, perp);
-            color_mix = fract(streak_coord * 0.5);
+            // Rain / particle streaks across the whole environment.
+            //
+            // Generate "lanes" in a plane perpendicular to `flow_dir`, and animate droplets
+            // along the flow axis using the 3D domain `p` (so motion is seam-free).
+            let up = select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(flow_dir.y) > 0.9);
+            let t_axis = normalize(cross(up, flow_dir));
+            let b_axis = normalize(cross(flow_dir, t_axis));
+
+            let lane_freq = 10.0 + scale * 4.0;
+            // Lower base frequency + per-lane variation keeps rain from collapsing into a
+            // perfectly regular dot-grid pattern.
+            let seg_freq = 3.0 + scale * 1.6;
+
+            let across = dot(dir, t_axis) * lane_freq;
+            let lane = floor(across);
+
+            // Per-lane variation (deterministic, cheap).
+            let h0 = epu_hash21(vec2f(lane, f32(scale_i) * 17.0));
+            let h1 = epu_hash21(vec2f(lane, f32(octaves) * 23.0));
+
+            // Thin line mask (lanes).
+            let width = mix(0.035, 0.085, h0);
+            let xf = abs(fract(across + h0) - 0.5);
+            let line = 1.0 - smoothstep(width, width * 1.8, xf);
+
+            // Periodic droplet modulation along the flow axis. Use a cosine bump so the
+            // wrap boundary is always zero (no visible "cut off" points).
+            let seg_freq_lane = seg_freq * mix(0.65, 1.35, h1);
+            let along = dot(p, flow_dir) * seg_freq_lane + h1;
+            let phase = fract(along);
+            let bump = 0.5 - 0.5 * cos(phase * TAU);
+            // Wider bumps read as streaks instead of pinpoint dots.
+            let seg = pow(bump, mix(0.8, 2.2, h1));
+
+            // Slight lateral wobble so streaks aren't perfectly rigid.
+            let wobble = dot(dir, b_axis) * (2.0 + h1 * 6.0);
+            pat = line * seg * (0.85 + 0.15 * sin(wobble + t * 1.5));
+            color_mix = h0;
         }
         case 2u: { // CAUSTIC
-            let p1 = sin(uv.x * 5.0 + time) * cos(uv.y * 5.0 + time * 0.7);
-            let p2 = sin(uv.x * 7.0 - time * 0.8) * cos(uv.y * 6.0 + time * 0.5);
+            let q = p * 2.0;
+            let p1 = sin(q.x * 1.7 + t) * cos(q.z * 1.9 + t * 0.7);
+            let p2 = sin(q.x * 2.3 - t * 0.8) * cos(q.y * 2.0 + t * 0.5);
             pat = (p1 + p2) * 0.25 + 0.5;
-            pat = smoothstep(0.4, 0.6, pat);
-            color_mix = (p1 * 0.5 + 0.5);
+            pat = smoothstep(0.45, 0.65, pat);
+            color_mix = p1 * 0.5 + 0.5;
         }
         default: {
-            pat = value_noise(uv) * 0.5 + 0.5;
+            pat = value_noise3(p) * 0.5 + 0.5;
             color_mix = pat;
         }
     }
