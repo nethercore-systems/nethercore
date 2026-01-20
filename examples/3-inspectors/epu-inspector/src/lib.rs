@@ -550,7 +550,7 @@ static mut SPHERE_MESH: u32 = 0;
 static mut TORUS_MESH: u32 = 0;
 static mut CUBE_MESH: u32 = 0;
 static mut SHAPE_INDEX: i32 = 0;
-static mut MATERIAL_METALLIC_U8: i32 = 77; // ~0.30 * 255
+static mut MATERIAL_METALLIC_U8: i32 = 255; // ~1 * 255
 static mut MATERIAL_ROUGHNESS_U8: i32 = 128; // ~0.50 * 255
 
 const SHAPE_COUNT: i32 = 3;
@@ -569,12 +569,6 @@ pub extern "C" fn init() {
         SPHERE_MESH = sphere(1.0, 32, 24);
         CUBE_MESH = cube(1.2, 1.2, 1.2);
         TORUS_MESH = torus(1.0, 0.4, 32, 16);
-
-        // Set up initial light
-        light_set(0, 0.5, -0.7, 0.5);
-        light_color(0, 0xFFFFFFFF);
-        light_intensity(0, 1.0);
-        light_enable(0);
 
         // Set up initial environment
         epu_set(0, PRESETS[0].as_ptr() as *const u64);
