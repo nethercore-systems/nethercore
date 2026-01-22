@@ -175,7 +175,7 @@ impl EpuRuntime {
     ///
     /// This should be called once per frame before `build_envs()` to ensure
     /// proper cache invalidation for time-dependent environments.
-    pub fn advance_frame(&self) {
+    pub fn advance_frame(&mut self) {
         self.cache.advance_frame();
     }
 
@@ -189,14 +189,14 @@ impl EpuRuntime {
     /// Invalidate the cache entry for a specific environment ID.
     ///
     /// This forces the environment to be rebuilt on the next `build_envs()` call.
-    pub fn invalidate_cache(&self, env_id: u32) {
+    pub fn invalidate_cache(&mut self, env_id: u32) {
         self.cache.invalidate(env_id);
     }
 
     /// Invalidate all cache entries.
     ///
     /// This forces all environments to be rebuilt on the next `build_envs()` call.
-    pub fn invalidate_all_caches(&self) {
+    pub fn invalidate_all_caches(&mut self) {
         self.cache.invalidate_all();
     }
 
@@ -279,28 +279,14 @@ impl EpuRuntime {
             .collect();
 
         // Recreate main bind group with new texture views
-        self.bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("EPU Bind Group"),
-            layout: &self.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: self.env_states_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: self.active_env_ids_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: self.frame_uniforms_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: wgpu::BindingResource::TextureView(&self.env_radiance_mip_views[0]),
-                },
-            ],
-        });
+        self.bind_group = pipelines::create_main_bind_group(
+            device,
+            &self.bind_group_layout,
+            &self.env_states_buffer,
+            &self.active_env_ids_buffer,
+            &self.frame_uniforms_buffer,
+            &self.env_radiance_mip_views[0],
+        );
 
         self.env_layer_capacity = new_capacity;
         self.resource_version = self.resource_version.wrapping_add(1);
@@ -540,12 +526,15 @@ impl EpuRuntime {
         self.ensure_layer_capacity(device, max_env_id + 1);
 
         // Filter configs to only those that need rebuilding
-        let dirty_configs: Vec<(u32, &EpuConfig)> = configs
-            .iter()
-            .take(MAX_ACTIVE_ENVS as usize)
-            .filter(|(env_id, config)| self.cache.needs_rebuild(*env_id, config))
-            .copied()
-            .collect();
+        let dirty_configs: Vec<(u32, &EpuConfig)> = {
+            let cache = &mut self.cache;
+            configs
+                .iter()
+                .take(MAX_ACTIVE_ENVS as usize)
+                .filter(|(env_id, config)| cache.needs_rebuild(*env_id, config))
+                .copied()
+                .collect()
+        };
 
         // Always upload frame uniforms for rendering
         let frame_uniforms = FrameUniforms {

@@ -700,6 +700,7 @@ pub extern "C" fn matcap_set(slot: u32, texture: u32) void;
 /// - 5: HSV_MOD (HSV shift dst by src)
 /// - 6: MIN (min(dst, src * a))
 /// - 7: OVERLAY (Photoshop-style overlay)
+/// 
 /// Draw the environment background.
 /// 
 /// Renders the procedural environment background for the current viewport and pass.

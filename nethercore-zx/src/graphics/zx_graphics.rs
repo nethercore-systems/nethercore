@@ -399,6 +399,11 @@ impl ZXGraphics {
         &self.epu_runtime
     }
 
+    /// Get a mutable reference to the EPU runtime.
+    pub fn epu_runtime_mut(&mut self) -> &mut EpuRuntime {
+        &mut self.epu_runtime
+    }
+
     /// Build EPU environment maps for the given configurations.
     ///
     /// This dispatches compute shaders to generate EnvRadiance (mip pyramid) and

@@ -89,12 +89,146 @@ fn test_unpack_note_unpacked() {
 
 /// Load demo.xm for testing
 fn load_demo_xm() -> Option<Vec<u8>> {
-    // Load one of the generated tracker XM files for testing
-    let demo_path = concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../examples/assets/tracker-nether_groove.xm"
-    );
-    std::fs::read(demo_path).ok()
+    fn write_fixed_str<const N: usize>(out: &mut Vec<u8>, s: &str) {
+        let mut buf = [0u8; N];
+        let bytes = s.as_bytes();
+        let copy_len = bytes.len().min(N);
+        buf[..copy_len].copy_from_slice(&bytes[..copy_len]);
+        out.extend_from_slice(&buf);
+    }
+
+    // Keep tests self-contained: synthesize a small, valid XM with one instrument
+    // and a small amount of embedded sample data.
+    let num_channels: u8 = 2;
+    let num_patterns: u16 = 2;
+    let num_instruments: u16 = 1;
+    let song_length: u16 = 2;
+
+    // Pattern 0: one note, rest empty
+    let pattern0 = XmPattern {
+        num_rows: 4,
+        notes: vec![
+            vec![
+                XmNote {
+                    note: 0x31, // C-4
+                    instrument: 1,
+                    volume: 64,
+                    effect: 0,
+                    effect_param: 0,
+                },
+                XmNote::default(),
+            ],
+            vec![XmNote::default(), XmNote::default()],
+            vec![XmNote::default(), XmNote::default()],
+            vec![XmNote::default(), XmNote::default()],
+        ],
+    };
+
+    // Pattern 1: all empty
+    let pattern1 = XmPattern {
+        num_rows: 4,
+        notes: vec![
+            vec![XmNote::default(), XmNote::default()],
+            vec![XmNote::default(), XmNote::default()],
+            vec![XmNote::default(), XmNote::default()],
+            vec![XmNote::default(), XmNote::default()],
+        ],
+    };
+
+    let patterns = [pattern0, pattern1];
+    let packed_patterns: Vec<Vec<u8>> = patterns
+        .iter()
+        .map(|p| pack_pattern_data(p, num_channels))
+        .collect();
+
+    let mut out = Vec::new();
+
+    // ========== XM Header ==========
+    out.extend_from_slice(XM_MAGIC); // Magic (17)
+    write_fixed_str::<20>(&mut out, "nether-xm demo"); // Module name (20)
+    out.push(0x1A); // 0x1A marker (1)
+    write_fixed_str::<20>(&mut out, "nether-xm tests"); // Tracker name (20)
+    out.extend_from_slice(&XM_VERSION.to_le_bytes()); // Version (2)
+    out.extend_from_slice(&276u32.to_le_bytes()); // Header size (4)
+    out.extend_from_slice(&song_length.to_le_bytes()); // Song length (2)
+    out.extend_from_slice(&0u16.to_le_bytes()); // Restart position (2)
+    out.extend_from_slice(&(num_channels as u16).to_le_bytes()); // Channels (2)
+    out.extend_from_slice(&num_patterns.to_le_bytes()); // Patterns (2)
+    out.extend_from_slice(&num_instruments.to_le_bytes()); // Instruments (2)
+    out.extend_from_slice(&1u16.to_le_bytes()); // Flags (2) - linear frequency table
+    out.extend_from_slice(&6u16.to_le_bytes()); // Default speed (2)
+    out.extend_from_slice(&125u16.to_le_bytes()); // Default BPM (2)
+
+    // Pattern order table (256)
+    for i in 0..256 {
+        out.push(if i < song_length as usize { i as u8 } else { 0 });
+    }
+
+    // ========== Patterns ==========
+    for (pattern, packed) in patterns.iter().zip(packed_patterns.iter()) {
+        out.extend_from_slice(&9u32.to_le_bytes()); // pattern header length
+        out.push(0); // packing type
+        out.extend_from_slice(&pattern.num_rows.to_le_bytes());
+        out.extend_from_slice(&(packed.len() as u16).to_le_bytes());
+        out.extend_from_slice(packed);
+    }
+
+    // ========== Instrument (1 sample) ==========
+    // Standard instrument header with samples is 243 bytes.
+    out.extend_from_slice(&243u32.to_le_bytes());
+    write_fixed_str::<22>(&mut out, "DemoInstr");
+    out.push(0); // instrument type
+    out.extend_from_slice(&1u16.to_le_bytes()); // num_samples
+
+    // Sample header size (always 40)
+    out.extend_from_slice(&40u32.to_le_bytes());
+
+    // Note -> sample map (96 bytes)
+    out.extend_from_slice(&[0u8; 96]);
+
+    // Volume envelope points (48 bytes) + panning envelope points (48 bytes)
+    out.extend_from_slice(&[0u8; 48]);
+    out.extend_from_slice(&[0u8; 48]);
+
+    // Envelope point counts
+    out.push(0); // num vol points
+    out.push(0); // num pan points
+
+    // Envelope sustain/loop points (6 bytes)
+    out.extend_from_slice(&[0u8; 6]);
+
+    // Envelope types
+    out.push(0); // vol_type
+    out.push(0); // pan_type
+
+    // Vibrato params (4 bytes)
+    out.extend_from_slice(&[0u8; 4]);
+
+    // Volume fadeout (2 bytes)
+    out.extend_from_slice(&256u16.to_le_bytes());
+
+    // Reserved (2 bytes)
+    out.extend_from_slice(&0u16.to_le_bytes());
+
+    // Sample header (40 bytes)
+    let sample_length = 16u32;
+    out.extend_from_slice(&sample_length.to_le_bytes()); // length
+    out.extend_from_slice(&0u32.to_le_bytes()); // loop start
+    out.extend_from_slice(&0u32.to_le_bytes()); // loop length
+    out.push(64); // volume
+    out.push(0); // finetune
+    out.push(0); // type
+    out.push(128); // panning
+    out.push(0); // relative note
+    out.push(0); // reserved
+    write_fixed_str::<22>(&mut out, "DemoInstr"); // sample name
+
+    // Sample data (dummy)
+    for i in 0..sample_length {
+        out.push(i as u8);
+    }
+
+    Some(out)
 }
 
 #[test]
@@ -288,7 +422,7 @@ fn test_rebuild_from_unpacked_input() {
     // Write patterns in UNPACKED format (5 bytes per note)
     for pattern in &module.patterns {
         // Pattern header
-        unpacked_xm.extend_from_slice(&5u32.to_le_bytes()); // header_length
+        unpacked_xm.extend_from_slice(&9u32.to_le_bytes()); // header_length
         unpacked_xm.push(0); // packing_type
         unpacked_xm.extend_from_slice(&pattern.num_rows.to_le_bytes()); // num_rows
 
@@ -311,22 +445,34 @@ fn test_rebuild_from_unpacked_input() {
         }
     }
 
-    // Add instrument data (simplified - just copy from original after pattern data)
-    // For now, just verify the unpacked XM can be parsed
-    // In a full implementation, we'd copy the instrument data from the original
+    // Append instrument headers + sample data from the original XM so the file is complete.
+    // This keeps the test focused on verifying UNPACKED pattern parsing.
+    fn find_instrument_offset(xm: &[u8], num_patterns: u16) -> usize {
+        // Header size is at offset 60 (after magic + name + marker + tracker + version).
+        let header_size = u32::from_le_bytes([xm[60], xm[61], xm[62], xm[63]]) as usize;
+        let mut pos = 60 + header_size;
 
-    // Parse the unpacked XM
-    let unpacked_module = parse_xm(&unpacked_xm);
-    if unpacked_module.is_err() {
-        // If parsing fails due to missing instrument data, that's OK for this test
-        // The key is that we tested unpacked pattern reading
-        println!(
-            "Note: Unpacked XM parsing incomplete (missing instrument data), but pattern reading works"
-        );
-        return;
+        for _ in 0..num_patterns {
+            let header_start = pos;
+            let header_len = u32::from_le_bytes([
+                xm[header_start],
+                xm[header_start + 1],
+                xm[header_start + 2],
+                xm[header_start + 3],
+            ]) as usize;
+            let packed_size = u16::from_le_bytes([xm[header_start + 7], xm[header_start + 8]])
+                as usize;
+            pos = header_start + header_len + packed_size;
+        }
+
+        pos
     }
 
-    let unpacked_module = unpacked_module.unwrap();
+    let instrument_offset = find_instrument_offset(&xm, module.num_patterns);
+    unpacked_xm.extend_from_slice(&xm[instrument_offset..]);
+
+    // Parse the unpacked XM
+    let unpacked_module = parse_xm(&unpacked_xm).expect("Unpacked XM should parse");
     let unpacked_size = unpacked_xm.len();
 
     // Rebuild it (should output packed format)

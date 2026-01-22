@@ -7,7 +7,6 @@
 use super::EpuConfig;
 use super::settings::MAX_ACTIVE_ENVS;
 use super::settings::MAX_ENV_STATES;
-use std::cell::{Cell, RefCell};
 
 /// Cache entry for dirty-state tracking of environment configurations.
 ///
@@ -23,40 +22,36 @@ pub(super) struct EpuCacheEntry {
     pub valid: bool,
 }
 
-/// Thread-safe cache storage using RefCell for interior mutability.
-///
-/// This allows `build_envs()` to maintain its `&self` signature while still
-/// updating the cache state.
+/// Cache storage for dirty-state tracking.
 pub(super) struct EpuCache {
-    entries: RefCell<Vec<EpuCacheEntry>>,
-    current_frame: Cell<u64>,
+    entries: Vec<EpuCacheEntry>,
+    current_frame: u64,
 }
 
 impl EpuCache {
     pub fn new() -> Self {
         Self {
-            entries: RefCell::new(vec![EpuCacheEntry::default(); MAX_ENV_STATES as usize]),
-            current_frame: Cell::new(0),
+            entries: vec![EpuCacheEntry::default(); MAX_ENV_STATES as usize],
+            current_frame: 0,
         }
     }
 
-    pub fn advance_frame(&self) {
-        self.current_frame
-            .set(self.current_frame.get().wrapping_add(1));
+    pub fn advance_frame(&mut self) {
+        self.current_frame = self.current_frame.wrapping_add(1);
     }
 
     pub fn current_frame(&self) -> u64 {
-        self.current_frame.get()
+        self.current_frame
     }
 
-    pub fn invalidate(&self, env_id: u32) {
-        if let Some(entry) = self.entries.borrow_mut().get_mut(env_id as usize) {
+    pub fn invalidate(&mut self, env_id: u32) {
+        if let Some(entry) = self.entries.get_mut(env_id as usize) {
             entry.valid = false;
         }
     }
 
-    pub fn invalidate_all(&self) {
-        for entry in self.entries.borrow_mut().iter_mut() {
+    pub fn invalidate_all(&mut self) {
+        for entry in self.entries.iter_mut() {
             entry.valid = false;
         }
     }
@@ -64,12 +59,11 @@ impl EpuCache {
     /// Check if an environment needs rebuilding and update cache.
     ///
     /// Returns `true` if the environment needs to be rebuilt.
-    pub fn needs_rebuild(&self, env_id: u32, config: &EpuConfig) -> bool {
+    pub fn needs_rebuild(&mut self, env_id: u32, config: &EpuConfig) -> bool {
         let hash = config.state_hash();
         let time_dependent = config.is_time_dependent();
-        let mut entries = self.entries.borrow_mut();
 
-        if let Some(entry) = entries.get_mut(env_id as usize) {
+        if let Some(entry) = self.entries.get_mut(env_id as usize) {
             // Check if we can skip this environment
             if entry.valid && entry.state_hash == hash && !entry.time_dependent {
                 // Cache hit: same config, not time-dependent
@@ -165,7 +159,7 @@ mod tests {
 
     #[test]
     fn test_epu_cache_advance_frame() {
-        let cache = EpuCache::new();
+        let mut cache = EpuCache::new();
         assert_eq!(cache.current_frame(), 0);
 
         cache.advance_frame();
@@ -177,10 +171,10 @@ mod tests {
 
     #[test]
     fn test_epu_cache_advance_frame_wrapping() {
-        let cache = EpuCache::new();
+        let mut cache = EpuCache::new();
 
         // Set to max value
-        cache.current_frame.set(u64::MAX);
+        cache.current_frame = u64::MAX;
         assert_eq!(cache.current_frame(), u64::MAX);
 
         // Should wrap to 0
@@ -190,7 +184,7 @@ mod tests {
 
     #[test]
     fn test_epu_cache_needs_rebuild_first_call() {
-        let cache = EpuCache::new();
+        let mut cache = EpuCache::new();
         let config = EpuConfig {
             layers: [
                 [1, 2],
@@ -210,7 +204,7 @@ mod tests {
 
     #[test]
     fn test_epu_cache_hit_static_config() {
-        let cache = EpuCache::new();
+        let mut cache = EpuCache::new();
         let config = EpuConfig {
             layers: [
                 [1, 2],
@@ -236,7 +230,7 @@ mod tests {
 
     #[test]
     fn test_epu_cache_miss_different_config() {
-        let cache = EpuCache::new();
+        let mut cache = EpuCache::new();
         let config1 = EpuConfig {
             layers: [
                 [1, 2],
@@ -275,7 +269,7 @@ mod tests {
 
     #[test]
     fn test_epu_cache_miss_time_dependent() {
-        let cache = EpuCache::new();
+        let mut cache = EpuCache::new();
 
         // Create a time-dependent config (FLOW with speed > 0)
         let mut e = epu_begin();
@@ -297,7 +291,7 @@ mod tests {
 
     #[test]
     fn test_epu_cache_invalidate_single() {
-        let cache = EpuCache::new();
+        let mut cache = EpuCache::new();
         let config = EpuConfig {
             layers: [
                 [1, 2],
@@ -324,7 +318,7 @@ mod tests {
 
     #[test]
     fn test_epu_cache_invalidate_all() {
-        let cache = EpuCache::new();
+        let mut cache = EpuCache::new();
         let config1 = EpuConfig {
             layers: [
                 [1, 0],
@@ -366,7 +360,7 @@ mod tests {
 
     #[test]
     fn test_epu_cache_multiple_env_ids() {
-        let cache = EpuCache::new();
+        let mut cache = EpuCache::new();
         let config_a = EpuConfig {
             layers: [
                 [0xA, 0],

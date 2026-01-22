@@ -401,7 +401,7 @@ impl ConsoleResourceManager for ZResourceManager {
         // render_frame() so the textures are valid for sampling during rendering.
 
         // Tick the EPU cache (invalidates time-dependent environments)
-        graphics.epu_runtime().advance_frame();
+        graphics.epu_runtime_mut().advance_frame();
 
         // Collect active environment IDs from the environment pool
         let env_count = state.environment_pool.len();

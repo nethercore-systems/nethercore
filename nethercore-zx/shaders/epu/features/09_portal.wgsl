@@ -115,9 +115,13 @@ fn eval_portal(
     // Reject if behind the portal center (d <= 0)
     if d <= 0.0 { return LayerSample(vec3f(0.0), 0.0); }
 
-    // Project onto tangent plane: gnomonic projection
-    // uv = (dir - center * d) / d
-    let uv = (dir - center * d) / d;
+    // Project onto tangent plane: gnomonic projection (tangent-local UV).
+    // Divide by `d` so UV is unbounded as d -> 0 (approaching 90° from center).
+    // (This avoids "portal rotates with world axes" artifacts.)
+    let up = select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(center.y) > 0.9);
+    let t = normalize(cross(up, center));
+    let b = normalize(cross(center, t));
+    let uv = vec2f(dot(dir, t) / d, dot(dir, b) / d);
 
     // Compute grazing fade to prevent edge artifacts
     let grazing_w = smoothstep(0.1, 0.3, d);

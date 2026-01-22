@@ -87,6 +87,38 @@ pub(super) fn create_radiance_texture(
     (texture, full_view, mip_views)
 }
 
+pub(super) fn create_main_bind_group(
+    device: &wgpu::Device,
+    bind_group_layout: &wgpu::BindGroupLayout,
+    env_states_buffer: &wgpu::Buffer,
+    active_env_ids_buffer: &wgpu::Buffer,
+    frame_uniforms_buffer: &wgpu::Buffer,
+    mip0_view: &wgpu::TextureView,
+) -> wgpu::BindGroup {
+    device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("EPU Bind Group"),
+        layout: bind_group_layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: env_states_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: active_env_ids_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: frame_uniforms_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: wgpu::BindingResource::TextureView(mip0_view),
+            },
+        ],
+    })
+}
+
 /// Create the main environment build compute pipeline.
 pub(super) fn create_main_pipeline(
     device: &wgpu::Device,
@@ -158,28 +190,14 @@ pub(super) fn create_main_pipeline(
         ],
     });
 
-    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("EPU Bind Group"),
-        layout: &bind_group_layout,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: env_states_buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: active_env_ids_buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: frame_uniforms_buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 3,
-                resource: wgpu::BindingResource::TextureView(mip0_view),
-            },
-        ],
-    });
+    let bind_group = create_main_bind_group(
+        device,
+        &bind_group_layout,
+        env_states_buffer,
+        active_env_ids_buffer,
+        frame_uniforms_buffer,
+        mip0_view,
+    );
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("EPU Pipeline Layout"),
