@@ -25,10 +25,9 @@ struct FrameUniforms {
 @group(0) @binding(3) var epu_out_sharp: texture_storage_2d_array<rgba16float, write>;
 
 fn evaluate_env_radiance(dir: vec3f, st: PackedEnvironmentState, time: f32) -> vec3f {
-    // Layer 0 is assumed to be RAMP for enclosure weights (recommended).
-    let layer0 = st.layers[0];
-    let enc = enclosure_from_ramp(layer0);
-    let regions = compute_region_weights(dir, enc);
+    // Start with default enclosure (will be set by first bounds layer)
+    var enc = EnclosureConfig(vec3f(0.0, 1.0, 0.0), 0.5, -0.5, 0.1);
+    var regions = RegionWeights(0.33, 0.34, 0.33);
 
     var radiance = vec3f(0.0);
 
@@ -36,6 +35,14 @@ fn evaluate_env_radiance(dir: vec3f, st: PackedEnvironmentState, time: f32) -> v
         let instr = st.layers[i];
         let opcode = instr_opcode(instr);
         if opcode == OP_NOP { continue; }
+
+        let is_bounds = opcode < OP_FEATURE_MIN;
+
+        // If this is a bounds layer, update enclosure/regions first
+        if is_bounds {
+            enc = enclosure_from_layer(instr, opcode, enc);
+            regions = compute_region_weights(dir, enc);
+        }
 
         let blend = instr_blend(instr);
         let sample = evaluate_layer(dir, instr, enc, regions, time);

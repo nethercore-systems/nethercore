@@ -460,8 +460,8 @@ fn test_rebuild_from_unpacked_input() {
                 xm[header_start + 2],
                 xm[header_start + 3],
             ]) as usize;
-            let packed_size = u16::from_le_bytes([xm[header_start + 7], xm[header_start + 8]])
-                as usize;
+            let packed_size =
+                u16::from_le_bytes([xm[header_start + 7], xm[header_start + 8]]) as usize;
             pos = header_start + header_len + packed_size;
         }
 

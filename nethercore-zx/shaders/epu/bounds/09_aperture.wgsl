@@ -3,8 +3,8 @@
 // Creates a view-centered viewport/frame. The wall region becomes the frame,
 // and sky becomes the opening through it, creating a strong "interior" cue.
 // 128-bit packed fields:
-//   color_a: Reserved (RGB24, set to 0)
-//   color_b: Reserved (RGB24, set to 0)
+//   color_a: Opening/sky color (RGB24)
+//   color_b: Frame/wall color (RGB24)
 //   intensity: Frame edge softness (0..255 -> 0.005..0.1)
 //   param_a: Opening half-width (0..255 -> 0.1..1.5 tangent units)
 //   param_b: Opening half-height (0..255 -> 0.1..1.5 tangent units)
@@ -251,8 +251,12 @@ fn eval_aperture(
     let w_wall = frame_w + outside_w * (baseline.wall + baseline.sky);
     let w_floor = outside_w * baseline.floor;
 
-    // APERTURE is an enclosure modifier: output the sky promotion weight
-    // The opening_w represents where sky should be visible through the frame
-    // We output the opening weight as the modifier effect
-    return LayerSample(vec3f(0.0), opening_w);
+    // Get colors
+    let opening_color = instr_color_a(instr);  // Sky through opening
+    let frame_color = instr_color_b(instr);    // Frame/wall color
+
+    // Blend colors based on zone weights
+    let rgb = opening_color * w_sky + frame_color * w_wall + frame_color * 0.5 * w_floor;
+
+    return LayerSample(rgb, 1.0);
 }

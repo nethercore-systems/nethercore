@@ -13,8 +13,8 @@ fn evaluate_layer(
     let opcode = instr_opcode(instr);
     let region_mask = instr_region(instr);
 
-    let is_feature = opcode >= OP_FEATURE_MIN;
-    let region_w = select(1.0, region_weight(regions, region_mask), is_feature);
+    // Always compute region weight from mask - both bounds and features can use it
+    let region_w = region_weight(regions, region_mask);
 
     switch opcode {
         // ====================================================================

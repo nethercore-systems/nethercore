@@ -2,8 +2,8 @@
 // SILHOUETTE - Skyline/Horizon Cutout (vNext enclosure modifier at 0x03)
 // Creates environmental silhouettes that reshape the sky/wall boundary.
 // 128-bit packed fields:
-//   color_a: Unused (RGB24, set to 0)
-//   color_b: Unused (RGB24, set to 0)
+//   color_a: Silhouette color (RGB24)
+//   color_b: Background/sky color (RGB24)
 //   intensity: Edge softness (0..255 -> 0.005..0.1)
 //   param_a: Horizon height bias (0..255 -> -0.3..0.5)
 //   param_b: Roughness/amplitude (0..255 -> 0.1..1.0)
@@ -198,8 +198,12 @@ fn eval_silhouette(
     // Apply strength
     let effect = wall_from_sky * strength;
 
-    // SILHOUETTE is an enclosure modifier that converts sky to wall
-    // below the silhouette line. Return the effect weight.
-    // Color is unused for modifiers; we return neutral values.
-    return LayerSample(vec3f(0.0), effect);
+    // Get colors
+    let silhouette_color = instr_color_a(instr);
+    let background_color = instr_color_b(instr);
+
+    // Blend based on silhouette effect
+    let rgb = mix(background_color, silhouette_color, effect);
+
+    return LayerSample(rgb, 1.0);
 }

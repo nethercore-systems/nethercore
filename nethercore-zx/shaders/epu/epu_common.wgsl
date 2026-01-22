@@ -328,6 +328,30 @@ fn enclosure_from_ramp(instr: vec4u) -> EnclosureConfig {
     return EnclosureConfig(up, ceil_y, floor_y, soft);
 }
 
+// Extract enclosure config from any bounds layer
+// This allows bounds layers to redefine the enclosure for subsequent features
+fn enclosure_from_layer(instr: vec4u, opcode: u32, prev_enc: EnclosureConfig) -> EnclosureConfig {
+    switch opcode {
+        case OP_RAMP: {
+            return enclosure_from_ramp(instr);
+        }
+        case OP_SPLIT: {
+            // SPLIT uses its direction as the up axis, inherits heights from previous
+            let up = decode_dir16(instr_dir16(instr));
+            return EnclosureConfig(up, prev_enc.ceil_y, prev_enc.floor_y, prev_enc.soft);
+        }
+        case OP_SECTOR, OP_SILHOUETTE, OP_APERTURE: {
+            // These modifiers use the direction as up axis
+            let up = decode_dir16(instr_dir16(instr));
+            return EnclosureConfig(up, prev_enc.ceil_y, prev_enc.floor_y, prev_enc.soft);
+        }
+        default: {
+            // Other bounds (CELL, PATCHES, LOBE, BAND, FOG) keep previous enclosure
+            return prev_enc;
+        }
+    }
+}
+
 fn compute_region_weights(dir: vec3f, enc: EnclosureConfig) -> RegionWeights {
     let y = dot(dir, enc.up);
 

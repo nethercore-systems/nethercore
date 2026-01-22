@@ -1,8 +1,8 @@
 // ============================================================================
 // SECTOR - Angular Wedge Enclosure Modifier (vNext 0x02)
 // 128-bit packed fields:
-//   color_a: Unused (set to 0)
-//   color_b: Unused (set to 0)
+//   color_a: Sky/opening color (RGB24)
+//   color_b: Wall color (RGB24)
 //   intensity: Opening strength (0..255 -> 0.0..1.0)
 //   param_a: Opening center azimuth (0..255 -> 0.0..1.0)
 //   param_b: Opening width (0..255 -> 0.0..1.0)
@@ -93,13 +93,12 @@ fn eval_sector(
     let new_wall = baseline.wall - opening_mask;
     let new_floor = baseline.floor;
 
-    // SECTOR is an enclosure modifier that changes the perceived region weights.
-    // Since color_a/color_b are unused, we output using the RAMP's region colors
-    // weighted by the modified weights. However, for proper layering, we output
-    // a blend factor that represents the opening contribution.
-    //
-    // For enclosure-aware blending: output RGB=0 with the sky-promotion weight.
-    // When used with appropriate blend modes, this modifies the perception.
-    // Full enclosure modifier semantics would require architectural changes.
-    return LayerSample(vec3f(0.0), opening_mask);
+    // Get colors
+    let sky_color = instr_color_a(instr);
+    let wall_color = instr_color_b(instr);
+
+    // Blend based on modified region weights
+    let rgb = sky_color * new_sky + wall_color * new_wall + wall_color * 0.5 * new_floor;
+
+    return LayerSample(rgb, 1.0);
 }
