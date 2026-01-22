@@ -166,11 +166,12 @@ impl ZXGraphics {
         // (viewport, pass_id) so split-screen and multi-pass rendering can draw an environment
         // per pass. Only the last call per key is used.
         for ((viewport, pass_id), mvp_index) in &z_state.epu_frame_draws {
-            self.command_buffer.add_command(super::command_buffer::VRPCommand::EpuEnvironment {
-                mvp_index: *mvp_index,
-                viewport: *viewport,
-                pass_id: *pass_id,
-            });
+            self.command_buffer
+                .add_command(super::command_buffer::VRPCommand::EpuEnvironment {
+                    mvp_index: *mvp_index,
+                    viewport: *viewport,
+                    pass_id: *pass_id,
+                });
         }
 
         // Note: All per-frame cleanup (model_matrices, audio_commands, render_pass)

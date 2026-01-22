@@ -408,9 +408,7 @@ impl ConsoleResourceManager for ZResourceManager {
         if env_count > 0 {
             // Push-only API: epu_draw(config_ptr) provides the config for this frame.
             // If the game doesn't call epu_draw(), fall back to the default environment.
-            let config: EpuConfig = state
-                .epu_frame_config
-                .unwrap_or_else(default_environment);
+            let config: EpuConfig = state.epu_frame_config.unwrap_or_else(default_environment);
 
             // Build all active env_ids with the same config (single global environment).
             let config_refs: Vec<(u32, &EpuConfig)> = (0..env_count as u32)

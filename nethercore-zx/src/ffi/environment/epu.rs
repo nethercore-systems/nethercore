@@ -70,9 +70,7 @@ pub(crate) fn epu_draw(mut caller: Caller<'_, ZXGameContext>, config_ptr: u32) {
         && prev.layers != config.layers
         && !state.epu_frame_draws.is_empty()
     {
-        warn!(
-            "epu_draw: multiple different configs pushed in the same frame; last call wins"
-        );
+        warn!("epu_draw: multiple different configs pushed in the same frame; last call wins");
     }
 
     // Last call wins for the frame config.
@@ -85,4 +83,3 @@ pub(crate) fn epu_draw(mut caller: Caller<'_, ZXGameContext>, config_ptr: u32) {
     // Record (and overwrite) the draw request for this viewport/pass.
     state.epu_frame_draws.insert((viewport, pass_id), mvp_index);
 }
-

@@ -17,17 +17,37 @@ const TAU: f32 = 6.283185307179586;
 // - 0x08..0x1F: feature ops (high-frequency motifs)
 const OP_NOP: u32 = 0x00u;
 const OP_RAMP: u32 = 0x01u;
+
+// Legacy v2 enclosure opcodes (kept for backward compatibility)
 const OP_LOBE: u32 = 0x02u;
 const OP_BAND: u32 = 0x03u;
 const OP_FOG: u32 = 0x04u;
-// 0x05..0x07 reserved for future bounds ops
+
+// vNext enclosure opcodes (0x02-0x07)
+// These replace the legacy opcodes at 0x02-0x04 in vNext runtimes
+const OP_SECTOR: u32 = 0x02u;       // Angular wedge (replaces LOBE in vNext)
+const OP_SILHOUETTE: u32 = 0x03u;   // Skyline/horizon cutout (replaces BAND in vNext)
+const OP_SPLIT: u32 = 0x04u;        // Planar cut (replaces FOG in vNext)
+const OP_CELL: u32 = 0x05u;         // Voronoi cell partitioning
+const OP_PATCHES: u32 = 0x06u;      // Noise-based patches
+const OP_APERTURE: u32 = 0x07u;     // Shaped opening/vignette enclosure modifier
 
 const OP_FEATURE_MIN: u32 = 0x08u;
 const OP_DECAL: u32 = 0x08u;
 const OP_GRID: u32 = 0x09u;
 const OP_SCATTER: u32 = 0x0Au;
 const OP_FLOW: u32 = 0x0Bu;
-// 0x0C..0x1F reserved for future feature ops
+
+// vNext radiance opcodes (0x0C-0x13)
+const OP_TRACE: u32 = 0x0Cu;        // Procedural line/crack patterns (lightning, cracks, lead lines, filaments)
+const OP_VEIL: u32 = 0x0Du;         // Curtain/ribbon effects (curtains, pillars, laser bars, rain wall, shards)
+const OP_ATMOSPHERE: u32 = 0x0Eu;   // Advanced fog with scattering (replaces v2 FOG)
+const OP_PLANE: u32 = 0x0Fu;        // Ground plane textures
+const OP_CELESTIAL: u32 = 0x10u;    // Moon/sun/planet bodies
+const OP_PORTAL: u32 = 0x11u;       // Swirling vortex/portal effect
+const OP_LOBE_V2: u32 = 0x12u;      // Region-masked directional glow (moved from 0x02)
+const OP_BAND_V2: u32 = 0x13u;      // Region-masked horizon band (moved from 0x03)
+// 0x14..0x1F reserved for future radiance ops
 
 // ============================================================================
 // REGION MASK CONSTANTS (3-bit bitfield)
@@ -156,6 +176,26 @@ fn instr_reserved4(instr: vec4u) -> u32 {
 // Extract reserved bit 112 (w3 bit 16)
 fn instr_reserved(instr: vec4u) -> u32 {
     return (instr.w >> 16u) & 0x1u;
+}
+
+// Extract 5-bit meta5 from bits 116..112 (reserved4 << 1 | reserved)
+// meta5 encodes domain_id (top 2 bits) and variant_id (bottom 3 bits)
+fn instr_meta5(instr: vec4u) -> u32 {
+    let meta_hi = instr_reserved4(instr);  // bits 116..113 (4 bits)
+    let meta_lo = instr_reserved(instr);   // bit 112 (1 bit)
+    return (meta_hi << 1u) | meta_lo;
+}
+
+// Extract 2-bit domain_id from meta5 (top 2 bits)
+// Domain IDs: 0=DIRECT3D, 1=AXIS_Y, 2=AXIS_Z, 3=TANGENT_LOCAL
+fn instr_domain_id(instr: vec4u) -> u32 {
+    return (instr_meta5(instr) >> 3u) & 0x3u;
+}
+
+// Extract 3-bit variant_id from meta5 (bottom 3 bits)
+// Variant meaning is opcode-specific (e.g., SCATTER: 0=STARS, 1=DUST, etc.)
+fn instr_variant_id(instr: vec4u) -> u32 {
+    return instr_meta5(instr) & 0x7u;
 }
 
 // Extract 24-bit color_a from bits 111..88 (w3 bits 15..0 + w2 bits 31..24)

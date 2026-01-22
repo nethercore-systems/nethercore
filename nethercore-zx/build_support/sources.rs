@@ -49,17 +49,105 @@ pub(crate) const COMMON: &str = concat!(
         "/shaders/common/20_environment/80_mode7_rings.wgsl"
     )),
     // EPU v2 evaluation (procedural radiance for sky + specular residual)
+    // Common utilities, constants, structs
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/shaders/epu/epu_common.wgsl"
     )),
+    // Bounds opcodes (enclosure layers)
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/shaders/epu/epu_bounds.wgsl"
+        "/shaders/epu/bounds/00_ramp.wgsl"
     )),
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/shaders/epu/epu_features.wgsl"
+        "/shaders/epu/bounds/01_lobe.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/bounds/02_band.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/bounds/03_fog.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/bounds/04_sector.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/bounds/05_silhouette.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/bounds/06_split.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/bounds/07_cell.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/bounds/08_patches.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/bounds/09_aperture.wgsl"
+    )),
+    // Feature opcodes (radiance motifs)
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/00_decal.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/01_grid.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/02_scatter.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/03_flow.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/04_trace.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/05_veil.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/06_atmosphere.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/07_plane.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/08_celestial.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/09_portal.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/10_lobe_v2.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/11_band_v2.wgsl"
+    )),
+    // Layer dispatch
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/epu_dispatch.wgsl"
     )),
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -110,19 +198,107 @@ pub(crate) const EPU_COMMON: &str = include_str!(concat!(
     "/shaders/epu/epu_common.wgsl"
 ));
 
-/// EPU bounds opcodes: RAMP, LOBE, BAND, FOG.
+/// EPU bounds opcodes (modular): RAMP, LOBE, BAND, FOG, SECTOR, SILHOUETTE, SPLIT, CELL, PATCHES, APERTURE.
 #[allow(dead_code)]
-pub(crate) const EPU_BOUNDS: &str = include_str!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/shaders/epu/epu_bounds.wgsl"
-));
+pub(crate) const EPU_BOUNDS: &str = concat!(
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/bounds/00_ramp.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/bounds/01_lobe.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/bounds/02_band.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/bounds/03_fog.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/bounds/04_sector.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/bounds/05_silhouette.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/bounds/06_split.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/bounds/07_cell.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/bounds/08_patches.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/bounds/09_aperture.wgsl"
+    )),
+);
 
-/// EPU feature opcodes: DECAL, GRID, SCATTER, FLOW, plus layer dispatch.
+/// EPU feature opcodes (modular): DECAL, GRID, SCATTER, FLOW, TRACE, VEIL, ATMOSPHERE, PLANE, CELESTIAL, PORTAL, LOBE_V2, BAND_V2, plus layer dispatch.
 #[allow(dead_code)]
-pub(crate) const EPU_FEATURES: &str = include_str!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/shaders/epu/epu_features.wgsl"
-));
+pub(crate) const EPU_FEATURES: &str = concat!(
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/00_decal.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/01_grid.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/02_scatter.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/03_flow.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/04_trace.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/05_veil.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/06_atmosphere.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/07_plane.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/08_celestial.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/09_portal.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/10_lobe_v2.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/11_band_v2.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/epu_dispatch.wgsl"
+    )),
+);
 
 /// EPU compute shader: environment evaluation (builds EnvSharp + EnvLight0).
 #[allow(dead_code)]
@@ -172,10 +348,34 @@ const RERUN_IF_CHANGED_FILES: &[&str] = &[
     "shaders/mode1_matcap.wgsl",
     "shaders/env_template.wgsl",
     "shaders/quad_template.wgsl",
-    // EPU shaders
+    // EPU shaders - common
     "shaders/epu/epu_common.wgsl",
-    "shaders/epu/epu_bounds.wgsl",
-    "shaders/epu/epu_features.wgsl",
+    "shaders/epu/epu_dispatch.wgsl",
+    // EPU bounds opcodes
+    "shaders/epu/bounds/00_ramp.wgsl",
+    "shaders/epu/bounds/01_lobe.wgsl",
+    "shaders/epu/bounds/02_band.wgsl",
+    "shaders/epu/bounds/03_fog.wgsl",
+    "shaders/epu/bounds/04_sector.wgsl",
+    "shaders/epu/bounds/05_silhouette.wgsl",
+    "shaders/epu/bounds/06_split.wgsl",
+    "shaders/epu/bounds/07_cell.wgsl",
+    "shaders/epu/bounds/08_patches.wgsl",
+    "shaders/epu/bounds/09_aperture.wgsl",
+    // EPU feature opcodes
+    "shaders/epu/features/00_decal.wgsl",
+    "shaders/epu/features/01_grid.wgsl",
+    "shaders/epu/features/02_scatter.wgsl",
+    "shaders/epu/features/03_flow.wgsl",
+    "shaders/epu/features/04_trace.wgsl",
+    "shaders/epu/features/05_veil.wgsl",
+    "shaders/epu/features/06_atmosphere.wgsl",
+    "shaders/epu/features/07_plane.wgsl",
+    "shaders/epu/features/08_celestial.wgsl",
+    "shaders/epu/features/09_portal.wgsl",
+    "shaders/epu/features/10_lobe_v2.wgsl",
+    "shaders/epu/features/11_band_v2.wgsl",
+    // EPU compute shaders
     "shaders/epu/epu_compute_env.wgsl",
     "shaders/epu/epu_compute_blur.wgsl",
     "shaders/epu/epu_compute_irrad.wgsl",

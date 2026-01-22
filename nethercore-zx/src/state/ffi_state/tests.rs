@@ -381,7 +381,10 @@ fn test_epu_frame_config_storage() {
         .epu_frame_config
         .expect("epu_frame_config should be set");
     assert_eq!(stored.layers, config.layers);
-    assert_eq!(state.epu_frame_draws.get(&(Viewport::FULLSCREEN, 0)), Some(&123));
+    assert_eq!(
+        state.epu_frame_draws.get(&(Viewport::FULLSCREEN, 0)),
+        Some(&123)
+    );
 }
 
 #[test]

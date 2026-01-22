@@ -27,16 +27,24 @@
 //! let config = epu_finish(e);
 //! ```
 
+// Submodules for organized runtime code
+mod cache;
+mod pipelines;
 pub mod runtime;
+mod settings;
+mod shaders;
+mod types;
 
 #[cfg(test)]
 mod tests;
 
 // Re-export runtime types
-pub use runtime::{
-    ActiveEnvList, EPU_MAP_SIZE, EPU_MIN_MIP_SIZE, EpuRuntime, EpuRuntimeSettings, EpuSh9,
-    MAX_ACTIVE_ENVS, MAX_ENV_STATES, collect_active_envs,
+pub use cache::{ActiveEnvList, collect_active_envs};
+pub use runtime::EpuRuntime;
+pub use settings::{
+    EPU_MAP_SIZE, EPU_MIN_MIP_SIZE, EpuRuntimeSettings, MAX_ACTIVE_ENVS, MAX_ENV_STATES,
 };
+pub use types::EpuSh9;
 
 use glam::Vec3;
 
