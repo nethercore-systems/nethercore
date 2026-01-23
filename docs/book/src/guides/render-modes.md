@@ -499,17 +499,16 @@ All lit modes benefit from proper environment and light setup. See the [EPU Envi
 ```rust
 // nether.toml: render_mode = 1, 2, or 3
 
-fn init() {
-    // Set up environment using the EPU builder API (provides ambient light)
-    // See EPU RFC for full builder API documentation
-    let config = epu_begin()
-        .ramp_enclosure(Vec3::Y, /*wall*/24, /*sky*/40, /*floor*/24, 10, 5, 180)
-        .finish();
-    unsafe { epu_set(0, config.layers.as_ptr()); }
-}
+// 8 x [hi, lo] = 128 bytes (16 x u64).
+// For presets and packing helpers, see `examples/3-inspectors/epu-showcase/`.
+static ENV: [[u64; 2]; 8] = [
+    [0, 0], [0, 0], [0, 0], [0, 0],
+    [0, 0], [0, 0], [0, 0], [0, 0],
+];
 
 fn render() {
-    unsafe { epu_draw(0); }  // Draw environment background
+    // Draw environment background first (before geometry).
+    unsafe { epu_draw(ENV.as_ptr().cast()); }
 
     // Main directional light
     light_set(0, 0.5, -0.7, 0.5);
@@ -532,17 +531,12 @@ fn render() {
 ```c
 // nether.toml: render_mode = 1, 2, or 3
 
-static uint64_t env_config[8];
-
-NCZX_EXPORT void init(void) {
-    // Set up environment config (provides ambient light)
-    // See EPU RFC for instruction encoding
-    // ...
-    epu_set(0, env_config);
-}
+static const uint64_t env_config[16] = {
+    /* hi0, lo0, hi1, lo1, ... */
+};
 
 NCZX_EXPORT void render(void) {
-    epu_draw(0);  // Draw environment background
+    epu_draw(env_config);  // Draw environment background
 
     // Main directional light
     light_set(0, 0.5f, -0.7f, 0.5f);
@@ -565,17 +559,12 @@ NCZX_EXPORT void render(void) {
 ```zig
 // nether.toml: render_mode = 1, 2, or 3
 
-var env_config: [8]u64 = undefined;
-
-export fn init() void {
-    // Set up environment config (provides ambient light)
-    // See EPU RFC for instruction encoding
-    // ...
-    epu_set(0, &env_config);
-}
+const env_config: [16]u64 = .{
+    // hi0, lo0, hi1, lo1, ...
+};
 
 export fn render() void {
-    epu_draw(0);  // Draw environment background
+    epu_draw(&env_config);  // Draw environment background
 
     // Main directional light
     light_set(0, 0.5, -0.7, 0.5);

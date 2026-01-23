@@ -139,7 +139,7 @@ pub(super) fn create_main_pipeline(
         source: wgpu::ShaderSource::Wgsl(shader_source.into()),
     });
 
-    // Bind group layout (v2: no palette buffer, bindings 0-3)
+    // Bind group layout (no palette buffer, bindings 0-3)
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("EPU Bind Group Layout"),
         entries: &[

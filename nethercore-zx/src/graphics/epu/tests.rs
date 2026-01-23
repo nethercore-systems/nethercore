@@ -1,10 +1,10 @@
-//! Unit tests for EPU Rust API (v2 128-bit format)
+//! Unit tests for EPU Rust API (128-bit format)
 
 use super::*;
 use glam::Vec3;
 
 // =============================================================================
-// Bit Packing Tests (v2 128-bit format)
+// Bit Packing Tests (128-bit format)
 // =============================================================================
 
 #[test]
@@ -57,16 +57,16 @@ fn test_epu_layer_encode_blend_position() {
 }
 
 #[test]
-fn test_epu_layer_encode_reserved4_is_zero() {
-    // Bits 52..49 of the hi word are reserved and must be 0.
+fn test_epu_layer_encode_meta5_position() {
+    // meta5 occupies bits 52..48 of the hi word.
     let layer = EpuLayer {
-        opcode: EpuOpcode::Flow,
+        meta5: 0b1_0101,
         ..EpuLayer::nop()
     };
     let [hi, _lo] = layer.encode();
 
-    let reserved4 = (hi >> 49) & 0xF;
-    assert_eq!(reserved4, 0);
+    let meta5 = (hi >> 48) & 0x1F;
+    assert_eq!(meta5, 0b1_0101);
 }
 
 #[test]
@@ -168,6 +168,7 @@ fn test_epu_layer_encode_full() {
         opcode: EpuOpcode::Decal,    // 0x8
         region_mask: REGION_SKY,     // 0b100
         blend: EpuBlend::Add,        // 0
+        meta5: 0x1B,
         color_a: [0xFF, 0x00, 0x00], // red
         color_b: [0x00, 0xFF, 0x00], // green
         alpha_a: 15,
@@ -185,7 +186,7 @@ fn test_epu_layer_encode_full() {
     assert_eq!((hi >> 59) & 0x1F, 0x8); // opcode
     assert_eq!((hi >> 56) & 0x7, 0b100); // region (SKY)
     assert_eq!((hi >> 53) & 0x7, 0); // blend (ADD)
-    assert_eq!((hi >> 49) & 0xF, 0); // reserved4
+    assert_eq!((hi >> 48) & 0x1F, 0x1B); // meta5
     assert_eq!((hi >> 24) & 0xFFFFFF, 0xFF0000); // color_a (red)
     assert_eq!(hi & 0xFFFFFF, 0x00FF00); // color_b (green)
 
@@ -301,7 +302,7 @@ fn test_pack_thresholds_clamped() {
 }
 
 // =============================================================================
-// Builder Tests (v2)
+// Builder Tests
 // =============================================================================
 
 #[test]
@@ -336,9 +337,9 @@ fn test_builder_ramp_enclosure() {
     let opcode = (hi >> 59) & 0x1F;
     assert_eq!(opcode, EpuOpcode::Ramp as u64);
 
-    // Check reserved bits are 0
-    let reserved4 = (hi >> 49) & 0xF;
-    assert_eq!(reserved4, 0);
+    // Check meta5 is 0
+    let meta5 = (hi >> 48) & 0x1F;
+    assert_eq!(meta5, 0);
 
     // Check sky color (color_a)
     let color_a = (hi >> 24) & 0xFFFFFF;
@@ -361,61 +362,114 @@ fn test_builder_ramp_enclosure() {
 }
 
 #[test]
-fn test_builder_lobe() {
+fn test_builder_sector_enclosure() {
     let mut builder = epu_begin();
-    let sun_dir = Vec3::new(0.5, 0.7, 0.3).normalize();
-    builder.lobe(sun_dir, [255, 200, 100], 180, 32, 10, 1);
+    builder.ramp_enclosure(RampParams::default());
+    builder.sector_enclosure(SectorParams {
+        up: Vec3::Y,
+        sky_color: [255, 200, 100],
+        wall_color: [10, 20, 30],
+        strength: 180,
+        center_u01: 64,
+        width: 128,
+        variant_id: 2,
+    });
     let config = epu_finish(builder);
 
-    let [hi, lo] = config.layers[0];
+    let [hi, lo] = config.layers[1];
 
     let opcode = (hi >> 59) & 0x1F;
-    assert_eq!(opcode, EpuOpcode::Lobe as u64);
+    assert_eq!(opcode, EpuOpcode::Sector as u64);
+
+    // Check meta5 (domain=0, variant=2)
+    let meta5 = (hi >> 48) & 0x1F;
+    assert_eq!(meta5, pack_meta5(0, 2) as u64);
 
     // Check color
     let color_a = (hi >> 24) & 0xFFFFFF;
     assert_eq!(color_a, 0xFFC864); // [255, 200, 100]
 
-    // Check reserved bits are 0
-    let reserved4 = (hi >> 49) & 0xF;
-    assert_eq!(reserved4, 0);
-
     let intensity = (lo >> 56) & 0xFF;
     assert_eq!(intensity, 180);
 
-    let exponent = (lo >> 48) & 0xFF;
-    assert_eq!(exponent, 32);
+    let center_u01 = (lo >> 48) & 0xFF;
+    assert_eq!(center_u01, 64);
 
-    let anim_speed = (lo >> 40) & 0xFF;
-    assert_eq!(anim_speed, 10);
-
-    let anim_mode = (lo >> 32) & 0xFF;
-    assert_eq!(anim_mode, 1);
+    let width = (lo >> 40) & 0xFF;
+    assert_eq!(width, 128);
 }
 
 #[test]
-fn test_builder_band() {
+fn test_builder_lobe_radiance() {
     let mut builder = epu_begin();
-    builder.band(Vec3::Y, [255, 128, 64], 200, 64, 128, 50);
+    builder.lobe_radiance(LobeRadianceParams {
+        region: EpuRegion::All,
+        blend: EpuBlend::Add,
+        dir: Vec3::Y,
+        color: [255, 200, 100],
+        edge_color: [0, 0, 0],
+        intensity: 180,
+        exponent: 32,
+        falloff: 10,
+        anim_mode: 1,
+        anim_speed: 10,
+        alpha: 15,
+    });
     let config = epu_finish(builder);
 
-    let [hi, _lo] = config.layers[0];
+    let [hi, _lo] = config.layers[4];
     let opcode = (hi >> 59) & 0x1F;
-    assert_eq!(opcode, EpuOpcode::Band as u64);
+    assert_eq!(opcode, EpuOpcode::LobeRadiance as u64);
 }
 
 #[test]
-fn test_builder_fog() {
+fn test_builder_band_radiance() {
     let mut builder = epu_begin();
-    builder.fog(Vec3::Y, [200, 200, 220], 128, 128, 100);
+    builder.band_radiance(BandRadianceParams {
+        region: EpuRegion::All,
+        blend: EpuBlend::Add,
+        axis: Vec3::Y,
+        color: [255, 128, 64],
+        edge_color: [0, 0, 0],
+        intensity: 200,
+        width: 64,
+        offset: 128,
+        softness: 0,
+        scroll_speed: 50,
+        alpha: 15,
+    });
     let config = epu_finish(builder);
 
-    let [hi, _lo] = config.layers[0];
+    let [hi, _lo] = config.layers[4];
+    let opcode = (hi >> 59) & 0x1F;
+    assert_eq!(opcode, EpuOpcode::BandRadiance as u64);
+}
+
+#[test]
+fn test_builder_atmosphere_absorption() {
+    let mut builder = epu_begin();
+    builder.atmosphere(AtmosphereParams {
+        region: EpuRegion::All,
+        blend: EpuBlend::Multiply,
+        zenith_color: [200, 200, 220],
+        horizon_color: [200, 200, 220],
+        intensity: 128,
+        falloff_exponent: 100,
+        horizon_y: 128,
+        mie_concentration: 0,
+        mie_exponent: 0,
+        sun_dir: Vec3::Y,
+        alpha: 15,
+        variant_id: 0, // ABSORPTION
+    });
+    let config = epu_finish(builder);
+
+    let [hi, _lo] = config.layers[4];
 
     let opcode = (hi >> 59) & 0x1F;
-    assert_eq!(opcode, EpuOpcode::Fog as u64);
+    assert_eq!(opcode, EpuOpcode::Atmosphere as u64);
 
-    // Fog should use MULTIPLY blend
+    // Absorption is typically used with MULTIPLY blend.
     let blend = (hi >> 53) & 0x7;
     assert_eq!(blend, EpuBlend::Multiply as u64);
 }
@@ -447,9 +501,9 @@ fn test_builder_decal() {
     let region = (hi >> 56) & 0x7;
     assert_eq!(region, REGION_SKY as u64);
 
-    // Check reserved bits are 0
-    let reserved4 = (hi >> 49) & 0xF;
-    assert_eq!(reserved4, 0);
+    // Check meta5 is 0
+    let meta5 = (hi >> 48) & 0x1F;
+    assert_eq!(meta5, 0);
 
     // Check alpha_a
     let alpha_a = (lo >> 4) & 0xF;
@@ -541,6 +595,7 @@ fn test_builder_flow() {
         speed: 20,
         octaves: 2,
         pattern: FlowPattern::Caustic,
+        turbulence: 0,
     });
     let config = epu_finish(builder);
 
@@ -552,9 +607,9 @@ fn test_builder_flow() {
     let blend = (hi >> 53) & 0x7;
     assert_eq!(blend, EpuBlend::Lerp as u64);
 
-    // Check reserved bits are 0
-    let reserved4 = (hi >> 49) & 0xF;
-    assert_eq!(reserved4, 0);
+    // Check meta5 is 0
+    let meta5 = (hi >> 48) & 0x1F;
+    assert_eq!(meta5, 0);
 
     // Check param_c packing
     let param_c = (lo >> 32) & 0xFF;
@@ -569,11 +624,11 @@ fn test_builder_flow() {
 fn test_builder_slot_allocation() {
     let mut builder = epu_begin();
 
-    // Add bounds layers (slots 0-3)
+    // Add enclosure (bounds) layers (slots 0-3)
     builder.ramp_enclosure(RampParams::default());
-    builder.lobe(Vec3::Y, [255, 255, 255], 100, 32, 0, 0);
-    builder.band(Vec3::Y, [255, 128, 64], 100, 64, 128, 0);
-    builder.fog(Vec3::Y, [200, 200, 220], 50, 128, 100);
+    builder.sector_enclosure(SectorParams::default());
+    builder.split_enclosure(SplitParams::default());
+    builder.cell_enclosure(CellParams::default());
 
     // Add feature layers (slots 4-7)
     builder.decal(DecalParams::default());
@@ -585,9 +640,9 @@ fn test_builder_slot_allocation() {
 
     // Verify bounds slots
     assert_eq!((config.layers[0][0] >> 59) & 0x1F, EpuOpcode::Ramp as u64);
-    assert_eq!((config.layers[1][0] >> 59) & 0x1F, EpuOpcode::Lobe as u64);
-    assert_eq!((config.layers[2][0] >> 59) & 0x1F, EpuOpcode::Band as u64);
-    assert_eq!((config.layers[3][0] >> 59) & 0x1F, EpuOpcode::Fog as u64);
+    assert_eq!((config.layers[1][0] >> 59) & 0x1F, EpuOpcode::Sector as u64);
+    assert_eq!((config.layers[2][0] >> 59) & 0x1F, EpuOpcode::Split as u64);
+    assert_eq!((config.layers[3][0] >> 59) & 0x1F, EpuOpcode::Cell as u64);
 
     // Verify feature slots
     assert_eq!((config.layers[4][0] >> 59) & 0x1F, EpuOpcode::Decal as u64);
@@ -604,20 +659,35 @@ fn test_builder_bounds_overflow_ignored() {
     let mut builder = epu_begin();
 
     // Add 5 bounds layers (only 4 slots available)
-    builder.lobe(Vec3::Y, [255, 0, 0], 100, 32, 0, 0);
-    builder.lobe(Vec3::X, [0, 255, 0], 100, 32, 0, 0);
-    builder.lobe(-Vec3::Y, [0, 0, 255], 100, 32, 0, 0);
-    builder.lobe(-Vec3::X, [255, 255, 0], 100, 32, 0, 0);
-    builder.lobe(Vec3::Z, [255, 0, 255], 100, 32, 0, 0); // This should be ignored
+    builder.sector_enclosure(SectorParams {
+        sky_color: [255, 0, 0],
+        ..SectorParams::default()
+    });
+    builder.sector_enclosure(SectorParams {
+        sky_color: [0, 255, 0],
+        ..SectorParams::default()
+    });
+    builder.sector_enclosure(SectorParams {
+        sky_color: [0, 0, 255],
+        ..SectorParams::default()
+    });
+    builder.sector_enclosure(SectorParams {
+        sky_color: [255, 255, 0],
+        ..SectorParams::default()
+    });
+    builder.sector_enclosure(SectorParams {
+        sky_color: [255, 0, 255],
+        ..SectorParams::default()
+    }); // This should be ignored
 
     let config = epu_finish(builder);
 
-    // 5th lobe should not appear anywhere
+    // 5th layer should not appear anywhere
     for (i, [hi, _lo]) in config.layers.iter().enumerate() {
         if i < 4 {
-            // Bounds slots should have lobes
+            // Bounds slots should have sectors
             let opcode = (hi >> 59) & 0x1F;
-            assert_eq!(opcode, EpuOpcode::Lobe as u64);
+            assert_eq!(opcode, EpuOpcode::Sector as u64);
         } else {
             // Feature slots should be empty (NOP)
             let opcode = (hi >> 59) & 0x1F;
@@ -653,7 +723,7 @@ fn test_builder_feature_overflow_ignored() {
 
 #[test]
 fn test_epu_config_size() {
-    // EpuConfig must be exactly 128 bytes (v2)
+    // EpuConfig must be exactly 128 bytes
     assert_eq!(
         std::mem::size_of::<EpuConfig>(),
         128,
@@ -662,7 +732,7 @@ fn test_epu_config_size() {
 }
 
 // =============================================================================
-// Example Config Tests (v2)
+// Example Config Tests
 // =============================================================================
 
 #[test]
@@ -703,9 +773,9 @@ fn test_void_with_stars() {
         EpuOpcode::Scatter as u64
     );
 
-    // Verify reserved bits are 0
-    let reserved4 = (config.layers[4][0] >> 49) & 0xF;
-    assert_eq!(reserved4, 0);
+    // Verify meta5 is 0
+    let meta5 = (config.layers[4][0] >> 48) & 0x1F;
+    assert_eq!(meta5, 0);
 }
 
 #[test]
@@ -725,7 +795,13 @@ fn test_sunny_meadow() {
         softness: 180,
     });
 
-    e.lobe(sun_dir, [255, 240, 200], 180, 32, 0, 0);
+    e.lobe_radiance(LobeRadianceParams {
+        dir: sun_dir,
+        color: [255, 240, 200],
+        intensity: 180,
+        exponent: 32,
+        ..LobeRadianceParams::default()
+    });
 
     // Sun disk.
     e.decal(DecalParams {
@@ -746,8 +822,11 @@ fn test_sunny_meadow() {
 
     // Verify structure
     assert_eq!((config.layers[0][0] >> 59) & 0x1F, EpuOpcode::Ramp as u64);
-    assert_eq!((config.layers[1][0] >> 59) & 0x1F, EpuOpcode::Lobe as u64);
-    assert_eq!((config.layers[4][0] >> 59) & 0x1F, EpuOpcode::Decal as u64);
+    assert_eq!(
+        (config.layers[4][0] >> 59) & 0x1F,
+        EpuOpcode::LobeRadiance as u64
+    );
+    assert_eq!((config.layers[5][0] >> 59) & 0x1F, EpuOpcode::Decal as u64);
 }
 
 // =============================================================================
@@ -815,7 +894,7 @@ fn test_is_time_dependent_static_config() {
     // Config with no animated features
     let mut e = epu_begin();
     e.ramp_enclosure(RampParams::default());
-    e.lobe(Vec3::Y, [255, 255, 255], 180, 32, 0, 0); // anim_speed=0, anim_mode=0
+    e.lobe_radiance(LobeRadianceParams::default()); // anim_mode=0, anim_speed=0
     e.decal(DecalParams {
         pulse_speed: 0, // No pulse
         ..DecalParams::default()
@@ -828,7 +907,11 @@ fn test_is_time_dependent_static_config() {
 #[test]
 fn test_is_time_dependent_lobe_animation() {
     let mut e = epu_begin();
-    e.lobe(Vec3::Y, [255, 255, 255], 180, 32, 10, 1); // anim_mode=1 (pulse)
+    e.lobe_radiance(LobeRadianceParams {
+        anim_mode: 1,  // pulse
+        anim_speed: 10,
+        ..LobeRadianceParams::default()
+    });
     let config = epu_finish(e);
 
     assert!(config.is_time_dependent());
@@ -837,7 +920,10 @@ fn test_is_time_dependent_lobe_animation() {
 #[test]
 fn test_is_time_dependent_band_scroll() {
     let mut e = epu_begin();
-    e.band(Vec3::Y, [255, 128, 64], 200, 64, 128, 50); // scroll_speed=50
+    e.band_radiance(BandRadianceParams {
+        scroll_speed: 50,
+        ..BandRadianceParams::default()
+    });
     let config = epu_finish(e);
 
     assert!(config.is_time_dependent());
@@ -846,7 +932,10 @@ fn test_is_time_dependent_band_scroll() {
 #[test]
 fn test_is_time_dependent_band_static() {
     let mut e = epu_begin();
-    e.band(Vec3::Y, [255, 128, 64], 200, 64, 128, 0); // scroll_speed=0
+    e.band_radiance(BandRadianceParams {
+        scroll_speed: 0,
+        ..BandRadianceParams::default()
+    });
     let config = epu_finish(e);
 
     assert!(!config.is_time_dependent());
@@ -922,6 +1011,7 @@ fn test_is_time_dependent_scatter_drift() {
         opcode: EpuOpcode::Scatter,
         region_mask: REGION_ALL,
         blend: EpuBlend::Add,
+        meta5: 0,
         color_a: [255, 255, 255],
         color_b: [0, 0, 0],
         alpha_a: 15,
@@ -972,7 +1062,7 @@ fn test_is_time_dependent_empty_config() {
 }
 
 // =============================================================================
-// Region Mask Tests (v2)
+// Region Mask Tests
 // =============================================================================
 
 #[test]
@@ -993,7 +1083,7 @@ fn test_region_enum_to_mask() {
 }
 
 // =============================================================================
-// Blend Mode Tests (v2)
+// Blend Mode Tests
 // =============================================================================
 
 #[test]

@@ -1,14 +1,13 @@
 // ============================================================================
-// LOBE (v2) - Region-Masked Directional Glow
+// LOBE (Radiance) - Region-Masked Directional Glow
 // Opcode: 0x12
 // Role: Radiance (additive feature layer)
 //
 // Creates directional glow or light spill effects (suns, lamps, neon washes,
-// spotlights) centered around a direction. This is the v2 LOBE algorithm
-// moved to the radiance range (from 0x02) so it can be region-masked and
-// layered with other radiance effects.
+// spotlights) centered around a direction. This opcode lives in the radiance
+// range so it can be region-masked and layered with other radiance effects.
 //
-// Packed fields (v2):
+// Packed fields:
 //   color_a: Core glow color (RGB24)
 //   color_b: Edge/falloff color (RGB24)
 //   intensity: Brightness (0..255 -> 0.0..2.0)
@@ -25,13 +24,7 @@
 //   variant_id: Ignored
 // ============================================================================
 
-// Deterministic hash for flicker animation (1D -> 1D)
-// Uses the same hash as the legacy v2 bounds lobe for identical behavior
-fn lobe_v2_hash11(x: f32) -> f32 {
-    return fract(sin(x) * 43758.5453123);
-}
-
-fn eval_lobe_v2(
+fn eval_lobe_radiance(
     dir: vec3f,
     instr: vec4u,
     region_w: f32,
@@ -82,7 +75,7 @@ fn eval_lobe_v2(
     } else if mode == 2u && speed > 0.0 {
         // Mode 2 (flicker): anim = 0.5 + 0.5 * hash(floor(time * speed))
         // Discrete steps for deterministic flicker
-        anim = 0.5 + 0.5 * lobe_v2_hash11(floor(time * speed));
+        anim = 0.5 + 0.5 * epu_hash11(floor(time * speed));
     }
 
     // Extract intensity: bits 63..56 (0..255 -> 0.0..2.0)

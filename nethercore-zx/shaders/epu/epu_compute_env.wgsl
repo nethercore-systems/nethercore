@@ -1,7 +1,7 @@
 // ============================================================================
 // EPU COMPUTE: ENVIRONMENT EVALUATION
 // Builds EnvRadiance (mip 0) for all active environments.
-// EPU v2: 128-bit instructions with embedded RGB24 colors (no palette)
+// EPU: 128-bit instructions with embedded RGB24 colors (no palette)
 // ============================================================================
 
 // PackedEnvironmentState: 8 layers stored as vec4u (128-bit per instruction)
@@ -17,7 +17,7 @@ struct FrameUniforms {
     _pad0: u32,
 }
 
-// Bindings (v2): No palette buffer - colors are embedded in instructions
+// Bindings: No palette buffer - colors are embedded in instructions
 @group(0) @binding(0) var<storage, read> epu_states: array<PackedEnvironmentState>;
 @group(0) @binding(1) var<storage, read> epu_active_env_ids: array<u32>;
 @group(0) @binding(2) var<uniform> epu_frame: FrameUniforms;
@@ -38,16 +38,19 @@ fn evaluate_env_radiance(dir: vec3f, st: PackedEnvironmentState, time: f32) -> v
 
         let is_bounds = opcode < OP_FEATURE_MIN;
 
-        // If this is a bounds layer, update enclosure/regions first
-        if is_bounds {
-            enc = enclosure_from_layer(instr, opcode, enc);
-            regions = compute_region_weights(dir, enc);
-        }
-
         let blend = instr_blend(instr);
-        let sample = evaluate_layer(dir, instr, enc, regions, time);
 
-        radiance = apply_blend(radiance, sample, blend);
+        if is_bounds {
+            // Bounds opcode: update enclosure, get sample + output regions
+            enc = enclosure_from_layer(instr, opcode, enc);
+            let bounds_result = evaluate_bounds_layer(dir, instr, opcode, enc, regions, time);
+            regions = bounds_result.regions;  // Use output regions for subsequent features
+            radiance = apply_blend(radiance, bounds_result.sample, blend);
+        } else {
+            // Feature opcode: just get sample using current regions
+            let sample = evaluate_layer(dir, instr, enc, regions, time);
+            radiance = apply_blend(radiance, sample, blend);
+        }
     }
 
     return radiance;

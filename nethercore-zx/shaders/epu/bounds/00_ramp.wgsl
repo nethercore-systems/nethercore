@@ -17,7 +17,7 @@ fn eval_ramp(
     instr: vec4u,
     enc: EnclosureConfig,
 ) -> LayerSample {
-    // v2 packing matches `EpuBuilder::ramp_enclosure()`:
+    // Packing:
     // - color_a: sky/ceiling
     // - color_b: floor/ground
     // - param_a/b/c: wall/horizon

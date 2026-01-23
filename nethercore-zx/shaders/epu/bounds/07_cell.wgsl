@@ -1,5 +1,5 @@
 // ============================================================================
-// CELL - Voronoi Cell Enclosure Source (vNext 0x05)
+// CELL - Voronoi Cell Enclosure Source (0x05)
 // Tessellates the sphere into discrete cells for mosaic/crystalline enclosures.
 // 128-bit packed fields:
 //   color_a: Sky (gap) base color (RGB24)

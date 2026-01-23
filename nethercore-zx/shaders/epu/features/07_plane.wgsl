@@ -3,7 +3,7 @@
 // Opcode: 0x0F
 // Role: Radiance (additive feature layer)
 //
-// Packed fields (v2):
+// Packed fields:
 //   color_a: Primary surface color (RGB24)
 //   color_b: Secondary/grout/gap color (RGB24)
 //   intensity: Pattern contrast/brightness (0..255 -> 0..1)

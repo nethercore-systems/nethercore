@@ -1,5 +1,5 @@
 // ============================================================================
-// SPLIT - Planar Cut Enclosure Source (vNext 0x04)
+// SPLIT - Planar Cut Enclosure Source (0x04)
 // Divides the sphere using one or more planar cuts for geometric divisions.
 // 128-bit packed fields:
 //   color_a: Sky region base color (RGB24)
@@ -159,7 +159,8 @@ fn split_prism(dir: vec3f, n0: vec3f, basis: mat3x3f, side_count: f32, rotation:
 fn eval_split(
     dir: vec3f,
     instr: vec4u,
-) -> LayerSample {
+    base_regions: RegionWeights,
+) -> BoundsResult {
     // Decode plane normal from direction field
     let n0 = decode_dir16(instr_dir16(instr));
 
@@ -257,6 +258,7 @@ fn eval_split(
     // Blend colors based on region weights
     let rgb = sky_color * w_sky + wall_color * w_wall + floor_color * w_floor;
 
-    // SPLIT is an enclosure source: return full weight (w=1.0)
-    return LayerSample(rgb, 1.0);
+    // SPLIT defines its own regions
+    let output_regions = RegionWeights(w_sky, w_wall, w_floor);
+    return BoundsResult(LayerSample(rgb, 1.0), output_regions);
 }

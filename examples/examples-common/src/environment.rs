@@ -4,18 +4,17 @@
 //! EPU (Environment Processing Unit) API. The legacy env_* functions have been
 //! removed; use `epu_draw()` instead.
 //!
-//! # EPU v2 Format (128-bit instructions)
+//! # EPU Format (128-bit instructions)
 //!
 //! Each environment is 128 bytes (8 x 128-bit instructions). Each 128-bit
 //! instruction is stored as two u64 values `[hi, lo]`:
 //!
 //! ```text
 //! u64 hi [bits 127..64]:
-//!   bits 63..59: opcode     (5)   - NOP=0, bounds=1..7 (RAMP=1, LOBE=2, BAND=3, FOG=4; 5..7 reserved), features=8.. (DECAL=8, GRID=9, SCATTER=10, FLOW=11)
+//!   bits 63..59: opcode     (5)   - NOP=0, enclosure=1..7 (RAMP=1, SECTOR=2, SILHOUETTE=3, SPLIT=4, CELL=5, PATCHES=6, APERTURE=7), radiance=8.. (DECAL=8, GRID=9, SCATTER=10, FLOW=11, ... , LOBE_RADIANCE=0x12, BAND_RADIANCE=0x13)
 //!   bits 58..56: region     (3)   - Bitfield: SKY=0b100, WALLS=0b010, FLOOR=0b001, ALL=0b111
 //!   bits 55..53: blend      (3)   - ADD=0, MULTIPLY=1, MAX=2, LERP=3, SCREEN=4, HSV_MOD=5, MIN=6, OVERLAY=7
-//!   bits 52..49: reserved   (4)
-//!   bit  48:     reserved   (1)
+//!   bits 52..48: meta5      (5)   - (domain_id<<3)|variant_id; use 0 when unused
 //!   bits 47..24: color_a    (24)  - RGB24 primary color
 //!   bits 23..0:  color_b    (24)  - RGB24 secondary color
 //!
@@ -30,8 +29,8 @@
 //!   bits 3..0:   alpha_b    (4)   - color_b alpha (0-15)
 //! ```
 //!
-//! Slots 0-3: Bounds layers (RAMP, LOBE, BAND, FOG)
-//! Slots 4-7: Feature layers (DECAL, GRID, SCATTER, FLOW)
+//! Slots 0-3: Enclosure layers (RAMP + optional enclosure ops)
+//! Slots 4-7: Radiance layers (DECAL/GRID/SCATTER/FLOW + additional radiance ops)
 
 use crate::ffi::*;
 
@@ -315,19 +314,23 @@ impl Default for DebugEnvironment {
 }
 
 // =============================================================================
-// EPU v2 Helper Functions (const-friendly)
+// EPU Helper Functions (const-friendly)
 // =============================================================================
 
-// EPU Opcodes (v2 spec: 5-bit)
+// EPU Opcodes (5-bit)
 // Not all opcodes are currently used in presets, but they are available.
 #[allow(dead_code)]
 const OP_NOP: u64 = 0x00;
 const OP_RAMP: u64 = 0x01;
-const OP_LOBE: u64 = 0x02;
-const OP_BAND: u64 = 0x03;
+const OP_LOBE: u64 = 0x12;
+const OP_BAND: u64 = 0x13;
+const OP_SPLIT: u64 = 0x04;
 #[allow(dead_code)]
-const OP_FOG: u64 = 0x04;
-// 0x05..0x07 reserved for future bounds ops
+const OP_CELL: u64 = 0x05;
+#[allow(dead_code)]
+const OP_PATCHES: u64 = 0x06;
+#[allow(dead_code)]
+const OP_APERTURE: u64 = 0x07;
 const OP_DECAL: u64 = 0x08;
 const OP_GRID: u64 = 0x09;
 const OP_SCATTER: u64 = 0x0A;
@@ -355,23 +358,24 @@ const BLEND_SCREEN: u64 = 4;
 // Common directions (octahedral encoded: u8, v8)
 const DIR_UP: u64 = 0x80FF; // +Y direction
 
-/// Build v2 hi word: opcode(5), region(3), blend(3), reserved4(4), reserved(1), color_a(24), color_b(24)
+/// Build hi word: opcode(5), region(3), blend(3), meta5(5), color_a(24), color_b(24)
 const fn epu_hi(
     opcode: u64,
     region: u64,
     blend: u64,
+    meta5: u64,
     color_a: u64,
     color_b: u64,
 ) -> u64 {
     ((opcode & 0x1F) << 59)
         | ((region & 0x7) << 56)
         | ((blend & 0x7) << 53)
-        // bits 52..49 reserved
+        | ((meta5 & 0x1F) << 48)
         | ((color_a & 0xFFFFFF) << 24)
         | (color_b & 0xFFFFFF)
 }
 
-/// Build v2 lo word: intensity(8), param_a(8), param_b(8), param_c(8), param_d(8), direction(16), alpha_a(4), alpha_b(4)
+/// Build lo word: intensity(8), param_a(8), param_b(8), param_c(8), param_d(8), direction(16), alpha_a(4), alpha_b(4)
 const fn epu_lo(
     intensity: u64,
     param_a: u64,
@@ -396,7 +400,7 @@ const fn epu_lo(
 const NOP_LAYER: [u64; 2] = [0, 0];
 
 // =============================================================================
-// EPU v2 Preset Configurations (128-bit per layer)
+// EPU Preset Configurations (128-bit per layer)
 // =============================================================================
 
 /// Simple blue sky gradient (RAMP only)
@@ -404,7 +408,7 @@ const NOP_LAYER: [u64; 2] = [0, 0];
 static EPU_GRADIENT: [[u64; 2]; 8] = [
     // RAMP: sky/wall/floor gradient with blue sky and green ground
     [
-        epu_hi(OP_RAMP, REGION_ALL, BLEND_ADD, 0x6496DC, 0x285028),
+        epu_hi(OP_RAMP, REGION_ALL, BLEND_ADD, 0, 0x6496DC, 0x285028),
         epu_lo(180, 200, 180, 0xA5, 0, DIR_UP, 15, 15),
     ],
     NOP_LAYER,
@@ -420,7 +424,7 @@ static EPU_GRADIENT: [[u64; 2]; 8] = [
 static EPU_CELLS: [[u64; 2]; 8] = [
     // RAMP: black void
     [
-        epu_hi(OP_RAMP, REGION_ALL, BLEND_ADD, 0x000008, 0x000010),
+        epu_hi(OP_RAMP, REGION_ALL, BLEND_ADD, 0, 0x000008, 0x000010),
         epu_lo(20, 0, 0, 0xF0, 0, DIR_UP, 15, 15),
     ],
     NOP_LAYER,
@@ -428,12 +432,12 @@ static EPU_CELLS: [[u64; 2]; 8] = [
     NOP_LAYER,
     // SCATTER: white stars
     [
-        epu_hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 0xFFFFFF, 0xAABBFF),
+        epu_hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 0, 0xFFFFFF, 0xAABBFF),
         epu_lo(255, 180, 15, 0x83, 0, 0, 15, 10),
     ],
     // SCATTER: blue distant stars
     [
-        epu_hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 0x8888FF, 0x4444AA),
+        epu_hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 0, 0x8888FF, 0x4444AA),
         epu_lo(160, 250, 6, 0x41, 0, 0, 12, 8),
     ],
     NOP_LAYER,
@@ -444,7 +448,7 @@ static EPU_CELLS: [[u64; 2]; 8] = [
 static EPU_LINES: [[u64; 2]; 8] = [
     // RAMP: dark purple/blue background
     [
-        epu_hi(OP_RAMP, REGION_ALL, BLEND_ADD, 0x101030, 0x080818),
+        epu_hi(OP_RAMP, REGION_ALL, BLEND_ADD, 0, 0x101030, 0x080818),
         epu_lo(80, 20, 20, 0xA5, 0, DIR_UP, 15, 15),
     ],
     NOP_LAYER,
@@ -452,12 +456,12 @@ static EPU_LINES: [[u64; 2]; 8] = [
     NOP_LAYER,
     // GRID: cyan neon lines on floor
     [
-        epu_hi(OP_GRID, REGION_FLOOR, BLEND_ADD, 0x00FFAA, 0x008866),
+        epu_hi(OP_GRID, REGION_FLOOR, BLEND_ADD, 0, 0x00FFAA, 0x008866),
         epu_lo(180, 48, 8, 0x00, 0, 0, 15, 10),
     ],
     // GRID: magenta accent on walls
     [
-        epu_hi(OP_GRID, REGION_WALLS, BLEND_ADD, 0xFF00FF, 0x880088),
+        epu_hi(OP_GRID, REGION_WALLS, BLEND_ADD, 0, 0xFF00FF, 0x880088),
         epu_lo(120, 32, 4, 0x00, 0, 0, 12, 8),
     ],
     NOP_LAYER,
@@ -468,23 +472,23 @@ static EPU_LINES: [[u64; 2]; 8] = [
 static EPU_RINGS: [[u64; 2]; 8] = [
     // RAMP: black void
     [
-        epu_hi(OP_RAMP, REGION_ALL, BLEND_ADD, 0x000008, 0x000010),
+        epu_hi(OP_RAMP, REGION_ALL, BLEND_ADD, 0, 0x000008, 0x000010),
         epu_lo(20, 0, 0, 0xF0, 0, DIR_UP, 15, 15),
     ],
     // LOBE: blue glow
     [
-        epu_hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0x2288FF, 0x0044AA),
+        epu_hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0x2288FF, 0x0044AA),
         epu_lo(200, 28, 0, 0, 0, 0x80C0, 15, 12),
     ],
     // BAND: cyan accent ring
     [
-        epu_hi(OP_BAND, REGION_ALL, BLEND_ADD, 0x00FFFF, 0x008888),
+        epu_hi(OP_BAND, REGION_ALL, BLEND_ADD, 0, 0x00FFFF, 0x008888),
         epu_lo(160, 0x20, 0x10, 0, 0, DIR_UP, 15, 10),
     ],
     NOP_LAYER,
     // DECAL: bright center disk
     [
-        epu_hi(OP_DECAL, REGION_SKY, BLEND_ADD, 0xFFFFFF, 0x88DDFF),
+        epu_hi(OP_DECAL, REGION_SKY, BLEND_ADD, 0, 0xFFFFFF, 0x88DDFF),
         epu_lo(255, 0x02, 16, 0, 0, 0x8080, 15, 15),
     ],
     NOP_LAYER,
@@ -503,12 +507,12 @@ impl DebugEnvironment {
 
     /// Apply environment settings using EPU (call in `render()`).
     ///
-    /// This implementation uses pre-built EPU v2 configurations (128-bit per layer)
+    /// This implementation uses pre-built EPU configurations (128-bit per layer)
     /// that approximate the legacy env_* modes.
     pub fn apply(&self) {
         unsafe {
             // Select EPU preset based on base_mode
-            // v2 format: [[u64; 2]; 8] = 128 bytes (8 x 128-bit layers)
+            // format: [[u64; 2]; 8] = 128 bytes (8 x 128-bit layers)
             let preset: &[[u64; 2]; 8] = match self.base_mode {
                 env_mode::GRADIENT => &EPU_GRADIENT,
                 env_mode::CELLS => &EPU_CELLS,

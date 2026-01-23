@@ -1,106 +1,49 @@
-# Environment Processing Unit (EPU) v2
+# Environment Processing Unit (EPU)
 
-The Environment Processing Unit is ZX's GPU-driven procedural environment system. It renders backgrounds when you call `epu_draw()` and provides ambient lighting data for lit shaders.
+The Environment Processing Unit (EPU) is ZX’s instruction-based procedural environment system. You provide a packed 128-byte configuration (8 × 128-bit instructions) and call `epu_draw(config_ptr)` to:
 
-## Overview
+- Render the environment background
+- Drive ambient + reflection lighting for lit materials (computed on the GPU)
 
-The EPU uses a **128-byte** instruction-based configuration (8 x 128-bit instructions) evaluated by GPU compute shaders into octahedral environment maps. This provides:
-
-- Procedural backgrounds (sky/walls/void)
-- Ambient lighting data for objects (diffuse ambient + reflection color)
-- Multi-environment support via `env_id` indexing
-- Animation via instruction parameters
-- Direct RGB24 colors (no palette indirection)
-- Reserved bits for future extensions
-
-## v2 Changes Summary
-
-| Aspect | v1 | v2 |
-|--------|----|----|
-| Instruction size | 64-bit | 128-bit |
-| Environment size | 64 bytes | 128 bytes |
-| Opcode bits | 4-bit (16 opcodes) | 5-bit (32 opcodes) |
-| Region | 2-bit enum | 3-bit combinable mask |
-| Blend modes | 4 modes | 8 modes (+SCREEN, HSV_MOD, MIN, OVERLAY) |
-| Color | 8-bit palette index | RGB24 x 2 per layer |
-| Emissive | Implicit (ADD=emissive) | Reserved (future use) |
-| Alpha | None | 4-bit x 2 (Bayer-friendly) |
-| Parameters | 3 (param_a/b/c) | 4 (+param_d) |
-| Palette buffer | Required | **REMOVED** |
+For canonical ABI docs, see `nethercore/include/zx.rs`. For the opcode catalog/spec, see `nethercore-design/specs/epu-feature-catalog.md`.
 
 ---
 
-## FFI Functions
-
-### epu_set
-
-Upload an environment configuration to a slot.
-
-{{#tabs global="lang"}}
-
-{{#tab name="Rust"}}
-```rust
-/// Set an EPU environment configuration.
-///
-/// # Arguments
-/// * `env_id` - Environment slot ID (0-255)
-/// * `config_ptr` - Pointer to 16 u64 values (128 bytes total)
-///                  First 8 values are high words, next 8 are low words
-fn epu_set(env_id: u32, config_ptr: *const u64)
-```
-{{#endtab}}
-
-{{#tab name="C/C++"}}
-```c
-/// Set an EPU environment configuration.
-///
-/// @param env_id Environment slot ID (0-255)
-/// @param config_ptr Pointer to 16 u64 values (128 bytes total)
-void epu_set(uint32_t env_id, const uint64_t* config_ptr);
-```
-{{#endtab}}
-
-{{#tab name="Zig"}}
-```zig
-/// Set an EPU environment configuration.
-/// env_id: Environment slot ID (0-255)
-/// config_ptr: Pointer to 16 u64 values (128 bytes total)
-pub extern fn epu_set(env_id: u32, config_ptr: [*]const u64) void;
-```
-{{#endtab}}
-
-{{#endtabs}}
+## FFI
 
 ### epu_draw
 
-Draw the background using the specified EPU environment.
+Draw the environment background for the current viewport/pass using a packed EPU config.
 
 {{#tabs global="lang"}}
 
 {{#tab name="Rust"}}
-```rust
-/// Draw the background using the specified EPU environment.
+```rust,ignore
+/// Draw the EPU background using a packed config.
 ///
-/// # Arguments
-/// * `env_id` - Environment slot ID (0-255)
-fn epu_draw(env_id: u32)
+/// config_ptr points to 16 u64 values (128 bytes):
+/// 8 instructions × (hi u64, lo u64)
+fn epu_draw(config_ptr: *const u64);
 ```
 {{#endtab}}
 
 {{#tab name="C/C++"}}
 ```c
-/// Draw the background using the specified EPU environment.
+/// Draw the EPU background using a packed config.
 ///
-/// @param env_id Environment slot ID (0-255)
-void epu_draw(uint32_t env_id);
+/// config_ptr points to 16 u64 values (128 bytes):
+/// 8 instructions × (hi u64, lo u64)
+void epu_draw(const uint64_t* config_ptr);
 ```
 {{#endtab}}
 
 {{#tab name="Zig"}}
 ```zig
-/// Draw the background using the specified EPU environment.
-/// env_id: Environment slot ID (0-255)
-pub extern fn epu_draw(env_id: u32) void;
+/// Draw the EPU background using a packed config.
+///
+/// config_ptr points to 16 u64 values (128 bytes):
+/// 8 instructions × (hi u64, lo u64)
+pub extern fn epu_draw(config_ptr: [*]const u64) void;
 ```
 {{#endtab}}
 
@@ -108,194 +51,24 @@ pub extern fn epu_draw(env_id: u32) void;
 
 Call this **first** in your `render()` function, before any 3D geometry.
 
-> **Note:** Ambient lighting is computed entirely on the GPU and applied automatically to 3D geometry.
-> There is no CPU-accessible ambient query function because GPU readback would break rollback determinism.
-
----
-
-## Builder API
-
-The builder API provides a safer, more ergonomic way to construct EPU layers without manual bit-packing.
-
-{{#tabs global="lang"}}
-
-{{#tab name="Rust"}}
-```rust
-epu_begin()                                      // Start building a new layer
-epu_layer_opcode(opcode: u8)                     // Set opcode (0-31; bounds=1..7, features=8..)
-epu_layer_region(region: u8)                     // Set region mask (bitfield)
-epu_layer_blend(blend: u8)                       // Set blend mode (0-7)
-epu_layer_color_a(r: u8, g: u8, b: u8)           // Primary RGB24 color
-epu_layer_color_b(r: u8, g: u8, b: u8)           // Secondary RGB24 color
-epu_layer_alpha_a(alpha: u8)                     // Primary alpha (0-15)
-epu_layer_alpha_b(alpha: u8)                     // Secondary alpha (0-15)
-epu_layer_intensity(intensity: u8)               // Layer brightness (0-255)
-epu_layer_params(a: u8, b: u8, c: u8, d: u8)     // Opcode-specific params
-epu_layer_direction(x: i16, y: i16, z: i16)      // Direction vector
-epu_finish(env_id: u8, layer_index: u8)          // Commit layer to env slot
-```
-{{#endtab}}
-
-{{#tab name="C/C++"}}
-```c
-void epu_begin(void);                            // Start building a new layer
-void epu_layer_opcode(uint8_t opcode);           // bounds: RAMP=1, LOBE=2, BAND=3, FOG=4 (5..7 reserved) | features: DECAL=8, GRID=9, SCATTER=10, FLOW=11
-void epu_layer_region(uint8_t region);           // SKY=4, WALLS=2, FLOOR=1 (bitfield, ALL=7)
-void epu_layer_blend(uint8_t blend);             // ADD=0, MULTIPLY=1, MAX=2, LERP=3, SCREEN=4, HSV_MOD=5, MIN=6, OVERLAY=7
-void epu_layer_color_a(uint8_t r, uint8_t g, uint8_t b);   // Primary RGB24
-void epu_layer_color_b(uint8_t r, uint8_t g, uint8_t b);   // Secondary RGB24
-void epu_layer_alpha_a(uint8_t alpha);           // 0-15 (Bayer dither compatible)
-void epu_layer_alpha_b(uint8_t alpha);           // 0-15 (Bayer dither compatible)
-void epu_layer_intensity(uint8_t intensity);     // 0-255
-void epu_layer_params(uint8_t a, uint8_t b, uint8_t c, uint8_t d);
-void epu_layer_direction(int16_t x, int16_t y, int16_t z);
-void epu_finish(uint8_t env_id, uint8_t layer_index);
-```
-{{#endtab}}
-
-{{#tab name="Zig"}}
-```zig
-pub extern fn epu_begin() void;
-pub extern fn epu_layer_opcode(opcode: u8) void;
-pub extern fn epu_layer_region(region: u8) void;
-pub extern fn epu_layer_blend(blend: u8) void;
-pub extern fn epu_layer_color_a(r: u8, g: u8, b: u8) void;
-pub extern fn epu_layer_color_b(r: u8, g: u8, b: u8) void;
-pub extern fn epu_layer_alpha_a(alpha: u8) void;
-pub extern fn epu_layer_alpha_b(alpha: u8) void;
-pub extern fn epu_layer_intensity(intensity: u8) void;
-pub extern fn epu_layer_params(a: u8, b: u8, c: u8, d: u8) void;
-pub extern fn epu_layer_direction(x: i16, y: i16, z: i16) void;
-pub extern fn epu_finish(env_id: u8, layer_index: u8) void;
-```
-{{#endtab}}
-
-{{#endtabs}}
-
-### Builder API Example
-
-{{#tabs global="lang"}}
-
-{{#tab name="C/C++"}}
-```c
-void setup_sunset_environment(void) {
-    // Layer 0: RAMP base gradient
-    epu_begin();
-    epu_layer_opcode(1);                    // RAMP
-    epu_layer_region(7);                    // ALL regions
-    epu_layer_blend(0);                     // ADD
-    epu_layer_color_a(255, 140, 80);        // Sky: sunset orange
-    epu_layer_color_b(30, 20, 40);          // Floor: dark purple
-    epu_layer_alpha_a(15);
-    epu_layer_alpha_b(15);
-    epu_layer_intensity(200);
-    epu_layer_params(180, 100, 0x84, 120);  // Wall: pink-ish
-    epu_layer_direction(0, 32767, 0);       // Up = +Y
-    epu_finish(0, 0);
-
-    // Layer 1: Sun LOBE
-    epu_begin();
-    epu_layer_opcode(2);                    // LOBE
-    epu_layer_region(4);                    // SKY only
-    epu_layer_blend(0);                     // ADD
-    epu_layer_color_a(255, 200, 100);       // Core: warm yellow
-    epu_layer_color_b(255, 100, 50);        // Edge: deep orange
-    epu_layer_alpha_a(15);
-    epu_layer_alpha_b(10);
-    epu_layer_intensity(255);
-    epu_layer_params(200, 0, 0, 80);        // Sharp falloff
-    epu_layer_direction(16384, 8192, 0);    // Sun position
-    epu_finish(0, 1);
-}
-```
-{{#endtab}}
-
-{{#tab name="Rust"}}
-```rust
-fn setup_sunset_environment() {
-    // Layer 0: RAMP base gradient
-    epu_begin();
-    epu_layer_opcode(1);                    // RAMP
-    epu_layer_region(7);                    // ALL regions
-    epu_layer_blend(0);                     // ADD
-    epu_layer_color_a(255, 140, 80);        // Sky: sunset orange
-    epu_layer_color_b(30, 20, 40);          // Floor: dark purple
-    epu_layer_alpha_a(15);
-    epu_layer_alpha_b(15);
-    epu_layer_intensity(200);
-    epu_layer_params(180, 100, 0x84, 120);
-    epu_layer_direction(0, 32767, 0);
-    epu_finish(0, 0);
-
-    // Layer 1: Sun LOBE
-    epu_begin();
-    epu_layer_opcode(2);                    // LOBE
-    epu_layer_region(4);                    // SKY only
-    epu_layer_blend(0);                     // ADD
-    epu_layer_color_a(255, 200, 100);
-    epu_layer_color_b(255, 100, 50);
-    epu_layer_alpha_a(15);
-    epu_layer_alpha_b(10);
-    epu_layer_intensity(255);
-    epu_layer_params(200, 0, 0, 80);
-    epu_layer_direction(16384, 8192, 0);
-    epu_finish(0, 1);
-}
-```
-{{#endtab}}
-
-{{#tab name="Zig"}}
-```zig
-fn setup_sunset_environment() void {
-    // Layer 0: RAMP base gradient
-    epu_begin();
-    epu_layer_opcode(1);
-    epu_layer_region(7);
-    epu_layer_blend(0);
-    epu_layer_color_a(255, 140, 80);
-    epu_layer_color_b(30, 20, 40);
-    epu_layer_alpha_a(15);
-    epu_layer_alpha_b(15);
-    epu_layer_intensity(200);
-    epu_layer_params(180, 100, 0x84, 120);
-    epu_layer_direction(0, 32767, 0);
-    epu_finish(0, 0);
-
-    // Layer 1: Sun LOBE
-    epu_begin();
-    epu_layer_opcode(2);
-    epu_layer_region(4);
-    epu_layer_blend(0);
-    epu_layer_color_a(255, 200, 100);
-    epu_layer_color_b(255, 100, 50);
-    epu_layer_alpha_a(15);
-    epu_layer_alpha_b(10);
-    epu_layer_intensity(255);
-    epu_layer_params(200, 0, 0, 80);
-    epu_layer_direction(16384, 8192, 0);
-    epu_finish(0, 1);
-}
-```
-{{#endtab}}
-
-{{#endtabs}}
+Notes:
+- For split-screen, set `viewport(...)` and call `epu_draw(...)` per viewport.
+- The EPU compute pass runs automatically before rendering.
+- Ambient lighting is computed and applied entirely on the GPU; there is no CPU ambient query.
 
 ---
 
 ## Configuration Layout
 
-Each environment is exactly **8 x 128-bit instructions** (128 bytes total):
+Each environment is exactly **8 × 128-bit instructions** (128 bytes total). In memory, that’s 16 `u64` values laid out as 8 `[hi, lo]` pairs.
 
-| Slot | Type | Recommended Use |
+| Slot | Kind | Recommended Use |
 |------|------|------------------|
-| 0 | Bounds | `RAMP` enclosure + base colors |
-| 1 | Bounds | `LOBE` (sun/neon spill) |
-| 2 | Bounds | `BAND` (horizon ring) |
-| 3 | Bounds | `FOG` (absorption/haze) |
-| 4 | Feature | `DECAL` (sun disk, signage, portals) |
-| 5 | Feature | `GRID` (panels, architectural lines) |
-| 6 | Feature | `SCATTER` (stars, dust, windows) |
-| 7 | Feature | `FLOW` (clouds, rain, caustics) |
+| 0 | Enclosure | `RAMP` (base enclosure + region weights) |
+| 1 | Enclosure | `SECTOR` |
+| 2 | Enclosure | `SILHOUETTE` |
+| 3 | Enclosure | `SPLIT` / `CELL` / `PATCHES` / `APERTURE` |
+| 4–7 | Radiance | `DECAL` / `GRID` / `SCATTER` / `FLOW` + radiance ops (`0x0C..0x13`) |
 
 ---
 
@@ -309,8 +82,7 @@ Each instruction is packed as two `u64` values:
 bits 127..123: opcode     (5)  - Which algorithm to run
 bits 122..120: region     (3)  - Bitfield: SKY=0b100, WALLS=0b010, FLOOR=0b001
 bits 119..117: blend      (3)  - How to combine layer output (8 modes)
-bits 116..113: reserved   (4)
-bit  112:      reserved   (1)  - Future use
+bits 116..112: meta5      (5)  - (domain_id<<3)|variant_id; use 0 when unused
 bits 111..88:  color_a    (24) - RGB24 primary color
 bits 87..64:   color_b    (24) - RGB24 secondary color
 ```
@@ -330,20 +102,36 @@ bits 3..0:     alpha_b    (4)  - color_b alpha (0=transparent, 15=opaque)
 
 ---
 
-## Opcodes
+## Opcode Map (current shaders)
 
-| Opcode | Name | Kind | Purpose |
-|--------|------|------|---------|
-| `0x00` | `NOP` | Any | Disable layer |
-| `0x01` | `RAMP` | Bounds | Enclosure gradient (sky/walls/floor) |
-| `0x02` | `LOBE` | Bounds | Directional glow (sun, lamp, neon spill) |
-| `0x03` | `BAND` | Bounds | Horizon band / ring |
-| `0x04` | `FOG` | Bounds | Atmospheric absorption |
-| `0x05` | `DECAL` | Feature | Sharp SDF shape (disk/ring/rect/line) |
-| `0x06` | `GRID` | Feature | Repeating lines/panels |
-| `0x07` | `SCATTER` | Feature | Point field (stars/dust/bubbles) |
-| `0x08` | `FLOW` | Feature | Animated noise/streaks/caustics |
-| `0x09..0x1F` | Reserved | - | Future expansion |
+This is the opcode number. Some opcodes use `meta5` for domain/variant selection; when unused, set `meta5 = 0`.
+
+| Code | Name | Notes |
+|---|---|---|
+| `0x00` | `NOP` | Disable layer |
+| `0x01` | `RAMP` | Enclosure gradient |
+| `0x02` | `SECTOR` | Enclosure modifier |
+| `0x03` | `SILHOUETTE` | Enclosure modifier |
+| `0x04` | `SPLIT` | Enclosure |
+| `0x05` | `CELL` | Enclosure |
+| `0x06` | `PATCHES` | Enclosure |
+| `0x07` | `APERTURE` | Enclosure |
+| `0x08` | `DECAL` | Radiance |
+| `0x09` | `GRID` | Radiance |
+| `0x0A` | `SCATTER` | Radiance |
+| `0x0B` | `FLOW` | Radiance |
+| `0x0C` | `TRACE` | Radiance |
+| `0x0D` | `VEIL` | Radiance |
+| `0x0E` | `ATMOSPHERE` | Radiance |
+| `0x0F` | `PLANE` | Radiance |
+| `0x10` | `CELESTIAL` | Radiance |
+| `0x11` | `PORTAL` | Radiance |
+| `0x12` | `LOBE_RADIANCE` | Radiance (region-masked) |
+| `0x13` | `BAND_RADIANCE` | Radiance (region-masked) |
+
+For full per-opcode packing/algorithm details, see:
+- `nethercore-design/specs/epu-feature-catalog.md`
+- `nethercore/nethercore-zx/shaders/epu/`
 
 ---
 
@@ -379,205 +167,49 @@ Regions are combinable using bitwise OR:
 
 ---
 
-## Reserved Field (4-bit)
+## meta5
 
-Bits 116..113 of the instruction hi word are currently reserved and must be set
-to 0. They are intended for future extensions.
+The 5-bit `meta5` field (hi bits 116..112) is interpreted as:
 
----
+- `meta5 = (domain_id << 3) | variant_id`
+- `domain_id = (meta5 >> 3) & 0b11`
+- `variant_id = meta5 & 0b111`
 
-## Dual-Color System
-
-Each layer has two RGB24 colors (`color_a` and `color_b`) with independent 4-bit alpha:
-
-| Opcode | color_a | color_b |
-|--------|---------|---------|
-| `RAMP` | Sky color | Floor color (wall via params) |
-| `LOBE` | Core glow | Edge tint |
-| `BAND` | Center color | Edge gradient |
-| `FOG` | Fog tint | Horizon tint |
-| `DECAL` | Fill color | Outline color |
-| `GRID` | Line color | Cell background |
-| `SCATTER` | Base color | Color variation |
-| `FLOW` | Primary color | Secondary color |
-
----
-
-## Per-Opcode Parameter Reference
-
-### RAMP (Enclosure Gradient)
-
-| Field | Purpose |
-|-------|---------|
-| `color_a` | Sky/ceiling color |
-| `color_b` | Floor/ground color |
-| `param_a` | Wall color R |
-| `param_b` | Wall color G |
-| `param_c[7:4]` | Ceiling Y threshold (0-15) |
-| `param_c[3:0]` | Floor Y threshold (0-15) |
-| `param_d` | Wall color B |
-| `intensity` | Softness (gradient smoothness) |
-| `direction` | Up vector |
-
-### LOBE (Directional Glow)
-
-| Field | Purpose |
-|-------|---------|
-| `color_a` | Core glow color |
-| `color_b` | Edge tint color |
-| `intensity` | Brightness |
-| `param_a` | Exponent (sharpness, 0-255 maps to 1-64) |
-| `param_b` | Animation speed |
-| `param_c` | Animation mode (0=none, 1=pulse, 2=flicker) |
-| `param_d` | Edge blend amount |
-| `direction` | Lobe center direction |
-
-### BAND (Horizon Ring)
-
-| Field | Purpose |
-|-------|---------|
-| `color_a` | Center color |
-| `color_b` | Edge gradient color |
-| `intensity` | Brightness |
-| `param_a` | Width |
-| `param_b` | Vertical offset |
-| `param_c` | Scroll speed |
-| `param_d` | Gradient sharpness |
-| `direction` | Band normal axis |
-
-### FOG (Atmospheric Absorption)
-
-| Field | Purpose |
-|-------|---------|
-| `color_a` | Fog tint color |
-| `color_b` | Horizon tint color |
-| `intensity` | Density |
-| `param_a` | Vertical bias |
-| `param_b` | Falloff curve |
-| `param_c` | Horizon blend amount |
-| `direction` | Up vector |
-
-Use `blend = MULTIPLY` for fog.
-
-### DECAL (Sharp SDF Shape)
-
-| Field | Purpose |
-|-------|---------|
-| `color_a` | Fill color |
-| `color_b` | Outline color |
-| `intensity` | Brightness |
-| `param_a[7:4]` | Shape (0=disk, 1=ring, 2=rect, 3=line) |
-| `param_a[3:0]` | Edge softness |
-| `param_b` | Size |
-| `param_c` | Pulse animation speed |
-| `param_d` | Outline width |
-| `direction` | Shape center |
-| `alpha_a` | Fill alpha |
-| `alpha_b` | Outline alpha |
-
-### GRID (Repeating Lines)
-
-| Field | Purpose |
-|-------|---------|
-| `color_a` | Line color |
-| `color_b` | Cell background color |
-| `intensity` | Brightness |
-| `param_a` | Scale (repetition count) |
-| `param_b` | Line thickness |
-| `param_c[7:4]` | Pattern (0=stripes, 1=grid, 2=checker) |
-| `param_c[3:0]` | Scroll speed |
-| `param_d` | Cell fill amount |
-| `alpha_a` | Line alpha |
-| `alpha_b` | Background alpha |
-
-### SCATTER (Point Field)
-
-| Field | Purpose |
-|-------|---------|
-| `color_a` | Base point color |
-| `color_b` | Color variation |
-| `intensity` | Brightness |
-| `param_a` | Density |
-| `param_b` | Point size |
-| `param_c[7:4]` | Twinkle amount |
-| `param_c[3:0]` | Random seed |
-| `param_d` | Color variation amount |
-| `alpha_a` | Point alpha |
-
-### FLOW (Animated Noise)
-
-| Field | Purpose |
-|-------|---------|
-| `color_a` | Primary color |
-| `color_b` | Secondary color |
-| `intensity` | Brightness |
-| `param_a` | Scale |
-| `param_b` | Animation speed |
-| `param_c[7:4]` | Noise octaves (0-4) |
-| `param_c[3:0]` | Pattern (0=noise, 1=streaks, 2=caustic) |
-| `param_d` | Color blend amount |
-| `direction` | Flow direction |
-| `alpha_a` | Flow alpha |
+For `LOBE`/`BAND` behavior at `0x02`/`0x03`, keep `meta5 = 0`.
 
 ---
 
 ## Quick Start
 
+The easiest reference implementation is the EPU showcase presets:
+- `nethercore/examples/3-inspectors/epu-showcase/src/presets.rs`
+- `nethercore/examples/3-inspectors/epu-showcase/src/constants.rs`
+
 {{#tabs global="lang"}}
 
 {{#tab name="Rust"}}
-```rust
-use glam::Vec3;
-
-fn init() {
-    let mut builder = epu_begin();
-
-    // Sky gradient with direct RGB colors
-    builder.ramp_enclosure(
-        Vec3::Y,                        // up vector
-        Rgb24::new(135, 206, 235),      // sky: light blue
-        Rgb24::new(255, 200, 150),      // wall: warm horizon
-        Rgb24::new(34, 139, 34),        // floor: forest green
-        10,                             // ceil_y threshold
-        5,                              // floor_y threshold
-        180,                            // softness
-        0,                              // reserved (set to 0)
-    );
-
-    // Sun glow
-    let sun_dir = Vec3::new(0.5, 0.7, 0.3).normalize();
-    builder.lobe(
-        sun_dir,
-        Rgb24::new(255, 255, 200),      // core: warm white
-        Rgb24::new(255, 180, 100),      // edge: orange
-        180, 32, 0, 0, 128, 0,
-    );
-
-    let config = builder.finish();
-    unsafe { epu_set(0, config.layers_hi.as_ptr()); }
-}
+```rust,ignore
+// 8 x [hi, lo]
+static ENV: [[u64; 2]; 8] = [
+    [0, 0], [0, 0], [0, 0], [0, 0],
+    [0, 0], [0, 0], [0, 0], [0, 0],
+];
 
 fn render() {
-    unsafe {
-        epu_draw(0);  // Draw environment background
-        // ... draw scene geometry
-    }
+    unsafe { epu_draw(ENV.as_ptr().cast()); }
+    // ... draw scene geometry
 }
 ```
 {{#endtab}}
 
 {{#tab name="C/C++"}}
 ```c
-static uint64_t env_config[16];  // 8 hi words + 8 lo words
-
-void init(void) {
-    // Build environment config (see EPU RFC for encoding)
-    // ...
-    epu_set(0, env_config);
-}
+static const uint64_t env_config[16] = {
+    /* hi0, lo0, hi1, lo1, ... */
+};
 
 void render(void) {
-    epu_draw(0);  // Draw environment background
+    epu_draw(env_config);
     // ... draw scene geometry
 }
 ```
@@ -585,16 +217,12 @@ void render(void) {
 
 {{#tab name="Zig"}}
 ```zig
-var env_config: [16]u64 = undefined;  // 8 hi + 8 lo words
-
-export fn init() void {
-    // Build environment config (see EPU RFC for encoding)
-    // ...
-    epu_set(0, &env_config);
-}
+const env_config: [16]u64 = .{
+    // hi0, lo0, hi1, lo1, ...
+};
 
 export fn render() void {
-    epu_draw(0);  // Draw environment background
+    epu_draw(&env_config);
     // ... draw scene geometry
 }
 ```
@@ -604,14 +232,9 @@ export fn render() void {
 
 ---
 
-## Legacy Compatibility
-
-The `draw_env()` function is retained for backwards compatibility and draws `env_id = 0`.
-
----
-
 ## See Also
 
 - [EPU Environments Guide](../guides/epu-environments.md) - Recipes and examples
 - [EPU Architecture Overview](../architecture/epu-overview.md) - Compute pipeline details
-- [EPU RFC](../../../../EPU%20RFC.md) - Full specification with WGSL code
+- [EPU Feature Catalog](../../../../../nethercore-design/specs/epu-feature-catalog.md) - Opcode catalog + packing details
+- [ZX FFI Bindings](../../../../../nethercore/include/zx.rs) - Canonical ABI docs

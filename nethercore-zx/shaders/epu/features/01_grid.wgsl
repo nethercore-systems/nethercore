@@ -1,6 +1,6 @@
 // ============================================================================
 // GRID - Repeating Lines / Panels
-// Packed fields (v2):
+// Packed fields:
 //   color_a: Primary line color (RGB24)
 //   color_b: Cross/secondary line color (RGB24)
 //   intensity: Brightness (0..255 -> 0..1)
@@ -93,5 +93,6 @@ fn eval_grid(
     }
 
     let intensity = u8_to_01(instr_intensity(instr));
-    return LayerSample(rgb, pat * intensity * region_w);
+    let alpha = instr_alpha_a_f32(instr);
+    return LayerSample(rgb, pat * intensity * alpha * region_w);
 }

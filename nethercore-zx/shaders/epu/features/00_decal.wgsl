@@ -1,6 +1,6 @@
 // ============================================================================
 // DECAL - Sharp SDF Shape
-// Packed fields (v2):
+// Packed fields:
 //   color_a: Shape/fill color (RGB24)
 //   color_b: Glow/outline color (RGB24)
 //   intensity: Brightness (0..255 -> 0..1)
@@ -75,10 +75,13 @@ fn eval_decal(
     let anim = select(1.0, 0.6 + 0.4 * sin(time * speed), speed > 0.0);
 
     // color_a = shape/fill color, color_b = glow/outline color
+    // alpha_a = fill alpha, alpha_b = glow alpha
     let fill_rgb = instr_color_a(instr);
     let glow_rgb = instr_color_b(instr);
-    let rgb = fill_rgb * edge + glow_rgb * glow;
+    let fill_alpha = instr_alpha_a_f32(instr);
+    let glow_alpha = instr_alpha_b_f32(instr);
+    let rgb = fill_rgb * edge * fill_alpha + glow_rgb * glow * glow_alpha;
 
     let intensity = u8_to_01(instr_intensity(instr));
-    return LayerSample(rgb, (edge + glow) * intensity * anim * region_w);
+    return LayerSample(rgb, (edge * fill_alpha + glow * glow_alpha) * intensity * anim * region_w);
 }

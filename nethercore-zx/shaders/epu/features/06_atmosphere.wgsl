@@ -3,7 +3,7 @@
 // Opcode: 0x0E
 // Role: Radiance (additive feature layer)
 //
-// Packed fields (v2):
+// Packed fields:
 //   color_a: Zenith/overhead tint (RGB24)
 //   color_b: Horizon tint (RGB24)
 //   intensity: Overall strength (0..255 -> 0..1)
@@ -19,7 +19,6 @@
 //   domain_id: Ignored (always uses enclosure up vector)
 //   variant_id: 0 ABSORPTION, 1 RAYLEIGH, 2 MIE, 3 FULL, 4 ALIEN
 //
-// Replaces v2 FOG (0x04). v2 FOG maps to ATMOSPHERE variant 0 (ABSORPTION).
 // ============================================================================
 
 // Variant IDs for ATMOSPHERE
@@ -29,7 +28,7 @@ const ATMOSPHERE_VARIANT_MIE: u32 = 2u;         // Sun halo/glow
 const ATMOSPHERE_VARIANT_FULL: u32 = 3u;        // Combined Rayleigh + Mie
 const ATMOSPHERE_VARIANT_ALIEN: u32 = 4u;       // Non-physical sin-based gradient
 
-// ABSORPTION variant: Multiplicative fog (replaces v2 FOG)
+// ABSORPTION variant: Multiplicative fog
 // factor = 1 - (1 - t) * intensity
 // Used with BLEND_MULTIPLY for absorption/darkening effect
 fn eval_atmosphere_absorption(

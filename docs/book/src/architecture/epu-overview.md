@@ -1,6 +1,11 @@
 # EPU Architecture Overview
 
-The Environment Processing Unit (EPU) is Nethercore ZX's GPU-driven, fully procedural environment system. This page provides an architectural overview; for the complete specification, see [EPU RFC.md](../../../../../EPU%20RFC.md) in the project root.
+The Environment Processing Unit (EPU) is Nethercore ZX's GPU-driven, fully procedural environment system. This page provides an architectural overview.
+
+For the complete specification (opcode catalog, packing rules, and shader implementations), see:
+- `nethercore-design/specs/epu-feature-catalog.md`
+- `nethercore/include/zx.rs`
+- `nethercore/nethercore-zx/shaders/epu/`
 
 For the current API reference and quick-start guide, see:
 - [EPU Environments Guide](../guides/epu-environments.md)
@@ -20,7 +25,7 @@ The system is designed around these hard constraints:
 | Constraint | Value |
 |------------|-------|
 | Config size | 128 bytes per environment state |
-| Layer count | 8 instructions (4 Bounds + 4 Features) |
+| Layer count | 8 instructions (4 Enclosure + 4 Radiance) |
 | Instruction size | 128 bits (two u64 values) |
 | Cubemaps | None (fully procedural octahedral maps) |
 | Mipmaps | Yes (compute-generated downsample pyramid) |
@@ -32,20 +37,17 @@ The system is designed around these hard constraints:
 ## System Diagram
 
 ```
-CPU (immediate-mode)                              GPU
---------------------                              ---
-Record draws with per-draw env_id          --->   [Compute] EPU_Build(active_env_list, time)
-Collect + deduplicate env_id list                 - For each active env_id:
-Cap to MAX_ACTIVE_ENV_STATES_PER_FRAME               - Evaluate microprogram into octahedral maps:
-                                                       - EnvRadiance mip0 = Bounds + Features (radiance)
-                                                     - Generate mip pyramid from EnvRadiance mip0:
-                                                       - mip1..k via 2x2 downsample chain
-                                                     - Extract SH9 from a coarse mip (e.g. 16x16)
+CPU (game)                                         GPU
+---------                                         ---
+Call epu_draw(config_ptr) during render()   --->   [Compute] EPU_Build(config, time)
+Capture (viewport, pass) draw requests             - Evaluate 8-layer microprogram into EnvRadiance (mip 0)
+Only the last pushed config is used                - Generate mip pyramid from EnvRadiance mip 0
+                                                    - Extract SH9 from a coarse mip (e.g. 16x16)
 
-Main render (background + objects)         --->   [Render] Sample prebuilt results
-                                                 - Background: procedural L_hi(env_id, dir) (no texture sample)
-                                                 - Specular:   EnvRadiance[env_id] (roughness -> LOD) + residual L_hi
-                                                 - Diffuse:    SH9[env_id] (L2 spherical harmonics)
+Main render (background + objects)          --->   [Render] Sample prebuilt results
+                                                  - Background: EPU environment draw per viewport/pass
+                                                  - Specular:   EnvRadiance sampled by roughness (LOD)
+                                                  - Diffuse:    SH9 evaluated at the shading normal
 ```
 
 ---
@@ -64,16 +66,13 @@ roughness-based reflections, and extracts SH9 coefficients for diffuse ambient.
 
 Each environment is exactly **8 x 128-bit instructions**:
 
-| Slot | Type | Recommended Use |
+| Slot | Kind | Recommended Use |
 |------|------|-----------------|
-| 0 | Bounds | `RAMP` enclosure + base colors |
-| 1 | Bounds | `LOBE` (sun/neon spill) |
-| 2 | Bounds | `BAND` (horizon ring) |
-| 3 | Bounds | `FOG` (absorption/haze) |
-| 4 | Feature | `DECAL` (sun disk, signage, portals) |
-| 5 | Feature | `GRID` (panels, architectural lines) |
-| 6 | Feature | `SCATTER` (stars, dust, windows) |
-| 7 | Feature | `FLOW` (clouds, rain, caustics) |
+| 0 | Enclosure | `RAMP` enclosure + base colors |
+| 1 | Enclosure | `SECTOR` |
+| 2 | Enclosure | `SILHOUETTE` |
+| 3 | Enclosure | `SPLIT` / `CELL` / `PATCHES` / `APERTURE` |
+| 4-7 | Radiance | `DECAL` / `GRID` / `SCATTER` / `FLOW` + radiance ops (`0x0C..0x13`) |
 
 ### Instruction Bit Layout (128-bit)
 
@@ -84,8 +83,7 @@ Each instruction is packed as two `u64` values:
 bits 127..123: opcode     (5)  - 32 opcodes available
 bits 122..120: region     (3)  - Bitfield: SKY=0b100, WALLS=0b010, FLOOR=0b001
 bits 119..117: blend      (3)  - 8 blend modes
-bits 116..113: reserved   (4)
-bit  112:      reserved   (1)  - Future flag
+bits 116..112: meta5      (5)  - (domain_id<<3)|variant_id; use 0 when unused
 bits 111..88:  color_a    (24) - RGB24 primary color
 bits 87..64:   color_b    (24) - RGB24 secondary color
 ```
@@ -107,14 +105,25 @@ bits 3..0:     alpha_b    (4)  - color_b alpha (0-15)
 | Opcode | Name | Kind | Purpose |
 |--------|------|------|---------|
 | `0x00` | `NOP` | Any | Disable layer |
-| `0x01` | `RAMP` | Bounds | Enclosure gradient (sky/walls/floor) |
-| `0x02` | `LOBE` | Bounds | Directional glow (sun, lamp, neon spill) |
-| `0x03` | `BAND` | Bounds | Horizon band / ring |
-| `0x04` | `FOG` | Bounds | Atmospheric absorption |
-| `0x05` | `DECAL` | Feature | Sharp SDF shape (disk/ring/rect/line) |
-| `0x06` | `GRID` | Feature | Repeating lines/panels |
-| `0x07` | `SCATTER` | Feature | Point field (stars/dust/bubbles) |
-| `0x08` | `FLOW` | Feature | Animated noise/streaks/caustics |
+| `0x01` | `RAMP` | Enclosure | Enclosure gradient (sky/walls/floor) |
+| `0x02` | `SECTOR` | Enclosure | Azimuthal opening wedge modifier |
+| `0x03` | `SILHOUETTE` | Enclosure | Skyline/horizon cutout modifier |
+| `0x04` | `SPLIT` | Enclosure | Geometric divisions |
+| `0x05` | `CELL` | Enclosure | Voronoi/mosaic cells |
+| `0x06` | `PATCHES` | Enclosure | Noise patches |
+| `0x07` | `APERTURE` | Enclosure | Shaped opening/viewport |
+| `0x08` | `DECAL` | Radiance | Sharp SDF shape (disk/ring/rect/line) |
+| `0x09` | `GRID` | Radiance | Repeating lines/panels |
+| `0x0A` | `SCATTER` | Radiance | Point field (stars/dust/bubbles) |
+| `0x0B` | `FLOW` | Radiance | Animated noise/streaks/caustics |
+| `0x0C` | `TRACE` | Radiance | Line/crack patterns |
+| `0x0D` | `VEIL` | Radiance | Curtain/ribbon effects |
+| `0x0E` | `ATMOSPHERE` | Radiance | Atmospheric absorption + scattering |
+| `0x0F` | `PLANE` | Radiance | Ground/surface textures |
+| `0x10` | `CELESTIAL` | Radiance | Moon/sun/planet bodies |
+| `0x11` | `PORTAL` | Radiance | Portal/vortex effects |
+| `0x12` | `LOBE_RADIANCE` | Radiance | Region-masked directional glow |
+| `0x13` | `BAND_RADIANCE` | Radiance | Region-masked horizon band |
 
 ### Blend Modes (8 modes)
 
@@ -133,6 +142,8 @@ bits 3..0:     alpha_b    (4)  - color_b alpha (0-15)
 
 ## Compute Pipeline
 
+Implementation note: Internally, the runtime stores outputs in arrays indexed by an internal `env_id`. The current public API (`epu_draw(config_ptr)`) provides a single global config, so (for now) all active `env_id`s share the same config.
+
 The EPU runtime maintains these outputs per `env_id`:
 
 | Output | Type | Purpose |
@@ -142,7 +153,7 @@ The EPU runtime maintains these outputs per `env_id`:
 
 ### Frame Execution Order
 
-1. Build draw list (each draw has `env_id`)
+1. Capture EPU draw requests (per viewport/pass) and determine active environment states
 2. Deduplicate `env_id` list, cap to `MAX_ACTIVE_ENV_STATES_PER_FRAME`
 3. Determine which `env_id`s are dirty (hash/time-dependent)
 4. Dispatch compute passes:
@@ -191,7 +202,7 @@ Diffuse ambient is evaluated from SH9 coefficients at the shading normal `n`.
 The EPU supports multiple environments per frame through texture array indexing:
 
 - All outputs are stored in array layers indexed by `env_id`
-- Renderers pass `env_id` per draw/instance
+- Renderers pass `env_id` per draw/instance (internal)
 - No per-draw rebinding required
 
 ### Recommended Caps
@@ -223,9 +234,9 @@ Update policy:
 
 ---
 
-## v2 Changes Summary
+## Format Changes Summary
 
-| Aspect | v1 | v2 |
+| Aspect | Legacy | Current |
 |--------|----|----|
 | Instruction size | 64-bit | 128-bit |
 | Environment size | 64 bytes | 128 bytes |
@@ -244,9 +255,10 @@ Update policy:
 For complete details including:
 
 - WGSL shader implementations
-- Rust API and builders
 - Per-opcode parameter tables
 - Example configurations
 - Performance considerations
 
-See the canonical [EPU RFC.md](../../../../../EPU%20RFC.md) specification document.
+See:
+- [EPU Feature Catalog](../../../../../nethercore-design/specs/epu-feature-catalog.md)
+- [ZX FFI Bindings](../../../../../nethercore/include/zx.rs)

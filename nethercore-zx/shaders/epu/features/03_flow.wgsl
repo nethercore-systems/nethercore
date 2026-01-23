@@ -1,6 +1,6 @@
 // ============================================================================
 // FLOW - Animated Noise / Streaks / Caustics
-// Packed fields (v2):
+// Packed fields:
 //   color_a: Primary flow color (RGB24)
 //   color_b: Secondary flow color (RGB24) - mixed based on pattern
 //   intensity: Brightness (0..255 -> 0..1)
@@ -10,6 +10,7 @@
 //   param_c[3:0]: Pattern (0=noise, 1=streaks, 2=caustic)
 //   param_d: Turbulence amount (0..255 -> 0..1)
 //   direction: Flow direction (oct-u16)
+//   alpha_a: Flow alpha (0..15 -> 0..1)
 // ============================================================================
 
 fn epu_hash21(p: vec2f) -> f32 {
@@ -183,5 +184,6 @@ fn eval_flow(
     let rgb = mix(flow_rgb, secondary_rgb, color_mix);
 
     let intensity = u8_to_01(instr_intensity(instr));
-    return LayerSample(rgb, pat * intensity * region_w);
+    let alpha = instr_alpha_a_f32(instr);
+    return LayerSample(rgb, pat * intensity * alpha * region_w);
 }

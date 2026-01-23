@@ -1,5 +1,5 @@
 // ============================================================================
-// SECTOR - Angular Wedge Enclosure Modifier (vNext 0x02)
+// SECTOR - Angular Wedge Enclosure Modifier (0x02)
 // 128-bit packed fields:
 //   color_a: Sky/opening color (RGB24)
 //   color_b: Wall color (RGB24)
@@ -9,7 +9,7 @@
 //   param_c: Reserved (set to 0)
 //   param_d: Reserved (set to 0)
 //   direction: Up axis (oct-u16), should match RAMP.up
-//   variant_id: 0 BOX, 1 TUNNEL, 2 CAVE
+//   variant_id: 0 BOX, 1 TUNNEL, 2 CAVE (from meta5)
 //
 // SECTOR creates an azimuthal opening in the enclosure, promoting wall regions
 // to sky within the opening sector. This signals "not a perfect sphere" for
@@ -20,7 +20,8 @@ fn eval_sector(
     dir: vec3f,
     instr: vec4u,
     enc: EnclosureConfig,
-) -> LayerSample {
+    base_regions: RegionWeights,
+) -> BoundsResult {
     // Decode up axis from direction field
     let up = decode_dir16(instr_dir16(instr));
 
@@ -50,8 +51,8 @@ fn eval_sector(
     let half_width = width * 0.5;
     let open_base = smoothstep(half_width, 0.0, dist) * intensity;
 
-    // Get baseline region weights from enclosure config
-    let baseline = compute_region_weights(dir, enc);
+    // Use baseline region weights passed in
+    let baseline = base_regions;
 
     // Apply variant shaping
     let variant = instr_variant_id(instr);
@@ -60,45 +61,32 @@ fn eval_sector(
     switch variant {
         case 0u: {
             // BOX: uniform opening (no vertical modulation)
-            // Opening applies uniformly across all vertical angles
         }
         case 1u: {
-            // TUNNEL: opening extends vertically (no floor/ceiling cap)
-            // Full opening strength regardless of vertical position
-            // Boost opening in wall region
+            // TUNNEL: boost opening in wall region
             open = open_base * (1.0 + baseline.wall * 0.5);
         }
         case 2u: {
-            // CAVE: opening biased downward (floor visible, ceiling blocked)
-            // Stronger opening near floor, weaker near ceiling
+            // CAVE: opening biased downward
             let y = dot(dir, up);
             let down_bias = smoothstep(0.5, -0.5, y);
             open = open_base * down_bias;
         }
-        default: {
-            // Default to BOX behavior
-        }
+        default: {}
     }
 
-    // Promote sky into opening sector:
-    // w_sky += open * w_wall; w_wall -= open * w_wall
-    // This shifts wall region toward sky within the opening.
-    //
-    // Compute modified region weights for the opening effect.
-    // The opening mask represents where wall becomes sky.
+    // Compute modified region weights (wall -> sky in opening)
     let opening_mask = open * baseline.wall;
+    let modified_regions = RegionWeights(
+        baseline.sky + opening_mask,
+        baseline.wall - opening_mask,
+        baseline.floor
+    );
 
-    // Compute the modified region weights
-    let new_sky = baseline.sky + opening_mask;
-    let new_wall = baseline.wall - opening_mask;
-    let new_floor = baseline.floor;
-
-    // Get colors
+    // Get colors and render
     let sky_color = instr_color_a(instr);
     let wall_color = instr_color_b(instr);
+    let rgb = sky_color * modified_regions.sky + wall_color * modified_regions.wall + wall_color * 0.5 * modified_regions.floor;
 
-    // Blend based on modified region weights
-    let rgb = sky_color * new_sky + wall_color * new_wall + wall_color * 0.5 * new_floor;
-
-    return LayerSample(rgb, 1.0);
+    return BoundsResult(LayerSample(rgb, 1.0), modified_regions);
 }

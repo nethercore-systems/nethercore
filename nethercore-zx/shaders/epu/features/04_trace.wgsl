@@ -3,7 +3,7 @@
 // Opcode: 0x0C
 // Role: Radiance (additive feature layer)
 //
-// Packed fields (v2):
+// Packed fields:
 //   color_a: Line/trace color (RGB24)
 //   color_b: Glow/outline color (RGB24)
 //   intensity: Brightness (0..255 -> 0..1)
@@ -22,7 +22,7 @@
 // ============================================================================
 
 // Domain IDs for TRACE
-const TRACE_DOMAIN_DIRECT3D: u32 = 0u;      // Legacy / fallback
+const TRACE_DOMAIN_DIRECT3D: u32 = 0u;      // Reserved/default
 const TRACE_DOMAIN_AXIS_CYL: u32 = 1u;      // Cylindrical (azimuth, height)
 const TRACE_DOMAIN_AXIS_POLAR: u32 = 2u;    // Polar (angle, radius from axis)
 const TRACE_DOMAIN_TANGENT_LOCAL: u32 = 3u; // Tangent plane at direction

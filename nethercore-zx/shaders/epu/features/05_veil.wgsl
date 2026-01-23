@@ -3,7 +3,7 @@
 // Opcode: 0x0D
 // Role: Radiance (additive feature layer)
 //
-// Packed fields (v2):
+// Packed fields:
 //   color_a: Ribbon/bar color (RGB24)
 //   color_b: Edge/glow color (RGB24)
 //   intensity: Brightness (0..255 -> 0..1)

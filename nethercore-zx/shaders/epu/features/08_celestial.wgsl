@@ -3,7 +3,7 @@
 // Opcode: 0x10
 // Role: Radiance (additive feature layer)
 //
-// Packed fields (v2):
+// Packed fields:
 //   color_a: Body surface color (RGB24)
 //   color_b: Atmosphere/corona/ring color (RGB24)
 //   intensity: Overall brightness (0..255 -> 0..2) - >1 for suns

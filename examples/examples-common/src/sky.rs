@@ -1,9 +1,9 @@
 //! Debug Sky - Sky and sun controls with debug integration
 //!
 //! Provides sky gradient and sun configuration with debug inspector integration.
-//! Now uses the EPU v2 (Environment Processing Unit) API with 128-bit instructions.
+//! Now uses the EPU (Environment Processing Unit) API with 128-bit instructions.
 //!
-//! # EPU v2 Format
+//! # EPU Format
 //!
 //! Each layer is 128 bits (2 x u64) with direct RGB colors.
 //! See `environment.rs` for the full format documentation.
@@ -81,7 +81,7 @@ impl DebugSky {
 
     /// Apply sky settings and draw (call in render())
     ///
-    /// Uses EPU v2 API with a simple RAMP layer for sky gradient.
+    /// Uses the EPU API with a simple RAMP layer for sky gradient.
     pub fn apply_and_draw(&self) {
         // Use the shared EPU_SKY preset
         unsafe {
@@ -108,21 +108,22 @@ impl DebugSky {
 }
 
 // =============================================================================
-// EPU v2 Preset for DebugSky
+// EPU Preset for DebugSky
 // =============================================================================
 
-// EPU v2 helper functions (same as in environment.rs)
+// EPU helper functions (same as in environment.rs)
 const fn epu_hi(
     opcode: u64,
     region: u64,
     blend: u64,
+    meta5: u64,
     color_a: u64,
     color_b: u64,
 ) -> u64 {
     ((opcode & 0x1F) << 59)
         | ((region & 0x7) << 56)
         | ((blend & 0x7) << 53)
-        // bits 52..49 reserved
+        | ((meta5 & 0x1F) << 48)
         | ((color_a & 0xFFFFFF) << 24)
         | (color_b & 0xFFFFFF)
 }
@@ -159,12 +160,12 @@ const BLEND_ADD: u64 = 0;
 // Direction for +Y (up)
 const DIR_UP: u64 = 0x80FF;
 
-/// EPU v2 sky preset: blue sky (0x6496DC) to green ground (0x285028)
+/// EPU sky preset: blue sky (0x6496DC) to green ground (0x285028)
 /// 8 x 128-bit layers, each as [hi, lo]
 static EPU_SKY: [[u64; 2]; 8] = [
     // Layer 0: RAMP gradient
     [
-        epu_hi(OP_RAMP, REGION_ALL, BLEND_ADD, 0x6496DC, 0x285028),
+        epu_hi(OP_RAMP, REGION_ALL, BLEND_ADD, 0, 0x6496DC, 0x285028),
         epu_lo(180, 200, 180, 0xA5, 0, DIR_UP, 15, 15),
     ],
     [0, 0], // NOP

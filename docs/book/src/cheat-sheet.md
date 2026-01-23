@@ -633,150 +633,65 @@ light_range(index: u32, range: f32) void
 
 ---
 
-## Environment Processing Unit (EPU) v2
+## Environment Processing Unit (EPU)
 
-The EPU provides procedural environment backgrounds and ambient lighting via a 128-byte instruction-based configuration (8 layers x 16 bytes per layer).
+The EPU renders procedural environment backgrounds and provides ambient/reflection lighting via a packed 128-byte configuration (8 x 128-bit instructions).
 
-### Direct Set API
-
-{{#tabs global="lang"}}
-
-{{#tab name="Rust"}}
-```rust
-// Configure environment (8 x [u64; 2] = 128 bytes)
-epu_set(env_id, config_ptr)           // Upload config to slot (0-255)
-
-// Draw environment background
-epu_draw(env_id)                      // Render background for env slot
-
-// Legacy compatibility
-draw_env()                            // Draws env_id 0
-```
-{{#endtab}}
-
-{{#tab name="C/C++"}}
-```c
-// Configure environment (8 x 128-bit = 128 bytes, passed as [u64; 16])
-void epu_set(uint8_t env_id, const uint64_t* config);
-
-// Draw environment background
-void epu_draw(uint32_t env_id);
-
-// Legacy compatibility
-void draw_env(void);                  // Draws env_id 0
-```
-{{#endtab}}
-
-{{#tab name="Zig"}}
-```zig
-// Configure environment (8 x 128-bit = 128 bytes)
-epu_set(env_id: u8, config: [*]const u64) void
-
-// Draw environment background
-epu_draw(env_id: u32) void
-
-// Legacy compatibility
-draw_env() void                       // Draws env_id 0
-```
-{{#endtab}}
-
-{{#endtabs}}
-
-### Builder API (Recommended)
+### Push API
 
 {{#tabs global="lang"}}
 
 {{#tab name="Rust"}}
 ```rust
-epu_begin()                                      // Start building a layer
-epu_layer_opcode(opcode)                         // Set opcode (0-31; bounds=1..7, features=8..)
-epu_layer_region(region)                         // Set region mask (bitfield)
-epu_layer_blend(blend)                           // Set blend mode (0-7)
-epu_layer_color_a(r, g, b)                       // Primary RGB24 color
-epu_layer_color_b(r, g, b)                       // Secondary RGB24 color
-epu_layer_alpha_a(alpha)                         // Primary alpha (0-15)
-epu_layer_alpha_b(alpha)                         // Secondary alpha (0-15)
-epu_layer_intensity(intensity)                   // Layer brightness (0-255)
-epu_layer_params(a, b, c, d)                     // Opcode-specific params
-epu_layer_direction(x, y, z)                     // Direction vector (i16 x 3)
-epu_finish(env_id, layer_index)                  // Commit layer to env slot
+fn epu_draw(config_ptr: *const u64);
 ```
 {{#endtab}}
 
 {{#tab name="C/C++"}}
 ```c
-void epu_begin(void);                            // Start building a layer
-void epu_layer_opcode(uint8_t opcode);           // Set opcode (0-31; bounds=1..7, features=8..)
-void epu_layer_region(uint8_t region);           // Set region mask (bitfield)
-void epu_layer_blend(uint8_t blend);             // Set blend mode (0-7)
-void epu_layer_color_a(uint8_t r, uint8_t g, uint8_t b);   // Primary RGB24
-void epu_layer_color_b(uint8_t r, uint8_t g, uint8_t b);   // Secondary RGB24
-void epu_layer_alpha_a(uint8_t alpha);           // Primary alpha (0-15)
-void epu_layer_alpha_b(uint8_t alpha);           // Secondary alpha (0-15)
-void epu_layer_intensity(uint8_t intensity);     // Layer brightness (0-255)
-void epu_layer_params(uint8_t a, uint8_t b, uint8_t c, uint8_t d);  // Params
-void epu_layer_direction(int16_t x, int16_t y, int16_t z);  // Direction
-void epu_finish(uint8_t env_id, uint8_t layer_index);       // Commit layer
+void epu_draw(const uint64_t* config_ptr);
 ```
 {{#endtab}}
 
 {{#tab name="Zig"}}
 ```zig
-epu_begin() void                                 // Start building a layer
-epu_layer_opcode(opcode: u8) void                // Set opcode (0-31; bounds=1..7, features=8..)
-epu_layer_region(region: u8) void                // Set region mask (bitfield)
-epu_layer_blend(blend: u8) void                  // Set blend mode (0-7)
-epu_layer_color_a(r: u8, g: u8, b: u8) void      // Primary RGB24
-epu_layer_color_b(r: u8, g: u8, b: u8) void      // Secondary RGB24
-epu_layer_alpha_a(alpha: u8) void                // Primary alpha (0-15)
-epu_layer_alpha_b(alpha: u8) void                // Secondary alpha (0-15)
-epu_layer_intensity(intensity: u8) void          // Layer brightness (0-255)
-epu_layer_params(a: u8, b: u8, c: u8, d: u8) void  // Params
-epu_layer_direction(x: i16, y: i16, z: i16) void // Direction
-epu_finish(env_id: u8, layer_index: u8) void     // Commit layer
+pub extern fn epu_draw(config_ptr: [*]const u64) void;
 ```
 {{#endtab}}
 
 {{#endtabs}}
 
-### v2 Instruction Layout (128-bit per layer)
+### Config Layout
+
+- 16 x `u64` (128 bytes total): `hi0, lo0, hi1, lo1, ... hi7, lo7`
+
+### Instruction Layout (128-bit per layer)
 
 ```
 u64 hi [bits 127..64]:
-  [127:123] opcode     (5)  - 32 opcodes (RAMP=1, LOBE=2, etc.)
-  [122:120] region     (3)  - Bitfield: SKY=4, WALLS=2, FLOOR=1, ALL=7
-  [119:117] blend      (3)  - 8 modes (ADD=0, MULTIPLY=1, MAX=2, etc.)
-  [116:113] reserved   (4)
-  [112]     reserved   (1)
+  [127:123] opcode     (5)
+  [122:120] region     (3)  - SKY=4, WALLS=2, FLOOR=1, ALL=7
+  [119:117] blend      (3)  - ADD=0, MULTIPLY=1, MAX=2, LERP=3, SCREEN=4, HSV_MOD=5, MIN=6, OVERLAY=7
+  [116:112] meta5      (5)  - (domain_id<<3)|variant_id; use 0 when unused
   [111:88]  color_a    (24) - RGB24 primary color
   [87:64]   color_b    (24) - RGB24 secondary color
 
 u64 lo [bits 63..0]:
-  [63:56]   intensity  (8)  - Layer brightness
-  [55:48]   param_a    (8)  - Opcode-specific
-  [47:40]   param_b    (8)  - Opcode-specific
-  [39:32]   param_c    (8)  - Opcode-specific
-  [31:24]   param_d    (8)  - Opcode-specific (NEW in v2)
-  [23:8]    direction  (16) - Octahedral encoded direction
-  [7:4]     alpha_a    (4)  - color_a alpha (0-15)
-  [3:0]     alpha_b    (4)  - color_b alpha (0-15)
+  [63:56]   intensity  (8)
+  [55:48]   param_a    (8)
+  [47:40]   param_b    (8)
+  [39:32]   param_c    (8)
+  [31:24]   param_d    (8)
+  [23:8]    direction  (16) - octahedral encoded (u8,u8)
+  [7:4]     alpha_a    (4)
+  [3:0]     alpha_b    (4)
 ```
 
-### Constants
+### Opcodes (current shaders)
 
-| Opcodes | Region Mask | Blend Modes |
-|---------|-------------|-------------|
-| NOP=0 | SKY=4 | ADD=0 |
-| RAMP=1 | WALLS=2 | MULTIPLY=1 |
-| LOBE=2 | FLOOR=1 | MAX=2 |
-| BAND=3 | ALL=7 | LERP=3 |
-| FOG=4 | SKY_WALLS=6 | SCREEN=4 |
-| DECAL=8 | SKY_FLOOR=5 | HSV_MOD=5 |
-| GRID=9 | WALLS_FLOOR=3 | MIN=6 |
-| SCATTER=10 | NONE=0 | OVERLAY=7 |
-| FLOW=11 | | |
+`NOP=0x00, RAMP=0x01, SECTOR=0x02, SILHOUETTE=0x03, SPLIT=0x04, CELL=0x05, PATCHES=0x06, APERTURE=0x07, DECAL=0x08, GRID=0x09, SCATTER=0x0A, FLOW=0x0B, TRACE=0x0C, VEIL=0x0D, ATMOSPHERE=0x0E, PLANE=0x0F, CELESTIAL=0x10, PORTAL=0x11, LOBE_RADIANCE=0x12, BAND_RADIANCE=0x13.`
 
-See [EPU API Reference](api/epu.md) for detailed opcode parameters and the [EPU RFC](../../../EPU%20RFC.md) for full specification.
+See [EPU API Reference](api/epu.md) and [EPU Feature Catalog](../../../../nethercore-design/specs/epu-feature-catalog.md).
 
 ---
 

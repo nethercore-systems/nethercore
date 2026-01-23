@@ -1,4 +1,4 @@
-//! EPU GPU Runtime (v2 - 128-bit instructions)
+//! EPU GPU Runtime (128-bit instructions)
 //!
 //! This module provides the GPU infrastructure to execute EPU compute shaders
 //! and produce an EnvRadiance octahedral map with a true mip pyramid, plus SH9
@@ -11,9 +11,9 @@
 //! - Storage texture for EnvRadiance output (mip-mapped)
 //! - Compute pipeline and bind groups
 //!
-//! # v2 Changes
+//! # Format Notes
 //!
-//! EPU v2 uses 128-bit instructions with embedded RGB24 colors. The palette
+//! EPU uses 128-bit instructions with embedded RGB24 colors. The palette
 //! buffer has been removed - colors are now packed directly into the
 //! instruction format.
 //!
@@ -33,12 +33,12 @@ use super::settings::{
 };
 use super::types::{FrameUniforms, GpuEnvironmentState, IrradUniforms};
 
-/// EPU GPU runtime for environment map generation (v2).
+/// EPU GPU runtime for environment map generation.
 ///
 /// Manages GPU resources and compute pipeline for generating EnvRadiance
 /// octahedral maps (with a downsample mip pyramid) from EPU configurations.
 ///
-/// v2: Palette buffer removed - colors are embedded in 128-bit instructions.
+/// Palette buffer removed - colors are embedded in 128-bit instructions.
 ///
 /// # Texture Array Growth
 ///

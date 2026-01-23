@@ -188,12 +188,12 @@ const PRESET_NEON_METROPOLIS: [[u64; 2]; 8] = [
     // L2: GRID - cyan grid on walls (vertical bars)
     [
         hi(OP_GRID, REGION_WALLS, BLEND_ADD, 0, 0x00ffff, 0x000000),
-        lo(160, 32, 0, 0, 0, DIR_UP, 15, 0),
+        lo(160, 32, 0, 3, 0, DIR_UP, 15, 0), // param_c=3: slow scroll animation
     ],
     // L3: SCATTER - warm yellow windows/lights on walls
     [
         hi(OP_SCATTER, REGION_WALLS, BLEND_ADD, 0, 0xffcc00, 0x000000),
-        lo(180, 128, 0, 0, 0, DIR_UP, 15, 0),
+        lo(180, 128, 0, 2, 0, DIR_UP, 15, 0), // param_c=2: twinkle animation
     ],
     // L4: VEIL/LASER_BARS - magenta vertical laser beams
     [
@@ -292,7 +292,7 @@ const PRESET_CRIMSON_HELLSCAPE: [[u64; 2]; 8] = [
     // L4: SCATTER - rising embers/sparks
     [
         hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 0, 0xff8800, 0x000000),
-        lo(180, 100, 100, 0, 0, DIR_UP, 15, 0),
+        lo(180, 100, 100, 3, 0, DIR_UP, 15, 0), // param_c=3: ember flicker
     ],
     // L5: ATMOSPHERE/ABSORPTION - thick blood mist
     [
@@ -386,7 +386,7 @@ const PRESET_FROZEN_TUNDRA: [[u64; 2]; 8] = [
     // L4: SCATTER - snowfall with downward drift
     [
         hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 0, 0xffffff, 0x000000),
-        lo(160, 128, 100, 0, 0, DIR_DOWN, 15, 0),
+        lo(160, 128, 100, 2, 0, DIR_DOWN, 15, 0), // param_c=2: gentle swirl
     ],
     // L5: ATMOSPHERE/RAYLEIGH - crisp cold air (arctic blue)
     [
@@ -488,7 +488,7 @@ const PRESET_ALIEN_JUNGLE: [[u64; 2]; 8] = [
     // L4: SCATTER - floating spores (cyan)
     [
         hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 0, 0x00ffcc, 0x000000),
-        lo(170, 100, 80, 0, 0, DIR_UP, 15, 0),
+        lo(170, 100, 80, 3, 0, DIR_UP, 15, 0), // param_c=3: spore drift
     ],
     // L5: VEIL/CURTAINS - bioluminescent hanging vines (purple)
     [
@@ -587,12 +587,12 @@ const PRESET_GOTHIC_CATHEDRAL: [[u64; 2]; 8] = [
     // L5: LOBE - shaft of divine golden light from above
     [
         hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0xffd700, 0x000000),
-        lo(180, 128, 0, 0, 0, DIR_SUN, 15, 0),
+        lo(180, 128, 0, 0, 2, DIR_SUN, 15, 0), // param_d=2: subtle pulse
     ],
     // L6: SCATTER - golden dust motes in light beam
     [
         hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 0, 0xffcc00, 0x000000),
-        lo(140, 80, 40, 0, 0, DIR_DOWN, 15, 0),
+        lo(140, 80, 40, 2, 0, DIR_DOWN, 15, 0), // param_c=2: gentle drift
     ],
     // L7: ATMOSPHERE/MIE - incense haze (smoky interior)
     [
@@ -647,7 +647,7 @@ const PRESET_OCEAN_DEPTHS: [[u64; 2]; 8] = [
     // L3: SCATTER - floating particles/plankton (blue-green)
     [
         hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 0, 0x40a0a0, 0x000000),
-        lo(150, 100, 60, 0, 0, DIR_UP, 15, 0),
+        lo(150, 100, 60, 2, 0, DIR_UP, 15, 0), // param_c=2: plankton drift
     ],
     // L4: VEIL/SHARDS - light shafts from surface (pale blue)
     [
@@ -691,7 +691,7 @@ const PRESET_OCEAN_DEPTHS: [[u64; 2]; 8] = [
     // L7: DECAL - bioluminescent creature (circle, cyan-green)
     [
         hi(OP_DECAL, REGION_WALLS, BLEND_ADD, 0, 0x00ffaa, 0x000000),
-        lo(160, 64, 0, 0, 0, DIR_UP, 15, 0),
+        lo(160, 64, 0, 0, 3, DIR_UP, 15, 0), // param_d=3: pulse glow
     ],
 ];
 
@@ -728,7 +728,7 @@ const PRESET_VOID_STATION: [[u64; 2]; 8] = [
     // L2: GRID - technical blue panel lines on walls
     [
         hi(OP_GRID, REGION_WALLS, BLEND_ADD, 0, 0x0044aa, 0x000000),
-        lo(140, 48, 0, 0, 0, DIR_UP, 15, 0),
+        lo(140, 48, 0, 2, 0, DIR_UP, 15, 0), // param_c=2: scan line effect
     ],
     // L3: CELL/GRID - floor grating pattern (dark blue)
     [
@@ -746,12 +746,12 @@ const PRESET_VOID_STATION: [[u64; 2]; 8] = [
     // L4: SCATTER - distant stars visible through viewport (white)
     [
         hi(OP_SCATTER, REGION_SKY, BLEND_ADD, 0, 0xffffff, 0x000000),
-        lo(200, 180, 0, 0, 0, DIR_UP, 15, 0),
+        lo(200, 180, 0, 1, 0, DIR_UP, 15, 0), // param_c=1: subtle twinkle
     ],
     // L5: DECAL - green status indicator rectangle
     [
         hi(OP_DECAL, REGION_WALLS, BLEND_ADD, 0, 0x00ff00, 0x000000),
-        lo(180, 32, 0, 0, 0, DIR_UP, 15, 0),
+        lo(180, 32, 0, 0, 4, DIR_UP, 15, 0), // param_d=4: blink animation
     ],
     // L6: APERTURE/IRREGULAR - damaged/irregular viewport frame
     [
@@ -832,7 +832,7 @@ const PRESET_DESERT_MIRAGE: [[u64; 2]; 8] = [
     // L4: SCATTER - blowing dust particles (sand color)
     [
         hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 0, 0xc8b080, 0x000000),
-        lo(120, 100, 60, 0, 0, DIR_DOWN, 12, 0),
+        lo(120, 100, 60, 2, 0, DIR_DOWN, 12, 0), // param_c=2: dust swirl
     ],
     // L5: CELESTIAL/SUN - blazing desert sun (intense white-yellow)
     [
@@ -895,7 +895,7 @@ const PRESET_NEON_ARCADE: [[u64; 2]; 8] = [
     // L1: GRID - magenta wireframe grid on floor (retro style)
     [
         hi(OP_GRID, REGION_FLOOR, BLEND_ADD, 0, 0xff00ff, 0x000000),
-        lo(180, 48, 0, 0, 0, DIR_UP, 15, 0),
+        lo(180, 48, 0, 4, 0, DIR_UP, 15, 0), // param_c=4: retro scroll
     ],
     // L2: SPLIT/BANDS - retro horizontal neon bands on walls
     [
@@ -926,7 +926,7 @@ const PRESET_NEON_ARCADE: [[u64; 2]; 8] = [
     // L4: SCATTER - background starfield (white)
     [
         hi(OP_SCATTER, REGION_SKY, BLEND_ADD, 0, 0xffffff, 0x000000),
-        lo(160, 150, 0, 0, 0, DIR_UP, 15, 0),
+        lo(160, 150, 0, 1, 0, DIR_UP, 15, 0), // param_c=1: star twinkle
     ],
     // L5: CELESTIAL/PLANET - retro magenta planet on horizon
     [
@@ -1017,7 +1017,7 @@ const PRESET_STORM_FRONT: [[u64; 2]; 8] = [
     // L5: SCATTER - raindrops (rain blue)
     [
         hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 0, 0x8090a0, 0x000000),
-        lo(180, 140, 180, 0, 0, DIR_DOWN, 15, 0),
+        lo(180, 140, 180, 3, 0, DIR_DOWN, 15, 0), // param_c=3: rain streaks
     ],
     // L6: ATMOSPHERE/FULL - thick storm atmosphere (gray)
     [
@@ -1106,12 +1106,12 @@ const PRESET_CRYSTAL_CAVERN: [[u64; 2]; 8] = [
     // L4: SCATTER - glinting crystal facets (white sparks)
     [
         hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 0, 0xffffff, 0x000000),
-        lo(170, 120, 0, 0, 0, DIR_UP, 15, 0),
+        lo(170, 120, 0, 2, 0, DIR_UP, 15, 0), // param_c=2: crystal sparkle
     ],
     // L5: LOBE - ambient crystal glow from below (purple)
     [
         hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0xa040ff, 0x000000),
-        lo(160, 128, 0, 0, 0, DIR_DOWN, 15, 0),
+        lo(160, 128, 0, 0, 2, DIR_DOWN, 15, 0), // param_d=2: glow pulse
     ],
     // L6: PORTAL/CIRCLE - magic circle on floor (cyan)
     [
@@ -1200,7 +1200,7 @@ const PRESET_WAR_ZONE: [[u64; 2]; 8] = [
     // L4: SCATTER - floating ash and embers (orange)
     [
         hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 0, 0xff6600, 0x000000),
-        lo(180, 100, 80, 0, 0, DIR_UP, 15, 0),
+        lo(180, 100, 80, 3, 0, DIR_UP, 15, 0), // param_c=3: ember rise
     ],
     // L5: FLOW - smoke trails (gray)
     [
@@ -1294,7 +1294,7 @@ const PRESET_ENCHANTED_GROVE: [[u64; 2]; 8] = [
     // L4: SCATTER - fairy dust particles (gold)
     [
         hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 0, 0xffdd00, 0x000000),
-        lo(170, 100, 60, 0, 0, DIR_UP, 15, 0),
+        lo(170, 100, 60, 3, 0, DIR_UP, 15, 0), // param_c=3: fairy sparkle
     ],
     // L5: PATCHES/BLOBS - dappled sunlight (soft yellow)
     [
@@ -1312,7 +1312,7 @@ const PRESET_ENCHANTED_GROVE: [[u64; 2]; 8] = [
     // L6: LOBE - warm sunbeam through canopy (golden)
     [
         hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0xffd700, 0x000000),
-        lo(180, 128, 0, 0, 0, DIR_SUN, 15, 0),
+        lo(180, 128, 0, 0, 2, DIR_SUN, 15, 0), // param_d=2: beam sway
     ],
     // L7: FLOW - gentle leaf movement (green)
     [
@@ -1346,7 +1346,7 @@ const PRESET_ASTRAL_VOID: [[u64; 2]; 8] = [
     // L2: SCATTER - dense starfield (white)
     [
         hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 0, 0xffffff, 0x000000),
-        lo(200, 200, 0, 0, 0, DIR_UP, 15, 0),
+        lo(200, 200, 0, 1, 0, DIR_UP, 15, 0), // param_c=1: star shimmer
     ],
     // L3: CELESTIAL/PLANET - terrestrial planet (blue-green)
     [
@@ -1489,7 +1489,7 @@ const PRESET_TOXIC_WASTELAND: [[u64; 2]; 8] = [
     // L6: SCATTER - toxic particles (yellow-green)
     [
         hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 0, 0xa0c040, 0x000000),
-        lo(160, 100, 60, 0, 0, DIR_UP, 15, 0),
+        lo(160, 100, 60, 2, 0, DIR_UP, 15, 0), // param_c=2: toxic swirl
     ],
     // L7: ATMOSPHERE/ALIEN - poisonous atmosphere (toxic green)
     [
@@ -1565,7 +1565,7 @@ const PRESET_MOONLIT_GRAVEYARD: [[u64; 2]; 8] = [
     // L4: SCATTER - floating mist particles (pale blue)
     [
         hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 0, 0x8090a0, 0x000000),
-        lo(160, 100, 60, 0, 0, DIR_UP, 15, 0),
+        lo(160, 100, 60, 2, 0, DIR_UP, 15, 0), // param_c=2: mist drift
     ],
     // L5: CELESTIAL/MOON - full moon (pale silver)
     [
@@ -1672,12 +1672,12 @@ const PRESET_VOLCANIC_CORE: [[u64; 2]; 8] = [
     // L5: SCATTER - rising sparks (bright orange)
     [
         hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 0, 0xff8000, 0x000000),
-        lo(180, 120, 100, 0, 0, DIR_UP, 15, 0),
+        lo(180, 120, 100, 4, 0, DIR_UP, 15, 0), // param_c=4: spark flicker
     ],
     // L6: LOBE - intense heat glow from below (deep red)
     [
         hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0xff2000, 0x000000),
-        lo(200, 128, 0, 0, 0, DIR_DOWN, 15, 0),
+        lo(200, 128, 0, 0, 3, DIR_DOWN, 15, 0), // param_d=3: heat pulse
     ],
     // L7: ATMOSPHERE/ABSORPTION - volcanic gases (smoke black)
     [
@@ -1714,12 +1714,12 @@ const PRESET_DIGITAL_MATRIX: [[u64; 2]; 8] = [
     // L1: GRID - digital grid (bright green, all regions)
     [
         hi(OP_GRID, REGION_ALL, BLEND_ADD, 0, 0x00ff00, 0x000000),
-        lo(160, 32, 0, 0, 0, DIR_UP, 15, 0),
+        lo(160, 32, 0, 3, 0, DIR_UP, 15, 0), // param_c=3: matrix scroll
     ],
     // L2: SCATTER - falling code rain with BLEND_SCREEN for bright glow
     [
         hi(OP_SCATTER, REGION_ALL, BLEND_SCREEN, 0, 0x00ff00, 0x000000),
-        lo(180, 150, 200, 0, 0, DIR_DOWN, 15, 0),
+        lo(180, 150, 200, 4, 0, DIR_DOWN, 15, 0), // param_c=4: code rain
     ],
     // L3: CELL/GRID - data block structure (dark green)
     [
@@ -1818,12 +1818,12 @@ const PRESET_NOIR_DETECTIVE: [[u64; 2]; 8] = [
     // L3: LOBE - desk lamp cone of warm light
     [
         hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0xffe0a0, 0x000000),
-        lo(160, 128, 0, 0, 0, DIR_DOWN, 15, 0),
+        lo(160, 128, 0, 0, 1, DIR_DOWN, 15, 0), // param_d=1: subtle flicker
     ],
     // L4: SCATTER - cigarette smoke particles
     [
         hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 0, 0x808070, 0x000000),
-        lo(100, 80, 40, 0, 0, DIR_UP, 10, 0),
+        lo(100, 80, 40, 2, 0, DIR_UP, 10, 0), // param_c=2: smoke rise
     ],
     // L5: ATMOSPHERE/MIE - smoky haze filling the room
     [
@@ -1943,7 +1943,7 @@ const PRESET_STEAMPUNK_AIRSHIP: [[u64; 2]; 8] = [
     // L6: SCATTER - floating steam and dust particles
     [
         hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 0, 0xffe8c0, 0x000000),
-        lo(140, 100, 50, 0, 0, DIR_UP, 12, 0),
+        lo(140, 100, 50, 2, 0, DIR_UP, 12, 0), // param_c=2: steam rise
     ],
     // L7: ATMOSPHERE/MIE - warm amber engine room haze
     [
@@ -2011,7 +2011,7 @@ const PRESET_STORMY_SHORES: [[u64; 2]; 8] = [
     // L4: SCATTER - sea spray particles
     [
         hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 0, 0x90a0b0, 0x000000),
-        lo(160, 120, 80, 0, 0, DIR_UP, 12, 0),
+        lo(160, 120, 80, 3, 0, DIR_UP, 12, 0), // param_c=3: spray churn
     ],
     // L5: VEIL/SHARDS - light breaking through storm clouds
     [
@@ -2042,7 +2042,7 @@ const PRESET_STORMY_SHORES: [[u64; 2]; 8] = [
     // L7: LOBE - lighthouse beam cutting through fog
     [
         hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0xffffd0, 0x000000),
-        lo(160, 128, 0, 0, 0, DIR_SUNSET, 15, 0),
+        lo(160, 128, 0, 0, 3, DIR_SUNSET, 15, 0), // param_d=3: beam sweep
     ],
 ];
 
@@ -2089,7 +2089,7 @@ const PRESET_POLAR_AURORA: [[u64; 2]; 8] = [
     // L4: SCATTER - stars in night sky
     [
         hi(OP_SCATTER, REGION_SKY, BLEND_ADD, 0, 0xffffff, 0x000000),
-        lo(200, 200, 0, 0, 0, DIR_UP, 15, 0),
+        lo(200, 200, 0, 1, 0, DIR_UP, 15, 0), // param_c=1: star twinkle
     ],
     // L5: CELESTIAL/MOON - bright arctic moon
     [
@@ -2196,17 +2196,17 @@ const PRESET_SACRED_GEOMETRY: [[u64; 2]; 8] = [
     // L5: LOBE - divine central light beam
     [
         hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0xfff0c0, 0x000000),
-        lo(200, 128, 0, 0, 0, DIR_DOWN, 15, 0),
+        lo(200, 128, 0, 0, 2, DIR_DOWN, 15, 0), // param_d=2: divine pulse
     ],
     // L6: SCATTER - golden sacred particles
     [
         hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 0, 0xffd040, 0x000000),
-        lo(150, 100, 40, 0, 0, DIR_UP, 12, 0),
+        lo(150, 100, 40, 2, 0, DIR_UP, 12, 0), // param_c=2: sacred swirl
     ],
     // L7: DECAL - sacred symbol on floor
     [
         hi(OP_DECAL, REGION_FLOOR, BLEND_ADD, 0, 0xffe080, 0x000000),
-        lo(180, 80, 0, 0, 0, DIR_UP, 15, 0),
+        lo(180, 80, 0, 0, 2, DIR_UP, 15, 0), // param_d=2: glow pulse
     ],
 ];
 
@@ -2230,7 +2230,7 @@ const PRESET_RITUAL_CHAMBER: [[u64; 2]; 8] = [
     // L1: DECAL - magic circle/pentagram on floor (crimson)
     [
         hi(OP_DECAL, REGION_FLOOR, BLEND_ADD, 0, 0xff2000, 0x400000),
-        lo(220, 100, 0, 0, 0, DIR_UP, 15, 15),
+        lo(220, 100, 0, 0, 3, DIR_UP, 15, 15), // param_d=3: ritual pulse
     ],
     // L2: PORTAL/CIRCLE - summoning portal (dark purple)
     [
@@ -2279,7 +2279,7 @@ const PRESET_RITUAL_CHAMBER: [[u64; 2]; 8] = [
     // L6: SCATTER - magical sparks and embers
     [
         hi(OP_SCATTER, REGION_ALL, BLEND_ADD, 0, 0xff8040, 0x000000),
-        lo(180, 120, 60, 0, 0, DIR_UP, 15, 0),
+        lo(180, 120, 60, 3, 0, DIR_UP, 15, 0), // param_c=3: spark dance
     ],
     // L7: ATMOSPHERE/ALIEN - otherworldly oppressive atmosphere
     [

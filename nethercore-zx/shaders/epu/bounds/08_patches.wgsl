@@ -1,5 +1,5 @@
 // ============================================================================
-// PATCHES - Noise-Based Patch Enclosure Source (vNext 0x06)
+// PATCHES - Noise-Based Patch Enclosure Source (0x06)
 // Distributes organic patches of wall across a sky background using noise.
 // 128-bit packed fields:
 //   color_a: Sky base color (RGB24)

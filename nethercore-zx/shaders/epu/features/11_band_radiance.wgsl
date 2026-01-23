@@ -1,14 +1,13 @@
 // ============================================================================
-// BAND (v2) - Region-Masked Horizon Band
+// BAND (Radiance) - Region-Masked Horizon Band
 // Opcode: 0x13
 // Role: Radiance (additive feature layer)
 //
 // Creates horizon rings or bands around an axis with edge gradients and
-// optional azimuthal modulation/scrolling. This is the v2 BAND algorithm
-// moved to the radiance range (from 0x03) so it can be region-masked and
-// layered with other radiance effects.
+// optional azimuthal modulation/scrolling. This opcode lives in the radiance
+// range so it can be region-masked and layered with other radiance effects.
 //
-// Packed fields (v2):
+// Packed fields:
 //   color_a: Band center color (RGB24)
 //   color_b: Band edge color (RGB24)
 //   intensity: Brightness (0..255 -> 0.0..1.0)
@@ -25,7 +24,7 @@
 //   variant_id: Ignored
 // ============================================================================
 
-fn eval_band_v2(
+fn eval_band_radiance(
     dir: vec3f,
     instr: vec4u,
     region_w: f32,

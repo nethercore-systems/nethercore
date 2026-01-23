@@ -1,7 +1,7 @@
 // ============================================================================
 // EPU COMMON TYPES, DECODING, AND HELPERS
 // Environment Processing Unit - shared definitions
-// EPU v2: 128-bit instructions with direct RGB24 colors
+// EPU: 128-bit instructions with direct RGB24 colors
 // ============================================================================
 
 const PI: f32 = 3.141592653589793;
@@ -18,16 +18,10 @@ const TAU: f32 = 6.283185307179586;
 const OP_NOP: u32 = 0x00u;
 const OP_RAMP: u32 = 0x01u;
 
-// Legacy v2 enclosure opcodes (kept for backward compatibility)
-const OP_LOBE: u32 = 0x02u;
-const OP_BAND: u32 = 0x03u;
-const OP_FOG: u32 = 0x04u;
-
-// vNext enclosure opcodes (0x02-0x07)
-// These replace the legacy opcodes at 0x02-0x04 in vNext runtimes
-const OP_SECTOR: u32 = 0x02u;       // Angular wedge (replaces LOBE in vNext)
-const OP_SILHOUETTE: u32 = 0x03u;   // Skyline/horizon cutout (replaces BAND in vNext)
-const OP_SPLIT: u32 = 0x04u;        // Planar cut (replaces FOG in vNext)
+// Enclosure opcodes (0x02-0x07).
+const OP_SECTOR: u32 = 0x02u;       // Azimuthal opening wedge modifier
+const OP_SILHOUETTE: u32 = 0x03u;   // Skyline/horizon cutout modifier
+const OP_SPLIT: u32 = 0x04u;        // Planar cut enclosure source
 const OP_CELL: u32 = 0x05u;         // Voronoi cell partitioning
 const OP_PATCHES: u32 = 0x06u;      // Noise-based patches
 const OP_APERTURE: u32 = 0x07u;     // Shaped opening/vignette enclosure modifier
@@ -38,15 +32,15 @@ const OP_GRID: u32 = 0x09u;
 const OP_SCATTER: u32 = 0x0Au;
 const OP_FLOW: u32 = 0x0Bu;
 
-// vNext radiance opcodes (0x0C-0x13)
+// Radiance opcodes (0x0C-0x13)
 const OP_TRACE: u32 = 0x0Cu;        // Procedural line/crack patterns (lightning, cracks, lead lines, filaments)
 const OP_VEIL: u32 = 0x0Du;         // Curtain/ribbon effects (curtains, pillars, laser bars, rain wall, shards)
-const OP_ATMOSPHERE: u32 = 0x0Eu;   // Advanced fog with scattering (replaces v2 FOG)
+const OP_ATMOSPHERE: u32 = 0x0Eu;   // Atmospheric absorption + scattering
 const OP_PLANE: u32 = 0x0Fu;        // Ground plane textures
 const OP_CELESTIAL: u32 = 0x10u;    // Moon/sun/planet bodies
 const OP_PORTAL: u32 = 0x11u;       // Swirling vortex/portal effect
-const OP_LOBE_V2: u32 = 0x12u;      // Region-masked directional glow (moved from 0x02)
-const OP_BAND_V2: u32 = 0x13u;      // Region-masked horizon band (moved from 0x03)
+const OP_LOBE_RADIANCE: u32 = 0x12u; // Region-masked directional glow
+const OP_BAND_RADIANCE: u32 = 0x13u; // Region-masked horizon band
 // 0x14..0x1F reserved for future radiance ops
 
 // ============================================================================
@@ -84,6 +78,11 @@ fn epu_saturate(x: f32) -> f32 { return clamp(x, 0.0, 1.0); }
 fn epu_saturate3(v: vec3f) -> vec3f { return clamp(v, vec3f(0.0), vec3f(1.0)); }
 fn u8_to_01(x: u32) -> f32 { return f32(x) / 255.0; }
 fn u4_to_01(x: u32) -> f32 { return f32(x) / 15.0; }
+
+// Deterministic 1D hash: f32 -> f32 in [0, 1).
+fn epu_hash11(x: f32) -> f32 {
+    return fract(sin(x * 127.1) * 43758.5453123);
+}
 
 fn nibble_to_signed_1(v4: u32) -> f32 {
     // 0..15 -> -1..1
@@ -125,7 +124,7 @@ fn decode_dir16(encoded: u32) -> vec3f {
 }
 
 // ============================================================================
-// INSTRUCTION FIELD EXTRACTION (128-bit, EPU v2)
+// INSTRUCTION FIELD EXTRACTION (128-bit)
 //
 // 128-bit instruction stored as vec4<u32>: [w0, w1, w2, w3]
 //   w3 = bits 127..96 (hi.hi)
@@ -137,8 +136,7 @@ fn decode_dir16(encoded: u32) -> vec3f {
 //   bits 127..123: opcode     (5)  - 32 opcodes
 //   bits 122..120: region     (3)  - Bitfield: SKY=0b100, WALLS=0b010, FLOOR=0b001
 //   bits 119..117: blend      (3)  - 8 blend modes
-//   bits 116..113: reserved   (4)  - Future use
-//   bit  112:      reserved   (1)  - Future flag
+//   bits 116..112: meta5      (5)  - (domain_id<<3)|variant_id
 //   bits 111..88:  color_a    (24) - RGB24 primary color
 //   bits 87..64:   color_b    (24) - RGB24 secondary color
 //
@@ -168,22 +166,10 @@ fn instr_blend(instr: vec4u) -> u32 {
     return (instr.w >> 21u) & 0x7u;
 }
 
-// Extract reserved bits 116..113 (w3 bits 20..17)
-fn instr_reserved4(instr: vec4u) -> u32 {
-    return (instr.w >> 17u) & 0xFu;
-}
-
-// Extract reserved bit 112 (w3 bit 16)
-fn instr_reserved(instr: vec4u) -> u32 {
-    return (instr.w >> 16u) & 0x1u;
-}
-
-// Extract 5-bit meta5 from bits 116..112 (reserved4 << 1 | reserved)
+// Extract 5-bit meta5 from bits 116..112 (w3 bits 20..16)
 // meta5 encodes domain_id (top 2 bits) and variant_id (bottom 3 bits)
 fn instr_meta5(instr: vec4u) -> u32 {
-    let meta_hi = instr_reserved4(instr);  // bits 116..113 (4 bits)
-    let meta_lo = instr_reserved(instr);   // bit 112 (1 bit)
-    return (meta_hi << 1u) | meta_lo;
+    return (instr.w >> 16u) & 0x1Fu;
 }
 
 // Extract 2-bit domain_id from meta5 (top 2 bits)
@@ -308,7 +294,7 @@ struct EnclosureConfig {
 fn enclosure_from_ramp(instr: vec4u) -> EnclosureConfig {
     let up = decode_dir16(instr_dir16(instr));
 
-    // EPU v2: Heights are packed in param_d (param_a/b/c are floor RGB)
+    // Heights are packed in param_d (param_a/b/c are floor RGB)
     let pd = instr_d(instr);
     let ceil_q = (pd >> 4u) & 0xFu;
     let floor_q = pd & 0xFu;
@@ -346,7 +332,7 @@ fn enclosure_from_layer(instr: vec4u, opcode: u32, prev_enc: EnclosureConfig) ->
             return EnclosureConfig(up, prev_enc.ceil_y, prev_enc.floor_y, prev_enc.soft);
         }
         default: {
-            // Other bounds (CELL, PATCHES, LOBE, BAND, FOG) keep previous enclosure
+            // Other bounds keep the previous enclosure
             return prev_enc;
         }
     }
@@ -362,7 +348,7 @@ fn compute_region_weights(dir: vec3f, enc: EnclosureConfig) -> RegionWeights {
     return RegionWeights(w_sky, w_wall, w_floor);
 }
 
-// Compute region weight from bitfield mask (v2 style)
+// Compute region weight from bitfield mask
 // mask is a 3-bit bitfield: SKY=0b100, WALLS=0b010, FLOOR=0b001
 fn region_weight(weights: RegionWeights, mask: u32) -> f32 {
     var w = 0.0;
@@ -385,6 +371,12 @@ fn region_weight(weights: RegionWeights, mask: u32) -> f32 {
 struct LayerSample {
     rgb: vec3f,
     w: f32,
+}
+
+// Result from bounds opcodes - includes rendering sample and output regions for subsequent features
+struct BoundsResult {
+    sample: LayerSample,
+    regions: RegionWeights,  // The regions to use for all subsequent features
 }
 
 fn apply_blend(dst: vec3f, s: LayerSample, blend: u32) -> vec3f {

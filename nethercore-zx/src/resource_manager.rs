@@ -67,8 +67,8 @@ fn bone_transform_to_matrix(t: &BoneTransform) -> BoneMatrix3x4 {
 /// A simple cyan sky with gray walls and dark floor. This is used as a fallback
 /// when games don't specify their own environment configuration via `epu_draw()`.
 ///
-/// v2 format: Layer 0 is a RAMP enclosure, layers 1-7 are empty.
-/// For preset examples showing full EPU capabilities, see the epu-inspector example.
+/// Format: Layer 0 is a RAMP enclosure, layers 1-7 are empty.
+/// For preset examples showing full EPU capabilities, see the epu-showcase example.
 fn default_environment() -> EpuConfig {
     use glam::Vec3;
 

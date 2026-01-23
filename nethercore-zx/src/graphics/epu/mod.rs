@@ -11,7 +11,7 @@
 //! a true mip pyramid for roughness-based reflections. Diffuse ambient uses
 //! SH9 coefficients extracted from a coarse mip level.
 //!
-//! # v2 Format (128-bit instructions)
+//! # Format (128-bit instructions)
 //!
 //! Each environment is 128 bytes (8 x 128-bit instructions). The 128-bit format
 //! provides direct RGB colors, per-color alpha, and region masks for more
@@ -22,8 +22,9 @@
 //! ```ignore
 //! let mut e = epu_begin();
 //! e.ramp_enclosure(RampParams { ... });
-//! e.lobe(LobeParams { ... });
-//! e.decal(DecalParams { ... });
+//! e.sector_enclosure(SectorParams { ... });
+//! e.decal(DecalParams { ..Default::default() });
+//! e.lobe_radiance(LobeRadianceParams { ... });
 //! let config = epu_finish(e);
 //! ```
 
@@ -56,8 +57,8 @@ use glam::Vec3;
 ///
 /// Opcode ranges:
 /// - `0x00`: NOP (universal)
-/// - `0x01..=0x07`: Bounds ops (low-frequency / enclosure)
-/// - `0x08..=0x1F`: Feature ops (high-frequency motifs)
+/// - `0x01..=0x07`: Enclosure ops
+/// - `0x08..=0x1F`: Radiance ops
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum EpuOpcode {
@@ -66,12 +67,18 @@ pub enum EpuOpcode {
     Nop = 0x0,
     /// Enclosure gradient (sky/walls/floor)
     Ramp = 0x1,
-    /// Directional glow (sun, lamp, neon spill)
-    Lobe = 0x2,
-    /// Horizon band / ring
-    Band = 0x3,
-    /// Atmospheric absorption (use MULTIPLY blend)
-    Fog = 0x4,
+    /// Angular wedge enclosure modifier
+    Sector = 0x2,
+    /// Skyline/horizon cutout enclosure modifier
+    Silhouette = 0x3,
+    /// Planar cut enclosure source
+    Split = 0x4,
+    /// Voronoi/mosaic cell enclosure source
+    Cell = 0x5,
+    /// Noise patch enclosure source
+    Patches = 0x6,
+    /// Shaped opening/viewport enclosure modifier
+    Aperture = 0x7,
     /// Sharp SDF shape (disk/ring/rect/line)
     Decal = 0x8,
     /// Repeating lines/panels
@@ -80,10 +87,26 @@ pub enum EpuOpcode {
     Scatter = 0xA,
     /// Animated noise/streaks/caustics
     Flow = 0xB,
+    /// Procedural line/crack patterns
+    Trace = 0xC,
+    /// Curtain/ribbon effects
+    Veil = 0xD,
+    /// Atmospheric absorption + scattering
+    Atmosphere = 0xE,
+    /// Planar textures/patterns
+    Plane = 0xF,
+    /// Moon/sun/planet bodies
+    Celestial = 0x10,
+    /// Portal/vortex effects
+    Portal = 0x11,
+    /// Region-masked directional glow
+    LobeRadiance = 0x12,
+    /// Region-masked horizon band
+    BandRadiance = 0x13,
 }
 
 // =============================================================================
-// Region Mask Constants (v2 3-bit bitfield)
+// Region Mask Constants (3-bit bitfield)
 // =============================================================================
 
 /// Sky/ceiling region bit
@@ -97,7 +120,7 @@ pub const REGION_ALL: u8 = 0b111;
 /// No regions (layer disabled)
 pub const REGION_NONE: u8 = 0b000;
 
-/// EPU region mask for features (v1 compatibility enum, maps to v2 mask)
+/// Convenience enum for EPU region masks (3-bit mask).
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum EpuRegion {
@@ -113,14 +136,14 @@ pub enum EpuRegion {
 }
 
 impl EpuRegion {
-    /// Convert to v2 region mask
+    /// Convert to 3-bit region mask
     #[inline]
     pub fn to_mask(self) -> u8 {
         self as u8
     }
 }
 
-/// EPU blend mode (v2: 3-bit, 8 modes)
+/// EPU blend mode (3-bit, 8 modes)
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum EpuBlend {
@@ -192,9 +215,9 @@ pub enum FlowPattern {
 ///
 /// Use `encode()` to convert to the 128-bit packed format (two u64 values).
 ///
-/// # v2 Format
-///
-/// The v2 format uses 128 bits per layer, providing:
+    /// # Format
+    ///
+    /// The format uses 128 bits per layer, providing:
 /// - Direct RGB colors (no palette)
 /// - Per-color alpha (4-bit each)
 /// - Region masks (3-bit, combinable)
@@ -207,6 +230,10 @@ pub struct EpuLayer {
     pub region_mask: u8,
     /// How to combine layer output (3-bit, 8 modes)
     pub blend: EpuBlend,
+    /// Meta header bits (5-bit): (domain_id << 3) | variant_id
+    ///
+    /// Set to 0 when unused.
+    pub meta5: u8,
     /// Primary RGB color
     pub color_a: [u8; 3],
     /// Secondary RGB color
@@ -243,6 +270,7 @@ impl EpuLayer {
             opcode: EpuOpcode::Nop,
             region_mask: REGION_ALL,
             blend: EpuBlend::Add,
+            meta5: 0,
             color_a: [0, 0, 0],
             color_b: [0, 0, 0],
             alpha_a: 15,
@@ -265,8 +293,7 @@ impl EpuLayer {
     ///   bits 63..59: opcode     (5)
     ///   bits 58..56: region     (3)
     ///   bits 55..53: blend      (3)
-    ///   bits 52..49: reserved   (4)
-    ///   bit  48:     reserved   (1)
+    ///   bits 52..48: meta5      (5) - (domain_id<<3)|variant_id
     ///   bits 47..24: color_a    (24) RGB
     ///   bits 23..0:  color_b    (24) RGB
     ///
@@ -282,6 +309,10 @@ impl EpuLayer {
     /// ```
     #[inline]
     pub fn encode(self) -> [u64; 2] {
+        let meta5 = (self.meta5 as u64) & 0x1F;
+        let meta_hi = (meta5 >> 1) & 0xF;
+        let meta_lo = meta5 & 0x1;
+
         // Pack color_a as RGB24
         let color_a_packed = ((self.color_a[0] as u64) << 16)
             | ((self.color_a[1] as u64) << 8)
@@ -296,8 +327,8 @@ impl EpuLayer {
         let hi = ((self.opcode as u64 & 0x1F) << 59)
             | ((self.region_mask as u64 & 0x7) << 56)
             | ((self.blend as u64 & 0x7) << 53)
-            // bits 52..49 reserved
-            // bit 48 reserved
+            | ((meta_hi & 0xF) << 49)
+            | ((meta_lo & 0x1) << 48)
             | (color_a_packed << 24)
             | color_b_packed;
 
@@ -314,7 +345,7 @@ impl EpuLayer {
         [hi, lo]
     }
 
-    /// Create a layer with the given region (using EpuRegion enum for v1 compatibility)
+    /// Create a layer with the given region (using `EpuRegion`).
     #[inline]
     pub fn with_region(mut self, region: EpuRegion) -> Self {
         self.region_mask = region.to_mask();
@@ -328,8 +359,8 @@ impl EpuLayer {
 /// 8 layers packed into 128 bytes (each layer is 2 x u64 = 16 bytes).
 ///
 /// Recommended slot usage:
-/// - Slots 0-3: Bounds (RAMP, LOBE, BAND, FOG)
-/// - Slots 4-7: Features (DECAL, GRID, SCATTER, FLOW)
+/// - Slots 0-3: Enclosure (RAMP + optional enclosure ops)
+/// - Slots 4-7: Radiance (DECAL/GRID/SCATTER/FLOW + radiance ops)
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct EpuConfig {
@@ -359,21 +390,29 @@ impl EpuConfig {
         for [hi, lo] in &self.layers {
             // Extract opcode from hi word bits 63..59
             let opcode = (hi >> 59) & 0x1F;
+            let meta5 = (hi >> 48) & 0x1F;
             // Extract params from lo word
             let param_b = ((lo >> 40) & 0xFF) as u8;
             let param_c = ((lo >> 32) & 0xFF) as u8;
+            let param_d = ((lo >> 24) & 0xFF) as u8;
             let dir16 = ((lo >> 8) & 0xFFFF) as u16;
 
             match opcode {
-                // LOBE: anim_mode in param_c (0=none, 1=pulse, 2=flicker)
-                o if o == EpuOpcode::Lobe as u64 => {
-                    if param_c != 0 {
+                // LOBE_RADIANCE: anim mode in param_c, speed in param_d
+                o if o == EpuOpcode::LobeRadiance as u64 => {
+                    if (param_c % 3) != 0 && param_d != 0 {
                         return true;
                     }
                 }
-                // BAND: scroll_speed in param_c
-                o if o == EpuOpcode::Band as u64 => {
-                    if param_c != 0 {
+                // BAND_RADIANCE: scroll speed in param_d
+                o if o == EpuOpcode::BandRadiance as u64 => {
+                    if param_d != 0 {
+                        return true;
+                    }
+                }
+                // SILHOUETTE: drift amount in low nibble of param_c, drift speed in param_d
+                o if o == EpuOpcode::Silhouette as u64 => {
+                    if (param_c & 0x0F) != 0 && param_d != 0 {
                         return true;
                     }
                 }
@@ -403,6 +442,26 @@ impl EpuConfig {
                 // FLOW: speed in param_b
                 o if o == EpuOpcode::Flow as u64 => {
                     if param_b != 0 {
+                        return true;
+                    }
+                }
+                // VEIL: curvature in param_c and/or scroll speed in param_d
+                o if o == EpuOpcode::Veil as u64 => {
+                    if param_c != 0 || param_d != 0 {
+                        return true;
+                    }
+                }
+                // PLANE: some variants use drift_speed (param_d)
+                o if o == EpuOpcode::Plane as u64 => {
+                    if param_d != 0 {
+                        return true;
+                    }
+                }
+                // PORTAL: VORTEX uses time * rotation_speed (param_d)
+                o if o == EpuOpcode::Portal as u64 => {
+                    let variant_id = (meta5 & 0x7) as u8;
+                    const PORTAL_VARIANT_VORTEX: u8 = 3;
+                    if variant_id == PORTAL_VARIANT_VORTEX && param_d != 0 {
                         return true;
                     }
                 }
@@ -462,6 +521,14 @@ pub fn pack_thresholds(ceil_y_q: u8, floor_y_q: u8) -> u8 {
     ((ceil_y_q & 0x0F) << 4) | (floor_y_q & 0x0F)
 }
 
+/// Pack `(domain_id, variant_id)` into the 5-bit `meta5` field.
+///
+/// `meta5 = (domain_id << 3) | variant_id`.
+#[inline]
+pub const fn pack_meta5(domain_id: u8, variant_id: u8) -> u8 {
+    ((domain_id & 0x03) << 3) | (variant_id & 0x07)
+}
+
 // =============================================================================
 // Builder API
 // =============================================================================
@@ -483,8 +550,8 @@ pub fn epu_finish(builder: EpuBuilder) -> EpuConfig {
 /// Builder for constructing EPU configurations with semantic methods.
 ///
 /// Automatically manages layer slot allocation:
-/// - Bounds (RAMP, LOBE, BAND, FOG) go to slots 0-3
-/// - Features (DECAL, GRID, SCATTER, FLOW) go to slots 4-7
+/// - Enclosure (RAMP + enclosure ops) goes to slots 0-3
+/// - Radiance (feature ops) goes to slots 4-7
 pub struct EpuBuilder {
     cfg: EpuConfig,
     next_bounds: usize,
@@ -533,7 +600,7 @@ impl EpuBuilder {
     }
 
     // =========================================================================
-    // Bounds Helpers
+    // Enclosure (Bounds) Helpers
     // =========================================================================
 
     /// Set the enclosure gradient (RAMP) - always goes to slot 0.
@@ -544,6 +611,7 @@ impl EpuBuilder {
             opcode: EpuOpcode::Ramp,
             region_mask: REGION_ALL,
             blend: EpuBlend::Add,
+            meta5: 0,
             color_a: p.sky_color,
             color_b: p.floor_color,
             alpha_a: 15,
@@ -560,108 +628,124 @@ impl EpuBuilder {
         self.next_bounds = self.next_bounds.max(1);
     }
 
-    /// Add a directional glow (LOBE).
-    ///
-    /// # Arguments
-    /// * `dir` - Lobe center direction
-    /// * `color` - RGB color for glow
-    /// * `intensity` - Brightness (0..255)
-    /// * `exponent` - Sharpness (0..255 maps to 1..64)
-    /// * `anim_speed` - Animation speed (0..255 maps to 0..10)
-    /// * `anim_mode` - Animation mode (0=none, 1=pulse, 2=flicker)
-    pub fn lobe(
-        &mut self,
-        dir: Vec3,
-        color: [u8; 3],
-        intensity: u8,
-        exponent: u8,
-        anim_speed: u8,
-        anim_mode: u8,
-    ) {
+    /// Apply a SECTOR enclosure modifier.
+    pub fn sector_enclosure(&mut self, p: SectorParams) {
         self.push_bounds(EpuLayer {
-            opcode: EpuOpcode::Lobe,
+            opcode: EpuOpcode::Sector,
             region_mask: REGION_ALL,
             blend: EpuBlend::Add,
-            color_a: color,
-            color_b: [0, 0, 0], // Edge tint (unused for now)
+            meta5: pack_meta5(0, p.variant_id),
+            color_a: p.sky_color,
+            color_b: p.wall_color,
             alpha_a: 15,
             alpha_b: 15,
-            intensity,
-            param_a: exponent,
-            param_b: anim_speed,
-            param_c: anim_mode,
-            param_d: 0,
-            direction: encode_direction_u16(dir),
-        });
-    }
-
-    /// Add a horizon band (BAND).
-    ///
-    /// # Arguments
-    /// * `normal` - Band normal axis
-    /// * `color` - RGB color for band
-    /// * `intensity` - Brightness (0..255)
-    /// * `width` - Band width (0..255 maps to 0.005..0.5)
-    /// * `offset` - Vertical offset (0..255 maps to -0.5..0.5)
-    /// * `scroll_speed` - Scroll speed (0..255 maps to 0..1)
-    pub fn band(
-        &mut self,
-        normal: Vec3,
-        color: [u8; 3],
-        intensity: u8,
-        width: u8,
-        offset: u8,
-        scroll_speed: u8,
-    ) {
-        self.push_bounds(EpuLayer {
-            opcode: EpuOpcode::Band,
-            region_mask: REGION_ALL,
-            blend: EpuBlend::Add,
-            color_a: color,
-            color_b: [0, 0, 0],
-            alpha_a: 15,
-            alpha_b: 15,
-            intensity,
-            param_a: width,
-            param_b: offset,
-            param_c: scroll_speed,
-            param_d: 0,
-            direction: encode_direction_u16(normal),
-        });
-    }
-
-    /// Add atmospheric fog/absorption (FOG).
-    ///
-    /// Uses MULTIPLY blend mode for absorption effect.
-    ///
-    /// # Arguments
-    /// * `up` - Up vector for vertical bias
-    /// * `fog_color` - RGB color for fog tint
-    /// * `density` - Fog density (0..255)
-    /// * `vertical_bias` - Vertical bias (0..255 maps to -1..1)
-    /// * `falloff` - Falloff curve (0..255 maps to 0.5..4.0)
-    pub fn fog(
-        &mut self,
-        up: Vec3,
-        fog_color: [u8; 3],
-        density: u8,
-        vertical_bias: u8,
-        falloff: u8,
-    ) {
-        self.push_bounds(EpuLayer {
-            opcode: EpuOpcode::Fog,
-            region_mask: REGION_ALL,
-            blend: EpuBlend::Multiply,
-            color_a: fog_color,
-            color_b: [255, 255, 255], // Clear color for fog
-            alpha_a: 15,
-            alpha_b: 15,
-            intensity: density,
-            param_a: vertical_bias,
-            param_b: falloff,
+            intensity: p.strength,
+            param_a: p.center_u01,
+            param_b: p.width,
             param_c: 0,
             param_d: 0,
-            direction: encode_direction_u16(up),
+            direction: encode_direction_u16(p.up),
+        });
+    }
+
+    /// Apply a SILHOUETTE enclosure modifier.
+    pub fn silhouette_enclosure(&mut self, p: SilhouetteParams) {
+        let param_c = ((p.octaves_q & 0x0F) << 4) | (p.drift_amount_q & 0x0F);
+        self.push_bounds(EpuLayer {
+            opcode: EpuOpcode::Silhouette,
+            region_mask: REGION_ALL,
+            blend: EpuBlend::Add,
+            meta5: pack_meta5(0, p.variant_id),
+            color_a: p.silhouette_color,
+            color_b: p.background_color,
+            alpha_a: p.strength,
+            alpha_b: 0,
+            intensity: p.edge_softness,
+            param_a: p.horizon_bias,
+            param_b: p.roughness,
+            param_c,
+            param_d: p.drift_speed,
+            direction: encode_direction_u16(p.up),
+        });
+    }
+
+    /// Apply a SPLIT enclosure source.
+    pub fn split_enclosure(&mut self, p: SplitParams) {
+        self.push_bounds(EpuLayer {
+            opcode: EpuOpcode::Split,
+            region_mask: REGION_ALL,
+            blend: EpuBlend::Add,
+            meta5: pack_meta5(0, p.variant_id),
+            color_a: p.sky_color,
+            color_b: p.wall_color,
+            alpha_a: 15,
+            alpha_b: 15,
+            intensity: 0,
+            param_a: p.blend_width,
+            param_b: p.wedge_angle,
+            param_c: p.count,
+            param_d: p.offset,
+            direction: encode_direction_u16(p.axis),
+        });
+    }
+
+    /// Apply a CELL enclosure source.
+    pub fn cell_enclosure(&mut self, p: CellParams) {
+        self.push_bounds(EpuLayer {
+            opcode: EpuOpcode::Cell,
+            region_mask: REGION_ALL,
+            blend: EpuBlend::Add,
+            meta5: pack_meta5(0, p.variant_id),
+            color_a: p.gap_color,
+            color_b: p.wall_color,
+            alpha_a: p.gap_alpha,
+            alpha_b: p.outline_alpha,
+            intensity: p.outline_brightness,
+            param_a: p.density,
+            param_b: p.fill_ratio,
+            param_c: p.gap_width,
+            param_d: p.seed,
+            direction: encode_direction_u16(p.axis),
+        });
+    }
+
+    /// Apply a PATCHES enclosure source.
+    pub fn patches_enclosure(&mut self, p: PatchesParams) {
+        self.push_bounds(EpuLayer {
+            opcode: EpuOpcode::Patches,
+            region_mask: REGION_ALL,
+            blend: EpuBlend::Add,
+            meta5: pack_meta5(p.domain_id, p.variant_id),
+            color_a: p.sky_color,
+            color_b: p.wall_color,
+            alpha_a: p.sky_alpha,
+            alpha_b: p.wall_alpha,
+            intensity: 0,
+            param_a: p.scale,
+            param_b: p.coverage,
+            param_c: p.sharpness,
+            param_d: p.seed,
+            direction: encode_direction_u16(p.axis),
+        });
+    }
+
+    /// Apply an APERTURE enclosure modifier.
+    pub fn aperture_enclosure(&mut self, p: ApertureParams) {
+        self.push_bounds(EpuLayer {
+            opcode: EpuOpcode::Aperture,
+            region_mask: REGION_ALL,
+            blend: EpuBlend::Add,
+            meta5: pack_meta5(0, p.variant_id),
+            color_a: p.opening_color,
+            color_b: p.frame_color,
+            alpha_a: 0,
+            alpha_b: 0,
+            intensity: p.edge_softness,
+            param_a: p.half_width,
+            param_b: p.half_height,
+            param_c: p.frame_thickness,
+            param_d: p.variant_param,
+            direction: encode_direction_u16(p.dir),
         });
     }
 
@@ -676,6 +760,7 @@ impl EpuBuilder {
             opcode: EpuOpcode::Decal,
             region_mask: p.region.to_mask(),
             blend: p.blend,
+            meta5: 0,
             color_a: p.color,
             color_b: p.color_b,
             alpha_a: p.alpha,
@@ -696,6 +781,7 @@ impl EpuBuilder {
             opcode: EpuOpcode::Scatter,
             region_mask: p.region.to_mask(),
             blend: p.blend,
+            meta5: 0,
             color_a: p.color,
             color_b: [0, 0, 0],
             alpha_a: 15,
@@ -716,6 +802,7 @@ impl EpuBuilder {
             opcode: EpuOpcode::Grid,
             region_mask: p.region.to_mask(),
             blend: p.blend,
+            meta5: 0,
             color_a: p.color,
             color_b: [0, 0, 0],
             alpha_a: 15,
@@ -736,6 +823,7 @@ impl EpuBuilder {
             opcode: EpuOpcode::Flow,
             region_mask: p.region.to_mask(),
             blend: p.blend,
+            meta5: 0,
             color_a: p.color,
             color_b: [0, 0, 0],
             alpha_a: 15,
@@ -744,14 +832,74 @@ impl EpuBuilder {
             param_a: p.scale,
             param_b: p.speed,
             param_c,
-            param_d: 0,
+            param_d: p.turbulence,
             direction: encode_direction_u16(p.dir),
+        });
+    }
+
+    /// Add a directional glow (LOBE_RADIANCE).
+    pub fn lobe_radiance(&mut self, p: LobeRadianceParams) {
+        self.push_feature(EpuLayer {
+            opcode: EpuOpcode::LobeRadiance,
+            region_mask: p.region.to_mask(),
+            blend: p.blend,
+            meta5: 0,
+            color_a: p.color,
+            color_b: p.edge_color,
+            alpha_a: p.alpha,
+            alpha_b: 0,
+            intensity: p.intensity,
+            param_a: p.exponent,
+            param_b: p.falloff,
+            param_c: p.anim_mode,
+            param_d: p.anim_speed,
+            direction: encode_direction_u16(p.dir),
+        });
+    }
+
+    /// Add a horizon band (BAND_RADIANCE).
+    pub fn band_radiance(&mut self, p: BandRadianceParams) {
+        self.push_feature(EpuLayer {
+            opcode: EpuOpcode::BandRadiance,
+            region_mask: p.region.to_mask(),
+            blend: p.blend,
+            meta5: 0,
+            color_a: p.color,
+            color_b: p.edge_color,
+            alpha_a: p.alpha,
+            alpha_b: 0,
+            intensity: p.intensity,
+            param_a: p.width,
+            param_b: p.offset,
+            param_c: p.softness,
+            param_d: p.scroll_speed,
+            direction: encode_direction_u16(p.axis),
+        });
+    }
+
+    /// Add atmospheric absorption/scattering (ATMOSPHERE).
+    pub fn atmosphere(&mut self, p: AtmosphereParams) {
+        self.push_feature(EpuLayer {
+            opcode: EpuOpcode::Atmosphere,
+            region_mask: p.region.to_mask(),
+            blend: p.blend,
+            meta5: pack_meta5(0, p.variant_id),
+            color_a: p.zenith_color,
+            color_b: p.horizon_color,
+            alpha_a: p.alpha,
+            alpha_b: 0,
+            intensity: p.intensity,
+            param_a: p.falloff_exponent,
+            param_b: p.horizon_y,
+            param_c: p.mie_concentration,
+            param_d: p.mie_exponent,
+            direction: encode_direction_u16(p.sun_dir),
         });
     }
 }
 
 // =============================================================================
-// Parameter Structs (v2 - RGB colors)
+// Parameter Structs (RGB colors)
 // =============================================================================
 
 /// Parameters for RAMP enclosure.
@@ -783,6 +931,192 @@ impl Default for RampParams {
             ceil_q: 8,
             floor_q: 8,
             softness: 128,
+        }
+    }
+}
+
+/// Parameters for SECTOR enclosure.
+#[derive(Clone, Copy, Debug)]
+pub struct SectorParams {
+    pub up: Vec3,
+    pub sky_color: [u8; 3],
+    pub wall_color: [u8; 3],
+    pub strength: u8,
+    pub center_u01: u8,
+    pub width: u8,
+    pub variant_id: u8,
+}
+
+impl Default for SectorParams {
+    fn default() -> Self {
+        Self {
+            up: Vec3::Y,
+            sky_color: [0, 0, 0],
+            wall_color: [0, 0, 0],
+            strength: 0,
+            center_u01: 128,
+            width: 64,
+            variant_id: 0,
+        }
+    }
+}
+
+/// Parameters for SILHOUETTE enclosure.
+#[derive(Clone, Copy, Debug)]
+pub struct SilhouetteParams {
+    pub up: Vec3,
+    pub silhouette_color: [u8; 3],
+    pub background_color: [u8; 3],
+    pub edge_softness: u8,
+    pub horizon_bias: u8,
+    pub roughness: u8,
+    pub octaves_q: u8,
+    pub drift_amount_q: u8,
+    pub drift_speed: u8,
+    pub strength: u8,
+    pub variant_id: u8,
+}
+
+impl Default for SilhouetteParams {
+    fn default() -> Self {
+        Self {
+            up: Vec3::Y,
+            silhouette_color: [0, 0, 0],
+            background_color: [0, 0, 0],
+            edge_softness: 32,
+            horizon_bias: 128,
+            roughness: 128,
+            octaves_q: 4,
+            drift_amount_q: 0,
+            drift_speed: 0,
+            strength: 15,
+            variant_id: 0,
+        }
+    }
+}
+
+/// Parameters for SPLIT enclosure.
+#[derive(Clone, Copy, Debug)]
+pub struct SplitParams {
+    pub axis: Vec3,
+    pub sky_color: [u8; 3],
+    pub wall_color: [u8; 3],
+    pub blend_width: u8,
+    pub wedge_angle: u8,
+    pub count: u8,
+    pub offset: u8,
+    pub variant_id: u8,
+}
+
+impl Default for SplitParams {
+    fn default() -> Self {
+        Self {
+            axis: Vec3::Y,
+            sky_color: [0, 0, 0],
+            wall_color: [0, 0, 0],
+            blend_width: 16,
+            wedge_angle: 128,
+            count: 8,
+            offset: 0,
+            variant_id: 0,
+        }
+    }
+}
+
+/// Parameters for CELL enclosure.
+#[derive(Clone, Copy, Debug)]
+pub struct CellParams {
+    pub axis: Vec3,
+    pub gap_color: [u8; 3],
+    pub wall_color: [u8; 3],
+    pub outline_brightness: u8,
+    pub density: u8,
+    pub fill_ratio: u8,
+    pub gap_width: u8,
+    pub seed: u8,
+    pub gap_alpha: u8,
+    pub outline_alpha: u8,
+    pub variant_id: u8,
+}
+
+impl Default for CellParams {
+    fn default() -> Self {
+        Self {
+            axis: Vec3::Y,
+            gap_color: [0, 0, 0],
+            wall_color: [0, 0, 0],
+            outline_brightness: 0,
+            density: 64,
+            fill_ratio: 255,
+            gap_width: 0,
+            seed: 0,
+            gap_alpha: 15,
+            outline_alpha: 15,
+            variant_id: 0,
+        }
+    }
+}
+
+/// Parameters for PATCHES enclosure.
+#[derive(Clone, Copy, Debug)]
+pub struct PatchesParams {
+    pub axis: Vec3,
+    pub sky_color: [u8; 3],
+    pub wall_color: [u8; 3],
+    pub scale: u8,
+    pub coverage: u8,
+    pub sharpness: u8,
+    pub seed: u8,
+    pub sky_alpha: u8,
+    pub wall_alpha: u8,
+    pub domain_id: u8,
+    pub variant_id: u8,
+}
+
+impl Default for PatchesParams {
+    fn default() -> Self {
+        Self {
+            axis: Vec3::Y,
+            sky_color: [0, 0, 0],
+            wall_color: [0, 0, 0],
+            scale: 32,
+            coverage: 128,
+            sharpness: 64,
+            seed: 0,
+            sky_alpha: 15,
+            wall_alpha: 15,
+            domain_id: 0,
+            variant_id: 0,
+        }
+    }
+}
+
+/// Parameters for APERTURE enclosure.
+#[derive(Clone, Copy, Debug)]
+pub struct ApertureParams {
+    pub dir: Vec3,
+    pub opening_color: [u8; 3],
+    pub frame_color: [u8; 3],
+    pub edge_softness: u8,
+    pub half_width: u8,
+    pub half_height: u8,
+    pub frame_thickness: u8,
+    pub variant_param: u8,
+    pub variant_id: u8,
+}
+
+impl Default for ApertureParams {
+    fn default() -> Self {
+        Self {
+            dir: Vec3::Z,
+            opening_color: [0, 0, 0],
+            frame_color: [0, 0, 0],
+            edge_softness: 16,
+            half_width: 128,
+            half_height: 128,
+            frame_thickness: 64,
+            variant_param: 0,
+            variant_id: 0,
         }
     }
 }
@@ -925,6 +1259,8 @@ pub struct FlowParams {
     pub octaves: u8,
     /// Pattern type
     pub pattern: FlowPattern,
+    /// Turbulence amount (0..255)
+    pub turbulence: u8,
 }
 
 impl Default for FlowParams {
@@ -939,6 +1275,111 @@ impl Default for FlowParams {
             speed: 20,
             octaves: 2,
             pattern: FlowPattern::Noise,
+            turbulence: 0,
+        }
+    }
+}
+
+/// Parameters for LOBE_RADIANCE feature.
+#[derive(Clone, Copy, Debug)]
+pub struct LobeRadianceParams {
+    pub region: EpuRegion,
+    pub blend: EpuBlend,
+    pub dir: Vec3,
+    pub color: [u8; 3],
+    pub edge_color: [u8; 3],
+    pub intensity: u8,
+    pub exponent: u8,
+    pub falloff: u8,
+    pub anim_mode: u8,
+    pub anim_speed: u8,
+    pub alpha: u8,
+}
+
+impl Default for LobeRadianceParams {
+    fn default() -> Self {
+        Self {
+            region: EpuRegion::All,
+            blend: EpuBlend::Add,
+            dir: Vec3::Y,
+            color: [255, 255, 255],
+            edge_color: [0, 0, 0],
+            intensity: 255,
+            exponent: 64,
+            falloff: 64,
+            anim_mode: 0,
+            anim_speed: 0,
+            alpha: 15,
+        }
+    }
+}
+
+/// Parameters for BAND_RADIANCE feature.
+#[derive(Clone, Copy, Debug)]
+pub struct BandRadianceParams {
+    pub region: EpuRegion,
+    pub blend: EpuBlend,
+    pub axis: Vec3,
+    pub color: [u8; 3],
+    pub edge_color: [u8; 3],
+    pub intensity: u8,
+    pub width: u8,
+    pub offset: u8,
+    pub softness: u8,
+    pub scroll_speed: u8,
+    pub alpha: u8,
+}
+
+impl Default for BandRadianceParams {
+    fn default() -> Self {
+        Self {
+            region: EpuRegion::All,
+            blend: EpuBlend::Add,
+            axis: Vec3::Y,
+            color: [255, 255, 255],
+            edge_color: [0, 0, 0],
+            intensity: 255,
+            width: 64,
+            offset: 128,
+            softness: 0,
+            scroll_speed: 0,
+            alpha: 15,
+        }
+    }
+}
+
+/// Parameters for ATMOSPHERE feature.
+#[derive(Clone, Copy, Debug)]
+pub struct AtmosphereParams {
+    pub region: EpuRegion,
+    pub blend: EpuBlend,
+    pub zenith_color: [u8; 3],
+    pub horizon_color: [u8; 3],
+    pub intensity: u8,
+    pub falloff_exponent: u8,
+    pub horizon_y: u8,
+    pub mie_concentration: u8,
+    pub mie_exponent: u8,
+    pub sun_dir: Vec3,
+    pub alpha: u8,
+    pub variant_id: u8,
+}
+
+impl Default for AtmosphereParams {
+    fn default() -> Self {
+        Self {
+            region: EpuRegion::All,
+            blend: EpuBlend::Add,
+            zenith_color: [0, 0, 0],
+            horizon_color: [0, 0, 0],
+            intensity: 0,
+            falloff_exponent: 128,
+            horizon_y: 128,
+            mie_concentration: 0,
+            mie_exponent: 64,
+            sun_dir: Vec3::Y,
+            alpha: 15,
+            variant_id: 0,
         }
     }
 }

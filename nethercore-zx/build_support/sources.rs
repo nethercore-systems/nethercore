@@ -48,7 +48,7 @@ pub(crate) const COMMON: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/shaders/common/20_environment/80_mode7_rings.wgsl"
     )),
-    // EPU v2 evaluation (procedural radiance for sky + specular residual)
+    // EPU evaluation (procedural radiance for sky + specular residual)
     // Common utilities, constants, structs
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -58,18 +58,6 @@ pub(crate) const COMMON: &str = concat!(
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/shaders/epu/bounds/00_ramp.wgsl"
-    )),
-    include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/shaders/epu/bounds/01_lobe.wgsl"
-    )),
-    include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/shaders/epu/bounds/02_band.wgsl"
-    )),
-    include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/shaders/epu/bounds/03_fog.wgsl"
     )),
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -138,11 +126,11 @@ pub(crate) const COMMON: &str = concat!(
     )),
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/shaders/epu/features/10_lobe_v2.wgsl"
+        "/shaders/epu/features/10_lobe_radiance.wgsl"
     )),
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/shaders/epu/features/11_band_v2.wgsl"
+        "/shaders/epu/features/11_band_radiance.wgsl"
     )),
     // Layer dispatch
     include_str!(concat!(
@@ -198,24 +186,12 @@ pub(crate) const EPU_COMMON: &str = include_str!(concat!(
     "/shaders/epu/epu_common.wgsl"
 ));
 
-/// EPU bounds opcodes (modular): RAMP, LOBE, BAND, FOG, SECTOR, SILHOUETTE, SPLIT, CELL, PATCHES, APERTURE.
+/// EPU bounds opcodes (modular): RAMP, SECTOR, SILHOUETTE, SPLIT, CELL, PATCHES, APERTURE.
 #[allow(dead_code)]
 pub(crate) const EPU_BOUNDS: &str = concat!(
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/shaders/epu/bounds/00_ramp.wgsl"
-    )),
-    include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/shaders/epu/bounds/01_lobe.wgsl"
-    )),
-    include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/shaders/epu/bounds/02_band.wgsl"
-    )),
-    include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/shaders/epu/bounds/03_fog.wgsl"
     )),
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -243,7 +219,7 @@ pub(crate) const EPU_BOUNDS: &str = concat!(
     )),
 );
 
-/// EPU feature opcodes (modular): DECAL, GRID, SCATTER, FLOW, TRACE, VEIL, ATMOSPHERE, PLANE, CELESTIAL, PORTAL, LOBE_V2, BAND_V2, plus layer dispatch.
+/// EPU feature opcodes (modular): DECAL, GRID, SCATTER, FLOW, TRACE, VEIL, ATMOSPHERE, PLANE, CELESTIAL, PORTAL, LOBE_RADIANCE, BAND_RADIANCE, plus layer dispatch.
 #[allow(dead_code)]
 pub(crate) const EPU_FEATURES: &str = concat!(
     include_str!(concat!(
@@ -288,11 +264,11 @@ pub(crate) const EPU_FEATURES: &str = concat!(
     )),
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/shaders/epu/features/10_lobe_v2.wgsl"
+        "/shaders/epu/features/10_lobe_radiance.wgsl"
     )),
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/shaders/epu/features/11_band_v2.wgsl"
+        "/shaders/epu/features/11_band_radiance.wgsl"
     )),
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -353,9 +329,6 @@ const RERUN_IF_CHANGED_FILES: &[&str] = &[
     "shaders/epu/epu_dispatch.wgsl",
     // EPU bounds opcodes
     "shaders/epu/bounds/00_ramp.wgsl",
-    "shaders/epu/bounds/01_lobe.wgsl",
-    "shaders/epu/bounds/02_band.wgsl",
-    "shaders/epu/bounds/03_fog.wgsl",
     "shaders/epu/bounds/04_sector.wgsl",
     "shaders/epu/bounds/05_silhouette.wgsl",
     "shaders/epu/bounds/06_split.wgsl",
@@ -373,8 +346,8 @@ const RERUN_IF_CHANGED_FILES: &[&str] = &[
     "shaders/epu/features/07_plane.wgsl",
     "shaders/epu/features/08_celestial.wgsl",
     "shaders/epu/features/09_portal.wgsl",
-    "shaders/epu/features/10_lobe_v2.wgsl",
-    "shaders/epu/features/11_band_v2.wgsl",
+    "shaders/epu/features/10_lobe_radiance.wgsl",
+    "shaders/epu/features/11_band_radiance.wgsl",
     // EPU compute shaders
     "shaders/epu/epu_compute_env.wgsl",
     "shaders/epu/epu_compute_blur.wgsl",

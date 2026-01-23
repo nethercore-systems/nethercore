@@ -1,19 +1,19 @@
-//! EPU Inspector - Environment Processing Unit Demo
+//! EPU Showcase - Environment Processing Unit Demo
 //!
 //! Demonstrates the instruction-based EPU system for procedural environment backgrounds.
 //! The EPU uses 128-byte configurations (8 x 128-bit layers) to define complex environments
 //! with minimal memory and deterministic rendering.
 //!
-//! # v2/vNext Format (128-bit instructions)
+//! # Format (128-bit instructions)
 //!
 //! Each layer is 128 bits (2 x u64) with the following layout:
 //! - hi word: opcode(5), region(3), blend(3), meta5(5), color_a(24), color_b(24)
-//!   - meta5 = (domain_id << 3) | variant_id for vNext opcodes
+//!   - meta5 = (domain_id << 3) | variant_id for domain/variant selection
 //! - lo word: intensity(8), param_a(8), param_b(8), param_c(8), param_d(8), direction(16), alpha_a(4), alpha_b(4)
 //!
 //! Features:
-//! - Multiple preset environments (v2 + vNext presets)
-//! - vNext opcodes: CELL, PATCHES, APERTURE, TRACE, VEIL, ATMOSPHERE, PLANE, CELESTIAL, PORTAL
+//! - Multiple preset environments
+//! - Additional opcodes: CELL, PATCHES, APERTURE, TRACE, VEIL, ATMOSPHERE, PLANE, CELESTIAL, PORTAL
 //! - Keyboard/gamepad cycling through presets
 //! - Real-time environment background rendering via epu_draw()
 //! - Layer breakdown showing opcode names for current preset
@@ -231,8 +231,8 @@ fn opcode_name(opcode: u8) -> &'static [u8] {
         0x0F => b"PLANE",
         0x10 => b"CELESTIAL",
         0x11 => b"PORTAL",
-        0x12 => b"LOBE_V2",
-        0x13 => b"BAND_V2",
+        0x12 => b"LOBE_RADIANCE",
+        0x13 => b"BAND_RADIANCE",
         _ => b"???",
     }
 }
@@ -243,8 +243,8 @@ fn extract_opcode(hi: u64) -> u8 {
 }
 
 unsafe fn draw_ui() {
-    // Title - update to reflect v2/vNext support
-    let title = b"EPU Inspector (v2/vNext)";
+    // Title
+    let title = b"EPU Showcase";
     set_color(0xFFFFFFFF);
     draw_text(title.as_ptr(), title.len() as u32, 10.0, 10.0, 24.0);
 

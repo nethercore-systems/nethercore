@@ -564,63 +564,21 @@ fn light_disable(index: u32)
 
 ### Procedural Environment
 
-The environment provides ambient lighting for all modes via the Environment Processing Unit (EPU).
+The environment background and ambient/reflection lighting are driven by the Environment Processing Unit (EPU).
 
-**Dual-Layer Architecture:**
-
-The EPU supports two independent environment layers (base and overlay) that can be blended together:
+Game-facing API (push-only):
 
 ```rust
-// Configure base layer (layer 0)
-fn env_gradient(layer: u32, zenith: u32, sky_horizon: u32, ground_horizon: u32,
-                nadir: u32, azim: f32, shift: f32, elev: f32,
-                disk: u32, halo: u32, intensity: u32, haze: u32, warmth: u32, cloudiness: u32, cloud_phase: u32)
-
-// Configure overlay layer (layer 1) with a different mode
-fn env_cells(
-    layer: u32,
-    family: u32,
-    variant: u32,
-    density: u32,
-    size_min: u32,
-    size_max: u32,
-    intensity: u32,
-    shape: u32,
-    motion: u32,
-    parallax: u32,
-    height_bias: u32,
-    clustering: u32,
-    color_a: u32,
-    color_b: u32,
-    axis_x: f32,
-    axis_y: f32,
-    axis_z: f32,
-    phase: u32,
-    seed: u32,
-)
-
-// Set blend mode for overlay compositing
-fn env_blend(mode: u32)  // 0=alpha, 1=add, 2=multiply, 3=screen
-
-// Render the configured environment
-fn draw_env()
+fn epu_draw(config_ptr: *const u64)
 ```
 
-**Layer System:**
-- Layer 0 (base): Primary environment layer
-- Layer 1 (overlay): Secondary layer composited on top
-- Same mode can be used on both layers with different parameters
-- Example: Stars (layer 0) + rain (layer 1), both using Cells mode (family 0, variants 0/1)
+`config_ptr` points to 16 `u64` values (128 bytes total) representing 8 packed 128-bit instructions as `[hi, lo]` pairs.
 
-**Ambient calculation:**
-```
-ambient = sample_sky(normal) * albedo * ambient_factor
-```
-
-**Lighting integration:**
-- Mode 0 with normals: Simple Lambert from directional lights
-- Modes 2-3: Dynamic lights + environment ambient
-- See [Environment (EPU) API](../../book/src/api/epu.md) for all 8 procedural modes
+Notes:
+- Call `epu_draw(...)` first in `render()` (before any geometry).
+- For split-screen / multi-pass, call `viewport(...)` and `epu_draw(...)` per viewport/pass.
+- Presets and packing helpers live in `examples/3-inspectors/epu-showcase/`.
+- See [Environment (EPU) API](../../book/src/api/epu.md) for instruction encoding and opcode map.
 
 ### Packed Light Format
 

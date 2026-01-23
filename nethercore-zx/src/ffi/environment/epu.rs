@@ -3,7 +3,7 @@
 //! These functions provide the instruction-based EPU API for configuring
 //! and rendering procedural environments using 128-byte packed configurations.
 //!
-//! # v2 Format
+//! # Format
 //!
 //! Each environment is 128 bytes (8 x 128-bit instructions). Each 128-bit
 //! instruction is stored as two u64 values (hi, lo).

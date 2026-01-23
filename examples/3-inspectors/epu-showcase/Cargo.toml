@@ -1,5 +1,5 @@
 [package]
-name = "epu-inspector"
+name = "epu-showcase"
 version = "0.1.0"
 edition = "2021"
 

@@ -1,5 +1,5 @@
 // ============================================================================
-// APERTURE - Shaped Opening Enclosure Modifier (vNext 0x07)
+// APERTURE - Shaped Opening Enclosure Modifier (0x07)
 // Creates a view-centered viewport/frame. The wall region becomes the frame,
 // and sky becomes the opening through it, creating a strong "interior" cue.
 // 128-bit packed fields:
@@ -152,7 +152,8 @@ fn eval_aperture(
     dir: vec3f,
     instr: vec4u,
     enc: EnclosureConfig,
-) -> LayerSample {
+    base_regions: RegionWeights,
+) -> BoundsResult {
     // Decode aperture center direction
     let center_dir = decode_dir16(instr_dir16(instr));
 
@@ -164,15 +165,14 @@ fn eval_aperture(
     let param_d_raw = instr_d(instr);
     let variant = instr_variant_id(instr);
 
-    // Compute baseline region weights from enclosure state
-    let baseline = compute_region_weights(dir, enc);
+    // Use baseline region weights passed in
+    let baseline = base_regions;
 
     // Check if direction is behind the aperture
     let d = dot(dir, center_dir);
     if d <= 0.0 {
-        // Behind aperture: apply "outside" weights (baseline enclosure)
-        // APERTURE is an enclosure modifier, output weight for sky promotion
-        return LayerSample(vec3f(0.0), 0.0);
+        // Behind aperture: use baseline regions unchanged
+        return BoundsResult(LayerSample(vec3f(0.0), 0.0), base_regions);
     }
 
     // Build view-centered tangent chart projection
@@ -258,5 +258,7 @@ fn eval_aperture(
     // Blend colors based on zone weights
     let rgb = opening_color * w_sky + frame_color * w_wall + frame_color * 0.5 * w_floor;
 
-    return LayerSample(rgb, 1.0);
+    // Output modified regions
+    let output_regions = RegionWeights(w_sky, w_wall, w_floor);
+    return BoundsResult(LayerSample(rgb, 1.0), output_regions);
 }

@@ -7,7 +7,7 @@
 // tangent-local SDF shapes. Used for horror voids, magical portals,
 // dimensional cracks, and otherworldly effects.
 //
-// Packed fields (v2):
+// Packed fields:
 //   color_a: Interior/void color (RGB24)
 //   color_b: Edge glow color (RGB24)
 //   intensity: Edge glow brightness (0..255 -> 0..2)

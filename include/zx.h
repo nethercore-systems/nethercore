@@ -655,21 +655,19 @@ NCZX_IMPORT void draw_env(void);
 /** * `slot` — Matcap slot (1-3) */
 NCZX_IMPORT void matcap_set(uint32_t slot, uint32_t texture);
 
-/** Set an EPU environment configuration (v2 128-byte format). */
-/**  */
-/** Draw the background using an EPU v2 config (push-only). */
+/** Draw the environment background using an EPU configuration (128-byte). */
 /**  */
 /** Reads a 128-byte (8 x 128-bit = 16 x u64) environment configuration from */
 /** WASM memory and renders the procedural background for the current viewport */
-/** and render pass. */
+/** and render pass. If called multiple times in a frame, the last call wins. */
 /**  */
 /** # Arguments */
 /** * `config_ptr` — Pointer to 16 u64 values (128 bytes total) in WASM memory */
 /**  */
 /** # Configuration Layout */
 /** Each environment is exactly 8 x 128-bit instructions (each stored as [hi, lo]): */
-/** - Slots 0-3: Bounds layers (RAMP, LOBE, BAND, FOG) */
-/** - Slots 4-7: Feature layers (DECAL, GRID, SCATTER, FLOW) */
+/** - Slots 0-3: Enclosure/bounds layers (`0x01..0x07`) */
+/** - Slots 4-7: Radiance/feature layers (`0x08..0x1F`) */
 /**  */
 /** # Instruction Bit Layout (per 128-bit = 2 x u64) */
 /** ```text */
@@ -677,8 +675,7 @@ NCZX_IMPORT void matcap_set(uint32_t slot, uint32_t texture);
 /** 63..59  opcode     (5)   Which algorithm to run (32 opcodes) */
 /** 58..56  region     (3)   Bitfield: SKY=0b100, WALLS=0b010, FLOOR=0b001 */
 /** 55..53  blend      (3)   8 blend modes */
-/** 52..49  reserved   (4) */
-/** 48      reserved   (1)   Future flag */
+/** 52..48  meta5      (5)   (domain_id<<3)|variant_id; use 0 when unused */
 /** 47..24  color_a    (24)  RGB24 primary color */
 /** 23..0   color_b    (24)  RGB24 secondary color */
 /**  */
@@ -693,16 +690,20 @@ NCZX_IMPORT void matcap_set(uint32_t slot, uint32_t texture);
 /** 3..0    alpha_b    (4)   color_b alpha (0-15) */
 /** ``` */
 /**  */
-/** # Opcodes */
+/** # Opcodes (common) */
 /** - 0x00: NOP (disable layer) */
 /** - 0x01: RAMP (enclosure gradient) */
-/** - 0x02: LOBE (directional glow) */
-/** - 0x03: BAND (horizon ring) */
-/** - 0x04: FOG (atmospheric absorption) */
-/** - 0x05: DECAL (sharp SDF shape) */
-/** - 0x06: GRID (repeating lines/panels) */
-/** - 0x07: SCATTER (point field) */
-/** - 0x08: FLOW (animated noise/streaks) */
+/** - 0x02: SECTOR (enclosure modifier) */
+/** - 0x03: SILHOUETTE (enclosure modifier) */
+/** - 0x04: SPLIT (enclosure source) */
+/** - 0x05: CELL (enclosure source) */
+/** - 0x06: PATCHES (enclosure source) */
+/** - 0x07: APERTURE (enclosure modifier) */
+/** - 0x08: DECAL (sharp SDF shape) */
+/** - 0x09: GRID (repeating lines/panels) */
+/** - 0x0A: SCATTER (point field) */
+/** - 0x0B: FLOW (animated noise/streaks) */
+/** - 0x0C..0x13: radiance opcodes (TRACE/VEIL/ATMOSPHERE/PLANE/CELESTIAL/PORTAL/LOBE_RADIANCE/BAND_RADIANCE) */
 /**  */
 /** # Blend Modes */
 /** - 0: ADD (dst + src * a) */

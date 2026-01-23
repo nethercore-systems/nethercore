@@ -53,7 +53,7 @@ pub struct EpuSh9 {
     _pad8: f32,
 }
 
-/// GPU representation of an EPU environment state (v2 128-bit format).
+/// GPU representation of an EPU environment state (128-bit format).
 ///
 /// Each layer is 128 bits = 4 x u32 for GPU compatibility.
 /// The shader expects `array<vec4u, 8>` where each vec4u represents a 128-bit instruction.

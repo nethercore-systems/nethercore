@@ -1,5 +1,5 @@
 // ============================================================================
-// SILHOUETTE - Skyline/Horizon Cutout (vNext enclosure modifier at 0x03)
+// SILHOUETTE - Skyline/Horizon Cutout (0x03)
 // Creates environmental silhouettes that reshape the sky/wall boundary.
 // 128-bit packed fields:
 //   color_a: Silhouette color (RGB24)
@@ -12,7 +12,7 @@
 //   param_d: Drift speed (0..255 -> 0.0..0.5)
 //   direction: Up axis (oct-u16)
 //   alpha_a: Strength (0..15 -> 0.0..1.0)
-//   variant_id: 0=MOUNTAINS, 1=CITY, 2=FOREST, 3=DUNES, 4=WAVES, 5=RUINS, 6=INDUSTRIAL, 7=SPIRES
+//   variant_id: 0=MOUNTAINS, 1=CITY, 2=FOREST, 3=DUNES, 4=WAVES, 5=RUINS, 6=INDUSTRIAL, 7=SPIRES (from meta5)
 // ============================================================================
 
 // Periodic hash for seamless azimuthal wrap
@@ -139,13 +139,13 @@ fn eval_silhouette(
     dir: vec3f,
     instr: vec4u,
     enc: EnclosureConfig,
+    base_regions: RegionWeights,
     time: f32,
-) -> LayerSample {
+) -> BoundsResult {
     // Decode up axis from direction field
     let up = decode_dir16(instr_dir16(instr));
 
     // Build axis-cylinder basis around up vector
-    // Use a reference vector that is not parallel to up
     let ref_vec = select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(up.y) > 0.9);
     let t_axis = normalize(cross(ref_vec, up));
     let b_axis = normalize(cross(up, t_axis));
@@ -184,26 +184,29 @@ fn eval_silhouette(
     let raw_height = silhouette_height(u_shifted, variant, octaves, seed);
 
     // Scale by roughness and apply height bias
-    // Height is in range [-1, 1] from noise, scale to useful range
     let h = height_bias + raw_height * roughness * 0.5;
 
-    // Convert v01 to y-threshold space: v01=0 is floor, v01=1 is sky
-    // y_equiv maps v01 to match the height function range
+    // Convert v01 to y-threshold space
     let y_equiv = v01 * 2.0 - 1.0;
 
-    // Silhouette mask: 1.0 where y_equiv < h (below silhouette line -> wall)
-    // smoothstep gives soft transition at the silhouette edge
+    // Silhouette mask: 1.0 where below silhouette line (sky becomes wall)
     let wall_from_sky = smoothstep(h + softness, h - softness, y_equiv);
 
     // Apply strength
     let effect = wall_from_sky * strength;
 
-    // Get colors
+    // Modify regions: silhouette converts sky->wall below the horizon line
+    let sky_to_wall = effect * base_regions.sky;
+    let modified_regions = RegionWeights(
+        base_regions.sky - sky_to_wall,
+        base_regions.wall + sky_to_wall,
+        base_regions.floor
+    );
+
+    // Get colors and render
     let silhouette_color = instr_color_a(instr);
     let background_color = instr_color_b(instr);
-
-    // Blend based on silhouette effect
     let rgb = mix(background_color, silhouette_color, effect);
 
-    return LayerSample(rgb, 1.0);
+    return BoundsResult(LayerSample(rgb, 1.0), modified_regions);
 }
