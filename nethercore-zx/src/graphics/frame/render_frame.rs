@@ -223,6 +223,16 @@ impl ZXGraphics {
         // 2. Render mode changes (different bind group layout)
         // This saves ~0.1ms/frame on typical hardware by avoiding descriptor set churn.
         let frame_bind_group = if let Some(first_cmd) = self.command_buffer.commands().first() {
+            // The bind group layout is shared across pipelines. However, in render modes 1-3 the
+            // mesh pipeline requires normals; the first sorted command is often a Quad or
+            // EpuEnvironment which uses a non-normal vertex format. Use a safe mesh format when
+            // creating a pipeline solely to obtain the bind group layout.
+            let bind_group_format = if self.current_render_mode > 0 {
+                crate::graphics::FORMAT_NORMAL
+            } else {
+                self.unit_quad_format
+            };
+
             // Extract fields from first command variant
             // Note: depth_test is per-pass via PassConfig, but we use defaults for bind group layout
             let (format, cull_mode, pass_id) = match first_cmd {
@@ -240,10 +250,10 @@ impl ZXGraphics {
                 } => (*format, *cull_mode, *pass_id),
                 VRPCommand::Quad {
                     cull_mode, pass_id, ..
-                } => (self.unit_quad_format, *cull_mode, *pass_id),
+                } => (bind_group_format, *cull_mode, *pass_id),
                 VRPCommand::EpuEnvironment { pass_id, .. } => {
                     // EPU environment uses its own pipeline
-                    (0, CullMode::None, *pass_id)
+                    (bind_group_format, CullMode::None, *pass_id)
                 }
             };
 

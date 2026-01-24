@@ -207,25 +207,56 @@ impl NetherManifest {
             );
         }
 
-        // Find .wasm file
-        let wasm_file = std::fs::read_dir(&target_dir)
+        // Find candidate .wasm files (note: cargo won't clean up old outputs when crates are renamed).
+        let mut wasm_files: Vec<PathBuf> = std::fs::read_dir(&target_dir)
             .with_context(|| format!("Failed to read target directory: {}", target_dir.display()))?
             .filter_map(|e| e.ok())
-            .find(|e| {
-                e.path()
-                    .extension()
+            .map(|e| e.path())
+            .filter(|path| {
+                path.extension()
                     .and_then(|ext| ext.to_str())
                     .map(|ext| ext == "wasm")
                     .unwrap_or(false)
             })
-            .map(|e| e.path());
+            .collect();
 
-        wasm_file.ok_or_else(|| {
-            anyhow::anyhow!(
+        if wasm_files.is_empty() {
+            anyhow::bail!(
                 "No WASM file found in {}\nRun 'nether compile' first.",
                 target_dir.display()
-            )
-        })
+            );
+        }
+
+        if wasm_files.len() == 1 {
+            return Ok(wasm_files.remove(0));
+        }
+
+        // Prefer a file that matches the game id (cargo outputs underscores for '-' in crate names).
+        let expected_stem = self.game.id.replace('-', "_");
+        let expected_name = format!("{}.wasm", expected_stem);
+        if let Some(path) = wasm_files
+            .iter()
+            .find(|p| p.file_name().and_then(|n| n.to_str()) == Some(expected_name.as_str()))
+        {
+            return Ok(path.clone());
+        }
+
+        // Otherwise, prefer the newest file (best-effort heuristic).
+        wasm_files.sort_by(|a, b| {
+            let a_time = std::fs::metadata(a).and_then(|m| m.modified()).ok();
+            let b_time = std::fs::metadata(b).and_then(|m| m.modified()).ok();
+            b_time.cmp(&a_time)
+        });
+
+        eprintln!(
+            "Warning: multiple .wasm outputs found in {} but none match game.id='{}'. \
+Consider setting build.wasm in nether.toml. Using newest: {}",
+            target_dir.display(),
+            self.game.id,
+            wasm_files[0].display()
+        );
+
+        Ok(wasm_files.remove(0))
     }
 
     /// Validate manifest fields
@@ -279,6 +310,7 @@ impl NetherManifest {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn test_manifest_minimal() {
@@ -556,5 +588,38 @@ max_players = 5
         .unwrap();
 
         assert!(manifest.validate().is_err());
+    }
+
+    #[test]
+    fn test_find_wasm_prefers_game_id_match_when_multiple() {
+        let manifest = NetherManifest::parse(
+            r#"
+[game]
+id = "epu-showcase"
+title = "Test"
+author = "Author"
+version = "0.1.0"
+"#,
+        )
+        .unwrap();
+
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time")
+            .as_nanos();
+        let temp_dir = std::env::temp_dir().join(format!("nether_find_wasm_test_{}", unique));
+        let target_dir = temp_dir.join("target/wasm32-unknown-unknown/release");
+        std::fs::create_dir_all(&target_dir).unwrap();
+
+        // Write a "wrong" wasm after the correct one to make it newer.
+        let correct = target_dir.join("epu_showcase.wasm");
+        std::fs::write(&correct, b"").unwrap();
+        let wrong = target_dir.join("epu_inspector.wasm");
+        std::fs::write(&wrong, b"").unwrap();
+
+        let found = manifest.find_wasm(&temp_dir, false).unwrap();
+        assert_eq!(found, correct);
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }
