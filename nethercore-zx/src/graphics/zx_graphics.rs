@@ -407,15 +407,13 @@ impl ZXGraphics {
     /// # Arguments
     /// * `encoder` - Command encoder to record compute passes
     /// * `configs` - Slice of (env_id, config) pairs to evaluate
-    /// * `time` - Current time for animation (in seconds)
     pub fn build_epu_environments(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
         configs: &[(u32, &crate::graphics::epu::EpuConfig)],
-        time: f32,
     ) {
         self.epu_runtime
-            .build_envs(&self.device, &self.queue, encoder, configs, time);
+            .build_envs(&self.device, &self.queue, encoder, configs);
     }
 
     // =================================================================

@@ -9,10 +9,10 @@ use super::EpuConfig;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub(super) struct FrameUniforms {
-    pub time: f32,
     pub active_count: u32,
     pub map_size: u32,
     pub _pad0: u32,
+    pub _pad1: u32,
 }
 
 /// Irradiance uniforms structure matching the WGSL `IrradUniforms` struct.

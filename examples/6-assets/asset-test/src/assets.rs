@@ -3,8 +3,6 @@
 //! This module provides access to all assets defined in assets.toml.
 //! Call `load()` during your game's `init()` to load all assets.
 
-#![allow(dead_code)]
-
 // Embedded asset data (from shared examples/assets/ folder)
 static CUBE_MESH: &[u8] = include_bytes!("../../../assets/cube.nczxmesh");
 static CHECKERBOARD_TEX: &[u8] = include_bytes!("../../../assets/checkerboard.nczxtex");

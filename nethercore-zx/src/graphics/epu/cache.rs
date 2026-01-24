@@ -10,14 +10,12 @@ use super::settings::MAX_ENV_STATES;
 
 /// Cache entry for dirty-state tracking of environment configurations.
 ///
-/// Each entry stores the hash and time-dependency flag for an environment slot,
-/// allowing the runtime to skip rebuilding unchanged static environments.
+/// Each entry stores the hash for an environment slot, allowing the runtime to
+/// skip rebuilding unchanged environments.
 #[derive(Clone, Copy, Default)]
 pub(super) struct EpuCacheEntry {
     /// Hash of the EpuConfig used to detect changes
     pub state_hash: u64,
-    /// Whether this config uses time-based animation
-    pub time_dependent: bool,
     /// Whether this cache entry contains valid data
     pub valid: bool,
 }
@@ -25,23 +23,13 @@ pub(super) struct EpuCacheEntry {
 /// Cache storage for dirty-state tracking.
 pub(super) struct EpuCache {
     entries: Vec<EpuCacheEntry>,
-    current_frame: u64,
 }
 
 impl EpuCache {
     pub fn new() -> Self {
         Self {
             entries: vec![EpuCacheEntry::default(); MAX_ENV_STATES as usize],
-            current_frame: 0,
         }
-    }
-
-    pub fn advance_frame(&mut self) {
-        self.current_frame = self.current_frame.wrapping_add(1);
-    }
-
-    pub fn current_frame(&self) -> u64 {
-        self.current_frame
     }
 
     pub fn invalidate(&mut self, env_id: u32) {
@@ -61,18 +49,16 @@ impl EpuCache {
     /// Returns `true` if the environment needs to be rebuilt.
     pub fn needs_rebuild(&mut self, env_id: u32, config: &EpuConfig) -> bool {
         let hash = config.state_hash();
-        let time_dependent = config.is_time_dependent();
 
         if let Some(entry) = self.entries.get_mut(env_id as usize) {
             // Check if we can skip this environment
-            if entry.valid && entry.state_hash == hash && !entry.time_dependent {
-                // Cache hit: same config, not time-dependent
+            if entry.valid && entry.state_hash == hash {
+                // Cache hit: same config
                 return false;
             }
 
-            // Cache miss or time-dependent: update cache and rebuild
+            // Cache miss: update hash and rebuild
             entry.state_hash = hash;
-            entry.time_dependent = time_dependent;
             entry.valid = true;
         }
 
@@ -147,39 +133,12 @@ pub fn collect_active_envs(env_ids: &[u32]) -> ActiveEnvList {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graphics::epu::{FlowParams, epu_begin, epu_finish};
 
     #[test]
     fn test_cache_entry_default() {
         let entry = EpuCacheEntry::default();
         assert_eq!(entry.state_hash, 0);
-        assert!(!entry.time_dependent);
         assert!(!entry.valid);
-    }
-
-    #[test]
-    fn test_epu_cache_advance_frame() {
-        let mut cache = EpuCache::new();
-        assert_eq!(cache.current_frame(), 0);
-
-        cache.advance_frame();
-        assert_eq!(cache.current_frame(), 1);
-
-        cache.advance_frame();
-        assert_eq!(cache.current_frame(), 2);
-    }
-
-    #[test]
-    fn test_epu_cache_advance_frame_wrapping() {
-        let mut cache = EpuCache::new();
-
-        // Set to max value
-        cache.current_frame = u64::MAX;
-        assert_eq!(cache.current_frame(), u64::MAX);
-
-        // Should wrap to 0
-        cache.advance_frame();
-        assert_eq!(cache.current_frame(), 0);
     }
 
     #[test]
@@ -265,28 +224,6 @@ mod tests {
 
         // Same different config: cache hit
         assert!(!cache.needs_rebuild(0, &config2));
-    }
-
-    #[test]
-    fn test_epu_cache_miss_time_dependent() {
-        let mut cache = EpuCache::new();
-
-        // Create a time-dependent config (FLOW with speed > 0)
-        let mut e = epu_begin();
-        e.flow(FlowParams {
-            speed: 20, // Time-dependent
-            ..FlowParams::default()
-        });
-        let config = epu_finish(e);
-
-        // Verify it's time-dependent
-        assert!(config.is_time_dependent());
-
-        // First call: needs rebuild
-        assert!(cache.needs_rebuild(0, &config));
-
-        // Second call: still needs rebuild (time-dependent always rebuilds)
-        assert!(cache.needs_rebuild(0, &config));
     }
 
     #[test]

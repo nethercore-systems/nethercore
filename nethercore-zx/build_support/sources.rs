@@ -25,27 +25,27 @@ pub(crate) const COMMON: &str = concat!(
     )),
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/shaders/epu/bounds/04_sector.wgsl"
+        "/shaders/epu/bounds/01_sector.wgsl"
     )),
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/shaders/epu/bounds/05_silhouette.wgsl"
+        "/shaders/epu/bounds/02_silhouette.wgsl"
     )),
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/shaders/epu/bounds/06_split.wgsl"
+        "/shaders/epu/bounds/03_split.wgsl"
     )),
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/shaders/epu/bounds/07_cell.wgsl"
+        "/shaders/epu/bounds/04_cell.wgsl"
     )),
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/shaders/epu/bounds/08_patches.wgsl"
+        "/shaders/epu/bounds/05_patches.wgsl"
     )),
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/shaders/epu/bounds/09_aperture.wgsl"
+        "/shaders/epu/bounds/06_aperture.wgsl"
     )),
     // Feature opcodes (radiance motifs)
     include_str!(concat!(
@@ -159,27 +159,27 @@ pub(crate) const EPU_BOUNDS: &str = concat!(
     )),
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/shaders/epu/bounds/04_sector.wgsl"
+        "/shaders/epu/bounds/01_sector.wgsl"
     )),
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/shaders/epu/bounds/05_silhouette.wgsl"
+        "/shaders/epu/bounds/02_silhouette.wgsl"
     )),
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/shaders/epu/bounds/06_split.wgsl"
+        "/shaders/epu/bounds/03_split.wgsl"
     )),
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/shaders/epu/bounds/07_cell.wgsl"
+        "/shaders/epu/bounds/04_cell.wgsl"
     )),
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/shaders/epu/bounds/08_patches.wgsl"
+        "/shaders/epu/bounds/05_patches.wgsl"
     )),
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/shaders/epu/bounds/09_aperture.wgsl"
+        "/shaders/epu/bounds/06_aperture.wgsl"
     )),
 );
 
@@ -284,12 +284,12 @@ const RERUN_IF_CHANGED_FILES: &[&str] = &[
     "shaders/epu/epu_dispatch.wgsl",
     // EPU bounds opcodes
     "shaders/epu/bounds/00_ramp.wgsl",
-    "shaders/epu/bounds/04_sector.wgsl",
-    "shaders/epu/bounds/05_silhouette.wgsl",
-    "shaders/epu/bounds/06_split.wgsl",
-    "shaders/epu/bounds/07_cell.wgsl",
-    "shaders/epu/bounds/08_patches.wgsl",
-    "shaders/epu/bounds/09_aperture.wgsl",
+    "shaders/epu/bounds/01_sector.wgsl",
+    "shaders/epu/bounds/02_silhouette.wgsl",
+    "shaders/epu/bounds/03_split.wgsl",
+    "shaders/epu/bounds/04_cell.wgsl",
+    "shaders/epu/bounds/05_patches.wgsl",
+    "shaders/epu/bounds/06_aperture.wgsl",
     // EPU feature opcodes
     "shaders/epu/features/00_decal.wgsl",
     "shaders/epu/features/01_grid.wgsl",

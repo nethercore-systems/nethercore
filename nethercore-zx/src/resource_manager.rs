@@ -400,9 +400,6 @@ impl ConsoleResourceManager for ZResourceManager {
         // and SH9 for active environments. This must happen before
         // render_frame() so the textures are valid for sampling during rendering.
 
-        // Tick the EPU cache (invalidates time-dependent environments)
-        graphics.epu_runtime_mut().advance_frame();
-
         // Collect active environment IDs from shading states used this frame.
         // This keeps the EPU compute workload proportional to what the frame actually references.
         let env_ids: Vec<u32> = state
@@ -425,12 +422,8 @@ impl ConsoleResourceManager for ZResourceManager {
                 .map(|env_id| (env_id, &config))
                 .collect();
 
-            // Time parameter: use 0.0 for static environments, or derive from frame counter
-            // The EPU cache handles time-dependent configs (they rebuild every frame)
-            let time = (graphics.epu_runtime().current_frame() as f32) / 60.0;
-
             // Dispatch EPU compute shaders
-            graphics.build_epu_environments(encoder, &config_refs, time);
+            graphics.build_epu_environments(encoder, &config_refs);
         }
 
         // =====================================================================
