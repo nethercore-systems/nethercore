@@ -74,5 +74,4 @@ impl ZXGraphics {
         });
         self.shading_state_capacity = new_capacity;
     }
-
 }

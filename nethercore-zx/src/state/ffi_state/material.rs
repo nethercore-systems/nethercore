@@ -6,61 +6,61 @@ impl ZXFFIState {
     /// Update material property in current shading state (with quantization check)
     /// Metallic is stored in uniform_set_0 byte 0
     pub fn update_material_metallic(&mut self, value: f32) {
-        use crate::graphics::{pack_unorm8, update_uniform_set_0_byte};
+        use crate::graphics::{pack_unorm8, update_u32_byte};
         let quantized = pack_unorm8(value);
         let current_byte = (self.current_shading_state.uniform_set_0 & 0xFF) as u8;
         if current_byte != quantized {
             self.current_shading_state.uniform_set_0 =
-                update_uniform_set_0_byte(self.current_shading_state.uniform_set_0, 0, quantized);
+                update_u32_byte(self.current_shading_state.uniform_set_0, 0, quantized);
             self.shading_state_dirty = true;
         }
     }
 
     /// Roughness is stored in uniform_set_0 byte 1
     pub fn update_material_roughness(&mut self, value: f32) {
-        use crate::graphics::{pack_unorm8, update_uniform_set_0_byte};
+        use crate::graphics::{pack_unorm8, update_u32_byte};
         let quantized = pack_unorm8(value);
         let current_byte = ((self.current_shading_state.uniform_set_0 >> 8) & 0xFF) as u8;
         if current_byte != quantized {
             self.current_shading_state.uniform_set_0 =
-                update_uniform_set_0_byte(self.current_shading_state.uniform_set_0, 1, quantized);
+                update_u32_byte(self.current_shading_state.uniform_set_0, 1, quantized);
             self.shading_state_dirty = true;
         }
     }
 
     /// Emissive is stored in uniform_set_0 byte 2
     pub fn update_material_emissive(&mut self, value: f32) {
-        use crate::graphics::{pack_unorm8, update_uniform_set_0_byte};
+        use crate::graphics::{pack_unorm8, update_u32_byte};
         let quantized = pack_unorm8(value);
         let current_byte = ((self.current_shading_state.uniform_set_0 >> 16) & 0xFF) as u8;
         if current_byte != quantized {
             self.current_shading_state.uniform_set_0 =
-                update_uniform_set_0_byte(self.current_shading_state.uniform_set_0, 2, quantized);
+                update_u32_byte(self.current_shading_state.uniform_set_0, 2, quantized);
             self.shading_state_dirty = true;
         }
     }
 
     /// Rim intensity is stored in uniform_set_0 byte 3
     pub fn update_material_rim_intensity(&mut self, value: f32) {
-        use crate::graphics::{pack_unorm8, update_uniform_set_0_byte};
+        use crate::graphics::{pack_unorm8, update_u32_byte};
         let quantized = pack_unorm8(value);
         let current_byte = ((self.current_shading_state.uniform_set_0 >> 24) & 0xFF) as u8;
         if current_byte != quantized {
             self.current_shading_state.uniform_set_0 =
-                update_uniform_set_0_byte(self.current_shading_state.uniform_set_0, 3, quantized);
+                update_u32_byte(self.current_shading_state.uniform_set_0, 3, quantized);
             self.shading_state_dirty = true;
         }
     }
 
     /// Rim power is stored in uniform_set_1 byte 0 (low byte)
     pub fn update_material_rim_power(&mut self, value: f32) {
-        use crate::graphics::{pack_unorm8, update_uniform_set_1_byte};
+        use crate::graphics::{pack_unorm8, update_u32_byte};
         // Rim power is [0-1] → [0-32] in shader, so we pack [0-1] as u8
         let quantized = pack_unorm8(value / 32.0); // Normalize from [0-32] to [0-1]
         let current_byte = (self.current_shading_state.uniform_set_1 & 0xFF) as u8;
         if current_byte != quantized {
             self.current_shading_state.uniform_set_1 =
-                update_uniform_set_1_byte(self.current_shading_state.uniform_set_1, 0, quantized);
+                update_u32_byte(self.current_shading_state.uniform_set_1, 0, quantized);
             self.shading_state_dirty = true;
         }
     }
@@ -121,6 +121,14 @@ impl ZXFFIState {
     pub fn update_color(&mut self, color: u32) {
         if self.current_shading_state.color_rgba8 != color {
             self.current_shading_state.color_rgba8 = color;
+            self.shading_state_dirty = true;
+        }
+    }
+
+    /// Update EPU environment index (`env_id`) in current shading state.
+    pub fn update_environment_index(&mut self, env_id: u32) {
+        if self.current_shading_state.environment_index != env_id {
+            self.current_shading_state.environment_index = env_id;
             self.shading_state_dirty = true;
         }
     }

@@ -112,13 +112,6 @@ impl PackedLight {
         ((r as u32) << 24) | ((g as u32) << 16) | ((b as u32) << 8) | (type_intensity as u32)
     }
 
-    /// Create a PackedLight from f32 parameters (directional light)
-    /// Backward compatibility: delegates to directional()
-    /// If enabled=false, intensity is set to 0 (which indicates disabled light)
-    pub fn from_floats(direction: Vec3, color: Vec3, intensity: f32, enabled: bool) -> Self {
-        Self::directional(direction, color, intensity, enabled)
-    }
-
     /// Create a disabled light (all zeros)
     pub fn disabled() -> Self {
         Self::default()

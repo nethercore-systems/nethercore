@@ -338,6 +338,17 @@ extern "C" {
     /// * `color` — Color in 0xRRGGBBAA format
     pub fn set_color(color: u32);
 
+    /// Set the EPU environment index (`env_id`) used for subsequent draw calls.
+    ///
+    /// This selects which EPU environment textures are sampled for:
+    /// - `epu_draw(...)` background rendering
+    /// - Reflections + ambient lighting in lit render modes (2/3)
+    ///
+    /// Notes:
+    /// - `env_id` is clamped to the supported range (0..255).
+    /// - Default is 0.
+    pub fn environment_index(env_id: u32);
+
     /// Set the face culling mode.
     ///
     /// # Arguments
@@ -896,7 +907,7 @@ extern "C" {
     ///
     /// Reads a 128-byte (8 x 128-bit = 16 x u64) environment configuration from
     /// WASM memory and renders the procedural background for the current viewport
-    /// and render pass. If called multiple times in a frame, the last call wins.
+    /// and render pass. If called multiple times for the same env_id in a frame, the last call wins.
     ///
     /// # Arguments
     /// * `config_ptr` — Pointer to 16 u64 values (128 bytes total) in WASM memory
@@ -956,6 +967,8 @@ extern "C" {
     ///
     /// Renders the procedural environment background for the current viewport and pass.
     ///
+    /// The config is stored for the currently selected `environment_index(...)`.
+    ///
     /// # Usage
     /// Call this **first** in your `render()` function, before any 3D geometry:
     /// ```rust,ignore
@@ -974,6 +987,12 @@ extern "C" {
     /// - For split-screen, set `viewport(...)` and call `epu_draw(...)` per viewport
     /// - The EPU compute pass runs automatically before rendering
     pub fn epu_draw(config_ptr: *const u64);
+
+    /// Store an EPU configuration for an environment ID without drawing a background.
+    ///
+    /// Use this to set up multiple environments in the same frame, then select
+    /// per-draw lighting/reflections via `environment_index(...)`.
+    pub fn epu_set_env(env_id: u32, config_ptr: *const u64);
 
     // NOTE: epu_get_ambient() was removed - GPU readback would break rollback determinism.
     // Ambient lighting is computed and applied entirely on the GPU side.

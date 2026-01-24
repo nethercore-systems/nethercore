@@ -215,9 +215,9 @@ pub enum FlowPattern {
 ///
 /// Use `encode()` to convert to the 128-bit packed format (two u64 values).
 ///
-    /// # Format
-    ///
-    /// The format uses 128 bits per layer, providing:
+/// # Format
+///
+/// The format uses 128 bits per layer, providing:
 /// - Direct RGB colors (no palette)
 /// - Per-color alpha (4-bit each)
 /// - Region masks (3-bit, combinable)

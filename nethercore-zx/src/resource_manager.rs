@@ -410,17 +410,24 @@ impl ConsoleResourceManager for ZResourceManager {
         let active = crate::graphics::epu::collect_active_envs(&env_ids);
 
         if !active.unique_ids.is_empty() {
-            // Push-only API: epu_draw(config_ptr) provides the config for this frame.
-            // If the game doesn't call epu_draw(), fall back to the default environment.
-            let config: EpuConfig = state.epu_frame_config.unwrap_or_else(default_environment);
-
-            // Build all active env_ids with the same config (single global environment).
-            let config_refs: Vec<(u32, &EpuConfig)> = active
-                .unique_ids
-                .iter()
+            // Push-only API: epu_draw(...) / epu_set_env(...) provide configs for one or more env_ids.
+            // If no config is provided, fall back to the built-in default environment.
+            let default_config: EpuConfig = state
+                .epu_frame_configs
+                .get(&0)
                 .copied()
-                .map(|env_id| (env_id, &config))
-                .collect();
+                .unwrap_or_else(default_environment);
+
+            // Build all active env_ids with their own config when present, falling back to env_id=0.
+            let mut config_refs: Vec<(u32, &EpuConfig)> =
+                Vec::with_capacity(active.unique_ids.len());
+            for &env_id in &active.unique_ids {
+                let config = state
+                    .epu_frame_configs
+                    .get(&env_id)
+                    .unwrap_or(&default_config);
+                config_refs.push((env_id, config));
+            }
 
             // Dispatch EPU compute shaders
             graphics.build_epu_environments(encoder, &config_refs);

@@ -390,5 +390,4 @@ mod tests {
         assert_ne!(state.flags & FLAG_TEXTURE_FILTER_LINEAR, 0);
         assert!(!state.skips_normal_map());
     }
-
 }

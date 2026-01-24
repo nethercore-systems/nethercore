@@ -219,6 +219,17 @@ pub extern "C" fn trigger_right(player: u32) f32;
 /// * `color` — Color in 0xRRGGBBAA format
 pub extern "C" fn set_color(color: u32) void;
 
+/// Set the EPU environment index (`env_id`) used for subsequent draw calls.
+/// 
+/// This selects which EPU environment textures are sampled for:
+/// - `epu_draw(...)` background rendering
+/// - Reflections + ambient lighting in lit render modes (2/3)
+/// 
+/// Notes:
+/// - `env_id` is clamped to the supported range (0..255).
+/// - Default is 0.
+pub extern "C" fn environment_index(env_id: u32) void;
+
 /// Set the face culling mode.
 /// 
 /// # Arguments
@@ -643,7 +654,7 @@ pub extern "C" fn matcap_set(slot: u32, texture: u32) void;
 /// 
 /// Reads a 128-byte (8 x 128-bit = 16 x u64) environment configuration from
 /// WASM memory and renders the procedural background for the current viewport
-/// and render pass. If called multiple times in a frame, the last call wins.
+/// and render pass. If called multiple times for the same env_id in a frame, the last call wins.
 /// 
 /// # Arguments
 /// * `config_ptr` — Pointer to 16 u64 values (128 bytes total) in WASM memory
@@ -703,6 +714,8 @@ pub extern "C" fn matcap_set(slot: u32, texture: u32) void;
 /// 
 /// Renders the procedural environment background for the current viewport and pass.
 /// 
+/// The config is stored for the currently selected `environment_index(...)`.
+/// 
 /// # Usage
 /// Call this **first** in your `render()` function, before any 3D geometry:
 /// ```rust,ignore
@@ -721,6 +734,12 @@ pub extern "C" fn matcap_set(slot: u32, texture: u32) void;
 /// - For split-screen, set `viewport(...)` and call `epu_draw(...)` per viewport
 /// - The EPU compute pass runs automatically before rendering
 pub extern "C" fn epu_draw(config_ptr: [*]const u64) void;
+
+/// Store an EPU configuration for an environment ID without drawing a background.
+/// 
+/// Use this to set up multiple environments in the same frame, then select
+/// per-draw lighting/reflections via `environment_index(...)`.
+pub extern "C" fn epu_set_env(env_id: u32, config_ptr: [*]const u64) void;
 
 /// Bind an MRE texture (Metallic-Roughness-Emissive) to slot 1.
 pub extern "C" fn material_mre(texture: u32) void;

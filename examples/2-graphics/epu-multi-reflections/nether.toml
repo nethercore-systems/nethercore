@@ -1,0 +1,6 @@
+[game]
+id = "epu-multi-reflections"
+title = "EPU Multi Reflections"
+author = "Nethercore Examples"
+version = "0.1.0"
+render_mode = 2

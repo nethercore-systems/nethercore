@@ -12,6 +12,7 @@ use crate::graphics::{CullMode, PassConfig, TextureFilter};
 /// Register render state FFI functions
 pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     linker.func_wrap("env", "set_color", set_color)?;
+    linker.func_wrap("env", "environment_index", environment_index)?;
     linker.func_wrap("env", "cull_mode", cull_mode)?;
     linker.func_wrap("env", "texture_filter", texture_filter)?;
     linker.func_wrap("env", "uniform_alpha", uniform_alpha)?;
@@ -34,6 +35,29 @@ pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
 fn set_color(mut caller: Caller<'_, ZXGameContext>, color: u32) {
     let state = &mut caller.data_mut().ffi;
     state.update_color(color);
+}
+
+/// Set the current EPU environment index (`env_id`) for subsequent draw calls.
+///
+/// This selects which EPU environment textures (EnvRadiance / SH9) are sampled for:
+/// - Background drawing (`epu_draw`)
+/// - Reflections and ambient lighting in lit render modes
+fn environment_index(mut caller: Caller<'_, ZXGameContext>, env_id: u32) {
+    use crate::graphics::epu::MAX_ENV_STATES;
+
+    let state = &mut caller.data_mut().ffi;
+
+    let env_id_clamped = env_id.min(MAX_ENV_STATES.saturating_sub(1));
+    if env_id != env_id_clamped {
+        warn!(
+            "environment_index({}) out of range - clamped to {} (max {})",
+            env_id,
+            env_id_clamped,
+            MAX_ENV_STATES.saturating_sub(1)
+        );
+    }
+
+    state.update_environment_index(env_id_clamped);
 }
 
 /// Set the face culling mode

@@ -79,20 +79,7 @@ impl PipelineCache {
         let _ = self.get_or_create_environment_shader_module(device);
 
         // Compile mesh shaders for all valid vertex formats in this mode.
-        //
-        // Additionally, for modes 1-3, compile Mode 0 fallback shaders for formats without normals.
-        // This avoids runtime hitches if any meshes lack normals in a non-Lambert render mode.
-        let mut formats = crate::shader_gen::valid_formats_for_mode(render_mode);
-        if render_mode > 0 {
-            use crate::graphics::FORMAT_NORMAL;
-            formats.extend(
-                crate::shader_gen::valid_formats_for_mode(0)
-                    .into_iter()
-                    .filter(|f| f & FORMAT_NORMAL == 0),
-            );
-        }
-        formats.sort_unstable();
-        formats.dedup();
+        let formats = crate::shader_gen::valid_formats_for_mode(render_mode);
 
         for format in formats {
             let _ = self.get_or_create_mesh_shader_module(device, render_mode, format);
@@ -123,38 +110,23 @@ impl PipelineCache {
             return &self.shader_modules[&key];
         }
 
-        // Generate shader source, falling back to Mode 0 when the requested mode requires normals
-        // but the format doesn't include them.
-        let has_normal = format & FORMAT_NORMAL != 0;
-        let (actual_mode, shader_source) = if render_mode > 0 && !has_normal {
-            let source =
-                generate_shader(0, format).expect("Mode 0 should support all valid vertex formats");
-            (0, source)
-        } else {
-            match generate_shader(render_mode, format) {
-                Ok(source) => (render_mode, source),
-                Err(e) => {
-                    tracing::warn!(
-                        "Shader generation failed for mode {} format {}: {}. Falling back to Mode 0 (Lambert).",
-                        render_mode,
-                        format,
-                        e
-                    );
-                    let source = generate_shader(0, format)
-                        .expect("Mode 0 should support all valid vertex formats");
-                    (0, source)
-                }
-            }
-        };
+        if render_mode > 0 && (format & FORMAT_NORMAL) == 0 {
+            panic!(
+                "Vertex format {} missing normals for render mode {} ({})",
+                format,
+                render_mode,
+                crate::shader_gen::mode_name(render_mode)
+            );
+        }
 
-        let label = if actual_mode == render_mode {
-            format!("Mode{}_Format{}", render_mode, format)
-        } else {
-            format!(
-                "Mode{}_Format{}_FallbackMode{}",
-                render_mode, format, actual_mode
+        let shader_source = generate_shader(render_mode, format).unwrap_or_else(|e| {
+            panic!(
+                "Shader generation failed for mode {} format {}: {}",
+                render_mode, format, e
             )
-        };
+        });
+
+        let label = format!("Mode{}_Format{}", render_mode, format);
 
         let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some(&label),

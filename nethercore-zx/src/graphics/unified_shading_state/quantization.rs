@@ -135,14 +135,3 @@ pub fn update_u32_byte(current: u32, byte_index: u8, value: u8) -> u32 {
     let mask = !(0xFFu32 << shift);
     (current & mask) | ((value as u32) << shift)
 }
-
-// Backwards compatibility aliases
-#[inline]
-pub fn update_uniform_set_0_byte(current: u32, byte_index: u8, value: u8) -> u32 {
-    update_u32_byte(current, byte_index, value)
-}
-
-#[inline]
-pub fn update_uniform_set_1_byte(current: u32, byte_index: u8, value: u8) -> u32 {
-    update_u32_byte(current, byte_index, value)
-}

@@ -1,15 +1,15 @@
 # Nethercore Examples
 
-**46 working examples** organized into 8 categories to help you learn game development with Nethercore.
+**37 working examples** organized into 8 categories to help you learn game development with Nethercore.
 
 ## 📁 Organization
 
 ```
 examples/
 ├── 1-getting-started/   →  4 examples   (FFI basics, languages)
-├── 2-graphics/          →  6 examples   (Rendering, meshes, materials)
-├── 3-inspectors/        → 13 examples   (Debug inspector, render modes, environments)
-├── 4-animation/         →  6 examples   (Skeletal animation, IK)
+├── 2-graphics/          →  7 examples   (Rendering, meshes, materials)
+├── 3-inspectors/        →  6 examples   (Debug inspector, render modes, environments)
+├── 4-animation/         →  3 examples   (Skeletal animation)
 ├── 5-audio/             →  5 examples   (Sound effects, tracker music)
 ├── 6-assets/            →  7 examples   (ROM loading, data packs, GLTF/GLB pipeline)
 ├── 7-games/             →  2 examples   (Complete games)
@@ -79,7 +79,7 @@ Learn the basics across multiple languages.
 
 ---
 
-### 2. Graphics & Rendering (6 examples)
+### 2. Graphics & Rendering (7 examples)
 
 Core rendering techniques and procedural meshes.
 
@@ -88,13 +88,14 @@ Core rendering techniques and procedural meshes.
 | **textured-quad** | Texture loading and sprite rendering | 🟢 Beginner | `load_texture()`, `texture_bind()` |
 | **procedural-shapes** | 7 built-in mesh generators with texture toggle | 🟡 Intermediate | B button toggles textured/plain modes |
 | **lighting** | Full PBR lighting with 4 dynamic lights | 🟡 Intermediate | Mode 2 PBR, sky system, metallic/roughness |
+| **epu-multi-reflections** | Two shiny spheres with different EPU reflection env_ids | 🟡 Intermediate | `environment_index()`, `epu_set_env()` |
 | **billboard** | GPU-instanced billboards, camera-facing sprites | 🟡 Intermediate | Instancing, orientation |
 | **dither-demo** | PS1-style ordered dithering effects | 🟡 Intermediate | Retro aesthetic |
 | **material-override** | Per-draw material property overrides | 🟡 Intermediate | Dynamic materials |
 
 ---
 
-### 3. Inspectors (13 examples)
+### 3. Inspectors (6 examples)
 
 Interactive debuggers for render modes and environment effects.
 
@@ -107,36 +108,24 @@ Interactive debuggers for render modes and environment effects.
 | **mode2-inspector** | Mode 2 | Metallic-Roughness PBR (Mode 2) explorer |
 | **mode3-inspector** | Mode 3 | Specular-Shininess Blinn-Phong explorer |
 
-#### Environment Inspectors + Debug (9)
+#### Debug + EPU (2)
 
-| Example | Effect Type | Description |
-|---------|-------------|-------------|
-| **debug-demo** | Debug inspection system (F4 panel) | Frame controls, inspection |
-| **env-gradient-inspector** | Gradient | 4-point gradient with 4 presets, debug controls |
-| **env-veil-inspector** | Veil | Veil-style environment effect |
-| **env-lines-inspector** | Lines | Line-based procedural environment |
-| **env-nebula-inspector** | Nebula | Soft-field environment (fog/clouds/aurora/ink/plasma/kaleido) |
-| **env-rings-inspector** | Rings | Concentric ring environment |
-| **env-room-inspector** | Room | Room-style enclosed environment |
-| **env-cells-inspector** | Cells | Particles + tiles environment |
-| **env-silhouette-inspector** | Silhouette | Silhouette-based environment |
-
-**Difficulty:** 🟡 Intermediate | **Key Features:** F4 debug panels, real-time parameter tweaking
+| Example | Description |
+|---------|-------------|
+| **debug-demo** | Debug inspection system (F4 panel) |
+| **epu-showcase** | EPU environment presets + inspector |
 
 ---
 
-### 4. Animation & Skinning (6 examples)
+### 4. Animation & Skinning (3 examples)
 
-GPU skeletal animation and inverse kinematics.
+GPU skeletal animation and keyframe playback.
 
 | Example | Description | Difficulty | Key Features |
 |---------|-------------|------------|--------------|
 | **skinned-mesh** | GPU skeletal animation basics | 🟡 Intermediate | `set_bones()`, basic transforms |
 | **animation-demo** | Keyframe animation playback from ROM | 🟡 Intermediate | ROM-based anim data |
-| **ik-demo** | Inverse kinematics (procedural animation) | 🔴 Advanced | Runtime IK solving |
-| **multi-skinned-procedural** | Multiple animated characters (procedural bones) | 🟡 Intermediate | Procedural skeleton |
 | **multi-skinned-rom** | Multiple animated characters (ROM data) | 🟡 Intermediate | ROM skeleton + anim |
-| **skeleton-stress-test** | Performance test with many skeletons | 🔴 Advanced | Stress testing |
 
 ---
 
@@ -204,7 +193,7 @@ Stencil buffers, viewports, and advanced techniques.
 
 ## 📊 Statistics
 
-- **Total Examples:** 46
+- **Total Examples:** 37
 - **Languages:** Rust, C, Zig
 - **Complete Games:** 2
 

@@ -156,11 +156,16 @@ pub struct ZXFFIState {
     pub mvp_shading_overflow_count: u32,
 
     // EPU (Environment Processing Unit) state - instruction-based API (push-only)
-    /// Last `epu_draw()` config captured for this frame (only the last call wins).
+    /// EPU configs pushed for this frame, keyed by `env_id`.
     ///
-    /// If the game doesn't call `epu_draw()` in a frame, the renderer falls back
-    /// to a built-in default environment config.
-    pub epu_frame_config: Option<EpuConfig>,
+    /// - `epu_draw(...)` stores a config for the **currently selected** `environment_index(...)`
+    ///   and records a background draw request.
+    /// - `epu_set_env(env_id, ...)` stores a config for an explicit `env_id` without drawing.
+    ///
+    /// Any `env_id` that does not have an explicit config falls back to:
+    /// 1) `env_id = 0` if present, else
+    /// 2) the built-in default environment config.
+    pub epu_frame_configs: HashMap<u32, EpuConfig>,
     /// EPU draw requests for this frame.
     ///
     /// Keyed by (viewport, pass_id) so split-screen and multi-pass rendering can
@@ -252,7 +257,7 @@ impl Default for ZXFFIState {
             mvp_shading_overflowed_this_frame: false,
             mvp_shading_overflow_count: 0,
             // EPU (instruction-based) state (push-only)
-            epu_frame_config: None,
+            epu_frame_configs: HashMap::new(),
             epu_frame_draws: HashMap::new(),
         }
     }

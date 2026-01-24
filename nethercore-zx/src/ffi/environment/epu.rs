@@ -13,35 +13,31 @@ use wasmtime::Caller;
 
 use crate::ffi::ZXGameContext;
 use crate::ffi::helpers::get_memory;
-use crate::graphics::epu::EpuConfig;
+use crate::graphics::epu::{EpuConfig, MAX_ENV_STATES};
 
-/// Draw the background using an EPU config (push-only, stateless API).
-///
-/// Reads 128 bytes (8 x 128-bit = 16 x u64) from WASM memory and stores the
-/// config as the frame's EPU environment. If called multiple times in a frame,
-/// only the last call is used.
-///
-/// # Arguments
-/// * `config_ptr` - Pointer to 16 u64 values (128 bytes) in WASM memory
-pub(crate) fn epu_draw(mut caller: Caller<'_, ZXGameContext>, config_ptr: u32) {
+fn read_epu_config(
+    caller: &Caller<'_, ZXGameContext>,
+    config_ptr: u32,
+    fn_name: &str,
+) -> Option<EpuConfig> {
     // Get WASM memory
-    let Some(memory) = get_memory(&caller, "epu_draw") else {
-        return;
+    let Some(memory) = get_memory(caller, fn_name) else {
+        return None;
     };
 
     // Read 128 bytes (16 x u64 = 8 x 128-bit) from WASM memory
-    let mem_data = memory.data(&caller);
+    let mem_data = memory.data(caller);
     let ptr = config_ptr as usize;
     let size = 128; // 16 x u64 = 128 bytes
 
     if ptr + size > mem_data.len() {
         warn!(
-            "epu_draw: memory access ({} bytes at {}) exceeds bounds ({})",
+            "{fn_name}: memory access ({} bytes at {}) exceeds bounds ({})",
             size,
             ptr,
             mem_data.len()
         );
-        return;
+        return None;
     }
 
     // Read the 16 u64 values (8 pairs of [hi, lo])
@@ -56,8 +52,60 @@ pub(crate) fn epu_draw(mut caller: Caller<'_, ZXGameContext>, config_ptr: u32) {
         arr
     };
 
-    // Create EpuConfig from the layers
-    let config = EpuConfig { layers };
+    Some(EpuConfig { layers })
+}
+
+/// Store an EPU config for an environment ID without drawing a background.
+///
+/// Reads 128 bytes (8 x 128-bit = 16 x u64) from WASM memory and stores the
+/// config for the given `env_id` for this frame. If called multiple times for
+/// the same `env_id` in a frame, the last call wins.
+///
+/// # Arguments
+/// * `env_id` - Environment ID (0..255)
+/// * `config_ptr` - Pointer to 16 u64 values (128 bytes) in WASM memory
+pub(crate) fn epu_set_env(mut caller: Caller<'_, ZXGameContext>, env_id: u32, config_ptr: u32) {
+    let env_id_clamped = env_id.min(MAX_ENV_STATES.saturating_sub(1));
+    if env_id != env_id_clamped {
+        warn!(
+            "epu_set_env: env_id {} out of range, clamped to {} (max {})",
+            env_id,
+            env_id_clamped,
+            MAX_ENV_STATES.saturating_sub(1)
+        );
+    }
+
+    let Some(config) = read_epu_config(&caller, config_ptr, "epu_set_env") else {
+        return;
+    };
+
+    let state = &mut caller.data_mut().ffi;
+
+    let layers = config.layers;
+    if let Some(prev) = state.epu_frame_configs.insert(env_id_clamped, config)
+        && prev.layers != layers
+    {
+        warn!(
+            "epu_set_env: multiple different configs pushed for env_id {} in the same frame; last call wins",
+            env_id_clamped
+        );
+    }
+}
+
+/// Draw the background using an EPU config (push-only, stateless API).
+///
+/// Reads 128 bytes (8 x 128-bit = 16 x u64) from WASM memory and stores the
+/// config for the **currently selected** env_id (`environment_index(...)`),
+/// then records a background draw request for the current viewport/pass.
+///
+/// If called multiple times for the same env_id in a frame, the last call wins.
+///
+/// # Arguments
+/// * `config_ptr` - Pointer to 16 u64 values (128 bytes) in WASM memory
+pub(crate) fn epu_draw(mut caller: Caller<'_, ZXGameContext>, config_ptr: u32) {
+    let Some(config) = read_epu_config(&caller, config_ptr, "epu_draw") else {
+        return;
+    };
 
     let state = &mut caller.data_mut().ffi;
 
@@ -65,16 +113,20 @@ pub(crate) fn epu_draw(mut caller: Caller<'_, ZXGameContext>, config_ptr: u32) {
     let viewport = state.current_viewport;
     let pass_id = state.current_pass_id;
 
-    // Warn if multiple different configs are pushed in the same frame.
-    if let Some(prev) = state.epu_frame_config
-        && prev.layers != config.layers
-        && !state.epu_frame_draws.is_empty()
+    // Store config for the current env_id (selected via environment_index()).
+    let env_id = state
+        .current_shading_state
+        .environment_index
+        .min(MAX_ENV_STATES.saturating_sub(1));
+    let layers = config.layers;
+    if let Some(prev) = state.epu_frame_configs.insert(env_id, config)
+        && prev.layers != layers
     {
-        warn!("epu_draw: multiple different configs pushed in the same frame; last call wins");
+        warn!(
+            "epu_draw: multiple different configs pushed for env_id {} in the same frame; last call wins",
+            env_id
+        );
     }
-
-    // Last call wins for the frame config.
-    state.epu_frame_config = Some(config);
 
     // Capture view/proj + shading state for this environment draw.
     // Instance index for the environment shader is an index into mvp_shading_indices.

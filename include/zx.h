@@ -232,6 +232,17 @@ NCZX_IMPORT float trigger_right(uint32_t player);
 /** * `color` — Color in 0xRRGGBBAA format */
 NCZX_IMPORT void set_color(uint32_t color);
 
+/** Set the EPU environment index (`env_id`) used for subsequent draw calls. */
+/**  */
+/** This selects which EPU environment textures are sampled for: */
+/** - `epu_draw(...)` background rendering */
+/** - Reflections + ambient lighting in lit render modes (2/3) */
+/**  */
+/** Notes: */
+/** - `env_id` is clamped to the supported range (0..255). */
+/** - Default is 0. */
+NCZX_IMPORT void environment_index(uint32_t env_id);
+
 /** Set the face culling mode. */
 /**  */
 /** # Arguments */
@@ -656,7 +667,7 @@ NCZX_IMPORT void matcap_set(uint32_t slot, uint32_t texture);
 /**  */
 /** Reads a 128-byte (8 x 128-bit = 16 x u64) environment configuration from */
 /** WASM memory and renders the procedural background for the current viewport */
-/** and render pass. If called multiple times in a frame, the last call wins. */
+/** and render pass. If called multiple times for the same env_id in a frame, the last call wins. */
 /**  */
 /** # Arguments */
 /** * `config_ptr` — Pointer to 16 u64 values (128 bytes total) in WASM memory */
@@ -716,6 +727,8 @@ NCZX_IMPORT void matcap_set(uint32_t slot, uint32_t texture);
 /**  */
 /** Renders the procedural environment background for the current viewport and pass. */
 /**  */
+/** The config is stored for the currently selected `environment_index(...)`. */
+/**  */
 /** # Usage */
 /** Call this **first** in your `render()` function, before any 3D geometry: */
 /** ```rust,ignore */
@@ -734,6 +747,12 @@ NCZX_IMPORT void matcap_set(uint32_t slot, uint32_t texture);
 /** - For split-screen, set `viewport(...)` and call `epu_draw(...)` per viewport */
 /** - The EPU compute pass runs automatically before rendering */
 NCZX_IMPORT void epu_draw(const uint64_t* config_ptr);
+
+/** Store an EPU configuration for an environment ID without drawing a background. */
+/**  */
+/** Use this to set up multiple environments in the same frame, then select */
+/** per-draw lighting/reflections via `environment_index(...)`. */
+NCZX_IMPORT void epu_set_env(uint32_t env_id, const uint64_t* config_ptr);
 
 /** Bind an MRE texture (Metallic-Roughness-Emissive) to slot 1. */
 NCZX_IMPORT void material_mre(uint32_t texture);

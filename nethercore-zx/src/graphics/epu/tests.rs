@@ -165,9 +165,9 @@ fn test_epu_layer_encode_alpha() {
 fn test_epu_layer_encode_full() {
     // Test a fully populated layer
     let layer = EpuLayer {
-        opcode: EpuOpcode::Decal,    // 0x8
-        region_mask: REGION_SKY,     // 0b100
-        blend: EpuBlend::Add,        // 0
+        opcode: EpuOpcode::Decal, // 0x8
+        region_mask: REGION_SKY,  // 0b100
+        blend: EpuBlend::Add,     // 0
         meta5: 0x1B,
         color_a: [0xFF, 0x00, 0x00], // red
         color_b: [0x00, 0xFF, 0x00], // green

@@ -26,7 +26,6 @@ pub use quantization::{
     pack_f16, pack_f16x2, pack_matcap_blend_modes, pack_rgb8, pack_rgba8, pack_snorm16,
     pack_uniform_set_0, pack_uniform_set_1, pack_unorm8, unpack_f16, unpack_f16x2,
     unpack_matcap_blend_modes, unpack_snorm16, unpack_unorm8, update_u32_byte,
-    update_uniform_set_0_byte, update_uniform_set_1_byte,
 };
 
 pub use shading_state::{

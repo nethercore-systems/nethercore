@@ -367,19 +367,20 @@ fn test_epu_frame_config_storage() {
     let mut state = ZXFFIState::default();
 
     // Initially empty
-    assert!(state.epu_frame_config.is_none());
+    assert!(state.epu_frame_configs.is_empty());
     assert!(state.epu_frame_draws.is_empty());
 
     // Store a config (zeroed layers - exact values don't matter for storage test)
     let config = crate::graphics::epu::EpuConfig {
         layers: [[0u64; 2]; 8],
     };
-    state.epu_frame_config = Some(config);
+    state.epu_frame_configs.insert(0, config);
     state.epu_frame_draws.insert((Viewport::FULLSCREEN, 0), 123);
 
     let stored = state
-        .epu_frame_config
-        .expect("epu_frame_config should be set");
+        .epu_frame_configs
+        .get(&0)
+        .expect("epu_frame_configs[0] should be set");
     assert_eq!(stored.layers, config.layers);
     assert_eq!(
         state.epu_frame_draws.get(&(Viewport::FULLSCREEN, 0)),
@@ -396,12 +397,12 @@ fn test_clear_frame_clears_epu_frame_requests() {
     let config = crate::graphics::epu::EpuConfig {
         layers: [[0u64; 2]; 8],
     };
-    state.epu_frame_config = Some(config);
+    state.epu_frame_configs.insert(0, config);
     state.epu_frame_draws.insert((Viewport::FULLSCREEN, 0), 0);
 
     // Clear frame should clear the per-frame request
     state.clear_frame();
 
-    assert!(state.epu_frame_config.is_none());
+    assert!(state.epu_frame_configs.is_empty());
     assert!(state.epu_frame_draws.is_empty());
 }

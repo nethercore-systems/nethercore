@@ -11,6 +11,35 @@ For canonical ABI docs, see `nethercore/include/zx.rs`. For the opcode catalog/s
 
 ## FFI
 
+### environment_index
+
+Select which EPU environment (`env_id`) subsequent draw calls will sample for ambient + reflections.
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust,ignore
+/// Select the EPU environment ID for subsequent draws (0..255).
+fn environment_index(env_id: u32);
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+/// Select the EPU environment ID for subsequent draws (0..255).
+void environment_index(uint32_t env_id);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+/// Select the EPU environment ID for subsequent draws (0..255).
+pub extern fn environment_index(env_id: u32) void;
+```
+{{#endtab}}
+
+{{#endtabs}}
+
 ### epu_draw
 
 Draw the environment background for the current viewport/pass using a packed EPU config.
@@ -55,6 +84,38 @@ Notes:
 - For split-screen, set `viewport(...)` and call `epu_draw(...)` per viewport.
 - The EPU compute pass runs automatically before rendering.
 - Ambient lighting is computed and applied entirely on the GPU; there is no CPU ambient query.
+- The config is stored for the currently selected `environment_index(...)`.
+
+### epu_set_env
+
+Store a packed EPU config for an explicit `env_id` without drawing a background.
+
+Use this to set up multiple environments in the same frame, then select per-draw reflections/ambient via `environment_index(...)`.
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust,ignore
+/// Store a packed EPU config for an env_id without drawing a background.
+fn epu_set_env(env_id: u32, config_ptr: *const u64);
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+/// Store a packed EPU config for an env_id without drawing a background.
+void epu_set_env(uint32_t env_id, const uint64_t* config_ptr);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+/// Store a packed EPU config for an env_id without drawing a background.
+pub extern fn epu_set_env(env_id: u32, config_ptr: [*]const u64) void;
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ---
 
