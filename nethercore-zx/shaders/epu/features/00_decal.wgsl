@@ -8,7 +8,7 @@
 //   param_a[3:0]: Edge softness (0..15 -> 0.001..0.05 rad)
 //   param_b: Size (0..255 -> 0..0.5 rad)
 //   param_c: Softness for glow (0..255 -> 0..0.2)
-//   param_d: Pulse speed (0..255 -> 0..10)
+//   param_d: Reserved (set to 0)
 //   direction: Shape center direction (oct-u16)
 // ============================================================================
 
@@ -28,8 +28,7 @@ fn box_sdf(p: vec2f, half_extents: vec2f) -> f32 {
 fn eval_decal(
     dir: vec3f,
     instr: vec4u,
-    region_w: f32,
-    time: f32
+    region_w: f32
 ) -> LayerSample {
     if region_w < 0.001 { return LayerSample(vec3f(0.0), 0.0); }
 
@@ -70,9 +69,7 @@ fn eval_decal(
     let glow_softness = u8_to_01(instr_c(instr)) * 0.2;
     let glow = smoothstep(glow_softness + softness, softness, sdf) * (1.0 - edge);
 
-    // Pulse animation using param_d
-    let speed = u8_to_01(instr_d(instr)) * 10.0;
-    let anim = select(1.0, 0.6 + 0.4 * sin(time * speed), speed > 0.0);
+    let anim = 1.0;
 
     // color_a = shape/fill color, color_b = glow/outline color
     // alpha_a = fill alpha, alpha_b = glow alpha

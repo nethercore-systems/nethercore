@@ -51,7 +51,7 @@ pub(crate) const VS_TANGENT_SKINNED: &str =
     "out.world_tangent = normalize(final_tangent);\n    out.bitangent_sign = final_tangent_sign;";
 
 pub(crate) const VS_SKINNED: &str = r#"// GPU skinning: compute skinned position, normal, and tangent
-    // Animation System v2 (Unified Buffer): keyframe_base and inverse_bind_base
+    // Animation system (Unified Buffer): keyframe_base and inverse_bind_base
     // point directly into unified_animation buffer (offsets pre-computed on CPU)
     // - Skinning mode (FLAG_SKINNING_MODE): 0 = raw, 1 = apply inverse bind
     let shading_state_for_skinning = shading_states[shading_state_idx];

@@ -245,7 +245,7 @@ fn skeleton_bind(mut caller: Caller<'_, ZXGameContext>, skeleton: u32) {
 /// Call this before drawing skinned meshes (meshes with FORMAT_SKINNED flag).
 /// The bone transforms are typically computed on CPU each frame for skeletal animation.
 ///
-/// # Animation System v2
+/// # Animation System
 /// Bone matrices are appended to the per-frame immediate bones buffer.
 /// The offset at which matrices were added is tracked, allowing multiple
 /// set_bones() calls per frame for different skinned mesh draws.
@@ -296,7 +296,7 @@ fn set_bones(mut caller: Caller<'_, ZXGameContext>, matrices_ptr: u32, count: u3
         return;
     }
 
-    // Record offset before appending (Animation System v2: accumulating buffer)
+    // Record offset before appending (Animation System: accumulating buffer)
     let offset = {
         let state = &caller.data().ffi;
         state.bone_matrices.len() as u32
@@ -336,7 +336,7 @@ fn set_bones(mut caller: Caller<'_, ZXGameContext>, matrices_ptr: u32, count: u3
         matrices.push(matrix);
     }
 
-    // Append bone matrices to render state (Animation System v2: accumulating)
+    // Append bone matrices to render state (Animation System: accumulating)
     let state = &mut caller.data_mut().ffi;
     state.bone_matrices.extend(matrices);
     state.bone_count = count;
@@ -366,7 +366,7 @@ fn set_bones(mut caller: Caller<'_, ZXGameContext>, matrices_ptr: u32, count: u3
 /// Use this when you have 4x4 matrices from a math library like glam.
 /// For 3x4 matrices, use `set_bones()` instead for better performance.
 ///
-/// # Animation System v2
+/// # Animation System
 /// Bone matrices are appended to the per-frame immediate bones buffer.
 /// See set_bones() for details.
 fn set_bones_4x4(mut caller: Caller<'_, ZXGameContext>, matrices_ptr: u32, count: u32) {
@@ -416,7 +416,7 @@ fn set_bones_4x4(mut caller: Caller<'_, ZXGameContext>, matrices_ptr: u32, count
         return;
     }
 
-    // Record offset before appending (Animation System v2: accumulating buffer)
+    // Record offset before appending (Animation System: accumulating buffer)
     let offset = {
         let state = &caller.data().ffi;
         state.bone_matrices.len() as u32
@@ -461,7 +461,7 @@ fn set_bones_4x4(mut caller: Caller<'_, ZXGameContext>, matrices_ptr: u32, count
         matrices.push(matrix);
     }
 
-    // Append bone matrices to render state (Animation System v2: accumulating)
+    // Append bone matrices to render state (Animation System: accumulating)
     let state = &mut caller.data_mut().ffi;
     state.bone_matrices.extend(matrices);
     state.bone_count = count;

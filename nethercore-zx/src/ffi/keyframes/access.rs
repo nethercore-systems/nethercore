@@ -116,7 +116,7 @@ pub(super) fn keyframe_read(
     Ok(())
 }
 
-/// Bind a keyframe directly from the static GPU buffer (Animation System v2)
+/// Bind a keyframe directly from the static GPU buffer (Animation System)
 ///
 /// Points subsequent skinned draws to use pre-decoded matrices from @binding(7) all_keyframes.
 /// No CPU decoding or data transfer needed at draw time.
@@ -129,7 +129,7 @@ pub(super) fn keyframe_read(
 /// - Invalid handle (not loaded)
 /// - Frame index out of bounds
 ///
-/// # Animation System v2
+/// # Animation System
 /// Unlike the legacy `keyframe_read() -> set_bones()` path, this uses pre-uploaded
 /// static keyframe data. The GPU shader reads directly from the all_keyframes buffer
 /// at the computed offset.
@@ -220,7 +220,7 @@ pub(super) fn keyframe_bind(
 /// - row1: [m10, m11, m12, ty]
 /// - row2: [m20, m21, m22, tz]
 ///
-/// Note: This function is used by tests but not runtime code since Animation System v2
+/// Note: This function is used by tests but not runtime code since the unified animation buffer
 /// uses pre-decoded static keyframes. Keeping it for test coverage.
 #[allow(dead_code)]
 fn bone_transform_to_matrix(t: &BoneTransform) -> BoneMatrix3x4 {

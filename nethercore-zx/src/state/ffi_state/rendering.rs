@@ -3,7 +3,7 @@
 use super::{SkeletonData, ZXFFIState};
 
 impl ZXFFIState {
-    /// Sync animation state (Animation System v2 - Unified Buffer) to current_shading_state
+    /// Sync animation state (Unified Buffer) to current_shading_state
     ///
     /// Computes absolute keyframe_base into unified_animation buffer:
     /// - Static keyframes: inverse_bind_end + section_offset
@@ -55,7 +55,7 @@ impl ZXFFIState {
     /// Uses deduplication via StatePool - if this exact state already exists, returns existing index.
     /// Otherwise adds a new entry.
     pub fn add_shading_state(&mut self) -> crate::graphics::ShadingStateIndex {
-        // Sync animation state before checking (Animation System v2)
+        // Sync animation state before checking
         self.sync_animation_state();
 
         // If not dirty, return the last added state

@@ -51,7 +51,7 @@ pub struct PackedUnifiedShadingState {
 
     pub lights: [PackedLight; 4], // 48 bytes (4 × 12-byte lights)
 
-    // Animation System v2 fields (12 bytes)
+    // Animation system fields (12 bytes)
     /// Base offset into @binding(7) all_keyframes buffer
     /// Shader reads: all_keyframes[keyframe_base + bone_index]
     /// 0 = no keyframes bound (use bones buffer directly)
@@ -82,7 +82,7 @@ impl Default for PackedUnifiedShadingState {
             uniform_set_1,
             flags: DEFAULT_FLAGS, // uniform_alpha = 15 (opaque), other flags = 0
             lights: [PackedLight::default(); 4], // All lights disabled
-            // Animation System v2 fields (default to no animation)
+            // Animation system fields (default to no animation)
             keyframe_base: 0,     // No keyframes bound
             inverse_bind_base: 0, // No skeleton bound (raw bone mode)
             _pad: 0,
@@ -122,7 +122,7 @@ pub const FLAG_SKINNING_MODE: u32 = 1 << 0;
 pub const FLAG_TEXTURE_FILTER_LINEAR: u32 = 1 << 1;
 
 // ============================================================================
-// Animation System v2 (Unified Buffer)
+// Animation system (Unified Buffer)
 // ============================================================================
 // NOTE: ANIMATION_FLAG_USE_IMMEDIATE removed - unified_animation buffer uses
 // pre-computed offsets. The shader just reads from unified_animation[keyframe_base + bone_idx].
@@ -208,7 +208,7 @@ impl PackedUnifiedShadingState {
             flags: DEFAULT_FLAGS, // uniform_alpha = 15 (opaque), other flags = 0
             uniform_set_1,
             lights,
-            // Animation System v2 fields - defaults
+            // Animation system fields - defaults
             keyframe_base: 0,
             inverse_bind_base: 0,
             _pad: 0,

@@ -274,7 +274,7 @@ impl ConsoleResourceManager for ZResourceManager {
         }
 
         // =====================================================================
-        // Animation System v2: Upload static animation data to GPU
+        // Animation system: Upload static animation data to GPU
         // =====================================================================
 
         // Upload all skeleton inverse bind matrices to GPU

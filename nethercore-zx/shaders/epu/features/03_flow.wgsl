@@ -5,7 +5,7 @@
 //   color_b: Secondary flow color (RGB24) - mixed based on pattern
 //   intensity: Brightness (0..255 -> 0..1)
 //   param_a: Scale (0..255 -> 1..16)
-//   param_b: Speed (0..255 -> 0..2)
+//   param_b: Reserved (set to 0)
 //   param_c[7:4]: Octaves (0..4)
 //   param_c[3:0]: Pattern (0=noise, 1=streaks, 2=caustic)
 //   param_d: Turbulence amount (0..255 -> 0..1)
@@ -63,8 +63,7 @@ fn value_noise3(p: vec3f) -> f32 {
 fn eval_flow(
     dir: vec3f,
     instr: vec4u,
-    region_w: f32,
-    time: f32
+    region_w: f32
 ) -> LayerSample {
     if region_w < 0.001 { return LayerSample(vec3f(0.0), 0.0); }
 
@@ -75,7 +74,6 @@ fn eval_flow(
     // periodic functions around the azimuth wrap and keeps patterns stable across the sphere.
     let scale_i = 1u + (instr_a(instr) * 15u) / 255u;
     let scale = f32(scale_i);
-    let speed = u8_to_01(instr_b(instr)) * 2.0;
 
     let pc = instr_c(instr);
     let octaves = min((pc >> 4u) & 0xFu, 4u);
@@ -86,21 +84,20 @@ fn eval_flow(
 
     // NOTE: FLOW previously used 2D UV parameterizations (cylindrical / octahedral),
     // which necessarily introduce seams. Those seams become very noticeable once the
-    // pattern is animated (time scroll), especially for smooth trig patterns like caustics.
+    // pattern is animated, especially for smooth trig patterns like caustics.
     //
     // Use a 3D domain based on the direction vector instead. This is continuous on the sphere,
     // so it eliminates hard seams for animated environments.
-    let t = time * speed;
-    var p = dir * scale + flow_dir * (t * 1.5);
+    var p = dir * scale;
+    let t = 0.0;
 
-    // Optional turbulence: add a small vector-valued distortion. Tie it to `speed` so
-    // speed=0 produces a truly static layer (important for EPU caching behavior).
+    // Optional turbulence: add a small vector-valued distortion.
     if turbulence > 0.001 {
         let p2 = p * 2.0;
         let wobble = vec3f(
-            value_noise3(p2 + vec3f(0.0, 0.0, t * 0.2)),
-            value_noise3(p2 + vec3f(17.3, 31.7, t * 0.2)),
-            value_noise3(p2 + vec3f(41.0, 12.0, t * 0.2))
+            value_noise3(p2 + vec3f(0.0, 0.0, 0.0)),
+            value_noise3(p2 + vec3f(17.3, 31.7, 0.0)),
+            value_noise3(p2 + vec3f(41.0, 12.0, 0.0))
         );
         p += wobble * turbulence * 0.5;
     }

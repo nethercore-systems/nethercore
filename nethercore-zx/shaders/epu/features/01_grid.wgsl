@@ -7,7 +7,7 @@
 //   param_a: Scale (0..255 -> 1..64)
 //   param_b: Thickness (0..255 -> 0.001..0.1)
 //   param_c[7:4]: Pattern (0=stripes, 1=grid, 2=checker)
-//   param_c[3:0]: Scroll speed (0..15 -> 0..2)
+//   param_c[3:0]: Reserved (set to 0)
 //   param_d: Rotation angle (0..255 -> 0..TAU)
 //   direction: Orientation (reserved for future expansion)
 // ============================================================================
@@ -34,8 +34,7 @@ fn rotate_2d(uv: vec2f, angle: f32) -> vec2f {
 fn eval_grid(
     dir: vec3f,
     instr: vec4u,
-    region_w: f32,
-    time: f32
+    region_w: f32
 ) -> LayerSample {
     if region_w < 0.001 { return LayerSample(vec3f(0.0), 0.0); }
 
@@ -44,15 +43,13 @@ fn eval_grid(
 
     let pc = instr_c(instr);
     let pattern_type = (pc >> 4u) & 0xFu;
-    let scroll_q = pc & 0xFu;
-    let scroll_speed = (f32(scroll_q) / 15.0) * 2.0;
 
     // Rotation from param_d
     let rotation = u8_to_01(instr_d(instr)) * TAU;
 
     let uv0 = get_cyl_uv(dir);
     let uv_rotated = rotate_2d(uv0, rotation);
-    let uv = uv_rotated + vec2f(time * scroll_speed, 0.0);
+    let uv = uv_rotated;
 
     // color_a = primary line color, color_b = cross/secondary line color
     let line_rgb = instr_color_a(instr);

@@ -77,7 +77,7 @@ pub struct ZXFFIState {
     /// Next keyframe handle to allocate
     pub next_keyframe_handle: u32,
 
-    // GPU Animation Index Tracking (Animation System v2 - Unified Buffer)
+    // GPU Animation Index Tracking (Unified Buffer)
     /// Tracks where each skeleton's inverse bind matrices are in unified_animation
     /// Index = skeleton_handle - 1 (handles are 1-indexed)
     pub skeleton_gpu_info: Vec<SkeletonGpuInfo>,

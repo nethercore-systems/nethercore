@@ -11,10 +11,10 @@ struct PackedEnvironmentState {
 }
 
 struct FrameUniforms {
-    time: f32,
     active_count: u32,
     map_size: u32,
     _pad0: u32,
+    _pad1: u32,
 }
 
 // Bindings: No palette buffer - colors are embedded in instructions
@@ -24,7 +24,7 @@ struct FrameUniforms {
 
 @group(0) @binding(3) var epu_out_sharp: texture_storage_2d_array<rgba16float, write>;
 
-fn evaluate_env_radiance(dir: vec3f, st: PackedEnvironmentState, time: f32) -> vec3f {
+fn evaluate_env_radiance(dir: vec3f, st: PackedEnvironmentState) -> vec3f {
     // Start with default enclosure (will be set by first bounds layer)
     var enc = EnclosureConfig(vec3f(0.0, 1.0, 0.0), 0.5, -0.5, 0.1);
     var regions = RegionWeights(0.33, 0.34, 0.33);
@@ -43,12 +43,12 @@ fn evaluate_env_radiance(dir: vec3f, st: PackedEnvironmentState, time: f32) -> v
         if is_bounds {
             // Bounds opcode: update enclosure, get sample + output regions
             enc = enclosure_from_layer(instr, opcode, enc);
-            let bounds_result = evaluate_bounds_layer(dir, instr, opcode, enc, regions, time);
+            let bounds_result = evaluate_bounds_layer(dir, instr, opcode, enc, regions);
             regions = bounds_result.regions;  // Use output regions for subsequent features
             radiance = apply_blend(radiance, bounds_result.sample, blend);
         } else {
             // Feature opcode: just get sample using current regions
-            let sample = evaluate_layer(dir, instr, enc, regions, time);
+            let sample = evaluate_layer(dir, instr, enc, regions);
             radiance = apply_blend(radiance, sample, blend);
         }
     }
@@ -71,7 +71,7 @@ fn epu_build(@builtin(global_invocation_id) gid: vec3u) {
     let dir = octahedral_decode(oct);
 
     let st = epu_states[env_id];
-    let radiance = evaluate_env_radiance(dir, st, epu_frame.time);
+    let radiance = evaluate_env_radiance(dir, st);
 
     textureStore(epu_out_sharp, vec2u(gid.xy), i32(env_id), vec4f(radiance, 1.0));
 }

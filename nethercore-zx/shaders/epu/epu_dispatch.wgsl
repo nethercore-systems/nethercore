@@ -9,8 +9,7 @@ fn evaluate_bounds_layer(
     instr: vec4u,
     opcode: u32,
     enc: EnclosureConfig,
-    base_regions: RegionWeights,
-    time: f32
+    base_regions: RegionWeights
 ) -> BoundsResult {
     switch opcode {
         case OP_RAMP: {
@@ -22,7 +21,7 @@ fn evaluate_bounds_layer(
             return eval_sector(dir, instr, enc, base_regions);
         }
         case OP_SILHOUETTE: {
-            return eval_silhouette(dir, instr, enc, base_regions, time);
+            return eval_silhouette(dir, instr, enc, base_regions);
         }
         case OP_SPLIT: {
             return eval_split(dir, instr, base_regions);
@@ -48,8 +47,7 @@ fn evaluate_layer(
     dir: vec3f,
     instr: vec4u,
     enc: EnclosureConfig,
-    regions: RegionWeights,
-    time: f32
+    regions: RegionWeights
 ) -> LayerSample {
     let opcode = instr_opcode(instr);
     let region_mask = instr_region(instr);
@@ -61,31 +59,31 @@ fn evaluate_layer(
         // ====================================================================
         // Feature opcodes (0x08+) - bounds handled by evaluate_bounds_layer
         // ====================================================================
-        case OP_DECAL:   { return eval_decal(dir, instr, region_w, time); }
-        case OP_GRID:    { return eval_grid(dir, instr, region_w, time); }
-        case OP_SCATTER: { return eval_scatter(dir, instr, region_w, time); }
-        case OP_FLOW:    { return eval_flow(dir, instr, region_w, time); }
+        case OP_DECAL:   { return eval_decal(dir, instr, region_w); }
+        case OP_GRID:    { return eval_grid(dir, instr, region_w); }
+        case OP_SCATTER: { return eval_scatter(dir, instr, region_w); }
+        case OP_FLOW:    { return eval_flow(dir, instr, region_w); }
 
         // Additional radiance opcodes (0x0C..0x13)
-        case OP_TRACE: { return eval_trace(dir, instr, region_w, time); }
-        case OP_VEIL: { return eval_veil(dir, instr, region_w, time); }
+        case OP_TRACE: { return eval_trace(dir, instr, region_w); }
+        case OP_VEIL: { return eval_veil(dir, instr, region_w); }
         case OP_ATMOSPHERE: {
-            return eval_atmosphere(dir, instr, enc, region_w, time);
+            return eval_atmosphere(dir, instr, enc, region_w);
         }
         case OP_PLANE: {
-            return eval_plane(dir, instr, region_w, time);
+            return eval_plane(dir, instr, region_w);
         }
         case OP_CELESTIAL: {
-            return eval_celestial(dir, instr, region_w, time);
+            return eval_celestial(dir, instr, region_w);
         }
         case OP_PORTAL: {
-            return eval_portal(dir, instr, region_w, time);
+            return eval_portal(dir, instr, region_w);
         }
         case OP_LOBE_RADIANCE: {
-            return eval_lobe_radiance(dir, instr, region_w, time);
+            return eval_lobe_radiance(dir, instr, region_w);
         }
         case OP_BAND_RADIANCE: {
-            return eval_band_radiance(dir, instr, region_w, time);
+            return eval_band_radiance(dir, instr, region_w);
         }
 
         default: { return LayerSample(vec3f(0.0), 0.0); }

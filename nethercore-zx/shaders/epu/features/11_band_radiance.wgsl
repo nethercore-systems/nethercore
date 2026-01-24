@@ -14,7 +14,7 @@
 //   param_a: Band width (0..255 -> 0.005..0.5)
 //   param_b: Y offset from equator (0..255 -> -0.5..0.5)
 //   param_c: Edge softness (0..255 -> 0.0..1.0)
-//   param_d: Scroll/modulation speed (0..255 -> 0.0..1.0)
+//   param_d: Modulation phase offset (0..255 -> 0.0..1.0)
 //   direction: Band axis/normal (oct-u16)
 //   alpha_a: Coverage alpha (0..15 -> 0.0..1.0)
 //   alpha_b: Unused (set to 0)
@@ -27,8 +27,7 @@
 fn eval_band_radiance(
     dir: vec3f,
     instr: vec4u,
-    region_w: f32,
-    time: f32
+    region_w: f32
 ) -> LayerSample {
     // Early out if region weight is negligible
     if region_w < 0.001 { return LayerSample(vec3f(0.0), 0.0); }
@@ -49,8 +48,8 @@ fn eval_band_radiance(
     let offset = mix(-0.5, 0.5, u8_to_01(instr_b(instr)));
     // param_c: Edge softness (0..255 -> 0.0..1.0)
     let softness = u8_to_01(instr_c(instr));
-    // param_d: Scroll/modulation speed (0..255 -> 0.0..1.0)
-    let scroll_speed = u8_to_01(instr_d(instr));
+    // param_d: Modulation phase offset (0..255 -> 0.0..1.0)
+    let phase_offset = u8_to_01(instr_d(instr));
 
     // 3. Compute distance from band center
     let dist = abs(u - offset);
@@ -66,9 +65,9 @@ fn eval_band_radiance(
     let edge_color = instr_color_b(instr);
     let rgb = mix(center_color, edge_color, edge_factor);
 
-    // 7. Apply azimuthal modulation if scroll_speed > 0
+    // 7. Apply azimuthal modulation if phase_offset > 0
     var modulated = band;
-    if scroll_speed > 0.0 {
+    if phase_offset > 0.0 {
         // Build orthonormal basis (t, b) around axis
         // Choose a reference vector that is not parallel to axis
         let ref_vec = select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(axis.y) > 0.9);
@@ -78,8 +77,8 @@ fn eval_band_radiance(
         // Compute azimuth angle
         let azimuth = atan2(dot(dir, b), dot(dir, t)) / TAU;
 
-        // Apply scroll: phase = fract(azimuth + time * scroll_speed)
-        let phase = fract(azimuth + time * scroll_speed);
+        // Apply phase offset: phase = fract(azimuth + phase_offset)
+        let phase = fract(azimuth + phase_offset);
 
         // Modulate: 0.7 + 0.3 * sin(phase * 8 * PI)
         // This creates 4 wavelengths around the band

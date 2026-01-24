@@ -10,7 +10,7 @@
 //   param_a: Pattern scale (0..255 -> 0.5..16.0)
 //   param_b: Gap width (0..255 -> 0..0.2)
 //   param_c: Roughness (0..255 -> 0..1)
-//   param_d: Scroll/drift speed (0..255 -> 0..1)
+//   param_d: Reserved (set to 0)
 //   direction: Plane normal (oct-u16)
 //   alpha_a: Pattern alpha (0..15 -> 0..1)
 //   alpha_b: Unused (set to 0)
@@ -202,14 +202,10 @@ fn eval_plane_stone(
 // SAND variant: low-freq noise + grain, optional drift
 fn eval_plane_sand(
     uv: vec2f,
-    roughness: f32,
-    drift_speed: f32,
-    time: f32
+    roughness: f32
 ) -> vec2f {
     // Returns (brightness_variation, grain_detail)
-    // Drift offset
-    let drift = vec2f(time * drift_speed * 0.1, time * drift_speed * 0.05);
-    let drifted_uv = uv + drift;
+    let drifted_uv = uv;
 
     // Low-frequency dunes
     let dunes = plane_fbm(drifted_uv * 0.5, 2u);
@@ -229,11 +225,9 @@ fn eval_plane_sand(
 // WATER variant: layered sinusoidal ripples
 fn eval_plane_water(
     uv: vec2f,
-    drift_speed: f32,
-    time: f32
 ) -> vec2f {
     // Returns (ripple_brightness, specular_highlight)
-    let t = time * drift_speed;
+    let t = 0.0;
 
     // Multiple overlapping ripple layers
     let center1 = vec2f(0.3, 0.4);
@@ -253,7 +247,7 @@ fn eval_plane_water(
     let combined = (ripple1 + ripple2 + ripple3) / 3.0;
 
     // Subtle caustic-like pattern
-    let caustic = plane_noise(uv * 8.0 + vec2f(t * 0.5, t * 0.3)) * 0.2;
+    let caustic = plane_noise(uv * 8.0 + vec2f(0.0, 0.0)) * 0.2;
 
     // Specular highlight approximation
     let specular = pow(combined, 4.0) * 0.5;
@@ -287,14 +281,10 @@ fn eval_plane_grating(
 // GRASS variant: noise-based with directional streaks
 fn eval_plane_grass(
     uv: vec2f,
-    roughness: f32,
-    drift_speed: f32,
-    time: f32
+    roughness: f32
 ) -> vec2f {
     // Returns (grass_density, color_variation)
-    // Wind sway
-    let wind = sin(uv.x * 2.0 + time * drift_speed * 2.0) * 0.1;
-    let swayed_uv = uv + vec2f(0.0, wind);
+    let swayed_uv = uv;
 
     // Base grass density (large patches)
     let density_base = plane_fbm(swayed_uv * 0.8, 2u);
@@ -342,8 +332,7 @@ fn eval_plane_pavement(
 fn eval_plane(
     dir: vec3f,
     instr: vec4u,
-    region_w: f32,
-    time: f32
+    region_w: f32
 ) -> LayerSample {
     if region_w < 0.001 { return LayerSample(vec3f(0.0), 0.0); }
 
@@ -357,8 +346,6 @@ fn eval_plane(
     let gap = u8_to_01(instr_b(instr)) * 0.2;
     // param_c: Roughness (0..255 -> 0..1)
     let roughness = u8_to_01(instr_c(instr));
-    // param_d: Scroll/drift speed (0..255 -> 0..1)
-    let drift_speed = u8_to_01(instr_d(instr));
 
     // Decode plane normal
     let plane_normal = decode_dir16(instr_dir16(instr));
@@ -416,13 +403,13 @@ fn eval_plane(
             color_variation = result.y;
         }
         case PLANE_VARIANT_SAND: {
-            let result = eval_plane_sand(uv, roughness, drift_speed, time);
+            let result = eval_plane_sand(uv, roughness);
             pattern_mask = 1.0;
             color_variation = result.x - 0.5; // Center around 0
             specular_term = result.y * 0.1;
         }
         case PLANE_VARIANT_WATER: {
-            let result = eval_plane_water(uv, drift_speed, time);
+            let result = eval_plane_water(uv);
             pattern_mask = 1.0;
             color_variation = result.x - 0.5;
             specular_term = result.y;
@@ -433,7 +420,7 @@ fn eval_plane(
             color_variation = result.y * 0.1;
         }
         case PLANE_VARIANT_GRASS: {
-            let result = eval_plane_grass(uv, roughness, drift_speed, time);
+            let result = eval_plane_grass(uv, roughness);
             pattern_mask = 1.0;
             color_variation = (result.x - 0.5) * 0.5 + (result.y - 0.5) * 0.3;
         }

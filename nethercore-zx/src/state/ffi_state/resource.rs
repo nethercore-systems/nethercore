@@ -91,7 +91,7 @@ impl ZXFFIState {
         // Clear GPU-instanced quad batches for next frame
         self.quad_batches.clear();
 
-        // Clear immediate bone matrices for next frame (Animation System v2)
+        // Clear immediate bone matrices for next frame
         // The bone_matrices buffer accumulates during the frame and must be reset
         self.bone_matrices.clear();
 

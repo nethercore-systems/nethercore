@@ -8,8 +8,8 @@
 //   param_a: Horizon height bias (0..255 -> -0.3..0.5)
 //   param_b: Roughness/amplitude (0..255 -> 0.1..1.0)
 //   param_c[7:4]: Layer count / octaves (0..15 -> 1..8)
-//   param_c[3:0]: Drift amount (0..15 -> 0.0..1.0)
-//   param_d: Drift speed (0..255 -> 0.0..0.5)
+//   param_c[3:0]: Reserved (set to 0)
+//   param_d: Reserved (set to 0)
 //   direction: Up axis (oct-u16)
 //   alpha_a: Strength (0..15 -> 0.0..1.0)
 //   variant_id: 0=MOUNTAINS, 1=CITY, 2=FOREST, 3=DUNES, 4=WAVES, 5=RUINS, 6=INDUSTRIAL, 7=SPIRES (from meta5)
@@ -72,7 +72,7 @@ fn silhouette_dunes(u: f32, seed: f32) -> f32 {
     return 0.5 * sin(u * TAU * 3.0 + phase) + 0.3 * sin(u * TAU * 7.0 + phase * 1.7);
 }
 
-// WAVES variant: animated ocean waves (for time=0, just periodic)
+// WAVES variant: ocean waves (periodic)
 fn silhouette_waves(u: f32, seed: f32) -> f32 {
     let wave1 = sin(u * TAU * 4.0 + seed);
     let wave2 = sin(u * TAU * 9.0 + seed * 2.3) * 0.5;
@@ -140,7 +140,6 @@ fn eval_silhouette(
     instr: vec4u,
     enc: EnclosureConfig,
     base_regions: RegionWeights,
-    time: f32,
 ) -> BoundsResult {
     // Decode up axis from direction field
     let up = decode_dir16(instr_dir16(instr));
@@ -168,17 +167,13 @@ fn eval_silhouette(
 
     let pc = instr_c(instr);
     let octaves = 1u + ((pc >> 4u) & 0xFu) / 2u;  // 1..8 octaves
-    let drift_amount = u4_to_01(pc & 0xFu);
-
-    let drift_speed = mix(0.0, 0.5, u8_to_01(instr_d(instr)));
     let strength = instr_alpha_a_f32(instr);
     let variant = instr_variant_id(instr);
 
     // Use a deterministic seed based on variant
     let seed = f32(variant) * 13.7 + 42.0;
 
-    // Apply drift for parallax animation
-    let u_shifted = fract(u01 + time * drift_speed * drift_amount);
+    let u_shifted = u01;
 
     // Compute height function
     let raw_height = silhouette_height(u_shifted, variant, octaves, seed);

@@ -21,7 +21,7 @@
 //!
 //! ```ignore
 //! let epu_runtime = EpuRuntime::new(&device);
-//! epu_runtime.build_env(&device, &queue, &mut encoder, &config, time);
+//! epu_runtime.build_env(&device, &queue, &mut encoder, &config);
 //! ```
 
 use super::EpuConfig;
@@ -165,25 +165,6 @@ impl EpuRuntime {
             irrad_bind_group_layout,
             cache: EpuCache::new(),
         }
-    }
-
-    // =========================================================================
-    // Cache Methods
-    // =========================================================================
-
-    /// Advance to the next frame for cache purposes.
-    ///
-    /// This should be called once per frame before `build_envs()` to ensure
-    /// proper cache invalidation for time-dependent environments.
-    pub fn advance_frame(&mut self) {
-        self.cache.advance_frame();
-    }
-
-    /// Get the current frame counter.
-    ///
-    /// This is incremented by `advance_frame()` each frame.
-    pub fn current_frame(&self) -> u64 {
-        self.cache.current_frame()
     }
 
     /// Invalidate the cache entry for a specific environment ID.
@@ -417,14 +398,12 @@ impl EpuRuntime {
     /// * `queue` - The wgpu queue for buffer writes
     /// * `encoder` - Command encoder to record compute pass
     /// * `config` - The EPU configuration to evaluate
-    /// * `time` - Current time for animation (in seconds)
     pub fn build_env(
         &self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         config: &EpuConfig,
-        time: f32,
     ) {
         // Convert EpuConfig to GPU format and upload to slot 0
         let gpu_state = GpuEnvironmentState::from(config);
@@ -436,10 +415,10 @@ impl EpuRuntime {
 
         // Upload frame uniforms
         let frame_uniforms = FrameUniforms {
-            time,
             active_count: 1,
             map_size: self.settings.map_size,
             _pad0: 0,
+            _pad1: 0,
         };
         queue.write_buffer(
             &self.frame_uniforms_buffer,
@@ -493,9 +472,7 @@ impl EpuRuntime {
     /// This dispatches the compute shader to generate radiance (mip 0) and then
     /// builds a downsampled mip pyramid for rough reflections and diffuse SH9.
     ///
-    /// Uses dirty-state caching to skip rebuilding unchanged static environments.
-    /// Call `advance_frame()` once per frame before this method to ensure proper
-    /// cache behavior for time-dependent environments.
+    /// Uses dirty-state caching to skip rebuilding unchanged environments.
     ///
     /// # Texture Growth
     ///
@@ -508,14 +485,12 @@ impl EpuRuntime {
     /// * `queue` - The wgpu queue for buffer writes
     /// * `encoder` - Command encoder to record compute pass
     /// * `configs` - Slice of (env_id, config) pairs to evaluate
-    /// * `time` - Current time for animation (in seconds)
     pub fn build_envs(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         configs: &[(u32, &EpuConfig)],
-        time: f32,
     ) {
         if configs.is_empty() {
             return;
@@ -538,10 +513,10 @@ impl EpuRuntime {
 
         // Always upload frame uniforms for rendering
         let frame_uniforms = FrameUniforms {
-            time,
             active_count: dirty_configs.len() as u32,
             map_size: self.settings.map_size,
             _pad0: 0,
+            _pad1: 0,
         };
         queue.write_buffer(
             &self.frame_uniforms_buffer,
@@ -646,7 +621,7 @@ impl EpuRuntime {
         &self.env_states_buffer
     }
 
-    /// Get a reference to the frame uniforms buffer (time + map sizing).
+    /// Get a reference to the frame uniforms buffer (active_count + map sizing).
     pub fn frame_uniforms_buffer(&self) -> &wgpu::Buffer {
         &self.frame_uniforms_buffer
     }

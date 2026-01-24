@@ -327,8 +327,7 @@ fn filament_trace(uv: vec2f, seed: f32, trace_idx: f32, point_count: u32, jitter
 fn eval_trace(
     dir: vec3f,
     instr: vec4u,
-    region_w: f32,
-    time: f32
+    region_w: f32
 ) -> LayerSample {
     if region_w < 0.001 { return LayerSample(vec3f(0.0), 0.0); }
 

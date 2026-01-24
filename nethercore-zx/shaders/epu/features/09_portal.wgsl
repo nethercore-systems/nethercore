@@ -88,18 +88,17 @@ fn portal_sdf_rift(uv: vec2f, size: f32, roughness: f32) -> f32 {
 }
 
 // Apply spiral warp for VORTEX variant
-fn portal_apply_vortex_warp(uv: vec2f, rotation_speed: f32, time: f32) -> vec2f {
+fn portal_apply_vortex_warp(uv: vec2f, rotation_speed: f32) -> vec2f {
     let angle = atan2(uv.y, uv.x);
     let radius = length(uv);
-    let warped_angle = angle + radius * rotation_speed * time;
+    let warped_angle = angle + radius * rotation_speed;
     return vec2f(cos(warped_angle), sin(warped_angle)) * radius;
 }
 
 fn eval_portal(
     dir: vec3f,
     instr: vec4u,
-    region_w: f32,
-    time: f32
+    region_w: f32
 ) -> LayerSample {
     if region_w < 0.001 { return LayerSample(vec3f(0.0), 0.0); }
 
@@ -142,7 +141,7 @@ fn eval_portal(
     // Apply VORTEX warp if needed (before SDF evaluation)
     var warped_uv = uv;
     if variant_id == PORTAL_VARIANT_VORTEX {
-        warped_uv = portal_apply_vortex_warp(uv, rotation_speed, time);
+        warped_uv = portal_apply_vortex_warp(uv, rotation_speed);
     }
 
     // Evaluate shape SDF by variant

@@ -44,7 +44,7 @@ struct PackedUnifiedShadingState {
     uniform_set_1: u32,              // Mode-specific: [b0, b1, b2, rim_power]
     flags: u32,                      // Bit 0: skinning_mode (0=raw, 1=inverse bind)
     lights: array<PackedLight, 4>,   // 48 bytes (4 × 12-byte lights)
-    // Animation System v2 fields (8 bytes) + padding (4 bytes) + env_id (4 bytes)
+    // Animation system fields (8 bytes) + padding (4 bytes) + env_id (4 bytes)
     keyframe_base: u32,              // Base offset into all_keyframes buffer
     inverse_bind_base: u32,          // Base offset into inverse_bind buffer
     _pad: u32,                       // Unused padding for struct alignment
@@ -98,13 +98,13 @@ struct EpuPackedEnvironmentState {
 
 // Frame uniforms shared between compute and render EPU evaluation.
 struct EpuFrameUniforms {
-    time: f32,
     active_count: u32,
     map_size: u32,
     _pad0: u32,
+    _pad1: u32,
 }
 
-// Binding 9: EPU frame uniforms (time + map sizing)
+// Binding 9: EPU frame uniforms (active_count + map sizing)
 @group(0) @binding(9) var<uniform> epu_frame: EpuFrameUniforms;
 
 // ============================================================================
@@ -147,7 +147,7 @@ const FLAG_SKINNING_MODE: u32 = 1u;
 // 0 = nearest (pixelated), 1 = linear (smooth)
 const FLAG_TEXTURE_FILTER_LINEAR: u32 = 2u;
 
-// Animation System v2: CPU pre-computes absolute keyframe_base offsets
+// Animation system: CPU pre-computes absolute keyframe_base offsets
 // (no flags needed - shader just reads from unified_animation[keyframe_base + bone_idx])
 
 // ============================================================================

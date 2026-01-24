@@ -38,7 +38,7 @@ fn epu_eval_hi(env_index: u32, direction: vec3<f32>) -> vec3f {
         if opcode == OP_NOP { continue; }
 
         let blend = instr_blend(instr);
-        let sample = evaluate_layer(dir, instr, enc, regions, epu_frame.time);
+        let sample = evaluate_layer(dir, instr, enc, regions);
         radiance = apply_blend(radiance, sample, blend);
     }
 

@@ -10,7 +10,7 @@
 //   param_a: Ribbon count (0..255 -> 2..32)
 //   param_b: Thickness (0..255 -> 0.01..0.3)
 //   param_c: Curvature/sway amplitude (0..255 -> 0..1)
-//   param_d: Scroll speed (0..255 -> 0..2)
+//   param_d: Reserved (set to 0)
 //   direction: Cylinder/polar axis (oct-u16)
 //   alpha_a: Ribbon alpha (0..15 -> 0..1)
 //   alpha_b: Glow alpha (0..15 -> 0..1)
@@ -96,14 +96,12 @@ fn eval_veil_curtains(
     ribbon_count: u32,
     base_thickness: f32,
     curvature: f32,
-    scroll_speed: f32,
-    time: f32
 ) -> vec3f {
     // Returns (min_dist, ribbon_mask_contribution, glow_factor)
     var min_dist = 1000.0;
     var best_hash_x = 0.0;
 
-    let u_scrolled = fract(u + time * scroll_speed);
+    let u_scrolled = fract(u);
 
     for (var i = 0u; i < ribbon_count; i++) {
         let fi = f32(i);
@@ -114,7 +112,7 @@ fn eval_veil_curtains(
         let thickness_var = base_thickness * (0.7 + h.y * 0.6);
 
         // Curvature/sway offset: sin wave along v with per-ribbon phase
-        let sway_offset = curvature * 0.1 * sin(v * PI * 2.0 + h.x * TAU + time * 0.5);
+        let sway_offset = curvature * 0.1 * sin(v * PI * 2.0 + h.x * TAU);
 
         let d = ribbon_dist_wrapped(u_scrolled, center_u + sway_offset);
 
@@ -144,13 +142,11 @@ fn eval_veil_pillars(
     v: f32,
     ribbon_count: u32,
     thickness: f32,
-    curvature: f32,
-    scroll_speed: f32,
-    time: f32
+    curvature: f32
 ) -> vec3f {
     var min_dist = 1000.0;
 
-    let u_scrolled = fract(u + time * scroll_speed);
+    let u_scrolled = fract(u);
 
     for (var i = 0u; i < ribbon_count; i++) {
         let fi = f32(i);
@@ -177,13 +173,11 @@ fn eval_veil_laser_bars(
     v: f32,
     ribbon_count: u32,
     thickness: f32,
-    curvature: f32,
-    scroll_speed: f32,
-    time: f32
+    curvature: f32
 ) -> vec3f {
     var min_dist = 1000.0;
 
-    let u_scrolled = fract(u + time * scroll_speed);
+    let u_scrolled = fract(u);
 
     // Laser bars are very thin (use 1/3 of base thickness for core)
     let core_thickness = thickness * 0.33;
@@ -217,9 +211,7 @@ fn eval_veil_rain_wall(
     v: f32,
     ribbon_count: u32,
     thickness: f32,
-    curvature: f32,
-    scroll_speed: f32,
-    time: f32
+    curvature: f32
 ) -> vec3f {
     var min_dist = 1000.0;
     var best_flicker = 1.0;
@@ -230,7 +222,7 @@ fn eval_veil_rain_wall(
     // Thin bars (half thickness)
     let bar_thickness = thickness * 0.4;
 
-    let u_scrolled = fract(u + time * scroll_speed * 0.3);
+    let u_scrolled = fract(u);
 
     for (var i = 0u; i < actual_count; i++) {
         let fi = f32(i);
@@ -240,7 +232,7 @@ fn eval_veil_rain_wall(
         // Per-bar v-scroll (downward rain effect)
         // Each bar has slightly different fall speed
         let fall_speed = 0.5 + h.x * 1.0;
-        let v_offset = fract(v * 0.5 + 0.5 + time * fall_speed * scroll_speed);
+        let v_offset = fract(v * 0.5 + 0.5);
         let v_adjusted = v_offset * 2.0 - 1.0;
 
         // Bar length variation (rain drops are short segments)
@@ -251,8 +243,8 @@ fn eval_veil_rain_wall(
 
         if d < min_dist && bar_visible > 0.5 {
             min_dist = d;
-            // Flicker based on hash and time
-            best_flicker = 0.7 + 0.3 * sin(h.z * TAU + time * 8.0);
+            // Per-bar intensity variation (deterministic)
+            best_flicker = 0.7 + 0.3 * sin(h.z * TAU);
         }
     }
 
@@ -271,14 +263,12 @@ fn eval_veil_shards(
     v: f32,
     ribbon_count: u32,
     base_thickness: f32,
-    curvature: f32,
-    scroll_speed: f32,
-    time: f32
+    curvature: f32
 ) -> vec3f {
     var min_dist = 1000.0;
     var best_hash = vec3f(0.0);
 
-    let u_scrolled = fract(u + time * scroll_speed * 0.2);
+    let u_scrolled = fract(u);
 
     for (var i = 0u; i < ribbon_count; i++) {
         let fi = f32(i);
@@ -320,8 +310,7 @@ fn eval_veil_shards(
 fn eval_veil(
     dir: vec3f,
     instr: vec4u,
-    region_w: f32,
-    time: f32
+    region_w: f32
 ) -> LayerSample {
     if region_w < 0.001 { return LayerSample(vec3f(0.0), 0.0); }
 
@@ -336,8 +325,6 @@ fn eval_veil(
     let thickness = mix(0.01, 0.3, u8_to_01(instr_b(instr)));
     // param_c: Curvature/sway (0..255 -> 0..1)
     let curvature = u8_to_01(instr_c(instr));
-    // param_d: Scroll speed (0..255 -> 0..2)
-    let scroll_speed = u8_to_01(instr_d(instr)) * 2.0;
 
     // Decode axis direction
     let axis = decode_dir16(instr_dir16(instr));
@@ -372,23 +359,23 @@ fn eval_veil(
 
     switch variant_id {
         case VEIL_VARIANT_CURTAINS: {
-            result = eval_veil_curtains(u, v, ribbon_count, thickness, curvature, scroll_speed, time);
+            result = eval_veil_curtains(u, v, ribbon_count, thickness, curvature);
         }
         case VEIL_VARIANT_PILLARS: {
-            result = eval_veil_pillars(u, v, ribbon_count, thickness, curvature, scroll_speed, time);
+            result = eval_veil_pillars(u, v, ribbon_count, thickness, curvature);
         }
         case VEIL_VARIANT_LASER_BARS: {
-            result = eval_veil_laser_bars(u, v, ribbon_count, thickness, curvature, scroll_speed, time);
+            result = eval_veil_laser_bars(u, v, ribbon_count, thickness, curvature);
         }
         case VEIL_VARIANT_RAIN_WALL: {
-            result = eval_veil_rain_wall(u, v, ribbon_count, thickness, curvature, scroll_speed, time);
+            result = eval_veil_rain_wall(u, v, ribbon_count, thickness, curvature);
         }
         case VEIL_VARIANT_SHARDS: {
-            result = eval_veil_shards(u, v, ribbon_count, thickness, curvature, scroll_speed, time);
+            result = eval_veil_shards(u, v, ribbon_count, thickness, curvature);
         }
         default: {
-            // Fallback to curtains
-            result = eval_veil_curtains(u, v, ribbon_count, thickness, curvature, scroll_speed, time);
+            // Default to curtains
+            result = eval_veil_curtains(u, v, ribbon_count, thickness, curvature);
         }
     }
 

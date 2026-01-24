@@ -13,8 +13,8 @@
 //   intensity: Brightness (0..255 -> 0.0..2.0)
 //   param_a: Exponent/sharpness (0..255 -> 1..64)
 //   param_b: Edge falloff curve (0..255 -> 0.5..4.0)
-//   param_c: Animation mode (0..255 -> 0..2 mod 3: 0=none, 1=pulse, 2=flicker)
-//   param_d: Animation speed (0..255 -> 0.0..10.0)
+//   param_c: Reserved (set to 0)
+//   param_d: Reserved (set to 0)
 //   direction: Lobe center direction (oct-u16)
 //   alpha_a: Coverage alpha (0..15 -> 0.0..1.0)
 //   alpha_b: Unused (set to 0)
@@ -27,8 +27,7 @@
 fn eval_lobe_radiance(
     dir: vec3f,
     instr: vec4u,
-    region_w: f32,
-    time: f32
+    region_w: f32
 ) -> LayerSample {
     // Early out if region weight is negligible
     if region_w < 0.001 { return LayerSample(vec3f(0.0), 0.0); }
@@ -61,22 +60,7 @@ fn eval_lobe_radiance(
     // Blend colors: rgb = mix(color_a, color_b, edge_factor)
     let rgb = mix(core_color, edge_color, edge_factor);
 
-    // Extract animation parameters
-    // param_c: Animation mode (0..255 -> 0..2 mod 3)
-    let mode = instr_c(instr) % 3u;
-    // param_d: Animation speed (0..255 -> 0.0..10.0)
-    let speed = u8_to_01(instr_d(instr)) * 10.0;
-
-    // Apply animation based on mode
-    var anim = 1.0;
-    if mode == 1u && speed > 0.0 {
-        // Mode 1 (pulse): anim = 0.7 + 0.3 * sin(time * speed)
-        anim = 0.7 + 0.3 * sin(time * speed);
-    } else if mode == 2u && speed > 0.0 {
-        // Mode 2 (flicker): anim = 0.5 + 0.5 * hash(floor(time * speed))
-        // Discrete steps for deterministic flicker
-        anim = 0.5 + 0.5 * epu_hash11(floor(time * speed));
-    }
+    let anim = 1.0;
 
     // Extract intensity: bits 63..56 (0..255 -> 0.0..2.0)
     let intensity = u8_to_01(instr_intensity(instr)) * 2.0;

@@ -39,7 +39,7 @@ The system is designed around these hard constraints:
 ```
 CPU (game)                                         GPU
 ---------                                         ---
-Call epu_draw(config_ptr) during render()   --->   [Compute] EPU_Build(config, time)
+Call epu_draw(config_ptr) during render()   --->   [Compute] EPU_Build(config)
 Capture (viewport, pass) draw requests             - Evaluate 8-layer microprogram into EnvRadiance (mip 0)
 Only the last pushed config is used                - Generate mip pyramid from EnvRadiance mip 0
                                                     - Extract SH9 from a coarse mip (e.g. 16x16)
@@ -155,7 +155,7 @@ The EPU runtime maintains these outputs per `env_id`:
 
 1. Capture EPU draw requests (per viewport/pass) and determine active environment states
 2. Deduplicate `env_id` list, cap to `MAX_ACTIVE_ENVS`
-3. Determine which `env_id`s are dirty (hash/time-dependent)
+3. Determine which `env_id`s are dirty (hash)
 4. Dispatch compute passes:
    - Environment evaluation (build `EnvRadiance` mip 0)
    - Mip pyramid generation (2x2 downsample chain)
@@ -219,18 +219,18 @@ The EPU supports multiple environments per frame through texture array indexing:
 
 ## Dirty-State Caching
 
-For static environments, the EPU tracks:
+For environments, the EPU tracks:
 
 - `state_hash`: Hash of the 128-byte config
-- `time_dependent`: True if any layer uses animation
+- `valid`: Whether the cached entry has been initialized
 
 Update policy:
 
 | Condition | Action |
 |-----------|--------|
 | Unused this frame | Skip |
-| Used + time-dependent | Rebuild every frame |
-| Used + static | Rebuild only when `state_hash` changes |
+| Used + unchanged | Skip |
+| Used + changed | Rebuild, then update `state_hash` |
 
 ---
 

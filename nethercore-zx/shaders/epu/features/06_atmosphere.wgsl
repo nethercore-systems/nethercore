@@ -130,8 +130,7 @@ fn eval_atmosphere(
     dir: vec3f,
     instr: vec4u,
     enc: EnclosureConfig,
-    region_w: f32,
-    time: f32
+    region_w: f32
 ) -> LayerSample {
     if region_w < 0.001 { return LayerSample(vec3f(0.0), 0.0); }
 

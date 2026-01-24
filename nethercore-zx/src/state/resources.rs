@@ -4,7 +4,7 @@ use super::BoneMatrix3x4;
 use zx_common::TextureFormat;
 
 // ============================================================================
-// GPU Animation Index Tracking (Animation System v2)
+// GPU Animation Index Tracking (Animation System)
 // ============================================================================
 
 /// Tracks where a skeleton's inverse bind matrices live in the global GPU buffer
@@ -29,7 +29,7 @@ pub struct KeyframeGpuInfo {
     pub frame_count: u16,
 }
 
-/// Source of bone matrices for a draw call (Animation System v2)
+/// Source of bone matrices for a draw call (Animation System)
 /// Determines whether to read from static GPU buffers or dynamic per-frame uploads
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyframeSource {
