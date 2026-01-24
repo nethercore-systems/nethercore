@@ -1,6 +1,6 @@
 //! Shader generation and validation logic used by the build script.
 
-use super::formats::{FORMAT_NORMAL, FormatFlags};
+use super::formats::FormatFlags;
 use super::{snippets, sources};
 
 /// Generate a shader for a specific mode and vertex format
@@ -472,10 +472,4 @@ pub(crate) fn validate_shader_generic(source: &str, name: &str) -> Result<(), St
         .map_err(|e| format!("Validation error for {}: {:?}", name, e))?;
 
     Ok(())
-}
-
-#[allow(dead_code)]
-fn _assert_constants_match() {
-    // This exists to keep lint warnings useful if we ever change flags here.
-    let _ = FORMAT_NORMAL;
 }
