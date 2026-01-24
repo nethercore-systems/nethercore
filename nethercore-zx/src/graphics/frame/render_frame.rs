@@ -128,9 +128,6 @@ impl ZXGraphics {
                         texture_slots[3].0,
                     ],
                 ),
-                VRPCommand::Environment {
-                    viewport, pass_id, ..
-                } => CommandSortKey::environment(*pass_id, *viewport),
                 VRPCommand::EpuEnvironment {
                     viewport, pass_id, ..
                 } => CommandSortKey::environment(*pass_id, *viewport),
@@ -165,14 +162,6 @@ impl ZXGraphics {
             self.ensure_shading_state_buffer_capacity(z_state.shading_pool.len());
             let data = bytemuck::cast_slice(z_state.shading_pool.as_slice());
             self.queue.write_buffer(&self.shading_state_buffer, 0, data);
-        }
-
-        // 2b. Upload environment states (Multi-Environment v4)
-        if !z_state.environment_pool.is_empty() {
-            self.ensure_environment_states_buffer_capacity(z_state.environment_pool.len());
-            let data = bytemuck::cast_slice(z_state.environment_pool.as_slice());
-            self.queue
-                .write_buffer(&self.environment_states_buffer, 0, data);
         }
 
         // 3. Upload MVP + shading indices with ABSOLUTE offsets into unified_transforms
@@ -252,10 +241,6 @@ impl ZXGraphics {
                 VRPCommand::Quad {
                     cull_mode, pass_id, ..
                 } => (self.unit_quad_format, *cull_mode, *pass_id),
-                VRPCommand::Environment { pass_id, .. } => {
-                    // Environment uses its own pipeline, but we need values for bind group layout
-                    (0, CullMode::None, *pass_id)
-                }
                 VRPCommand::EpuEnvironment { pass_id, .. } => {
                     // EPU environment uses its own pipeline
                     (0, CullMode::None, *pass_id)
@@ -308,9 +293,9 @@ impl ZXGraphics {
                     // 0-1: Transforms (unified_transforms, mvp_indices)
                     // 2: Shading (shading_states)
                     // 3: Animation (unified_animation)
-                    // 4: Environment (environment_states) - Multi-Environment v4
                     // 5: Quad rendering (quad_instances)
                     // 6-7: EPU textures (env_radiance, sampler)
+                    // 8-9: EPU state + frame uniforms
                     // 11: EPU SH9 (diffuse irradiance)
                     let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                         label: Some("Frame Bind Group (Unified)"),
@@ -331,10 +316,6 @@ impl ZXGraphics {
                             wgpu::BindGroupEntry {
                                 binding: 3,
                                 resource: self.unified_animation_buffer.as_entire_binding(),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 4,
-                                resource: self.environment_states_buffer.as_entire_binding(),
                             },
                             wgpu::BindGroupEntry {
                                 binding: 5,
@@ -395,9 +376,9 @@ impl ZXGraphics {
                 // 0-1: Transforms (unified_transforms, mvp_indices)
                 // 2: Shading (shading_states)
                 // 3: Animation (unified_animation)
-                // 4: Environment (environment_states) - Multi-Environment v4
                 // 5: Quad rendering (quad_instances)
                 // 6-7: EPU textures (env_radiance, sampler)
+                // 8-9: EPU state + frame uniforms
                 // 11: EPU SH9 (diffuse irradiance)
                 let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some("Frame Bind Group (Unified)"),
@@ -418,10 +399,6 @@ impl ZXGraphics {
                         wgpu::BindGroupEntry {
                             binding: 3,
                             resource: self.unified_animation_buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 4,
-                            resource: self.environment_states_buffer.as_entire_binding(),
                         },
                         wgpu::BindGroupEntry {
                             binding: 5,
@@ -500,7 +477,6 @@ impl ZXGraphics {
                 VRPCommand::Mesh { pass_id, .. }
                 | VRPCommand::IndexedMesh { pass_id, .. }
                 | VRPCommand::Quad { pass_id, .. }
-                | VRPCommand::Environment { pass_id, .. }
                 | VRPCommand::EpuEnvironment { pass_id, .. } => *pass_id,
             };
             let first_pass_config = z_state
@@ -641,19 +617,6 @@ impl ZXGraphics {
                         true,
                         false,
                         *is_screen_space,
-                    ),
-                    VRPCommand::Environment {
-                        viewport, pass_id, ..
-                    } => (
-                        *viewport,
-                        *pass_id,
-                        self.unit_quad_format, // Environment uses unit quad mesh
-                        super::super::render_state::CullMode::None,
-                        [TextureHandle::INVALID; 4], // Default textures (unused)
-                        BufferSource::Quad,          // Environment renders as a fullscreen quad
-                        false,
-                        true,
-                        false,
                     ),
                     VRPCommand::EpuEnvironment {
                         viewport, pass_id, ..
@@ -939,13 +902,6 @@ impl ZXGraphics {
                             *base_vertex..*base_vertex + *vertex_count,
                             *buffer_index..*buffer_index + 1,
                         );
-                    }
-                    VRPCommand::Environment { mvp_index, .. } => {
-                        // Environment rendering: Fullscreen triangle with procedural background
-
-                        // Draw fullscreen triangle (3 vertices, no vertex buffer)
-                        // Uses mvp_index as instance range (indexes mvp_shading_indices)
-                        render_pass.draw(0..3, *mvp_index..*mvp_index + 1);
                     }
                     VRPCommand::EpuEnvironment { mvp_index, .. } => {
                         // EPU environment rendering: Fullscreen triangle with procedural background

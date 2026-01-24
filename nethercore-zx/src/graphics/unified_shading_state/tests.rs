@@ -7,7 +7,6 @@ mod tests {
     #[test]
     fn test_packed_sizes() {
         assert_eq!(std::mem::size_of::<PackedLight>(), 12); // 12 bytes for point light support
-        assert_eq!(std::mem::size_of::<PackedEnvironmentState>(), 64); // 8 (header+pad) + 56 (data)
         assert_eq!(std::mem::size_of::<PackedUnifiedShadingState>(), 80); // 16 (header) + 48 (lights) + 16 (animation/env)
     }
 
@@ -392,92 +391,4 @@ mod tests {
         assert!(!state.skips_normal_map());
     }
 
-    // ========================================================================
-    // Environment System Tests
-    // ========================================================================
-
-    #[test]
-    fn test_environment_header_packing() {
-        // Test all combinations of modes and blend modes
-        for base in 0..8u32 {
-            for overlay in 0..8u32 {
-                for blend in 0..4u32 {
-                    let header = PackedEnvironmentState::make_header(base, overlay, blend);
-                    let mut env = PackedEnvironmentState::default();
-                    env.header = header;
-                    assert_eq!(env.base_mode(), base);
-                    assert_eq!(env.overlay_mode(), overlay);
-                    assert_eq!(env.blend_mode(), blend);
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn test_environment_mode_setters() {
-        let mut env = PackedEnvironmentState::default();
-
-        env.set_base_mode(env_mode::GRADIENT);
-        env.set_overlay_mode(env_mode::CELLS);
-        env.set_blend_mode(blend_mode::ADD);
-
-        assert_eq!(env.base_mode(), env_mode::GRADIENT);
-        assert_eq!(env.overlay_mode(), env_mode::CELLS);
-        assert_eq!(env.blend_mode(), blend_mode::ADD);
-
-        // Change individual values without affecting others
-        env.set_base_mode(env_mode::RINGS);
-        assert_eq!(env.base_mode(), env_mode::RINGS);
-        assert_eq!(env.overlay_mode(), env_mode::CELLS); // unchanged
-        assert_eq!(env.blend_mode(), blend_mode::ADD); // unchanged
-    }
-
-    #[test]
-    fn test_environment_gradient_packing() {
-        let mut env = PackedEnvironmentState::default();
-        env.pack_gradient(GradientConfig {
-            offset: 0,
-            zenith: 0x3366B2FF,
-            sky_horizon: 0xB2D8F2FF,
-            ground_horizon: 0x8B7355FF,
-            nadir: 0x4A3728FF,
-            rotation: 45.0,
-            shift: 0.25,
-            sun_elevation: 0.5,
-            sun_disk: 12,
-            sun_halo: 200,
-            sun_intensity: 255,
-            horizon_haze: 128,
-            sun_warmth: 64,
-            cloudiness: 180,
-            cloud_phase: 0x1234,
-        });
-
-        assert_eq!(env.data[0], 0x3366B2FF);
-        assert_eq!(env.data[1], 0xB2D8F2FF);
-        assert_eq!(env.data[2], 0x8B7355FF);
-        assert_eq!(env.data[3], 0x4A3728FF);
-
-        // Verify packing: cloud_phase:u16 (low16) | shift:f16 (high16)
-        assert_eq!(env.data[4] & 0xFFFF, 0x1234);
-        let shift = unpack_f16((env.data[4] >> 16) as u16);
-        assert!((shift - 0.25).abs() < 0.01);
-    }
-
-    #[test]
-    fn test_environment_default_gradient() {
-        let env = PackedEnvironmentState::default_gradient();
-        assert_eq!(env.base_mode(), env_mode::GRADIENT);
-        assert_eq!(env.overlay_mode(), env_mode::CELLS);
-        assert_eq!(env.blend_mode(), blend_mode::ALPHA);
-        // Verify colors are set
-        assert_ne!(env.data[0], 0); // zenith
-        assert_ne!(env.data[1], 0); // sky_horizon
-    }
-
-    #[test]
-    fn test_environment_index() {
-        assert_eq!(EnvironmentIndex::default(), EnvironmentIndex(0));
-        assert_eq!(EnvironmentIndex::INVALID, EnvironmentIndex(u32::MAX));
-    }
 }

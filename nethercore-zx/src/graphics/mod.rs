@@ -29,7 +29,7 @@ mod vertex;
 mod viewport;
 mod zx_graphics;
 
-// Re-export packing utilities from zx-common (for FFI and backwards compat)
+// Re-export packing utilities from zx-common (for FFI and tooling)
 pub use zx_common::{
     FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_TANGENT, FORMAT_UV,
     pack_bone_weights_unorm8, pack_color_rgba_unorm8, pack_normal_octahedral, pack_normal_snorm16,
@@ -47,7 +47,6 @@ pub use render_state::{
 };
 pub use unified_shading_state::{
     DEFAULT_FLAGS,
-    EnvironmentIndex,
     FLAG_DITHER_OFFSET_X_MASK,
     FLAG_DITHER_OFFSET_X_SHIFT,
     FLAG_DITHER_OFFSET_Y_MASK,
@@ -64,13 +63,9 @@ pub use unified_shading_state::{
     FLAG_USE_UNIFORM_ROUGHNESS,
     FLAG_USE_UNIFORM_SPECULAR,
     LightType,
-    // Multi-Environment v4
-    PackedEnvironmentState,
     PackedLight,
     PackedUnifiedShadingState,
     ShadingStateIndex,
-    blend_mode,
-    env_mode,
     pack_f16,
     pack_f16x2,
     pack_matcap_blend_modes,

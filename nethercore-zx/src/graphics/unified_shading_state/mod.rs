@@ -3,30 +3,20 @@
 // ============================================================================
 //
 // This module contains all types and utilities for the unified shading system,
-// including environment states, lights, and per-draw shading configurations.
+// including lights and per-draw shading configurations.
 //
 // The module is organized into the following submodules:
-// - environment: PackedEnvironmentState and environment mode configurations
 // - light: PackedLight and light types (directional, point)
 // - quantization: Helper functions for packing/unpacking data
 // - shading_state: PackedUnifiedShadingState and flags
 // - tests: Comprehensive test suite
 
-mod environment;
 mod light;
 mod quantization;
 mod shading_state;
 
 #[cfg(test)]
 mod tests;
-
-// Re-export all public types and functions to preserve API
-#[allow(unused_imports)]
-pub use environment::{
-    CellsConfig, ENV_LAYER_WORDS, ENV_OVERLAY_OFFSET, EnvironmentIndex, GradientConfig,
-    LinesConfig, NebulaConfig, PackedEnvironmentState, RingsConfig, RoomConfig, SilhouetteConfig,
-    VeilConfig, blend_mode, env_mode,
-};
 
 pub use light::{LightType, PackedLight};
 

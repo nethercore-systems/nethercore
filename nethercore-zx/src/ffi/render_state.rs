@@ -152,7 +152,7 @@ fn z_index(mut caller: Caller<'_, ZXGameContext>, n: u32) {
 /// # Example (FPS viewmodel rendering)
 /// ```rust,ignore
 /// // Draw world first (pass 0)
-/// draw_env();
+/// epu_draw(env_config_ptr);
 /// draw_mesh(world_mesh);
 ///
 /// // Draw gun on top (pass 1 with depth clear)
@@ -182,7 +182,7 @@ fn begin_pass(mut caller: Caller<'_, ZXGameContext>, clear_depth: u32) {
 /// begin_pass_stencil_write(1, 0);  // Start mask creation
 /// draw_mesh(circle_mesh);          // Draw circle to stencil only
 /// begin_pass_stencil_test(1, 0);   // Enable testing
-/// draw_env();                       // Only visible inside circle
+/// epu_draw(env_config_ptr);         // Only visible inside circle
 /// begin_pass(0);                    // Back to normal rendering
 /// ```
 fn begin_pass_stencil_write(

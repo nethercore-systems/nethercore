@@ -295,13 +295,13 @@ NCZX_IMPORT void z_index(uint32_t n);
 /** // Player 1: left half */
 /** viewport(0, 0, 480, 540); */
 /** camera_set(p1_x, p1_y, p1_z, p1_tx, p1_ty, p1_tz); */
-/** draw_env(); */
+/** epu_draw(env_config_ptr); */
 /** draw_mesh(scene); */
 /**  */
 /** // Player 2: right half */
 /** viewport(480, 0, 480, 540); */
 /** camera_set(p2_x, p2_y, p2_z, p2_tx, p2_ty, p2_tz); */
-/** draw_env(); */
+/** epu_draw(env_config_ptr); */
 /** draw_mesh(scene); */
 /**  */
 /** // Reset for HUD */
@@ -327,7 +327,7 @@ NCZX_IMPORT void viewport_clear(void);
 /** # Example (FPS viewmodel rendering) */
 /** ```rust,ignore */
 /** // Draw world first (pass 0) */
-/** draw_env(); */
+/** epu_draw(env_config_ptr); */
 /** draw_mesh(world_mesh); */
 /**  */
 /** // Draw gun on top (pass 1 with depth clear) */
@@ -351,7 +351,7 @@ NCZX_IMPORT void begin_pass(uint32_t clear_depth);
 /** begin_pass_stencil_write(1, 0);  // Start mask creation */
 /** draw_mesh(circle_mesh);          // Draw circle to stencil only */
 /** begin_pass_stencil_test(1, 0);   // Enable testing */
-/** draw_env();                       // Only visible inside circle */
+/** epu_draw(env_config_ptr);         // Only visible inside circle */
 /** begin_pass(0);                    // Back to normal rendering */
 /** ``` */
 NCZX_IMPORT void begin_pass_stencil_write(uint32_t ref_value, uint32_t clear_depth);
@@ -645,9 +645,6 @@ NCZX_IMPORT uint32_t load_font_ex(uint32_t texture, const uint8_t* widths_ptr, u
 /**  */
 /** Pass 0 for the built-in 8×8 monospace font. */
 NCZX_IMPORT void font_bind(uint32_t font_handle);
-
-/** Render the configured environment. Call first in render(), before any geometry. */
-NCZX_IMPORT void draw_env(void);
 
 /** Bind a matcap texture to a slot (Mode 1 only). */
 /**  */

@@ -148,14 +148,6 @@ pub struct ZXFFIState {
     pub current_shading_state: crate::graphics::PackedUnifiedShadingState,
     pub shading_state_dirty: bool,
 
-    // Environment state system (Multi-Environment v4)
-    // Pool of unique environment states (deduplicated)
-    pub environment_pool:
-        StatePool<crate::graphics::PackedEnvironmentState, crate::graphics::EnvironmentIndex>,
-    // Current staging state (modified by env_* FFI calls)
-    pub current_environment_state: crate::graphics::PackedEnvironmentState,
-    pub environment_dirty: bool,
-
     // GPU-instanced quad rendering (batched by texture)
     pub quad_batches: Vec<super::QuadBatch>,
 
@@ -256,10 +248,6 @@ impl Default for ZXFFIState {
             shading_pool: StatePool::new("Shading state", 65536),
             current_shading_state: crate::graphics::PackedUnifiedShadingState::default(),
             shading_state_dirty: true, // Start dirty so first draw creates state 0
-            // Environment state system (Multi-Environment v4)
-            environment_pool: StatePool::new("Environment state", 65536),
-            current_environment_state: crate::graphics::PackedEnvironmentState::default_gradient(),
-            environment_dirty: true, // Start dirty so first draw creates environment 0
             quad_batches: Vec::new(),
             mvp_shading_overflowed_this_frame: false,
             mvp_shading_overflow_count: 0,

@@ -1,6 +1,6 @@
 // Environment rendering shader template
 // Prepended with the common WGSL sources by build.rs
-// Renders a fullscreen procedural environment using Multi-Environment v4
+// Renders a fullscreen procedural environment using the EPU
 
 // ============================================================================
 // Vertex and Fragment Shaders
@@ -44,7 +44,7 @@ fn vs(@builtin(vertex_index) vertex_index: u32, @builtin(instance_index) instanc
 
 @fragment
 fn fs(in: EnvVertexOut) -> @location(0) vec4<f32> {
-    // Get environment index from shading state (Multi-Environment v4)
+    // Get environment ID (env_id) from shading state
     let shading = shading_states[in.shading_state_index];
     let env_index = shading.environment_index;
 

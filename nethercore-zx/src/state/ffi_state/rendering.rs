@@ -1,60 +1,8 @@
 //! Rendering state management methods for ZXFFIState
 
 use super::{SkeletonData, ZXFFIState};
-use crate::graphics::unified_shading_state::GradientConfig;
 
 impl ZXFFIState {
-    /// Update sky colors in current environment state (backwards compatibility)
-    ///
-    /// Both colors are 0xRRGGBBAA format.
-    /// Maps to env_gradient_set() internally for Multi-Environment v4 compatibility.
-    /// Ground colors are derived as darker versions of sky colors.
-    pub fn update_sky_colors(&mut self, horizon_rgba: u32, zenith_rgba: u32) {
-        use crate::graphics::{blend_mode, env_mode};
-
-        // Create ground colors by darkening the sky colors
-        let darken = |color: u32| -> u32 {
-            let r = ((color >> 24) & 0xFF) * 6 / 10;
-            let g = ((color >> 16) & 0xFF) * 6 / 10;
-            let b = ((color >> 8) & 0xFF) * 6 / 10;
-            let a = color & 0xFF;
-            (r << 24) | (g << 16) | (b << 8) | a
-        };
-
-        let ground_horizon = darken(horizon_rgba);
-        let nadir = darken(zenith_rgba);
-
-        // Set up gradient mode
-        self.current_environment_state
-            .set_base_mode(env_mode::GRADIENT);
-        self.current_environment_state
-            .set_overlay_mode(env_mode::GRADIENT);
-        self.current_environment_state
-            .set_blend_mode(blend_mode::ALPHA);
-
-        // Pack gradient colors
-        self.current_environment_state
-            .pack_gradient(GradientConfig {
-                offset: 0, // base mode offset
-                zenith: zenith_rgba,
-                sky_horizon: horizon_rgba,
-                ground_horizon,
-                nadir,
-                rotation: 0.0,
-                shift: 0.0,
-                sun_elevation: 0.0,
-                sun_disk: 0,
-                sun_halo: 0,
-                sun_intensity: 0,
-                horizon_haze: 0,
-                sun_warmth: 0,
-                cloudiness: 0,
-                cloud_phase: 0,
-            });
-
-        self.environment_dirty = true;
-    }
-
     /// Sync animation state (Animation System v2 - Unified Buffer) to current_shading_state
     ///
     /// Computes absolute keyframe_base into unified_animation buffer:
@@ -102,41 +50,13 @@ impl ZXFFIState {
         self.skeletons.get(index)
     }
 
-    /// Add current environment state to the pool if dirty, returning its index
-    ///
-    /// Uses deduplication via StatePool - if this exact state already exists, returns existing index.
-    /// Otherwise adds a new entry.
-    pub fn add_environment_state(&mut self) -> crate::graphics::EnvironmentIndex {
-        // If not dirty, return the last added state
-        if !self.environment_dirty && !self.environment_pool.is_empty() {
-            return self
-                .environment_pool
-                .last_index()
-                .unwrap_or(crate::graphics::EnvironmentIndex(0));
-        }
-
-        // Add to pool (handles deduplication and overflow internally)
-        let env_idx = self.environment_pool.add(self.current_environment_state);
-        self.environment_dirty = false;
-
-        env_idx
-    }
-
     /// Add current shading state to the pool if dirty, returning its index
     ///
     /// Uses deduplication via StatePool - if this exact state already exists, returns existing index.
     /// Otherwise adds a new entry.
-    /// Also syncs the current environment state index into the shading state.
     pub fn add_shading_state(&mut self) -> crate::graphics::ShadingStateIndex {
         // Sync animation state before checking (Animation System v2)
         self.sync_animation_state();
-
-        // Sync environment state (Multi-Environment v4)
-        let env_idx = self.add_environment_state();
-        if self.current_shading_state.environment_index != env_idx.0 {
-            self.current_shading_state.environment_index = env_idx.0;
-            self.shading_state_dirty = true;
-        }
 
         // If not dirty, return the last added state
         if !self.shading_state_dirty && !self.shading_pool.is_empty() {

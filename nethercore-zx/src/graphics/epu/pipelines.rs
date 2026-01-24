@@ -143,7 +143,7 @@ pub(super) fn create_main_pipeline(
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("EPU Bind Group Layout"),
         entries: &[
-            // @binding(0) epu_states: storage buffer of PackedEnvironmentState
+            // @binding(0) epu_states: storage buffer of EPU environment states
             wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgpu::ShaderStages::COMPUTE,

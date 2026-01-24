@@ -154,7 +154,7 @@ The EPU runtime maintains these outputs per `env_id`:
 ### Frame Execution Order
 
 1. Capture EPU draw requests (per viewport/pass) and determine active environment states
-2. Deduplicate `env_id` list, cap to `MAX_ACTIVE_ENV_STATES_PER_FRAME`
+2. Deduplicate `env_id` list, cap to `MAX_ACTIVE_ENVS`
 3. Determine which `env_id`s are dirty (hash/time-dependent)
 4. Dispatch compute passes:
    - Environment evaluation (build `EnvRadiance` mip 0)
@@ -197,7 +197,7 @@ Diffuse ambient is evaluated from SH9 coefficients at the shading normal `n`.
 
 ---
 
-## Multi-Environment Support
+## Multiple Environments
 
 The EPU supports multiple environments per frame through texture array indexing:
 
@@ -210,7 +210,7 @@ The EPU supports multiple environments per frame through texture array indexing:
 | Constant | Typical Value |
 |----------|---------------|
 | `MAX_ENV_STATES` | 256 |
-| `MAX_ACTIVE_ENV_STATES_PER_FRAME` | 32 |
+| `MAX_ACTIVE_ENVS` | 32 |
 | `EPU_MAP_SIZE` | 128 (default; override via `NETHERCORE_EPU_MAP_SIZE`) |
 | `EPU_MIN_MIP_SIZE` | 4 (default; override via `NETHERCORE_EPU_MIN_MIP_SIZE`) |
 | `EPU_IRRAD_TARGET_SIZE` | 16 |
@@ -234,19 +234,19 @@ Update policy:
 
 ---
 
-## Format Changes Summary
+## Format Summary
 
-| Aspect | Legacy | Current |
-|--------|----|----|
-| Instruction size | 64-bit | 128-bit |
-| Environment size | 64 bytes | 128 bytes |
-| Opcode bits | 4-bit (16 opcodes) | 5-bit (32 opcodes) |
-| Region | 2-bit enum | 3-bit mask (combinable) |
-| Blend modes | 4 modes | 8 modes |
-| Color | 8-bit palette index | RGB24 x 2 per layer |
-| Emissive | Implicit (ADD=emissive) | Reserved (future use) |
-| Alpha | None | 4-bit x 2 (per-color) |
-| Parameters | 3 (a/b/c) | 4 (+param_d) |
+| Aspect | Value |
+|--------|----|
+| Instruction size | 128-bit |
+| Environment size | 128 bytes |
+| Opcode bits | 5-bit (32 opcodes) |
+| Region | 3-bit mask (combinable) |
+| Blend modes | 8 modes |
+| Color | RGB24 × 2 per layer |
+| Emissive | Reserved (future use) |
+| Alpha | 4-bit × 2 (per-color) |
+| Parameters | 4 (+param_d) |
 
 ---
 

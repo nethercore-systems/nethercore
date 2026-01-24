@@ -199,17 +199,6 @@ impl ZXGraphics {
             mapped_at_creation: false,
         });
 
-        // Create environment state buffer (Multi-Environment v4)
-        // Per-frame array of PackedEnvironmentState (64 bytes each)
-        let environment_states_capacity = 256;
-        let environment_states_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Environment States"),
-            size: (environment_states_capacity
-                * std::mem::size_of::<super::PackedEnvironmentState>()) as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
         // Create texture manager (handles fallback textures)
         let texture_manager = super::texture_manager::TextureManager::new(&device, &queue)?;
 
@@ -308,8 +297,6 @@ impl ZXGraphics {
             mvp_indices_capacity,
             shading_state_buffer,
             shading_state_capacity,
-            environment_states_buffer,
-            environment_states_capacity,
             texture_bind_groups: hashbrown::HashMap::new(),
             cached_frame_bind_group: None,
             cached_frame_bind_group_hash: 0,

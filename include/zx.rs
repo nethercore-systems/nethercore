@@ -25,7 +25,9 @@
 //!
 //! #[no_mangle]
 //! pub extern "C" fn render() {
-//!     draw_env();
+//!     // Optional: draw the EPU background first.
+//!     // `config_ptr` points to 16 u64 values (128 bytes total).
+//!     // epu_draw(config_ptr);
 //!     // Draw your scene
 //! }
 //! ```
@@ -403,13 +405,13 @@ extern "C" {
     /// // Player 1: left half
     /// viewport(0, 0, 480, 540);
     /// camera_set(p1_x, p1_y, p1_z, p1_tx, p1_ty, p1_tz);
-    /// draw_env();
+    /// epu_draw(env_config_ptr);
     /// draw_mesh(scene);
     ///
     /// // Player 2: right half
     /// viewport(480, 0, 480, 540);
     /// camera_set(p2_x, p2_y, p2_z, p2_tx, p2_ty, p2_tz);
-    /// draw_env();
+    /// epu_draw(env_config_ptr);
     /// draw_mesh(scene);
     ///
     /// // Reset for HUD
@@ -447,7 +449,7 @@ extern "C" {
     /// # Example (FPS viewmodel rendering)
     /// ```rust,ignore
     /// // Draw world first (pass 0)
-    /// draw_env();
+    /// epu_draw(env_config_ptr);
     /// draw_mesh(world_mesh);
     ///
     /// // Draw gun on top (pass 1 with depth clear)
@@ -471,7 +473,7 @@ extern "C" {
     /// begin_pass_stencil_write(1, 0);  // Start mask creation
     /// draw_mesh(circle_mesh);          // Draw circle to stencil only
     /// begin_pass_stencil_test(1, 0);   // Enable testing
-    /// draw_env();                       // Only visible inside circle
+    /// epu_draw(env_config_ptr);         // Only visible inside circle
     /// begin_pass(0);                    // Back to normal rendering
     /// ```
     pub fn begin_pass_stencil_write(ref_value: u32, clear_depth: u32);
@@ -879,13 +881,6 @@ extern "C" {
     ///
     /// Pass 0 for the built-in 8×8 monospace font.
     pub fn font_bind(font_handle: u32);
-
-    // =========================================================================
-    // Environment Rendering
-    // =========================================================================
-
-    /// Render the configured environment. Call first in render(), before any geometry.
-    pub fn draw_env();
 
     /// Bind a matcap texture to a slot (Mode 1 only).
     ///

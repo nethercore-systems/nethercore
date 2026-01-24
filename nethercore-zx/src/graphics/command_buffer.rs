@@ -118,17 +118,7 @@ pub enum VRPCommand {
         /// True if screen-space quad (always writes depth), false if billboard (uses PassConfig depth)
         is_screen_space: bool,
     },
-    /// Environment draw (fullscreen procedural background) - Legacy Multi-Environment v4
-    Environment {
-        /// Index into `mvp_shading_indices` (instance_index) so the environment shader uses the
-        /// correct view/proj + shading state.
-        mvp_index: u32,
-        /// Viewport for split-screen rendering (captured at command creation)
-        viewport: Viewport,
-        /// Pass ID for render pass ordering (execution barrier)
-        pass_id: u32,
-    },
-    /// EPU Environment draw (fullscreen procedural background) - New instruction-based API
+    /// EPU environment draw (fullscreen procedural background)
     EpuEnvironment {
         /// Index into `mvp_shading_indices` (instance_index) so the environment shader uses the
         /// correct view/proj + shading state.

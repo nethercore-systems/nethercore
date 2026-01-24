@@ -65,8 +65,7 @@ pub struct PackedUnifiedShadingState {
     /// Padding for struct alignment (animation_flags slot unused)
     pub _pad: u32,
 
-    /// Index into environment_states buffer for environment rendering
-    /// References a PackedEnvironmentState in the GPU buffer
+    /// EPU environment ID (`env_id`) used for EnvRadiance / SH9 sampling.
     pub environment_index: u32,
 }
 

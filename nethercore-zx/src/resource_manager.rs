@@ -403,15 +403,25 @@ impl ConsoleResourceManager for ZResourceManager {
         // Tick the EPU cache (invalidates time-dependent environments)
         graphics.epu_runtime_mut().advance_frame();
 
-        // Collect active environment IDs from the environment pool
-        let env_count = state.environment_pool.len();
-        if env_count > 0 {
+        // Collect active environment IDs from shading states used this frame.
+        // This keeps the EPU compute workload proportional to what the frame actually references.
+        let env_ids: Vec<u32> = state
+            .shading_pool
+            .iter()
+            .map(|s| s.environment_index)
+            .collect();
+        let active = crate::graphics::epu::collect_active_envs(&env_ids);
+
+        if !active.unique_ids.is_empty() {
             // Push-only API: epu_draw(config_ptr) provides the config for this frame.
             // If the game doesn't call epu_draw(), fall back to the default environment.
             let config: EpuConfig = state.epu_frame_config.unwrap_or_else(default_environment);
 
             // Build all active env_ids with the same config (single global environment).
-            let config_refs: Vec<(u32, &EpuConfig)> = (0..env_count as u32)
+            let config_refs: Vec<(u32, &EpuConfig)> = active
+                .unique_ids
+                .iter()
+                .copied()
                 .map(|env_id| (env_id, &config))
                 .collect();
 

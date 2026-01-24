@@ -175,8 +175,6 @@ The 5-bit `meta5` field (hi bits 116..112) is interpreted as:
 - `domain_id = (meta5 >> 3) & 0b11`
 - `variant_id = meta5 & 0b111`
 
-For `LOBE`/`BAND` behavior at `0x02`/`0x03`, keep `meta5 = 0`.
-
 ---
 
 ## Quick Start

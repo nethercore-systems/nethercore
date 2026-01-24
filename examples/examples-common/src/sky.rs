@@ -6,7 +6,7 @@
 //! # EPU Format
 //!
 //! Each layer is 128 bits (2 x u64) with direct RGB colors.
-//! See `environment.rs` for the full format documentation.
+//! See `docs/book/src/api/epu.md` and `include/zx.rs` for the canonical layout.
 
 use crate::color;
 use crate::ffi::*;
@@ -111,7 +111,7 @@ impl DebugSky {
 // EPU Preset for DebugSky
 // =============================================================================
 
-// EPU helper functions (same as in environment.rs)
+// EPU helper functions (shared by examples)
 const fn epu_hi(
     opcode: u64,
     region: u64,

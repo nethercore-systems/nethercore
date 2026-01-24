@@ -12,42 +12,6 @@ pub(crate) const COMMON: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/shaders/common/10_unpacking.wgsl"
     )),
-    include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/shaders/common/20_environment/00_utils.wgsl"
-    )),
-    include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/shaders/common/20_environment/10_mode0_gradient.wgsl"
-    )),
-    include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/shaders/common/20_environment/20_mode1_cells.wgsl"
-    )),
-    include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/shaders/common/20_environment/30_mode2_lines.wgsl"
-    )),
-    include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/shaders/common/20_environment/40_mode3_silhouette.wgsl"
-    )),
-    include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/shaders/common/20_environment/50_mode4_nebula.wgsl"
-    )),
-    include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/shaders/common/20_environment/60_mode5_room.wgsl"
-    )),
-    include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/shaders/common/20_environment/70_mode6_veil.wgsl"
-    )),
-    include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/shaders/common/20_environment/80_mode7_rings.wgsl"
-    )),
     // EPU evaluation (procedural radiance for sky + specular residual)
     // Common utilities, constants, structs
     include_str!(concat!(
@@ -307,15 +271,6 @@ pub(crate) const EPU_SAMPLE: &str = include_str!(concat!(
 const RERUN_IF_CHANGED_FILES: &[&str] = &[
     "shaders/common/00_bindings.wgsl",
     "shaders/common/10_unpacking.wgsl",
-    "shaders/common/20_environment/00_utils.wgsl",
-    "shaders/common/20_environment/10_mode0_gradient.wgsl",
-    "shaders/common/20_environment/20_mode1_cells.wgsl",
-    "shaders/common/20_environment/30_mode2_lines.wgsl",
-    "shaders/common/20_environment/40_mode3_silhouette.wgsl",
-    "shaders/common/20_environment/50_mode4_nebula.wgsl",
-    "shaders/common/20_environment/60_mode5_room.wgsl",
-    "shaders/common/20_environment/70_mode6_veil.wgsl",
-    "shaders/common/20_environment/80_mode7_rings.wgsl",
     "shaders/common/20_environment/90_sampling.wgsl",
     "shaders/common/30_lighting.wgsl",
     "shaders/common/90_vertex_io.wgsl",

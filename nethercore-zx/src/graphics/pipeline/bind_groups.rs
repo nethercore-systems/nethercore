@@ -4,12 +4,14 @@
 
 /// Create bind group layout for per-frame uniforms (group 0)
 ///
-/// UNIFIED BUFFER ARCHITECTURE (6 bindings, all storage, grouped by purpose):
+/// UNIFIED BUFFER ARCHITECTURE (grouped by purpose):
 /// - Binding 0-1: Transforms (unified_transforms, mvp_indices)
 /// - Binding 2: Shading (shading_states)
 /// - Binding 3: Animation (unified_animation)
-/// - Binding 4: Environment (environment_states) - Multi-Environment v4
 /// - Binding 5: Quad rendering (quad_instances)
+/// - Binding 6-7: EPU textures (env_radiance, sampler)
+/// - Binding 8-9: EPU state + frame uniforms
+/// - Binding 11: EPU SH9 (diffuse irradiance)
 ///
 /// CPU pre-computes absolute indices into unified_transforms (no frame_offsets needed).
 /// Screen dimensions eliminated - resolution_index packed into QuadInstance.mode.
@@ -69,22 +71,6 @@ pub(crate) fn create_frame_bind_group_layout(
         wgpu::BindGroupLayoutEntry {
             binding: 3,
             visibility: wgpu::ShaderStages::VERTEX,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Storage { read_only: true },
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        },
-        // =====================================================================
-        // ENVIRONMENT (binding 4) - Multi-Environment v4
-        // =====================================================================
-
-        // Binding 4: environment_states - per-frame array of PackedEnvironmentState
-        // Used by environment shader for procedural environment rendering
-        wgpu::BindGroupLayoutEntry {
-            binding: 4,
-            visibility: wgpu::ShaderStages::FRAGMENT,
             ty: wgpu::BindingType::Buffer {
                 ty: wgpu::BufferBindingType::Storage { read_only: true },
                 has_dynamic_offset: false,

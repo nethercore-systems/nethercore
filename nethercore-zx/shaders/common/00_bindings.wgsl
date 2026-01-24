@@ -4,9 +4,9 @@
 // ============================================================================
 
 // ============================================================================
-// UNIFIED BUFFER ARCHITECTURE (6 bindings, grouped by purpose)
+// FRAME BIND GROUP (group 0) - grouped by purpose
 // ============================================================================
-// Reduced from 9 storage buffers to 6 storage for WebGPU compatibility.
+// Reduced from 9 storage buffers to 4 core storage buffers for WebGPU compatibility.
 // All mat4x4 matrices merged into unified_transforms.
 // All mat3x4 animation matrices merged into unified_animation.
 // CPU pre-computes absolute indices into unified_transforms (no frame_offsets needed).
@@ -16,8 +16,10 @@
 // - Binding 0-1: Transforms (unified_transforms, mvp_shading_indices)
 // - Binding 2: Shading (shading_states)
 // - Binding 3: Animation (unified_animation)
-// - Binding 4: Environment (environment_states) - Multi-Environment v4
 // - Binding 5: Quad rendering (quad_instances)
+// - Binding 6-7: EPU textures (env_radiance, sampler)
+// - Binding 8-9: EPU state + frame uniforms
+// - Binding 11: EPU SH9 (diffuse irradiance)
 
 // Binding 0: unified_transforms - all mat4x4 matrices [models | views | projs]
 // Indices are pre-computed on CPU to be absolute offsets into this array
@@ -42,11 +44,11 @@ struct PackedUnifiedShadingState {
     uniform_set_1: u32,              // Mode-specific: [b0, b1, b2, rim_power]
     flags: u32,                      // Bit 0: skinning_mode (0=raw, 1=inverse bind)
     lights: array<PackedLight, 4>,   // 48 bytes (4 × 12-byte lights)
-    // Animation System v2 fields (8 bytes) + padding (4 bytes) + environment index (4 bytes)
+    // Animation System v2 fields (8 bytes) + padding (4 bytes) + env_id (4 bytes)
     keyframe_base: u32,              // Base offset into all_keyframes buffer
     inverse_bind_base: u32,          // Base offset into inverse_bind buffer
     _pad: u32,                       // Unused padding for struct alignment
-    environment_index: u32,          // Index into environment_states buffer
+    environment_index: u32,          // EPU environment ID (env_id)
 }
 
 // Binding 2: shading_states - per-draw shading state array
@@ -63,40 +65,6 @@ struct BoneMatrix3x4 {
 // Binding 3: unified_animation - all mat3x4 animation data [inverse_bind | keyframes | immediate]
 // CPU pre-computes keyframe_base to point to the correct section
 @group(0) @binding(3) var<storage, read> unified_animation: array<BoneMatrix3x4>;
-
-// ============================================================================
-// ENVIRONMENT SYSTEM (Multi-Environment v4)
-// ============================================================================
-// Procedural environment rendering with layering and blend modes.
-// 8 modes: Gradient, Cells, Lines, Silhouette, Nebula, Room, Veil, Rings
-
-// Packed environment state (64 bytes)
-// Header: base_mode(3) + overlay_mode(3) + blend_mode(2) + reserved(24)
-// Data: base[0..7], overlay[7..14]
-struct PackedEnvironmentState {
-    header: u32,
-    _pad: u32,
-    data: array<u32, 14>,
-}
-
-// Environment mode constants
-const ENV_MODE_GRADIENT: u32 = 0u;
-const ENV_MODE_CELLS: u32 = 1u;
-const ENV_MODE_LINES: u32 = 2u;
-const ENV_MODE_SILHOUETTE: u32 = 3u;
-const ENV_MODE_NEBULA: u32 = 4u;
-const ENV_MODE_ROOM: u32 = 5u;
-const ENV_MODE_VEIL: u32 = 6u;
-const ENV_MODE_RINGS: u32 = 7u;
-
-// Blend mode constants
-const ENV_BLEND_ALPHA: u32 = 0u;     // lerp(base, overlay, overlay.a)
-const ENV_BLEND_ADD: u32 = 1u;       // base + overlay
-const ENV_BLEND_MULTIPLY: u32 = 2u;  // base * overlay
-const ENV_BLEND_SCREEN: u32 = 3u;    // 1 - (1-base) * (1-overlay)
-
-// Binding 4: environment_states - per-frame array of PackedEnvironmentState
-@group(0) @binding(4) var<storage, read> environment_states: array<PackedEnvironmentState>;
 
 // Binding 5: quad_instances - for GPU-instanced quad rendering (declared in quad_template.wgsl)
 // (not declared here - only used by quad shader)

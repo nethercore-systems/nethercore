@@ -75,26 +75,4 @@ impl ZXGraphics {
         self.shading_state_capacity = new_capacity;
     }
 
-    /// Ensure environment state buffer has sufficient capacity (Multi-Environment v4)
-    pub(super) fn ensure_environment_states_buffer_capacity(&mut self, count: usize) {
-        if count <= self.environment_states_capacity {
-            return;
-        }
-
-        let new_capacity = (count * 2).next_power_of_two();
-        tracing::debug!(
-            "Growing environment state buffer: {} → {}",
-            self.environment_states_capacity,
-            new_capacity
-        );
-
-        self.environment_states_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Environment States"),
-            size: (new_capacity * std::mem::size_of::<super::super::PackedEnvironmentState>())
-                as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        self.environment_states_capacity = new_capacity;
-    }
 }
