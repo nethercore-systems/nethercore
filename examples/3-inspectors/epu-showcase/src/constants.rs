@@ -1,7 +1,7 @@
 //! EPU Constants and Helper Functions
 //!
 //! Contains opcode definitions, region flags, blend modes, direction constants,
-//! and helper functions for building EPU v1 128-bit layer configurations.
+//! and helper functions for building EPU 128-bit layer configurations.
 //!
 //! The meta5 field (bits 52..48) encodes domain/variant:
 //! - meta5 = (meta_hi << 1) | meta_lo (5 bits total, 0..31)

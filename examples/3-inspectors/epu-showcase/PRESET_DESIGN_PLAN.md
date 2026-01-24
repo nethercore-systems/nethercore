@@ -1,10 +1,10 @@
-# EPU v1 Inspector Preset Design Plan
+# EPU Inspector Preset Design Plan
 
 This document tracks the 18 presets designed for the EPU inspector example refactor.
 
 ## Architecture Note
 
-This document reflects the canonical EPU v1 architecture. The opcode slot assignments are:
+This document reflects the canonical EPU architecture. The opcode slot assignments are:
 
 | Opcode | Slot |
 |--------|------|
@@ -220,7 +220,7 @@ This document reflects the canonical EPU v1 architecture. The opcode slot assign
 - L6: APERTURE/BARS (black bars, digital scanlines)
 - L7: FLOW/STREAKS (green #00dd00, code streaming effect)
 
-## Opcode Coverage Matrix (EPU v1)
+## Opcode Coverage Matrix
 
 | Opcode | Slot | Count | Presets | Needs Update |
 |--------|------|-------|---------|--------------|

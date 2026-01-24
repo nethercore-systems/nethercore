@@ -23,10 +23,13 @@ pub use light::{LightType, PackedLight};
 // Note: Some exports may appear unused in lib but are used by FFI/external code
 #[allow(unused_imports)]
 pub use quantization::{
-    pack_f16, pack_f16x2, pack_matcap_blend_modes, pack_rgb8, pack_rgba8, pack_snorm16,
-    pack_uniform_set_0, pack_uniform_set_1, pack_unorm8, unpack_f16, unpack_f16x2,
-    unpack_matcap_blend_modes, unpack_snorm16, unpack_unorm8, update_u32_byte,
+    pack_f16, pack_f16x2, pack_matcap_blend_modes, pack_rgb8, pack_rgba8, pack_uniform_set_0,
+    pack_uniform_set_1, pack_unorm8, unpack_f16, unpack_f16x2, unpack_matcap_blend_modes,
+    unpack_unorm8, update_u32_byte,
 };
+
+#[cfg(test)]
+pub use quantization::pack_snorm16;
 
 pub use shading_state::{
     DEFAULT_FLAGS, FLAG_DITHER_OFFSET_X_MASK, FLAG_DITHER_OFFSET_X_SHIFT,

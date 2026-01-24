@@ -16,12 +16,11 @@ pub use super::render_state::TextureHandle;
 /// Internal texture data
 ///
 /// Fields tracked for debugging and VRAM accounting.
-#[allow(dead_code)]
 pub(crate) struct TextureEntry {
-    pub texture: wgpu::Texture,
+    pub _texture: wgpu::Texture,
     pub view: wgpu::TextureView,
-    pub width: u32,
-    pub height: u32,
+    pub _width: u32,
+    pub _height: u32,
     /// Size in bytes (for VRAM tracking)
     pub size_bytes: usize,
 }
@@ -269,10 +268,10 @@ impl TextureManager {
         self.textures.insert(
             handle.0,
             TextureEntry {
-                texture,
+                _texture: texture,
                 view,
-                width,
-                height,
+                _width: width,
+                _height: height,
                 size_bytes,
             },
         );
@@ -355,10 +354,10 @@ impl TextureManager {
         self.textures.insert(
             handle.0,
             TextureEntry {
-                texture,
+                _texture: texture,
                 view,
-                width,
-                height,
+                _width: width,
+                _height: height,
                 size_bytes,
             },
         );

@@ -125,5 +125,8 @@ fn sample_epu_ambient(env_id: u32, n: vec3f) -> vec3f {
         + c.c8 * sh8;
 
     // SH reconstruction can go slightly negative; clamp to prevent artifacts.
-    return max(e, vec3f(0.0));
+    //
+    // NOTE: The SH coefficients represent diffuse irradiance (Lambertian-convolved).
+    // Convert to Lambertian diffuse radiance for albedo=1 by dividing by PI.
+    return max(e / PI, vec3f(0.0));
 }

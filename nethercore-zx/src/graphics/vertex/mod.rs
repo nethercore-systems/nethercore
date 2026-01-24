@@ -18,8 +18,8 @@ pub use attributes::VERTEX_ATTRIBUTES;
 /// All format flags combined (without tangent - tangent requires normal)
 pub const FORMAT_ALL: u8 = FORMAT_UV | FORMAT_COLOR | FORMAT_NORMAL | FORMAT_SKINNED;
 
-/// All format flags including tangent
-#[allow(dead_code)]
+/// All format flags including tangent (test helper).
+#[cfg(test)]
 pub const FORMAT_ALL_WITH_TANGENT: u8 =
     FORMAT_UV | FORMAT_COLOR | FORMAT_NORMAL | FORMAT_TANGENT | FORMAT_SKINNED;
 

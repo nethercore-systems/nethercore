@@ -215,70 +215,91 @@ pub extern "C" fn render() {
 
         // Mirror view (small viewport at top center)
         if SHOW_MIRROR {
-            // Draw mirror frame/border
-            viewport_clear();
-            set_color(0x222222FF,
+            // Pass: Mirror frame (no depth write so it won't block the mirror 3D pass)
+            begin_pass_full(
+                compare::ALWAYS,  // depth_compare
+                0,                // depth_write = FALSE
+                0,                // clear_depth
+                compare::ALWAYS,  // stencil_compare
+                0,                // stencil_ref
+                stencil_op::KEEP, // stencil_pass_op
+                stencil_op::KEEP, // stencil_fail_op
+                stencil_op::KEEP, // stencil_depth_fail_op
             );
-        draw_rect(
-                MIRROR_X as f32 - 4.0, MIRROR_Y as f32 - 4.0, MIRROR_WIDTH as f32 + 8.0, MIRROR_HEIGHT as f32 + 8.0);
+            viewport_clear();
+            set_color(0x222222FF);
+            draw_rect(
+                MIRROR_X as f32 - 4.0,
+                MIRROR_Y as f32 - 4.0,
+                MIRROR_WIDTH as f32 + 8.0,
+                MIRROR_HEIGHT as f32 + 8.0,
+            );
 
-            // Draw mirror contents
+            // Pass: Mirror contents (clear depth so picture-in-picture has correct depth)
+            begin_pass(1);
             viewport(MIRROR_X, MIRROR_Y, MIRROR_WIDTH, MIRROR_HEIGHT);
             draw_mirror_view();
-
-            // Mirror label
-            viewport_clear();
-            let mirror_text = "REAR VIEW";
-            set_color(0x888888FF,
-            );
-        draw_text(
-                mirror_text.as_ptr(), mirror_text.len() as u32, MIRROR_X as f32 + MIRROR_WIDTH as f32 / 2.0 - 40.0, MIRROR_Y as f32 + MIRROR_HEIGHT as f32 + 8.0, 12.0);
         }
 
-        // HUD
+        // UI / HUD pass (no depth write; keeps overlay from polluting depth for later passes)
+        begin_pass_full(
+            compare::ALWAYS,  // depth_compare
+            0,                // depth_write = FALSE
+            0,                // clear_depth
+            compare::ALWAYS,  // stencil_compare
+            0,                // stencil_ref
+            stencil_op::KEEP, // stencil_pass_op
+            stencil_op::KEEP, // stencil_fail_op
+            stencil_op::KEEP, // stencil_depth_fail_op
+        );
         viewport_clear();
 
         // Title
         let title = "REAR-VIEW MIRROR DEMO";
-        set_color(0xFFFFFFFF,
-        );
-        draw_text(
-            title.as_ptr(), title.len() as u32, 10.0, 10.0, 24.0);
+        set_color(0xFFFFFFFF);
+        draw_text(title.as_ptr(), title.len() as u32, 10.0, 10.0, 24.0);
 
         // Explanation
         let explain = "Uses viewport() for picture-in-picture mirror view";
-        set_color(0x888888FF,
-        );
-        draw_text(
-            explain.as_ptr(), explain.len() as u32, 10.0, 40.0, 12.0);
+        set_color(0x888888FF);
+        draw_text(explain.as_ptr(), explain.len() as u32, 10.0, 40.0, 12.0);
 
         // Mirror status
         let mirror_status = if SHOW_MIRROR { "Mirror: ON" } else { "Mirror: OFF" };
-        set_color(if SHOW_MIRROR { 0x88FF88FF } else { 0xFF8888FF },
-        );
+        set_color(if SHOW_MIRROR { 0x88FF88FF } else { 0xFF8888FF });
         draw_text(
             mirror_status.as_ptr(), mirror_status.len() as u32, 10.0, 60.0, 14.0);
 
+        // Mirror label (outside mirror viewport)
+        if SHOW_MIRROR {
+            let mirror_text = "REAR VIEW";
+            set_color(0x888888FF);
+            draw_text(
+                mirror_text.as_ptr(),
+                mirror_text.len() as u32,
+                MIRROR_X as f32 + MIRROR_WIDTH as f32 / 2.0 - 40.0,
+                MIRROR_Y as f32 + MIRROR_HEIGHT as f32 + 8.0,
+                12.0,
+            );
+        }
+
         // Speed display
         let speed_label = "Speed: ";
-        set_color(0xAAAAAAFF,
-        );
+        set_color(0xAAAAAAFF);
         draw_text(
             speed_label.as_ptr(), speed_label.len() as u32, SCREEN_WIDTH as f32 - 150.0, SCREEN_HEIGHT as f32 - 60.0, 16.0);
 
         // Controls at bottom
         let controls = "Controls: Left Stick = Steer/Accelerate | A = Toggle Mirror";
-        set_color(0xAAAAAAFF,
-        );
+        set_color(0xAAAAAAFF);
         draw_text(
             controls.as_ptr(), controls.len() as u32, 10.0, SCREEN_HEIGHT as f32 - 30.0, 14.0);
 
         // Red car warning if visible in mirror
         if SHOW_MIRROR {
             let warning = "Watch for red car behind you!";
-            set_color(0xFF4444FF,
-            );
-        draw_text(
+            set_color(0xFF4444FF);
+            draw_text(
                 warning.as_ptr(), warning.len() as u32, SCREEN_WIDTH as f32 / 2.0 - 100.0, SCREEN_HEIGHT as f32 - 50.0, 12.0);
         }
     }

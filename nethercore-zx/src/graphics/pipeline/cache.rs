@@ -89,12 +89,6 @@ impl PipelineCache {
         tracing::info!("Shader precompile complete for mode {}", render_mode);
     }
 
-    /// Check if shaders have been precompiled
-    #[allow(dead_code)] // Useful for testing/debugging
-    pub fn shaders_precompiled(&self) -> bool {
-        self.precompiled_render_modes != 0
-    }
-
     fn get_or_create_mesh_shader_module(
         &mut self,
         device: &wgpu::Device,

@@ -22,9 +22,10 @@ use crate::console::RESOLUTION;
 ///
 /// # Architecture Note
 ///
-/// The `color_texture` and `depth_texture` fields are never directly accessed
-/// after creation, but they MUST be stored here because wgpu::TextureView does
-/// not own the underlying texture. Dropping the texture would invalidate the views.
+/// The `*_texture` fields MUST be stored here because wgpu::TextureView does not own
+/// the underlying texture. Dropping the texture would invalidate the views.
+///
+/// `color_texture` is also used for capture (screenshots/GIFs).
 ///
 /// This is separate from `ZXGraphics::depth_texture/depth_view` which is used for
 /// window-sized UI rendering (not game content). The separation allows:
@@ -32,11 +33,9 @@ use crate::console::RESOLUTION;
 /// - UI renders at window resolution (crisp regardless of window size)
 /// - Blit pipeline scales game to window with configurable filtering
 pub(crate) struct RenderTarget {
-    #[allow(dead_code)] // Needed to keep texture alive for color_view
     pub(super) color_texture: wgpu::Texture,
     pub(super) color_view: wgpu::TextureView,
-    #[allow(dead_code)] // Needed to keep texture alive for depth_view
-    pub(super) depth_texture: wgpu::Texture,
+    pub(super) _depth_texture: wgpu::Texture,
     pub(super) depth_view: wgpu::TextureView,
     pub(super) width: u32,
     pub(super) height: u32,
@@ -394,7 +393,7 @@ impl ZXGraphics {
         RenderTarget {
             color_texture,
             color_view,
-            depth_texture,
+            _depth_texture: depth_texture,
             depth_view,
             width,
             height,

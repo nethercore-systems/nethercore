@@ -85,6 +85,11 @@ fn build_examples() -> Result<()> {
         })
         .collect();
 
+    // Remove stale installed examples that no longer exist in the repo.
+    // This avoids confusing runtime errors when the FFI changes (e.g., old ROMs importing removed
+    // functions like `epu_draw`).
+    cleanup_stale_examples(&games_dir, &examples)?;
+
     println!("Building {} examples...", examples.len());
 
     let success_count = AtomicUsize::new(0);
@@ -139,6 +144,67 @@ fn build_examples() -> Result<()> {
     );
     println!("Examples installed to: {}", games_dir.display());
     println!("You can now run 'cargo run' to play them in Nethercore ZX.");
+
+    Ok(())
+}
+
+fn cleanup_stale_examples(games_dir: &Path, examples: &[walkdir::DirEntry]) -> Result<()> {
+    use serde_json::Value;
+    use std::collections::HashSet;
+
+    let valid_ids: HashSet<&str> = examples
+        .iter()
+        .filter_map(|e| e.file_name().to_str())
+        .collect();
+
+    let entries = match fs::read_dir(games_dir) {
+        Ok(e) => e,
+        Err(e) => {
+            println!(
+                "Warning: failed to read games directory for cleanup: {}",
+                e
+            );
+            return Ok(());
+        }
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+
+        let manifest_path = path.join("manifest.json");
+        if !manifest_path.exists() {
+            continue;
+        }
+
+        let manifest = match fs::read_to_string(&manifest_path)
+            .ok()
+            .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+        {
+            Some(m) => m,
+            None => continue,
+        };
+
+        let author = manifest.get("author").and_then(|v| v.as_str());
+        if author != Some("Nethercore Examples") {
+            continue;
+        }
+
+        let Some(id) = manifest.get("id").and_then(|v| v.as_str()) else {
+            continue;
+        };
+
+        if valid_ids.contains(id) {
+            continue;
+        }
+
+        println!("Removing stale installed example: {}", id);
+        if let Err(e) = fs::remove_dir_all(&path) {
+            println!("  Warning: failed to remove {}: {}", path.display(), e);
+        }
+    }
 
     Ok(())
 }
@@ -239,14 +305,10 @@ fn ensure_nether_cli(project_root: &Path) -> Result<PathBuf> {
     #[cfg(windows)]
     let nether_path_debug = nether_path_debug.with_extension("exe");
 
-    if nether_path.exists() {
-        return Ok(nether_path);
-    }
-    if nether_path_debug.exists() {
-        return Ok(nether_path_debug);
-    }
-
-    println!("Building nether CLI...");
+    // Always run a build here. `cargo` will no-op when up-to-date, but this prevents
+    // using a stale `nether` binary when the nether-cli source changes (including
+    // `.wasm` output selection heuristics).
+    println!("Ensuring nether CLI is built...");
     let status = Command::new("cargo")
         .args(["build", "--release", "-p", "nether-cli"])
         .current_dir(project_root)
@@ -259,7 +321,13 @@ fn ensure_nether_cli(project_root: &Path) -> Result<PathBuf> {
         anyhow::bail!("Failed to build nether CLI");
     }
 
-    Ok(nether_path)
+    if nether_path.exists() {
+        Ok(nether_path)
+    } else if nether_path_debug.exists() {
+        Ok(nether_path_debug)
+    } else {
+        anyhow::bail!("nether CLI build succeeded but executable was not found");
+    }
 }
 
 /// Build an example using nether build (compile + pack)

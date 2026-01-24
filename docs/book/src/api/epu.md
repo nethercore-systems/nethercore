@@ -161,6 +161,12 @@ bits 7..4:     alpha_a    (4)  - color_a alpha (0=transparent, 15=opaque)
 bits 3..0:     alpha_b    (4)  - color_b alpha (0=transparent, 15=opaque)
 ```
 
+### Determinism (No Host Time)
+
+The EPU has **no host-managed time input**. Any temporal variation (scrolling, pulsing, drifting, twinkling, etc.) must be driven explicitly by the game by changing instruction parameters as part of deterministic simulation.
+
+In practice this usually means incrementing an opcode-specific **phase** parameter (often `param_d`, see the opcode catalog) each frame: `0, 1, 2, 3, …` (wrapping at 255), and re-calling `epu_set(...)` with the updated config.
+
 ---
 
 ## Opcode Map (current shaders)

@@ -46,7 +46,6 @@ pub const MAX_BUTTON_INDEX: u32 = 13;
 /// WASM games use button indices (0-13) via FFI rather than this enum.
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum Button {
     Up = 0,
     Down = 1,
@@ -64,7 +63,6 @@ pub enum Button {
     Select = 13,
 }
 
-#[allow(dead_code)]
 impl Button {
     /// Get the bitmask for this button
     #[inline]
@@ -102,7 +100,6 @@ pub struct ZInput {
 
 // Public API helpers for ZInput - used by tests and available for console-side code.
 // WASM games access input via FFI, not these Rust methods directly.
-#[allow(dead_code)]
 impl ZInput {
     /// Check if a button is held
     #[inline]

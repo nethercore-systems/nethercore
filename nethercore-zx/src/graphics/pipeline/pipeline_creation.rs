@@ -97,7 +97,7 @@ pub(crate) fn create_pipeline(
 /// Create a quad pipeline for GPU-instanced rendering
 ///
 /// `is_screen_space` determines depth behavior:
-/// - true: Screen-space quads always write depth at 0 for early-z optimization
+/// - true: Screen-space quads use Always compare; depth write respects PassConfig
 /// - false: Billboards use PassConfig depth settings (they're 3D positioned)
 pub(crate) fn create_quad_pipeline(
     device: &wgpu::Device,
@@ -123,10 +123,15 @@ pub(crate) fn create_quad_pipeline(
     let vertex_info = VertexFormatInfo::for_format(quad_format);
 
     // Screen-space quads use Always depth compare to allow later quads to overwrite earlier ones
-    // (painter's algorithm). Depth writes remain enabled for early-z optimization against 3D.
+    // (painter's algorithm) even when all quads share the same depth value.
+    //
+    // IMPORTANT: Depth *writes* must respect PassConfig so stencil-write and other special passes
+    // can disable depth pollution (screen-space quads default to writing depth in the standard pass
+    // for early-z against later 3D).
+    //
     // Billboard quads use PassConfig settings since they're 3D-positioned and need proper depth testing.
     let (depth_write_enabled, depth_compare) = if is_screen_space {
-        (true, wgpu::CompareFunction::Always)
+        (pass_config.depth_write, wgpu::CompareFunction::Always)
     } else {
         (pass_config.depth_write, pass_config.depth_compare)
     };

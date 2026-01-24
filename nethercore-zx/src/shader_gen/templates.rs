@@ -21,7 +21,6 @@ const TEMPLATE_MODE1: &str = include_str!(concat!(
 /// # Errors
 ///
 /// Returns `ShaderGenError::InvalidRenderMode` if mode is not 0-3.
-#[allow(dead_code)] // Debugging/inspection helper
 pub fn get_template(mode: u8) -> Result<&'static str, ShaderGenError> {
     match mode {
         0 => Ok(TEMPLATE_MODE0),

@@ -3,8 +3,6 @@
 //! Simple 8x8 monospace font covering ASCII 32-126 (printable characters).
 //! This is a minimal font suitable for debug text and simple UI.
 
-#![allow(dead_code)] // Public API for text rendering, not yet wired up
-
 /// Width of each glyph in pixels
 pub const GLYPH_WIDTH: u32 = 8;
 /// Height of each glyph in pixels

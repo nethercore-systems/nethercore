@@ -223,7 +223,8 @@ pub extern "C" fn set_color(color: u32) void;
 /// 
 /// This selects which EPU environment textures are sampled for:
 /// - `draw_epu()` background rendering
-/// - Reflections + ambient lighting in lit render modes (2/3)
+/// - Ambient lighting in lit render modes (0/2/3)
+/// - Reflections in lit render modes (1/2/3)
 /// 
 /// Notes:
 /// - `env_id` is clamped to the supported range (0..255).
@@ -654,11 +655,11 @@ pub extern "C" fn font_bind(font_handle: u32) void;
 /// * `slot` — Matcap slot (1-3)
 pub extern "C" fn matcap_set(slot: u32, texture: u32) void;
 
-/// Draw the environment background using an EPU configuration (128-byte).
+/// Store an EPU configuration (128-byte) for the current `environment_index(...)`.
 /// 
-/// Reads a 128-byte (8 x 128-bit = 16 x u64) environment configuration from
-/// WASM memory and renders the procedural background for the current viewport
-/// and render pass. If called multiple times for the same env_id in a frame, the last call wins.
+/// Reads a 128-byte (8 x 128-bit = 16 x u64) environment configuration from WASM memory
+/// and stores it for the current render frame. The EPU compute pass runs automatically before
+/// rendering to build environment textures (EnvRadiance + SH9) for any referenced `env_id`.
 /// 
 /// # Arguments
 /// * `config_ptr` — Pointer to 16 u64 values (128 bytes total) in WASM memory
@@ -737,6 +738,7 @@ pub extern "C" fn matcap_set(slot: u32, texture: u32) void;
 /// # Notes
 /// - The EPU compute pass runs automatically before rendering
 /// - To set up multiple environments in a frame: call `environment_index(env_id)`, then `epu_set(config_ptr)`
+/// - Determinism: the EPU has no host-managed time; animate by changing instruction parameters from the game
 pub extern "C" fn epu_set(config_ptr: [*]const u64) void;
 
 /// Draw the environment background for the current viewport/pass.

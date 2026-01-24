@@ -19,6 +19,8 @@ For the full specification (opcode catalog, packing rules, WGSL details), see:
 1. Create a packed EPU config: 8 × 128-bit instructions (stored as 16 `u64` values as 8 `[hi, lo]` pairs).
 2. Call `epu_set(config_ptr)` near the start of `render()`, then call `draw_epu()` after your 3D geometry so the environment fills only background pixels.
 
+**Determinism note:** The EPU has no host-managed time. To animate an environment, keep a deterministic `u8 phase` in your game state (e.g. `phase = phase.wrapping_add(1)` each frame), write it into the opcode parameter you want to drive (commonly `param_d`), and call `epu_set(...)` again with the updated config.
+
 {{#tabs global="lang"}}
 
 {{#tab name="Rust"}}

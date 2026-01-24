@@ -8,7 +8,9 @@ use zx_common::formats::{
 };
 
 use crate::ffi::ZXGameContext;
-use crate::state::{BoneMatrix3x4, KeyframeSource};
+use crate::state::KeyframeSource;
+#[cfg(test)]
+use crate::state::BoneMatrix3x4;
 
 /// Read a decoded keyframe into WASM memory
 ///
@@ -222,7 +224,7 @@ pub(super) fn keyframe_bind(
 ///
 /// Note: This function is used by tests but not runtime code since the unified animation buffer
 /// uses pre-decoded static keyframes. Keeping it for test coverage.
-#[allow(dead_code)]
+#[cfg(test)]
 fn bone_transform_to_matrix(t: &BoneTransform) -> BoneMatrix3x4 {
     let [qx, qy, qz, qw] = t.rotation;
     let [px, py, pz] = t.position;

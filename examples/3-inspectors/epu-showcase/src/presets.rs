@@ -1,4 +1,4 @@
-//! EPU Preset Configurations (EPU v1 128-bit format)
+//! EPU Preset Configurations (EPU 128-bit format)
 //!
 //! This module contains environment presets for the EPU inspector demo.
 //!
@@ -150,7 +150,7 @@ use crate::constants::{
 };
 
 // =============================================================================
-// Environment Presets (EPU v1 128-bit format)
+// Environment Presets (EPU 128-bit format)
 // =============================================================================
 
 // -----------------------------------------------------------------------------

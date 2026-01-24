@@ -12,7 +12,7 @@ pub fn mode_name(mode: u8) -> &'static str {
 }
 
 /// Get the number of shader permutations for a render mode
-#[allow(dead_code)] // Debugging/testing helper
+#[cfg(test)]
 pub fn shader_count_for_mode(mode: u8) -> usize {
     match mode {
         // Mode 0: 16 (no tangent) + 8 (tangent+normal) = 24
@@ -24,7 +24,6 @@ pub fn shader_count_for_mode(mode: u8) -> usize {
 }
 
 /// Get all valid vertex formats for a render mode
-#[allow(dead_code)] // Debugging/testing helper
 pub fn valid_formats_for_mode(mode: u8) -> Vec<u8> {
     // Tangent requires normal: filter out formats with TANGENT but without NORMAL
     let tangent_valid = |f: &u8| {

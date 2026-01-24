@@ -19,16 +19,19 @@
 mod error;
 mod formats;
 mod pregenerated;
+#[cfg(test)]
 mod templates;
 
 pub use error::ShaderGenError;
 #[allow(unused_imports)] // Re-exported for debugging/tests; may be unused within this module.
-pub use formats::{mode_name, shader_count_for_mode, valid_formats_for_mode};
+pub use formats::{mode_name, valid_formats_for_mode};
+#[cfg(test)]
+pub use formats::shader_count_for_mode;
 #[allow(unused_imports)] // Re-exported for debugging/tests; may be unused within this module.
 pub use pregenerated::{
     ENVIRONMENT_SHADER, PREGENERATED_SHADERS, QUAD_SHADER, get_pregenerated_shader,
 };
-#[allow(unused_imports)] // Re-exported for debugging/tests; may be unused within this module.
+#[cfg(test)]
 pub use templates::get_template;
 
 use crate::graphics::FORMAT_NORMAL;
