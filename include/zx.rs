@@ -990,23 +990,17 @@ extern "C" {
     ///
     /// # Notes
     /// - The EPU compute pass runs automatically before rendering
+    /// - To set up multiple environments in a frame: call `environment_index(env_id)`, then `epu_set(config_ptr)`
     pub fn epu_set(config_ptr: *const u64);
 
     /// Draw the environment background for the current viewport/pass.
     ///
     /// This draws a fullscreen background using the config selected by
-    /// `environment_index(...)` (and previously provided via `epu_set(...)` or
-    /// `epu_set_env(...)`).
+    /// `environment_index(...)` (and previously provided via `epu_set(...)`).
     ///
     /// For split-screen / multi-pass, set `viewport(...)` and call `draw_epu()`
     /// once per viewport/pass where you want an environment background.
     pub fn draw_epu();
-
-    /// Store an EPU configuration for an environment ID without drawing a background.
-    ///
-    /// Use this to set up multiple environments in the same frame, then select
-    /// per-draw lighting/reflections via `environment_index(...)`.
-    pub fn epu_set_env(env_id: u32, config_ptr: *const u64);
 
     // NOTE: epu_get_ambient() was removed - GPU readback would break rollback determinism.
     // Ambient lighting is computed and applied entirely on the GPU side.

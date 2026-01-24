@@ -88,7 +88,7 @@ Core rendering techniques and procedural meshes.
 | **textured-quad** | Texture loading and sprite rendering | 🟢 Beginner | `load_texture()`, `texture_bind()` |
 | **procedural-shapes** | 7 built-in mesh generators with texture toggle | 🟡 Intermediate | B button toggles textured/plain modes |
 | **lighting** | Full PBR lighting with 4 dynamic lights | 🟡 Intermediate | Mode 2 PBR, sky system, metallic/roughness |
-| **epu-multi-reflections** | Two shiny spheres with different EPU reflection env_ids | 🟡 Intermediate | `environment_index()`, `epu_set_env()` |
+| **epu-multi-reflections** | Two shiny spheres with different EPU reflection env_ids | 🟡 Intermediate | `environment_index()`, `epu_set()`, `draw_epu()` |
 | **billboard** | GPU-instanced billboards, camera-facing sprites | 🟡 Intermediate | Instancing, orientation |
 | **dither-demo** | PS1-style ordered dithering effects | 🟡 Intermediate | Retro aesthetic |
 | **material-override** | Per-draw material property overrides | 🟡 Intermediate | Dynamic materials |

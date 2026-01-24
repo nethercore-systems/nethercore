@@ -569,15 +569,15 @@ The environment background and ambient/reflection lighting are driven by the Env
 Game-facing API (push-only):
 
 ```rust
+fn environment_index(env_id: u32)
 fn epu_set(config_ptr: *const u64)
 fn draw_epu()
-fn epu_set_env(env_id: u32, config_ptr: *const u64)
 ```
 
 `config_ptr` points to 16 `u64` values (128 bytes total) representing 8 packed 128-bit instructions as `[hi, lo]` pairs.
 
 Notes:
-- Call `epu_set(...)` to provide a config for the current `environment_index(...)`.
+- Call `environment_index(env_id)` then `epu_set(...)` to provide a config for that env_id.
 - Call `draw_epu()` to draw the background (fills only pixels at depth == 1.0).
 - For split-screen / multi-pass, call `viewport(...)` and `draw_epu()` per viewport/pass.
 - Presets and packing helpers live in `examples/3-inspectors/epu-showcase/`.

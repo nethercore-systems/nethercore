@@ -65,7 +65,7 @@ fn bone_transform_to_matrix(t: &BoneTransform) -> BoneMatrix3x4 {
 /// Default environment configuration for the resource manager.
 ///
 /// A simple cyan sky with gray walls and dark floor. This is used as a fallback
-/// when games don't specify their own environment configuration via `epu_set()` / `epu_set_env()`.
+/// when games don't specify their own environment configuration via `environment_index(...)` + `epu_set()`.
 ///
 /// Format: Layer 0 is a RAMP enclosure, layers 1-7 are empty.
 /// For preset examples showing full EPU capabilities, see the epu-showcase example.
@@ -410,7 +410,8 @@ impl ConsoleResourceManager for ZResourceManager {
         let active = crate::graphics::epu::collect_active_envs(&env_ids);
 
         if !active.unique_ids.is_empty() {
-            // Push-only API: epu_set(...) / epu_set_env(...) provide configs for one or more env_ids.
+            // Push-only API: set `environment_index(...)` then call `epu_set(...)` to provide configs for
+            // one or more env_ids.
             // If no config is provided, fall back to the built-in default environment.
             let default_config: EpuConfig = state
                 .epu_frame_configs

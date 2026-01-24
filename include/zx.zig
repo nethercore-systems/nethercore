@@ -736,23 +736,17 @@ pub extern "C" fn matcap_set(slot: u32, texture: u32) void;
 /// 
 /// # Notes
 /// - The EPU compute pass runs automatically before rendering
+/// - To set up multiple environments in a frame: call `environment_index(env_id)`, then `epu_set(config_ptr)`
 pub extern "C" fn epu_set(config_ptr: [*]const u64) void;
 
 /// Draw the environment background for the current viewport/pass.
 /// 
 /// This draws a fullscreen background using the config selected by
-/// `environment_index(...)` (and previously provided via `epu_set(...)` or
-/// `epu_set_env(...)`).
+/// `environment_index(...)` (and previously provided via `epu_set(...)`).
 /// 
 /// For split-screen / multi-pass, set `viewport(...)` and call `draw_epu()`
 /// once per viewport/pass where you want an environment background.
 pub extern "C" fn draw_epu() void;
-
-/// Store an EPU configuration for an environment ID without drawing a background.
-/// 
-/// Use this to set up multiple environments in the same frame, then select
-/// per-draw lighting/reflections via `environment_index(...)`.
-pub extern "C" fn epu_set_env(env_id: u32, config_ptr: [*]const u64) void;
 
 /// Bind an MRE texture (Metallic-Roughness-Emissive) to slot 1.
 pub extern "C" fn material_mre(texture: u32) void;

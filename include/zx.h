@@ -749,23 +749,17 @@ NCZX_IMPORT void matcap_set(uint32_t slot, uint32_t texture);
 /**  */
 /** # Notes */
 /** - The EPU compute pass runs automatically before rendering */
+/** - To set up multiple environments in a frame: call `environment_index(env_id)`, then `epu_set(config_ptr)` */
 NCZX_IMPORT void epu_set(const uint64_t* config_ptr);
 
 /** Draw the environment background for the current viewport/pass. */
 /**  */
 /** This draws a fullscreen background using the config selected by */
-/** `environment_index(...)` (and previously provided via `epu_set(...)` or */
-/** `epu_set_env(...)`). */
+/** `environment_index(...)` (and previously provided via `epu_set(...)`). */
 /**  */
 /** For split-screen / multi-pass, set `viewport(...)` and call `draw_epu()` */
 /** once per viewport/pass where you want an environment background. */
 NCZX_IMPORT void draw_epu(void);
-
-/** Store an EPU configuration for an environment ID without drawing a background. */
-/**  */
-/** Use this to set up multiple environments in the same frame, then select */
-/** per-draw lighting/reflections via `environment_index(...)`. */
-NCZX_IMPORT void epu_set_env(uint32_t env_id, const uint64_t* config_ptr);
 
 /** Bind an MRE texture (Metallic-Roughness-Emissive) to slot 1. */
 NCZX_IMPORT void material_mre(uint32_t texture);

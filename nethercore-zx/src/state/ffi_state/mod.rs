@@ -159,7 +159,6 @@ pub struct ZXFFIState {
     /// EPU configs pushed for this frame, keyed by `env_id`.
     ///
     /// - `epu_set(...)` stores a config for the **currently selected** `environment_index(...)`.
-    /// - `epu_set_env(env_id, ...)` stores a config for an explicit `env_id` without drawing.
     /// - `draw_epu()` records a background draw request for the current viewport/pass.
     ///
     /// Any `env_id` that does not have an explicit config falls back to:

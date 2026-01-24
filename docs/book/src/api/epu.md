@@ -44,6 +44,8 @@ pub extern fn environment_index(env_id: u32) void;
 
 Store the environment config for the currently selected `environment_index(...)` (no background draw).
 
+To configure multiple environments in the same frame, call `environment_index(env_id)` then `epu_set(config_ptr)` for each `env_id` you use.
+
 {{#tabs global="lang"}}
 
 {{#tab name="Rust"}}
@@ -114,37 +116,6 @@ Notes:
 - The EPU compute pass runs automatically before rendering.
 - Ambient lighting is computed and applied entirely on the GPU; there is no CPU ambient query.
 - `epu_set(...)` stores a config for the currently selected `environment_index(...)`.
-
-### epu_set_env
-
-Store a packed EPU config for an explicit `env_id` without drawing a background.
-
-Use this to set up multiple environments in the same frame, then select per-draw reflections/ambient via `environment_index(...)`.
-
-{{#tabs global="lang"}}
-
-{{#tab name="Rust"}}
-```rust,ignore
-/// Store a packed EPU config for an env_id without drawing a background.
-fn epu_set_env(env_id: u32, config_ptr: *const u64);
-```
-{{#endtab}}
-
-{{#tab name="C/C++"}}
-```c
-/// Store a packed EPU config for an env_id without drawing a background.
-void epu_set_env(uint32_t env_id, const uint64_t* config_ptr);
-```
-{{#endtab}}
-
-{{#tab name="Zig"}}
-```zig
-/// Store a packed EPU config for an env_id without drawing a background.
-pub extern fn epu_set_env(env_id: u32, config_ptr: [*]const u64) void;
-```
-{{#endtab}}
-
-{{#endtabs}}
 
 ---
 
