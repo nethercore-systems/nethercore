@@ -17,7 +17,7 @@ Each package contains:
 - `nethercore` — Library app for browsing and playing games
 - `nether` — CLI tool for building, packing, and running games
 
-The "Latest" release is automatically updated with each push to main.
+Releases are published via CI; see the Releases page for the most recent build.
 
 **After extracting:**
 
@@ -81,6 +81,8 @@ cargo run
 | `/examples` | Example games |
 
 ## For Game Developers
+
+Docs index: [docs/README.md](./docs/README.md).
 
 See [docs/architecture/ffi.md](./docs/architecture/ffi.md) for the shared FFI API, or browse the [mdBook documentation](./docs/book/).
 
@@ -154,7 +156,7 @@ The examples will appear in the Nethercore ZX game library. Use the refresh butt
 - **Case-insensitive**: `PADDLE`, `Paddle`, and `paddle` all work
 - **Error messages**: Invalid games show suggestions and available games list
 
-The `/examples` directory contains 46 example games covering graphics, animation, audio, and more.
+The `/examples` directory contains dozens of example games covering graphics, animation, audio, and more.
 
 See [examples/README.md](./examples/README.md) for the complete list with descriptions.
 

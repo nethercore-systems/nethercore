@@ -2,6 +2,10 @@
 
 > Status: Archived snapshot
 > Last reviewed: 2026-01-06
+>
+> For current (canonical) repo instructions, see:
+> - [AGENTS.md](../../AGENTS.md)
+> - [CLAUDE.md](../../CLAUDE.md)
 
 ## Project Overview
 
@@ -15,96 +19,95 @@ Nethercore is a fantasy console platform with built-in rollback netcode, designe
 - `/core` — Console trait, WASM runtime, GGRS rollback, ConsoleRunner, debug inspection
 - `/library` — Main binary with library UI, console registry, game launcher
 - `/nethercore-zx` — 5th generation aesthetic console implementation (library, no binary)
-- `/z-common` — Z-specific formats, ROM loader
+- `/zx-common` — ZX formats, ROM loader
 - `/shared` — API types for platform backend, cart/ROM formats
 - `/tools` — Developer tools (nether-cli, nether-export)
 - `/docs` — Game developer documentation
 - `/examples` — Example games
 
 **Key Documentation:**
-- [TASKS.md](./TASKS.md) — Development status and implementation plan
-- [docs/architecture/ffi.md](./docs/architecture/ffi.md) — Shared FFI API reference
-- [../nethercore-design/consoles/zx-spec.md](../nethercore-design/consoles/zx-spec.md) — ZX console specification (source of truth)
-- [docs/architecture/zx/rendering.md](./docs/architecture/zx/rendering.md) — ZX graphics deep dive
-- [docs/architecture/rom-format.md](./docs/architecture/rom-format.md) — ROM/cart format specification
-- [docs/architecture/multiplayer-testing.md](./docs/architecture/multiplayer-testing.md) — Multiplayer and GGRS testing guide
+- [docs/maintenance/refactor-todos.md](../maintenance/refactor-todos.md) — Refactor / cleanup TODO list
+- [docs/architecture/ffi.md](../architecture/ffi.md) — Shared FFI API reference
+- [nethercore-design/consoles/zx-spec.md](../../../nethercore-design/consoles/zx-spec.md) — ZX console specification (source of truth, in this workspace)
+- [docs/architecture/zx/rendering.md](../architecture/zx/rendering.md) — ZX graphics deep dive
+- [docs/architecture/rom-format.md](../architecture/rom-format.md) — ROM/cart format specification
+- [docs/architecture/nchs.md](../architecture/nchs.md) — Netplay handshake model (pre-GGRS)
 
 ## Game Developer Documentation (Book)
 
-The [docs/book/](./docs/book/) directory contains comprehensive game developer documentation in mdBook format:
+The [docs/book/](../book/) directory contains comprehensive game developer documentation in mdBook format:
 
 **Quick Reference:**
-- [Cheat Sheet](./docs/book/src/cheat-sheet.md) — Quick FFI function lookup
+- [Cheat Sheet](../book/src/cheat-sheet.md) — Quick FFI function lookup
 
 **Getting Started:**
-- [Prerequisites](./docs/book/src/getting-started/prerequisites.md)
-- [Your First Game](./docs/book/src/getting-started/first-game.md)
-- [Understanding the Game Loop](./docs/book/src/getting-started/game-loop.md)
+- [Prerequisites](../book/src/getting-started/prerequisites.md)
+- [Your First Game](../book/src/getting-started/first-game.md)
+- [Understanding the Game Loop](../book/src/getting-started/game-loop.md)
 
 **Tutorials:**
-- [Build Paddle](./docs/book/src/tutorials/paddle/index.md) — Complete 8-part tutorial building a paddle game
+- [Build Paddle](../book/src/tutorials/paddle/index.md) — Complete 8-part tutorial building a paddle game
 
 **API Reference** (FFI functions with examples):
-- [System](./docs/book/src/api/system.md) — Time, logging, quit
-- [Input](./docs/book/src/api/input.md) — Buttons, sticks, triggers
-- [Graphics](./docs/book/src/api/graphics.md) — General graphics overview
-- [Camera](./docs/book/src/api/camera.md) — Camera setup
-- [Transforms](./docs/book/src/api/transforms.md) — Matrix stack operations
-- [Textures](./docs/book/src/api/textures.md) — Texture loading and binding
-- [Meshes](./docs/book/src/api/meshes.md) — Mesh loading and drawing
-- [Materials](./docs/book/src/api/materials.md) — PBR material properties
-- [Lighting](./docs/book/src/api/lighting.md) — Directional and point lights
-- [Skinning](./docs/book/src/api/skinning.md) — Skeletal animation
-- [Animation](./docs/book/src/api/animation.md) — Keyframe animation
-- [Procedural Meshes](./docs/book/src/api/procedural.md) — Shape generation
-- [2D Drawing](./docs/book/src/api/drawing-2d.md) — Sprites, text, rectangles
-- [Billboards](./docs/book/src/api/billboards.md) — Camera-facing quads
-- [Sky](./docs/book/src/api/sky.md) — Sky gradients and sun
-- [Audio](./docs/book/src/api/audio.md) — Sound and music playback
-- [Save Data](./docs/book/src/api/save-data.md) — Persistent storage
-- [ROM Loading](./docs/book/src/api/rom-loading.md) — Asset loading from ROM data pack
-- [Debug](./docs/book/src/api/debug.md) — Debug inspection system
+- [System](../book/src/api/system.md) — Time, logging, quit
+- [Input](../book/src/api/input.md) — Buttons, sticks, triggers
+- [Graphics](../book/src/api/graphics.md) — General graphics overview
+- [Camera](../book/src/api/camera.md) — Camera setup
+- [Transforms](../book/src/api/transforms.md) — Matrix stack operations
+- [Textures](../book/src/api/textures.md) — Texture loading and binding
+- [Meshes](../book/src/api/meshes.md) — Mesh loading and drawing
+- [Materials](../book/src/api/materials.md) — PBR material properties
+- [Lighting](../book/src/api/lighting.md) — Directional and point lights
+- [Skinning](../book/src/api/skinning.md) — Skeletal animation
+- [Animation](../book/src/api/animation.md) — Keyframe animation
+- [Procedural Meshes](../book/src/api/procedural.md) — Shape generation
+- [2D Drawing](../book/src/api/drawing-2d.md) — Sprites, text, rectangles
+- [Billboards](../book/src/api/billboards.md) — Camera-facing quads
+- [Audio](../book/src/api/audio.md) — Sound and music playback
+- [Save Data](../book/src/api/save-data.md) — Persistent storage
+- [ROM Loading](../book/src/api/rom-loading.md) — Asset loading from ROM data pack
+- [Debug](../book/src/api/debug.md) — Debug inspection system
 
 **Guides:**
-- [Render Modes](./docs/book/src/guides/render-modes.md) — Choosing and configuring render modes
-- [Rollback Safety](./docs/book/src/guides/rollback-safety.md) — Writing rollback-compatible code
-- [Asset Pipeline](./docs/book/src/guides/asset-pipeline.md) — Converting and bundling assets
-- [Publishing Your Game](./docs/book/src/guides/publishing.md) — Packaging and distribution
+- [Render Modes](../book/src/guides/render-modes.md) — Choosing and configuring render modes
+- [Rollback Safety](../book/src/guides/rollback-safety.md) — Writing rollback-compatible code
+- [Asset Pipeline](../book/src/guides/asset-pipeline.md) — Converting and bundling assets
+- [Publishing Your Game](../book/src/guides/publishing.md) — Packaging and distribution
 
 **Reference:**
-- [Button Constants](./docs/book/src/reference/buttons.md) — Input button mappings
-- [Dither Patterns](./docs/book/src/reference/dither-patterns.md) — Available dither patterns
-- [Example Games](./docs/book/src/reference/examples.md) — Overview of all examples
+- [Button Constants](../book/src/reference/buttons.md) — Input button mappings
+- [Dither Patterns](../book/src/reference/dither-patterns.md) — Available dither patterns
+- [Example Games](../book/src/reference/examples.md) — Overview of all examples
 
 **Contributing:**
-- [Getting Started](./docs/contributing/getting-started.md) — Contributing to Nethercore
-- [Distributing Games](./docs/contributing/distributing-games.md) — Publishing guidelines
+- [Getting Started](../contributing/getting-started.md) — Contributing to Nethercore
+- [Distributing Games](../contributing/distributing-games.md) — Publishing guidelines
 
 ## Canonical References
 
 | Reference | File | Purpose |
 |-----------|------|---------|
-| FFI Source of Truth | [zx.rs](./include/zx.rs) | All ZX FFI function signatures |
-| Shared FFI | [core/src/ffi.rs](./core/src/ffi.rs) | System, input, save, ROM functions |
-| ZX FFI Implementation | [nethercore-zx/src/ffi/mod.rs](./nethercore-zx/src/ffi/mod.rs) | ZX-specific FFI registration |
-| Console Trait | [core/src/console.rs](./core/src/console.rs) | Console abstraction |
+| FFI Source of Truth | [zx.rs](../../include/zx.rs) | All ZX FFI function signatures |
+| Shared FFI | [core/src/ffi/mod.rs](../../core/src/ffi/mod.rs) | System, input, save, ROM functions |
+| ZX FFI Implementation | [nethercore-zx/src/ffi/mod.rs](../../nethercore-zx/src/ffi/mod.rs) | ZX-specific FFI registration |
+| Console Trait | [core/src/console.rs](../../core/src/console.rs) | Console abstraction |
 
 ## Key Source Files
 
 ### Core Crate
-- [core/src/lib.rs](./core/src/lib.rs) — Public API exports
-- [core/src/console.rs](./core/src/console.rs) — Console trait definition
-- [core/src/wasm/mod.rs](./core/src/wasm/mod.rs) — WASM runtime
-- [core/src/rollback/mod.rs](./core/src/rollback/mod.rs) — GGRS integration
+- [core/src/lib.rs](../../core/src/lib.rs) — Public API exports
+- [core/src/console.rs](../../core/src/console.rs) — Console trait definition
+- [core/src/wasm/mod.rs](../../core/src/wasm/mod.rs) — WASM runtime
+- [core/src/rollback/mod.rs](../../core/src/rollback/mod.rs) — GGRS integration
 
 ### Nethercore ZX
-- [nethercore-zx/src/lib.rs](./nethercore-zx/src/lib.rs) — ZX public API
-- [nethercore-zx/src/console.rs](./nethercore-zx/src/console.rs) — Console impl
-- [nethercore-zx/src/graphics/mod.rs](./nethercore-zx/src/graphics/mod.rs) — wgpu rendering
+- [nethercore-zx/src/lib.rs](../../nethercore-zx/src/lib.rs) — ZX public API
+- [nethercore-zx/src/console.rs](../../nethercore-zx/src/console.rs) — Console impl
+- [nethercore-zx/src/graphics/mod.rs](../../nethercore-zx/src/graphics/mod.rs) — wgpu rendering
 
 ### Library
-- [library/src/main.rs](./library/src/main.rs) — Entry point
-- [library/src/registry.rs](./library/src/registry.rs) — Console registry
+- [library/src/main.rs](../../library/src/main.rs) — Entry point
+- [library/src/registry/mod.rs](../../library/src/registry/mod.rs) — Console registry
 
 ## Testing
 
@@ -120,22 +123,14 @@ cargo run -- platformer
 cargo run -- hello-world
 
 # Build a game using nether CLI (for game developers)
-cd examples/platformer
+cd examples/7-games/platformer
 nether build
 nether run
 ```
 
 ## Example Games
 
-Located in `examples/` — 28 examples organized by category:
-
-| Category | Examples |
-|----------|----------|
-| Getting Started | `hello-world`, `triangle`, `textured-quad`, `cube` |
-| Graphics | `lighting`, `blinn-phong`, `billboard`, `procedural-shapes` |
-| Animation | `skinned-mesh`, `animation-demo`, `ik-demo` |
-| Audio | `audio-demo` |
-| Complete Game | `platformer` |
+See [examples/README.md](../../examples/README.md) for the canonical list, organized by category folders (1-getting-started, 2-graphics, …).
 
 ## Architecture
 
@@ -255,7 +250,7 @@ The core handles GGRS serialization of whatever input type the console uses.
 - `/core` — `nethercore-core` crate with Console trait, ConsoleRunner, WASM runtime, GGRS integration, debug inspection
 - `/library` — `nethercore-library` binary (default workspace member) with library UI, console registry
 - `/nethercore-zx` — `nethercore-zx` library implementing Console for 5th generation aesthetic
-- `/z-common` — Z-specific formats, ZXRomLoader implementing RomLoader trait
+- `/zx-common` — ZX formats/ROM loader (also used by platform backend)
 - `/shared` — `nethercore-shared` crate with API types, cart formats, asset formats
 - `/tools/nether-cli` — Build, pack, and run games (`nether build`, `nether pack`, `nether run`)
 - `/tools/nether-export` — Convert assets to Nethercore formats (meshes, textures, audio, skeletons, animations)
@@ -386,7 +381,7 @@ cargo run -- platformer
 
 # Launch by prefix (case-insensitive, must be unique)
 cargo run -- plat        # Matches "platformer"
-cargo run -- CUBE        # Matches "cube"
+cargo run -- pad         # Matches "paddle"
 
 # No argument launches the library UI
 cargo run
@@ -402,7 +397,7 @@ cargo run
 - Helpful error messages listing available games
 
 **Implementation:**
-- `library/src/registry.rs` - Game ID resolution and console registry
+- `library/src/registry/mod.rs` - Game ID resolution and console registry
 - `library/src/main.rs` - CLI argument parsing and entry point
 
 ## License

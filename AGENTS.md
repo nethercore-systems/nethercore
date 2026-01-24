@@ -4,6 +4,7 @@ Fantasy console runtime/player with rollback netcode, console implementations (Z
 
 ## Start Here (Canonical)
 
+- Docs index (canonical entrypoint): `docs/README.md`
 - Runtime/player overview: `docs/architecture/overview.md`
 - ZX rendering architecture: `docs/architecture/zx/rendering.md`
 - ZX FFI ABI (signatures + docs): `include/zx.rs`

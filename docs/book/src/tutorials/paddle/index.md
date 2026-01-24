@@ -9,7 +9,7 @@ In this tutorial, you'll build a complete Paddle game from scratch. By the end, 
 - Title screen and game over states
 - **Automatic online multiplayer** via Nethercore's rollback netcode
 
-![Paddle game preview](../../assets/paddle-preview.png)
+![Paddle sprite](./assets/paddle.png) ![Ball sprite](./assets/ball.png)
 
 ## What You'll Learn
 

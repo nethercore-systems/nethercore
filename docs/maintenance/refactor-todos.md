@@ -35,7 +35,7 @@ Legend: **P0** = foundational architecture/correctness, **P1** = high-ROI cleanu
 - [ ] Move any non-deterministic work out of rollback/simulation reachable code paths (audit `Instant`, random seeds, HashMap iteration).
 - [x] Make tick-rate/fps derived from console specs (there’s a TODO to remove hardcoded fps).
 
-#### `nethercore/core/src/ffi.rs`
+#### `nethercore/core/src/ffi/*`
 
 - [ ] Reduce `unwrap()` density (currently high) and replace with structured errors + invariants.
 - [x] Centralize safe WASM memory helpers (read/write slices/strings) and enforce bounds checks consistently.
