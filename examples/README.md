@@ -1,12 +1,12 @@
 # Nethercore Examples
 
-**37 working examples** organized into 8 categories to help you learn game development with Nethercore.
+**38 working examples** organized into 8 categories to help you learn game development with Nethercore.
 
 ## 📁 Organization
 
 ```
 examples/
-├── 1-getting-started/   →  4 examples   (FFI basics, languages)
+├── 1-getting-started/   →  5 examples   (FFI basics, languages)
 ├── 2-graphics/          →  7 examples   (Rendering, meshes, materials)
 ├── 3-inspectors/        →  6 examples   (Debug inspector, render modes, environments)
 ├── 4-animation/         →  3 examples   (Skeletal animation)
@@ -66,13 +66,14 @@ cargo run -- paddle
 
 ## 📂 All Examples by Category
 
-### 1. Getting Started (4 examples)
+### 1. Getting Started (5 examples)
 
 Learn the basics across multiple languages.
 
 | Example | Description | Difficulty | Language |
 |---------|-------------|------------|----------|
 | **hello-world** | 2D drawing, text, rectangles, basic input | 🟢 Beginner | Rust |
+| **save-slots** | Persistent save slots (save/load/delete) | 🟢 Beginner | Rust |
 | **hello-world-c** | Identical to hello-world, demonstrates C FFI | 🟢 Beginner | C |
 | **hello-world-zig** | Identical to hello-world, demonstrates Zig FFI | 🟢 Beginner | Zig |
 | **triangle** | Minimal 3D rendering with a single colored triangle | 🟢 Beginner | Rust |
