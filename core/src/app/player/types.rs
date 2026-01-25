@@ -55,6 +55,8 @@ pub struct LoadedRom<C: Console + Clone> {
     pub console: C,
     /// Game title (from ROM metadata or file stem fallback)
     pub game_name: String,
+    /// Stable save identity (filesystem-safe, deterministic)
+    pub game_id: String,
 }
 
 /// Configuration for standalone player.
