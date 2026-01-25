@@ -3,6 +3,7 @@
 //! Manages caching of compiled render pipelines and shader modules.
 
 use hashbrown::HashMap;
+use hashbrown::hash_map::Entry;
 
 use super::super::render_state::{PassConfig, RenderState};
 use super::pipeline_creation::{
@@ -75,89 +76,99 @@ impl PipelineCache {
         );
 
         // Always warm up shared shaders that are used by 2D/UI or default backgrounds.
-        let _ = self.get_or_create_quad_shader_module(device);
-        let _ = self.get_or_create_environment_shader_module(device);
+        let _ = Self::get_or_create_quad_shader_module(&mut self.quad_shader_module, device);
+        let _ = Self::get_or_create_environment_shader_module(
+            &mut self.environment_shader_module,
+            device,
+        );
 
         // Compile mesh shaders for all valid vertex formats in this mode.
         let formats = crate::shader_gen::valid_formats_for_mode(render_mode);
 
         for format in formats {
-            let _ = self.get_or_create_mesh_shader_module(device, render_mode, format);
+            let _ = Self::get_or_create_mesh_shader_module(
+                &mut self.shader_modules,
+                device,
+                render_mode,
+                format,
+            );
         }
 
         self.precompiled_render_modes |= mask;
         tracing::info!("Shader precompile complete for mode {}", render_mode);
     }
 
-    fn get_or_create_mesh_shader_module(
-        &mut self,
+    fn get_or_create_mesh_shader_module<'a>(
+        shader_modules: &'a mut HashMap<(u8, u8), wgpu::ShaderModule>,
         device: &wgpu::Device,
         render_mode: u8,
         format: u8,
-    ) -> &wgpu::ShaderModule {
+    ) -> &'a wgpu::ShaderModule {
         use crate::graphics::FORMAT_NORMAL;
         use crate::shader_gen::generate_shader;
 
         let render_mode = render_mode.min(3);
         let key = (render_mode, format);
-        if self.shader_modules.contains_key(&key) {
-            return &self.shader_modules[&key];
+        match shader_modules.entry(key) {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => {
+                if render_mode > 0 && (format & FORMAT_NORMAL) == 0 {
+                    panic!(
+                        "Vertex format {} missing normals for render mode {} ({})",
+                        format,
+                        render_mode,
+                        crate::shader_gen::mode_name(render_mode)
+                    );
+                }
+
+                let shader_source = generate_shader(render_mode, format).unwrap_or_else(|e| {
+                    panic!(
+                        "Shader generation failed for mode {} format {}: {}",
+                        render_mode, format, e
+                    )
+                });
+
+                let label = format!("Mode{}_Format{}", render_mode, format);
+
+                let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                    label: Some(&label),
+                    source: wgpu::ShaderSource::Wgsl(shader_source.into()),
+                });
+
+                entry.insert(module)
+            }
         }
-
-        if render_mode > 0 && (format & FORMAT_NORMAL) == 0 {
-            panic!(
-                "Vertex format {} missing normals for render mode {} ({})",
-                format,
-                render_mode,
-                crate::shader_gen::mode_name(render_mode)
-            );
-        }
-
-        let shader_source = generate_shader(render_mode, format).unwrap_or_else(|e| {
-            panic!(
-                "Shader generation failed for mode {} format {}: {}",
-                render_mode, format, e
-            )
-        });
-
-        let label = format!("Mode{}_Format{}", render_mode, format);
-
-        let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some(&label),
-            source: wgpu::ShaderSource::Wgsl(shader_source.into()),
-        });
-
-        self.shader_modules.insert(key, module);
-        &self.shader_modules[&key]
     }
 
-    fn get_or_create_quad_shader_module(&mut self, device: &wgpu::Device) -> &wgpu::ShaderModule {
-        if self.quad_shader_module.is_none() {
-            self.quad_shader_module =
-                Some(device.create_shader_module(wgpu::ShaderModuleDescriptor {
-                    label: Some("Quad Shader"),
-                    source: wgpu::ShaderSource::Wgsl(crate::shader_gen::QUAD_SHADER.into()),
-                }));
+    fn get_or_create_quad_shader_module<'a>(
+        quad_shader_module: &'a mut Option<wgpu::ShaderModule>,
+        device: &wgpu::Device,
+    ) -> &'a wgpu::ShaderModule {
+        if quad_shader_module.is_none() {
+            *quad_shader_module = Some(device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("Quad Shader"),
+                source: wgpu::ShaderSource::Wgsl(crate::shader_gen::QUAD_SHADER.into()),
+            }));
         }
 
-        self.quad_shader_module
+        quad_shader_module
             .as_ref()
             .expect("Quad shader module just inserted")
     }
 
-    fn get_or_create_environment_shader_module(
-        &mut self,
+    fn get_or_create_environment_shader_module<'a>(
+        environment_shader_module: &'a mut Option<wgpu::ShaderModule>,
         device: &wgpu::Device,
-    ) -> &wgpu::ShaderModule {
-        if self.environment_shader_module.is_none() {
-            self.environment_shader_module =
+    ) -> &'a wgpu::ShaderModule {
+        if environment_shader_module.is_none() {
+            *environment_shader_module =
                 Some(device.create_shader_module(wgpu::ShaderModuleDescriptor {
                     label: Some("Environment Shader"),
                     source: wgpu::ShaderSource::Wgsl(crate::shader_gen::ENVIRONMENT_SHADER.into()),
                 }));
         }
 
-        self.environment_shader_module
+        environment_shader_module
             .as_ref()
             .expect("Environment shader module just inserted")
     }
@@ -176,33 +187,37 @@ impl PipelineCache {
     ) -> &PipelineEntry {
         let key = PipelineKey::new(render_mode, format, state, pass_config);
 
-        // Return existing pipeline if cached
-        if self.pipelines.contains_key(&key) {
-            return &self.pipelines[&key];
+        match self.pipelines.entry(key) {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => {
+                tracing::debug!(
+                    "Creating pipeline: mode={}, format={}, depth={}, cull={:?}, pass_config={:?}",
+                    render_mode,
+                    format,
+                    state.depth_test,
+                    state.cull_mode,
+                    pass_config
+                );
+
+                let shader_module = Self::get_or_create_mesh_shader_module(
+                    &mut self.shader_modules,
+                    device,
+                    render_mode,
+                    format,
+                );
+                let pipeline = create_pipeline(
+                    device,
+                    surface_format,
+                    render_mode,
+                    format,
+                    shader_module,
+                    state,
+                    pass_config,
+                );
+
+                entry.insert(pipeline)
+            }
         }
-
-        // Otherwise, create a new pipeline
-        tracing::debug!(
-            "Creating pipeline: mode={}, format={}, depth={}, cull={:?}, pass_config={:?}",
-            render_mode,
-            format,
-            state.depth_test,
-            state.cull_mode,
-            pass_config
-        );
-
-        let shader_module = self.get_or_create_mesh_shader_module(device, render_mode, format);
-        let entry = create_pipeline(
-            device,
-            surface_format,
-            render_mode,
-            format,
-            shader_module,
-            state,
-            pass_config,
-        );
-        self.pipelines.insert(key, entry);
-        &self.pipelines[&key]
     }
 
     /// Check if a pipeline exists in the cache
@@ -232,28 +247,28 @@ impl PipelineCache {
     ) -> &PipelineEntry {
         let key = PipelineKey::quad(pass_config, is_screen_space);
 
-        // Return existing pipeline if cached
-        if self.pipelines.contains_key(&key) {
-            return &self.pipelines[&key];
+        match self.pipelines.entry(key) {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => {
+                tracing::debug!(
+                    "Creating quad pipeline: is_screen_space={}, pass_config={:?}",
+                    is_screen_space,
+                    pass_config
+                );
+
+                let shader_module =
+                    Self::get_or_create_quad_shader_module(&mut self.quad_shader_module, device);
+                let pipeline = create_quad_pipeline(
+                    device,
+                    surface_format,
+                    shader_module,
+                    pass_config,
+                    is_screen_space,
+                );
+
+                entry.insert(pipeline)
+            }
         }
-
-        // Otherwise, create a new quad pipeline
-        tracing::debug!(
-            "Creating quad pipeline: is_screen_space={}, pass_config={:?}",
-            is_screen_space,
-            pass_config
-        );
-
-        let shader_module = self.get_or_create_quad_shader_module(device);
-        let entry = create_quad_pipeline(
-            device,
-            surface_format,
-            shader_module,
-            pass_config,
-            is_screen_space,
-        );
-        self.pipelines.insert(key, entry);
-        &self.pipelines[&key]
     }
 
     /// Get or create an environment pipeline
@@ -267,21 +282,24 @@ impl PipelineCache {
     ) -> &PipelineEntry {
         let key = PipelineKey::environment(pass_config);
 
-        // Return existing pipeline if cached
-        if self.pipelines.contains_key(&key) {
-            return &self.pipelines[&key];
+        match self.pipelines.entry(key) {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => {
+                tracing::debug!(
+                    "Creating environment pipeline: pass_config={:?}",
+                    pass_config
+                );
+
+                let shader_module = Self::get_or_create_environment_shader_module(
+                    &mut self.environment_shader_module,
+                    device,
+                );
+                let pipeline =
+                    create_environment_pipeline(device, surface_format, shader_module, pass_config);
+
+                entry.insert(pipeline)
+            }
         }
-
-        // Otherwise, create a new environment pipeline
-        tracing::debug!(
-            "Creating environment pipeline: pass_config={:?}",
-            pass_config
-        );
-
-        let shader_module = self.get_or_create_environment_shader_module(device);
-        let entry = create_environment_pipeline(device, surface_format, shader_module, pass_config);
-        self.pipelines.insert(key, entry);
-        &self.pipelines[&key]
     }
 
     /// Get a pipeline by key (works for both Regular and Quad)
