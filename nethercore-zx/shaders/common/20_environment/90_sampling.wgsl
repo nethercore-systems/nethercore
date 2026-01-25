@@ -27,9 +27,15 @@ fn epu_eval_hi(env_index: u32, direction: vec3<f32>) -> vec3f {
     let dir = normalize(direction);
     let st = epu_states[env_index];
 
-    // Layer 0 is assumed to be RAMP for enclosure weights (recommended).
-    let enc = enclosure_from_ramp(st.layers[0]);
-    let regions = compute_region_weights(dir, enc);
+    // Procedural evaluation path used by:
+    // - the sky/background draw (never limited by EnvRadiance resolution)
+    // - the high-frequency residual used in specular reflections
+    //
+    // Must match the compute shader's evaluation semantics (multi-bounds).
+
+    // Start with default enclosure/regions so feature-only configs still render.
+    var enc = EnclosureConfig(vec3f(0.0, 1.0, 0.0), 0.5, -0.5, 0.1);
+    var regions = RegionWeights(0.33, 0.34, 0.33);
 
     var radiance = vec3f(0.0);
     for (var i = 0u; i < 8u; i++) {
@@ -37,9 +43,21 @@ fn epu_eval_hi(env_index: u32, direction: vec3<f32>) -> vec3f {
         let opcode = instr_opcode(instr);
         if opcode == OP_NOP { continue; }
 
+        let is_bounds = opcode < OP_FEATURE_MIN;
         let blend = instr_blend(instr);
-        let sample = evaluate_layer(dir, instr, enc, regions);
-        radiance = apply_blend(radiance, sample, blend);
+
+        if is_bounds {
+            // Bounds opcode: update enclosure, evaluate bounds, and feed its output regions
+            // into subsequent feature layers.
+            enc = enclosure_from_layer(instr, opcode, enc);
+            let bounds_result = evaluate_bounds_layer(dir, instr, opcode, enc, regions);
+            regions = bounds_result.regions;
+            radiance = apply_blend(radiance, bounds_result.sample, blend);
+        } else {
+            // Feature opcode: evaluate using the current enclosure + region weights.
+            let sample = evaluate_layer(dir, instr, enc, regions);
+            radiance = apply_blend(radiance, sample, blend);
+        }
     }
 
     return radiance;

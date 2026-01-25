@@ -248,6 +248,15 @@ pub const VEIL_LASER_BARS: u64 = 2;
 pub const VEIL_RAIN_WALL: u64 = 3;
 pub const VEIL_SHARDS: u64 = 4;
 
+// SCATTER variants
+pub const SCATTER_STARS: u64 = 0;
+pub const SCATTER_DUST: u64 = 1;
+pub const SCATTER_WINDOWS: u64 = 2;
+pub const SCATTER_BUBBLES: u64 = 3;
+pub const SCATTER_EMBERS: u64 = 4;
+pub const SCATTER_RAIN: u64 = 5;
+pub const SCATTER_SNOW: u64 = 6;
+
 // ATMOSPHERE variants
 pub const ATMO_ABSORPTION: u64 = 0;
 pub const ATMO_RAYLEIGH: u64 = 1;
