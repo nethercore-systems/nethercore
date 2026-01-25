@@ -162,7 +162,7 @@ impl ZXGraphics {
         }
 
         // 1.9. Emit EPU environment draw commands (push-only API).
-        // The game calls epu_draw(config_ptr) during render(); we capture requests keyed by
+        // The game calls draw_epu() during render(); we capture requests keyed by
         // (viewport, pass_id) so split-screen and multi-pass rendering can draw an environment
         // per pass. Only the last call per key is used.
         for ((viewport, pass_id), mvp_index) in &z_state.epu_frame_draws {

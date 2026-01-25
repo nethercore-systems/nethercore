@@ -277,7 +277,7 @@ pub extern "C" fn render() {
         light_set(0, SUN_DIR_X, SUN_DIR_Y, SUN_DIR_Z);
         light_color(0, SUN_COLOR);
         light_intensity(0, 1.0);
-        epu_draw(EPU_SKY.as_ptr() as *const u64);
+        epu_set(EPU_SKY.as_ptr() as *const u64);
 
         // Apply lights
         apply_lights();
@@ -304,6 +304,9 @@ pub extern "C" fn render() {
 
         // Draw light indicators (small emissive spheres at point light positions)
         draw_light_indicators();
+
+        // Draw environment background after 3D so it fills only background pixels.
+        draw_epu();
 
         // Draw UI
         draw_ui();

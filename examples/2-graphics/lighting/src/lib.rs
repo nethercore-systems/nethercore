@@ -300,8 +300,8 @@ fn format_float(val: f32, buf: &mut [u8]) -> usize {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
-        // Configure and draw environment using EPU (always draw first, before any geometry)
-        // Simple blue sky gradient configuration
+        // Configure environment using EPU (set config up front; draw background after 3D)
+        // Simple blue sky gradient configuration.
         static EPU_SKY: [[u64; 2]; 8] = [
             // Layer 0: RAMP gradient
             [0x0F00_6496_DC28_5028, 0xB4C8_B4A5_0080_FFFF],
@@ -316,7 +316,7 @@ pub extern "C" fn render() {
         light_set(0, -0.7, -0.2, -0.7);  // Direction: rays from sun near horizon
         light_color(0, 0xFFFAF0FF);      // Color: warm white
         light_intensity(0, 1.0);
-        epu_draw(EPU_SKY.as_ptr() as *const u64);
+        epu_set(EPU_SKY.as_ptr() as *const u64);
 
         // Update camera position to orbit around the sphere
         let orbit_radius = 4.0;
@@ -336,6 +336,9 @@ pub extern "C" fn render() {
 
         set_color(0xFFFFFFFF);
         draw_mesh(SPHERE_MESH);
+
+        // Draw environment background after 3D so it fills only background pixels.
+        draw_epu();
 
         // Draw UI overlay
         let y = 20.0;

@@ -33,13 +33,15 @@ pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
 /// ```ignore
 /// viewport(0, 0, 480, 540);     // Player 1: left half
 /// camera_set(p1_cam...);
-/// epu_draw(env_config_ptr);
 /// draw_scene();
+/// epu_set(env_config_ptr);
+/// draw_epu();
 ///
 /// viewport(480, 0, 480, 540);   // Player 2: right half
 /// camera_set(p2_cam...);
-/// epu_draw(env_config_ptr);
 /// draw_scene();
+/// epu_set(env_config_ptr);
+/// draw_epu();
 ///
 /// viewport_clear();  // Reset for HUD or next frame
 /// ```

@@ -40,7 +40,7 @@ fn set_color(mut caller: Caller<'_, ZXGameContext>, color: u32) {
 /// Set the current EPU environment index (`env_id`) for subsequent draw calls.
 ///
 /// This selects which EPU environment textures (EnvRadiance / SH9) are sampled for:
-/// - Background drawing (`epu_draw`)
+/// - Background drawing (`draw_epu`)
 /// - Reflections and ambient lighting in lit render modes
 fn environment_index(mut caller: Caller<'_, ZXGameContext>, env_id: u32) {
     use crate::graphics::epu::MAX_ENV_STATES;
@@ -176,8 +176,9 @@ fn z_index(mut caller: Caller<'_, ZXGameContext>, n: u32) {
 /// # Example (FPS viewmodel rendering)
 /// ```rust,ignore
 /// // Draw world first (pass 0)
-/// epu_draw(env_config_ptr);
 /// draw_mesh(world_mesh);
+/// epu_set(env_config_ptr);
+/// draw_epu();
 ///
 /// // Draw gun on top (pass 1 with depth clear)
 /// begin_pass(1);  // Clear depth so gun renders on top
@@ -206,7 +207,8 @@ fn begin_pass(mut caller: Caller<'_, ZXGameContext>, clear_depth: u32) {
 /// begin_pass_stencil_write(1, 0);  // Start mask creation
 /// draw_mesh(circle_mesh);          // Draw circle to stencil only
 /// begin_pass_stencil_test(1, 0);   // Enable testing
-/// epu_draw(env_config_ptr);         // Only visible inside circle
+/// epu_set(env_config_ptr);
+/// draw_epu();                      // Only visible inside circle
 /// begin_pass(0);                    // Back to normal rendering
 /// ```
 fn begin_pass_stencil_write(

@@ -10,7 +10,7 @@
 //   param_a: Pattern scale (0..255 -> 0.5..16.0)
 //   param_b: Gap width (0..255 -> 0..0.2)
 //   param_c: Roughness (0..255 -> 0..1)
-//   param_d: Reserved (set to 0)
+//   param_d: Phase (0..255 -> 0..1)
 //   direction: Plane normal (oct-u16)
 //   alpha_a: Pattern alpha (0..15 -> 0..1)
 //   alpha_b: Unused (set to 0)
@@ -225,10 +225,9 @@ fn eval_plane_sand(
 // WATER variant: layered sinusoidal ripples
 fn eval_plane_water(
     uv: vec2f,
+    t: f32,
 ) -> vec2f {
     // Returns (ripple_brightness, specular_highlight)
-    let t = 0.0;
-
     // Multiple overlapping ripple layers
     let center1 = vec2f(0.3, 0.4);
     let center2 = vec2f(0.7, 0.6);
@@ -346,6 +345,8 @@ fn eval_plane(
     let gap = u8_to_01(instr_b(instr)) * 0.2;
     // param_c: Roughness (0..255 -> 0..1)
     let roughness = u8_to_01(instr_c(instr));
+    // param_d: Phase (0..255 -> 0..TAU)
+    let anim_t = u8_to_01(instr_d(instr)) * TAU;
 
     // Decode plane normal
     let plane_normal = decode_dir16(instr_dir16(instr));
@@ -409,7 +410,7 @@ fn eval_plane(
             specular_term = result.y * 0.1;
         }
         case PLANE_VARIANT_WATER: {
-            let result = eval_plane_water(uv);
+            let result = eval_plane_water(uv, anim_t);
             pattern_mask = 1.0;
             color_variation = result.x - 0.5;
             specular_term = result.y;
@@ -430,10 +431,8 @@ fn eval_plane(
             color_variation = result.y;
         }
         default: {
-            // Fallback to TILES
-            let result = eval_plane_tiles(uv, gap);
-            pattern_mask = result.x;
-            color_variation = result.y * 0.2;
+            // Reserved/unknown variants: no output.
+            return LayerSample(vec3f(0.0), 0.0);
         }
     }
 

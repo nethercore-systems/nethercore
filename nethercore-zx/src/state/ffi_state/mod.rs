@@ -158,9 +158,9 @@ pub struct ZXFFIState {
     // EPU (Environment Processing Unit) state - instruction-based API (push-only)
     /// EPU configs pushed for this frame, keyed by `env_id`.
     ///
-    /// - `epu_draw(...)` stores a config for the **currently selected** `environment_index(...)`
-    ///   and records a background draw request.
+    /// - `epu_set(...)` stores a config for the **currently selected** `environment_index(...)`.
     /// - `epu_set_env(env_id, ...)` stores a config for an explicit `env_id` without drawing.
+    /// - `draw_epu()` records a background draw request for the current viewport/pass.
     ///
     /// Any `env_id` that does not have an explicit config falls back to:
     /// 1) `env_id = 0` if present, else
@@ -169,7 +169,7 @@ pub struct ZXFFIState {
     /// EPU draw requests for this frame.
     ///
     /// Keyed by (viewport, pass_id) so split-screen and multi-pass rendering can
-    /// request an environment draw per pass. If `epu_draw()` is called multiple
+    /// request an environment draw per pass. If `draw_epu()` is called multiple
     /// times for the same key, only the last call wins.
     ///
     /// The value is an index into `mvp_shading_indices` (instance_index) so the

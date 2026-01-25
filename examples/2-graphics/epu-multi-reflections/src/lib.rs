@@ -4,7 +4,7 @@
 //! to validate multiple simultaneous reflection environments.
 //!
 //! - Requires `render_mode = 2` in nether.toml.
-//! - Uses `epu_draw(...)` + `epu_set_env(...)` to push two environments.
+//! - Uses `epu_set_env(...)` to push two environments and `draw_epu()` to draw the background.
 //! - Uses `environment_index(...)` per draw to select which env is sampled.
 
 #![no_std]
@@ -137,8 +137,7 @@ pub extern "C" fn render() {
         // Push two environments this frame:
         // - env_id 0: warm (also used as the visible background)
         // - env_id 1: cool (used only for the right sphere's reflections/ambient)
-        environment_index(0);
-        epu_draw(EPU_WARM.as_ptr() as *const u64);
+        epu_set_env(0, EPU_WARM.as_ptr() as *const u64);
         epu_set_env(1, EPU_COOL.as_ptr() as *const u64);
 
         // Left sphere: env 0 (warm).
@@ -154,6 +153,10 @@ pub extern "C" fn render() {
         push_identity();
         push_translate(1.6, 0.0, 0.0);
         draw_mesh(SPHERE_MESH);
+
+        // Draw environment background after 3D so it fills only background pixels.
+        environment_index(0);
+        draw_epu();
 
         // Labels.
         set_color(0xFFFFFFFF);

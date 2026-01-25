@@ -25,10 +25,11 @@
 //!
 //! #[no_mangle]
 //! pub extern "C" fn render() {
-//!     // Optional: draw the EPU background first.
+//!     // Optional: EPU environment background.
 //!     // `config_ptr` points to 16 u64 values (128 bytes total).
-//!     // epu_draw(config_ptr);
+//!     // epu_set(config_ptr);
 //!     // Draw your scene
+//!     // draw_epu();
 //! }
 //! ```
 //!
@@ -341,7 +342,7 @@ extern "C" {
     /// Set the EPU environment index (`env_id`) used for subsequent draw calls.
     ///
     /// This selects which EPU environment textures are sampled for:
-    /// - `epu_draw(...)` background rendering
+    /// - `draw_epu()` background rendering
     /// - Reflections + ambient lighting in lit render modes (2/3)
     ///
     /// Notes:
@@ -416,14 +417,16 @@ extern "C" {
     /// // Player 1: left half
     /// viewport(0, 0, 480, 540);
     /// camera_set(p1_x, p1_y, p1_z, p1_tx, p1_ty, p1_tz);
-    /// epu_draw(env_config_ptr);
+    /// epu_set(env_config_ptr);
     /// draw_mesh(scene);
+    /// draw_epu();
     ///
     /// // Player 2: right half
     /// viewport(480, 0, 480, 540);
     /// camera_set(p2_x, p2_y, p2_z, p2_tx, p2_ty, p2_tz);
-    /// epu_draw(env_config_ptr);
+    /// epu_set(env_config_ptr);
     /// draw_mesh(scene);
+    /// draw_epu();
     ///
     /// // Reset for HUD
     /// viewport_clear();
@@ -460,8 +463,9 @@ extern "C" {
     /// # Example (FPS viewmodel rendering)
     /// ```rust,ignore
     /// // Draw world first (pass 0)
-    /// epu_draw(env_config_ptr);
     /// draw_mesh(world_mesh);
+    /// epu_set(env_config_ptr);
+    /// draw_epu();
     ///
     /// // Draw gun on top (pass 1 with depth clear)
     /// begin_pass(1);  // Clear depth so gun renders on top
@@ -484,7 +488,8 @@ extern "C" {
     /// begin_pass_stencil_write(1, 0);  // Start mask creation
     /// draw_mesh(circle_mesh);          // Draw circle to stencil only
     /// begin_pass_stencil_test(1, 0);   // Enable testing
-    /// epu_draw(env_config_ptr);         // Only visible inside circle
+    /// epu_set(env_config_ptr);
+    /// draw_epu();                      // Only visible inside circle
     /// begin_pass(0);                    // Back to normal rendering
     /// ```
     pub fn begin_pass_stencil_write(ref_value: u32, clear_depth: u32);
@@ -963,30 +968,39 @@ extern "C" {
     /// - 6: MIN (min(dst, src * a))
     /// - 7: OVERLAY (Photoshop-style overlay)
     ///
-    /// Draw the environment background.
+    /// Store the environment configuration for the current `environment_index(...)`.
     ///
-    /// Renders the procedural environment background for the current viewport and pass.
-    ///
-    /// The config is stored for the currently selected `environment_index(...)`.
+    /// Use this to set the active environment config for this frame without
+    /// doing a fullscreen background draw.
     ///
     /// # Usage
-    /// Call this **first** in your `render()` function, before any 3D geometry:
     /// ```rust,ignore
     /// fn render() {
-    ///     // Draw environment background
-    ///     epu_draw(config.as_ptr());
+    ///     // Set environment configuration at the start of the pass/frame
+    ///     epu_set(config.as_ptr());
     ///
-    ///     // Then draw scene geometry
+    ///     // Draw scene geometry
     ///     draw_mesh(terrain);
     ///     draw_mesh(player);
+    ///
+    ///     // Draw environment background last (fills only background pixels)
+    ///     draw_epu();
     /// }
     /// ```
     ///
     /// # Notes
-    /// - Environment always renders behind all geometry (at far plane)
-    /// - For split-screen, set `viewport(...)` and call `epu_draw(...)` per viewport
     /// - The EPU compute pass runs automatically before rendering
-    pub fn epu_draw(config_ptr: *const u64);
+    pub fn epu_set(config_ptr: *const u64);
+
+    /// Draw the environment background for the current viewport/pass.
+    ///
+    /// This draws a fullscreen background using the config selected by
+    /// `environment_index(...)` (and previously provided via `epu_set(...)` or
+    /// `epu_set_env(...)`).
+    ///
+    /// For split-screen / multi-pass, set `viewport(...)` and call `draw_epu()`
+    /// once per viewport/pass where you want an environment background.
+    pub fn draw_epu();
 
     /// Store an EPU configuration for an environment ID without drawing a background.
     ///

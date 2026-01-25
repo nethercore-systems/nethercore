@@ -458,8 +458,8 @@ fn eval_celestial(
             sample = eval_celestial_eclipse(r, color_a, color_b, corona_brightness, alpha_a, alpha_b);
         }
         default: {
-            // Fallback to MOON for reserved variants
-            sample = eval_celestial_moon(r, surface_uv, phase_factor, limb, color_a, color_b, alpha_b);
+            // Reserved/unknown variants: no output.
+            return LayerSample(vec3f(0.0), 0.0);
         }
     }
 

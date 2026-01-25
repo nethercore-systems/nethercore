@@ -218,7 +218,7 @@ pub extern "C" fn render() {
         light_set(0, SUN_DIR_X, SUN_DIR_Y, SUN_DIR_Z);
         light_color(0, SUN_COLOR);
         light_intensity(0, 1.0);
-        epu_draw(EPU_SKY.as_ptr() as *const u64);
+        epu_set(EPU_SKY.as_ptr() as *const u64);
 
         // Update lights from debug values
         for i in 0..4u32 {
@@ -246,6 +246,9 @@ pub extern "C" fn render() {
             _ => SPHERE_MESH,
         };
         draw_mesh(mesh);
+
+        // Draw environment background after 3D so it fills only background pixels.
+        draw_epu();
 
         // Draw UI
         draw_ui();

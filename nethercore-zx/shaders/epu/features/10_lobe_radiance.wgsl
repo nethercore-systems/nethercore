@@ -13,8 +13,8 @@
 //   intensity: Brightness (0..255 -> 0.0..2.0)
 //   param_a: Exponent/sharpness (0..255 -> 1..64)
 //   param_b: Edge falloff curve (0..255 -> 0.5..4.0)
-//   param_c: Reserved (set to 0)
-//   param_d: Reserved (set to 0)
+//   param_c: Phase waveform (0=off, 1=sine, 2=triangle, 3=strobe)
+//   param_d: Phase (0..255 -> 0..1)
 //   direction: Lobe center direction (oct-u16)
 //   alpha_a: Coverage alpha (0..15 -> 0.0..1.0)
 //   alpha_b: Unused (set to 0)
@@ -60,7 +60,16 @@ fn eval_lobe_radiance(
     // Blend colors: rgb = mix(color_a, color_b, edge_factor)
     let rgb = mix(core_color, edge_color, edge_factor);
 
-    let anim = 1.0;
+    let waveform = instr_c(instr);
+    let phase = u8_to_01(instr_d(instr));
+    var anim = 1.0;
+    switch waveform {
+        case 0u: { anim = 1.0; }
+        case 1u: { anim = 0.5 + 0.5 * sin(phase * TAU); }
+        case 2u: { anim = 1.0 - abs(phase * 2.0 - 1.0); }
+        case 3u: { anim = step(0.5, fract(phase * 4.0)); }
+        default: { anim = 0.5 + 0.5 * sin(phase * TAU); }
+    }
 
     // Extract intensity: bits 63..56 (0..255 -> 0.0..2.0)
     let intensity = u8_to_01(instr_intensity(instr)) * 2.0;

@@ -507,8 +507,8 @@ static ENV: [[u64; 2]; 8] = [
 ];
 
 fn render() {
-    // Draw environment background first (before geometry).
-    unsafe { epu_draw(ENV.as_ptr().cast()); }
+    // Set environment config.
+    unsafe { epu_set(ENV.as_ptr().cast()); }
 
     // Main directional light
     light_set(0, 0.5, -0.7, 0.5);
@@ -523,6 +523,9 @@ fn render() {
     light_enable(1);
 
     // Draw scene...
+
+    // Draw environment background last (fills only background pixels).
+    unsafe { draw_epu(); }
 }
 ```
 {{#endtab}}
@@ -536,7 +539,7 @@ static const uint64_t env_config[16] = {
 };
 
 NCZX_EXPORT void render(void) {
-    epu_draw(env_config);  // Draw environment background
+    epu_set(env_config);  // Set environment config
 
     // Main directional light
     light_set(0, 0.5f, -0.7f, 0.5f);
@@ -551,6 +554,9 @@ NCZX_EXPORT void render(void) {
     light_enable(1);
 
     // Draw scene...
+
+    // Draw environment background last (fills only background pixels).
+    draw_epu();
 }
 ```
 {{#endtab}}
@@ -564,7 +570,7 @@ const env_config: [16]u64 = .{
 };
 
 export fn render() void {
-    epu_draw(&env_config);  // Draw environment background
+    epu_set(&env_config);  // Set environment config
 
     // Main directional light
     light_set(0, 0.5, -0.7, 0.5);
@@ -579,6 +585,9 @@ export fn render() void {
     light_enable(1);
 
     // Draw scene...
+
+    // Draw environment background last (fills only background pixels).
+    draw_epu();
 }
 ```
 {{#endtab}}

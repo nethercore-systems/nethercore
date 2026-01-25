@@ -207,6 +207,21 @@ pub enum FlowPattern {
     Caustic = 2,
 }
 
+/// Waveforms for phase-driven modulation.
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum PhaseWaveform {
+    /// No modulation (constant).
+    #[default]
+    Off = 0,
+    /// Smooth sine modulation.
+    Sine = 1,
+    /// Linear up/down (triangle) modulation.
+    Triangle = 2,
+    /// Hard on/off modulation.
+    Strobe = 3,
+}
+
 // =============================================================================
 // Core Types
 // =============================================================================
@@ -678,15 +693,15 @@ impl EpuBuilder {
             intensity: p.intensity,
             param_a,
             param_b: p.size,
-            param_c: p.pulse_speed,
-            param_d: 0,
+            param_c: p.glow_softness,
+            param_d: p.phase,
             direction: encode_direction_u16(p.dir),
         });
     }
 
     /// Add scattered points (SCATTER).
     pub fn scatter(&mut self, p: ScatterParams) {
-        let param_c = ((p.twinkle_q & 0x0F) << 4) | (p.seed & 0x0F);
+        let param_c = (p.twinkle_q & 0x0F) << 4;
         self.push_feature(EpuLayer {
             opcode: EpuOpcode::Scatter,
             region_mask: p.region.to_mask(),
@@ -700,7 +715,7 @@ impl EpuBuilder {
             param_a: p.density,
             param_b: p.size,
             param_c,
-            param_d: 0,
+            param_d: p.seed,
             direction: 0,
         });
     }
@@ -721,7 +736,7 @@ impl EpuBuilder {
             param_a: p.scale,
             param_b: p.thickness,
             param_c,
-            param_d: 0,
+            param_d: p.phase,
             direction: 0,
         });
     }
@@ -740,7 +755,7 @@ impl EpuBuilder {
             alpha_b: 15,
             intensity: p.intensity,
             param_a: p.scale,
-            param_b: p.speed,
+            param_b: p.phase,
             param_c,
             param_d: p.turbulence,
             direction: encode_direction_u16(p.dir),
@@ -761,8 +776,8 @@ impl EpuBuilder {
             intensity: p.intensity,
             param_a: p.exponent,
             param_b: p.falloff,
-            param_c: p.anim_mode,
-            param_d: p.anim_speed,
+            param_c: p.waveform as u8,
+            param_d: p.phase,
             direction: encode_direction_u16(p.dir),
         });
     }
@@ -782,7 +797,7 @@ impl EpuBuilder {
             param_a: p.width,
             param_b: p.offset,
             param_c: p.softness,
-            param_d: p.scroll_speed,
+            param_d: p.phase,
             direction: encode_direction_u16(p.axis),
         });
     }
@@ -1052,8 +1067,12 @@ pub struct DecalParams {
     pub softness_q: u8,
     /// Size (0..255 maps to 0..0.5 rad)
     pub size: u8,
-    /// Pulse animation speed (0..255 maps to 0..10)
-    pub pulse_speed: u8,
+    /// Glow softness (0..255 maps to 0..0.2)
+    pub glow_softness: u8,
+    /// Looping animation phase (0..255 maps to 0..1).
+    ///
+    /// Advance this from your game (deterministic) to animate the decal.
+    pub phase: u8,
     /// Alpha (0-15)
     pub alpha: u8,
 }
@@ -1070,7 +1089,8 @@ impl Default for DecalParams {
             intensity: 255,
             softness_q: 2,
             size: 20,
-            pulse_speed: 0,
+            glow_softness: 64,
+            phase: 0,
             alpha: 15,
         }
     }
@@ -1093,7 +1113,7 @@ pub struct ScatterParams {
     pub size: u8,
     /// Twinkle amount (0..15)
     pub twinkle_q: u8,
-    /// Random seed (0..15)
+    /// Random seed (0..255)
     pub seed: u8,
 }
 
@@ -1131,6 +1151,10 @@ pub struct GridParams {
     pub pattern: GridPattern,
     /// Scroll speed (0..15 maps to 0..2)
     pub scroll_q: u8,
+    /// Looping animation phase (0..255 maps to 0..1).
+    ///
+    /// Advance this from your game (deterministic) to animate scrolling.
+    pub phase: u8,
 }
 
 impl Default for GridParams {
@@ -1144,6 +1168,7 @@ impl Default for GridParams {
             thickness: 20,
             pattern: GridPattern::Grid,
             scroll_q: 0,
+            phase: 0,
         }
     }
 }
@@ -1163,8 +1188,10 @@ pub struct FlowParams {
     pub intensity: u8,
     /// Noise scale (0..255 maps to 1..16)
     pub scale: u8,
-    /// Animation speed (0..255 maps to 0..2)
-    pub speed: u8,
+    /// Looping animation phase (0..255 maps to 0..1).
+    ///
+    /// Advance this from your game (deterministic) to animate the pattern.
+    pub phase: u8,
     /// Noise octaves (0..4)
     pub octaves: u8,
     /// Pattern type
@@ -1182,7 +1209,7 @@ impl Default for FlowParams {
             color: [128, 128, 128],
             intensity: 60,
             scale: 32,
-            speed: 20,
+            phase: 0,
             octaves: 2,
             pattern: FlowPattern::Noise,
             turbulence: 0,
@@ -1201,8 +1228,12 @@ pub struct LobeRadianceParams {
     pub intensity: u8,
     pub exponent: u8,
     pub falloff: u8,
-    pub anim_mode: u8,
-    pub anim_speed: u8,
+    /// How to interpret [`phase`](Self::phase) for modulation.
+    pub waveform: PhaseWaveform,
+    /// Looping animation phase (0..255 maps to 0..1).
+    ///
+    /// Advance this from your game (deterministic) to animate the lobe.
+    pub phase: u8,
     pub alpha: u8,
 }
 
@@ -1217,8 +1248,8 @@ impl Default for LobeRadianceParams {
             intensity: 255,
             exponent: 64,
             falloff: 64,
-            anim_mode: 0,
-            anim_speed: 0,
+            waveform: PhaseWaveform::Off,
+            phase: 0,
             alpha: 15,
         }
     }
@@ -1236,7 +1267,10 @@ pub struct BandRadianceParams {
     pub width: u8,
     pub offset: u8,
     pub softness: u8,
-    pub scroll_speed: u8,
+    /// Looping modulation phase (0..255 maps to 0..1).
+    ///
+    /// Advance this from your game (deterministic) to scroll the modulation around the band.
+    pub phase: u8,
     pub alpha: u8,
 }
 
@@ -1252,7 +1286,7 @@ impl Default for BandRadianceParams {
             width: 64,
             offset: 128,
             softness: 0,
-            scroll_speed: 0,
+            phase: 0,
             alpha: 15,
         }
     }

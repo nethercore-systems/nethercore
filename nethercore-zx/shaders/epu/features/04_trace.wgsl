@@ -374,10 +374,8 @@ fn eval_trace(
             uv = uv * 0.5 + 0.5;
         }
         default: {
-            // DIRECT3D fallback - use cylindrical with Y-up
-            uv = trace_cyl_uv(dir, vec3f(0.0, 1.0, 0.0));
-            let pole_dist = min(uv.y, 1.0 - uv.y);
-            domain_w = smoothstep(0.0, 0.15, pole_dist);
+            // Reserved/unknown domains: no output.
+            return LayerSample(vec3f(0.0), 0.0);
         }
     }
 
@@ -409,8 +407,8 @@ fn eval_trace(
                 trace_dists = filament_trace(uv, seed, f32(i), point_count, jitter, thickness);
             }
             default: {
-                // Fallback to lightning
-                trace_dists = lightning_trace(uv, seed, f32(i), 2u, jitter, thickness);
+                // Reserved/unknown variants: no output.
+                return LayerSample(vec3f(0.0), 0.0);
             }
         }
 

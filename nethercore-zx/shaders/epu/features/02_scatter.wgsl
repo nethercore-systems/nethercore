@@ -166,6 +166,11 @@ fn eval_scatter(
     let domain_id = instr_domain_id(instr);
     let variant_id = instr_variant_id(instr);
 
+    // Reserved/unknown variants: no output.
+    if variant_id > SCATTER_VARIANT_SNOW {
+        return LayerSample(vec3f(0.0), 0.0);
+    }
+
     let density = mix(1.0, 256.0, u8_to_01(instr_a(instr)));
     let base_size = mix(0.001, 0.05, u8_to_01(instr_b(instr)));
     let size = base_size * scatter_size_mult(variant_id);

@@ -2,7 +2,7 @@
 
 The Environment Processing Unit (EPU) is ZX's GPU-driven procedural background and ambient environment system.
 
-- It renders an infinite environment when you call `epu_draw(config_ptr)` (packed 128-byte config).
+- It renders an infinite environment when you call `draw_epu()` after providing a config with `epu_set(config_ptr)` (packed 128-byte config).
 - The same environment is sampled by lit shaders for ambient/reflection lighting.
 
 For exact FFI signatures and instruction encoding, see the [Environment (EPU) API](../api/epu.md).
@@ -17,7 +17,7 @@ For the full specification (opcode catalog, packing rules, WGSL details), see:
 ## Quick Start
 
 1. Create a packed EPU config: 8 × 128-bit instructions (stored as 16 `u64` values as 8 `[hi, lo]` pairs).
-2. Call `epu_draw(config_ptr)` in your `render()` function (before any geometry).
+2. Call `epu_set(config_ptr)` near the start of `render()`, then call `draw_epu()` after your 3D geometry so the environment fills only background pixels.
 
 {{#tabs global="lang"}}
 
@@ -31,8 +31,9 @@ static ENV: [[u64; 2]; 8] = [
 
 fn render() {
     unsafe {
-        epu_draw(ENV.as_ptr().cast()); // Draw environment background
+        epu_set(ENV.as_ptr().cast()); // Set environment config
         // ... draw scene geometry
+        draw_epu(); // Draw environment background
     }
 }
 ```
@@ -45,8 +46,9 @@ static const uint64_t env_config[16] = {
 };
 
 void render(void) {
-    epu_draw(env_config);  // Draw environment background
+    epu_set(env_config);  // Set environment config
     // ... draw scene geometry
+    draw_epu();           // Draw environment background
 }
 ```
 {{#endtab}}
@@ -58,8 +60,9 @@ const env_config: [16]u64 = .{
 };
 
 export fn render() void {
-    epu_draw(&env_config);  // Draw environment background
+    epu_set(&env_config);  // Set environment config
     // ... draw scene geometry
+    draw_epu();            // Draw environment background
 }
 ```
 {{#endtab}}
@@ -108,7 +111,7 @@ The EPU uses a 128-byte instruction-based configuration:
 
 - Start from a known-good preset (`epu-showcase`).
 - Use the `epu-showcase` debug panel (F4) to iterate on one layer at a time (opcode + params).
-- Copy the resulting packed 8-layer config into your game and call `epu_draw(config_ptr)`.
+- Copy the resulting packed 8-layer config into your game, call `epu_set(config_ptr)`, then call `draw_epu()`.
 
 ### Slot Conventions
 
@@ -127,7 +130,7 @@ The EPU uses a 128-byte instruction-based configuration:
 
 ## Split-Screen / Multiple Viewports
 
-Call `viewport(...)` and then `epu_draw(config_ptr)` per viewport/pass where you want an environment background.
+Call `viewport(...)` and then `draw_epu()` per viewport/pass where you want an environment background.
 
 ---
 

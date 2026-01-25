@@ -14,7 +14,7 @@
 //   param_a: Size (0..255 -> 0.05..0.8 tangent units)
 //   param_b: Edge glow width (0..255 -> 0.01..0.3)
 //   param_c: Edge roughness for TEAR/CRACK/RIFT (0..255 -> 0..1)
-//   param_d: Rotation speed for VORTEX (0..255 -> 0..2)
+//   param_d: Phase for VORTEX (0..255 -> 0..1)
 //   direction: Portal center (oct-u16)
 //   alpha_a: Interior alpha (0..15 -> 0..1)
 //   alpha_b: Edge glow alpha (0..15 -> 0..1)
@@ -88,10 +88,10 @@ fn portal_sdf_rift(uv: vec2f, size: f32, roughness: f32) -> f32 {
 }
 
 // Apply spiral warp for VORTEX variant
-fn portal_apply_vortex_warp(uv: vec2f, rotation_speed: f32) -> vec2f {
+fn portal_apply_vortex_warp(uv: vec2f, phase: f32) -> vec2f {
     let angle = atan2(uv.y, uv.x);
     let radius = length(uv);
-    let warped_angle = angle + radius * rotation_speed;
+    let warped_angle = angle + radius * 2.0 + phase * TAU;
     return vec2f(cos(warped_angle), sin(warped_angle)) * radius;
 }
 
@@ -135,13 +135,13 @@ fn eval_portal(
     // param_c: Edge roughness (0..255 -> 0.0..1.0)
     let roughness = u8_to_01(instr_c(instr));
 
-    // param_d: Rotation speed for VORTEX (0..255 -> 0.0..2.0)
-    let rotation_speed = u8_to_01(instr_d(instr)) * 2.0;
+    // param_d: Phase for VORTEX (0..255 -> 0..1)
+    let phase = u8_to_01(instr_d(instr));
 
     // Apply VORTEX warp if needed (before SDF evaluation)
     var warped_uv = uv;
     if variant_id == PORTAL_VARIANT_VORTEX {
-        warped_uv = portal_apply_vortex_warp(uv, rotation_speed);
+        warped_uv = portal_apply_vortex_warp(uv, phase);
     }
 
     // Evaluate shape SDF by variant
@@ -166,8 +166,8 @@ fn eval_portal(
             sdf = portal_sdf_rift(warped_uv, size, roughness);
         }
         default: {
-            // Fallback to CIRCLE for reserved variants
-            sdf = portal_sdf_circle(warped_uv, size);
+            // Reserved/unknown variants: no output.
+            return LayerSample(vec3f(0.0), 0.0);
         }
     }
 

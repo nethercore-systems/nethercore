@@ -120,7 +120,7 @@ pub fn register_zx_ffi(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     draw_2d::register(linker)?;
 
     // Environment system (EPU)
-    // Includes epu_draw and matcap_set
+    // Includes epu_set/draw_epu and matcap_set
     environment::register(linker)?;
 
     // Material functions

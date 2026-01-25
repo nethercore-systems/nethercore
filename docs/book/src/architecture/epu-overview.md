@@ -39,9 +39,9 @@ The system is designed around these hard constraints:
 ```
 CPU (game)                                         GPU
 ---------                                         ---
-Call epu_draw(config_ptr) during render()   --->   [Compute] EPU_Build(config)
-Capture (viewport, pass) draw requests             - Evaluate 8-layer microprogram into EnvRadiance (mip 0)
-Only the last pushed config is used                - Generate mip pyramid from EnvRadiance mip 0
+Call epu_set(...) / epu_set_env(...) during render()   --->   [Compute] EPU_Build(configs)
+Call draw_epu() to request a background draw            - Evaluate 8-layer microprogram into EnvRadiance (mip 0)
+Capture (viewport, pass) draw requests                  - Generate mip pyramid from EnvRadiance mip 0
                                                     - Extract SH9 from a coarse mip (e.g. 16x16)
 
 Main render (background + objects)          --->   [Render] Sample prebuilt results
@@ -142,7 +142,7 @@ bits 3..0:     alpha_b    (4)  - color_b alpha (0-15)
 
 ## Compute Pipeline
 
-Implementation note: Internally, the runtime stores outputs in arrays indexed by an internal `env_id`. The current public API (`epu_draw(config_ptr)`) provides a single global config, so (for now) all active `env_id`s share the same config.
+Implementation note: Internally, the runtime stores outputs in arrays indexed by `env_id`. Games can provide configs for one or more `env_id`s via `epu_set(...)` and `epu_set_env(env_id, ...)`. Any `env_id` without an explicit config falls back to `env_id = 0`, and then to the built-in default config.
 
 The EPU runtime maintains these outputs per `env_id`:
 

@@ -411,8 +411,8 @@ fn test_builder_lobe_radiance() {
         intensity: 180,
         exponent: 32,
         falloff: 10,
-        anim_mode: 1,
-        anim_speed: 10,
+        waveform: PhaseWaveform::Sine,
+        phase: 10,
         alpha: 15,
     });
     let config = epu_finish(builder);
@@ -435,7 +435,7 @@ fn test_builder_band_radiance() {
         width: 64,
         offset: 128,
         softness: 0,
-        scroll_speed: 50,
+        phase: 50,
         alpha: 15,
     });
     let config = epu_finish(builder);
@@ -487,7 +487,8 @@ fn test_builder_decal() {
         intensity: 255,
         softness_q: 2,
         size: 12,
-        pulse_speed: 0,
+        glow_softness: 64,
+        phase: 0,
         alpha: 15,
     });
     let config = epu_finish(builder);
@@ -541,12 +542,16 @@ fn test_builder_scatter() {
     let opcode = (hi >> 59) & 0x1F;
     assert_eq!(opcode, EpuOpcode::Scatter as u64);
 
-    // Check param_c packing
+    // Check param_c packing (high nibble only; low nibble reserved)
     let param_c = (lo >> 32) & 0xFF;
     let twinkle = (param_c >> 4) & 0x0F;
-    let seed = param_c & 0x0F;
+    let reserved = param_c & 0x0F;
 
     assert_eq!(twinkle, 8);
+    assert_eq!(reserved, 0);
+
+    // Seed is stored in param_d
+    let seed = (lo >> 24) & 0xFF;
     assert_eq!(seed, 3);
 }
 
@@ -562,6 +567,7 @@ fn test_builder_grid() {
         thickness: 20,
         pattern: GridPattern::Grid,
         scroll_q: 5,
+        phase: 0,
     });
     let config = epu_finish(builder);
 
@@ -592,7 +598,7 @@ fn test_builder_flow() {
         color: [200, 200, 255],
         intensity: 60,
         scale: 32,
-        speed: 20,
+        phase: 20,
         octaves: 2,
         pattern: FlowPattern::Caustic,
         turbulence: 0,
@@ -814,7 +820,8 @@ fn test_sunny_meadow() {
         intensity: 255,
         softness_q: 2,
         size: 12,
-        pulse_speed: 0,
+        glow_softness: 64,
+        phase: 0,
         alpha: 15,
     });
 

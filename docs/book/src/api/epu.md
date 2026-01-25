@@ -1,6 +1,6 @@
 # Environment Processing Unit (EPU)
 
-The Environment Processing Unit (EPU) is ZX’s instruction-based procedural environment system. You provide a packed 128-byte configuration (8 × 128-bit instructions) and call `epu_draw(config_ptr)` to:
+The Environment Processing Unit (EPU) is ZX’s instruction-based procedural environment system. You provide a packed 128-byte configuration (8 × 128-bit instructions) and use `epu_set(config_ptr)` + `draw_epu()` to:
 
 - Render the environment background
 - Drive ambient + reflection lighting for lit materials (computed on the GPU)
@@ -40,51 +40,80 @@ pub extern fn environment_index(env_id: u32) void;
 
 {{#endtabs}}
 
-### epu_draw
+### epu_set
 
-Draw the environment background for the current viewport/pass using a packed EPU config.
+Store the environment config for the currently selected `environment_index(...)` (no background draw).
 
 {{#tabs global="lang"}}
 
 {{#tab name="Rust"}}
 ```rust,ignore
-/// Draw the EPU background using a packed config.
+/// Store the EPU config for the current environment_index(...).
 ///
 /// config_ptr points to 16 u64 values (128 bytes):
 /// 8 instructions × (hi u64, lo u64)
-fn epu_draw(config_ptr: *const u64);
+fn epu_set(config_ptr: *const u64);
 ```
 {{#endtab}}
 
 {{#tab name="C/C++"}}
 ```c
-/// Draw the EPU background using a packed config.
+/// Store the EPU config for the current environment_index(...).
 ///
 /// config_ptr points to 16 u64 values (128 bytes):
 /// 8 instructions × (hi u64, lo u64)
-void epu_draw(const uint64_t* config_ptr);
+void epu_set(const uint64_t* config_ptr);
 ```
 {{#endtab}}
 
 {{#tab name="Zig"}}
 ```zig
-/// Draw the EPU background using a packed config.
+/// Store the EPU config for the current environment_index(...).
 ///
 /// config_ptr points to 16 u64 values (128 bytes):
 /// 8 instructions × (hi u64, lo u64)
-pub extern fn epu_draw(config_ptr: [*]const u64) void;
+pub extern fn epu_set(config_ptr: [*]const u64) void;
 ```
 {{#endtab}}
 
 {{#endtabs}}
 
-Call this **first** in your `render()` function, before any 3D geometry.
+### draw_epu
+
+Draw the environment background for the current viewport/pass.
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust,ignore
+/// Draw the EPU background for the current viewport/pass.
+fn draw_epu();
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+/// Draw the EPU background for the current viewport/pass.
+void draw_epu(void);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+/// Draw the EPU background for the current viewport/pass.
+pub extern fn draw_epu() void;
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+Call `draw_epu()` **after** your 3D geometry so the environment only fills background pixels.
 
 Notes:
-- For split-screen, set `viewport(...)` and call `epu_draw(...)` per viewport.
+- For split-screen, set `viewport(...)` and call `draw_epu()` per viewport.
 - The EPU compute pass runs automatically before rendering.
 - Ambient lighting is computed and applied entirely on the GPU; there is no CPU ambient query.
-- The config is stored for the currently selected `environment_index(...)`.
+- `epu_set(...)` stores a config for the currently selected `environment_index(...)`.
 
 ### epu_set_env
 
@@ -255,8 +284,11 @@ static ENV: [[u64; 2]; 8] = [
 ];
 
 fn render() {
-    unsafe { epu_draw(ENV.as_ptr().cast()); }
-    // ... draw scene geometry
+    unsafe {
+        epu_set(ENV.as_ptr().cast());
+        // ... draw scene geometry
+        draw_epu();
+    }
 }
 ```
 {{#endtab}}
@@ -268,8 +300,9 @@ static const uint64_t env_config[16] = {
 };
 
 void render(void) {
-    epu_draw(env_config);
+    epu_set(env_config);
     // ... draw scene geometry
+    draw_epu();
 }
 ```
 {{#endtab}}
@@ -281,8 +314,9 @@ const env_config: [16]u64 = .{
 };
 
 export fn render() void {
-    epu_draw(&env_config);
+    epu_set(&env_config);
     // ... draw scene geometry
+    draw_epu();
 }
 ```
 {{#endtab}}

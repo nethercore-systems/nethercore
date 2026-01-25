@@ -5,7 +5,7 @@
 //   color_b: Secondary flow color (RGB24) - mixed based on pattern
 //   intensity: Brightness (0..255 -> 0..1)
 //   param_a: Scale (0..255 -> 1..16)
-//   param_b: Reserved (set to 0)
+//   param_b: Phase (0..255 -> 0..1)
 //   param_c[7:4]: Octaves (0..4)
 //   param_c[3:0]: Pattern (0=noise, 1=streaks, 2=caustic)
 //   param_d: Turbulence amount (0..255 -> 0..1)
@@ -89,7 +89,7 @@ fn eval_flow(
     // Use a 3D domain based on the direction vector instead. This is continuous on the sphere,
     // so it eliminates hard seams for animated environments.
     var p = dir * scale;
-    let t = 0.0;
+    let t = u8_to_01(instr_b(instr)) * TAU;
 
     // Optional turbulence: add a small vector-valued distortion.
     if turbulence > 0.001 {

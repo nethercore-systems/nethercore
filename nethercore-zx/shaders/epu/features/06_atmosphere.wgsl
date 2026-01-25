@@ -193,8 +193,8 @@ fn eval_atmosphere(
             sample = eval_atmosphere_alien(t, intensity, color_a, color_b);
         }
         default: {
-            // Fallback to ABSORPTION for reserved variants (5, 6, 7)
-            sample = eval_atmosphere_absorption(t, intensity, color_a, color_b);
+            // Reserved/unknown variants: no output.
+            sample = LayerSample(vec3f(0.0), 0.0);
         }
     }
 

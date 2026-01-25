@@ -15,7 +15,7 @@
 //! - Multiple preset environments
 //! - Additional opcodes: CELL, PATCHES, APERTURE, TRACE, VEIL, ATMOSPHERE, PLANE, CELESTIAL, PORTAL
 //! - Keyboard/gamepad cycling through presets
-//! - Real-time environment background rendering via epu_draw()
+//! - Real-time environment background rendering via epu_set()/draw_epu()
 //! - Layer breakdown showing opcode names for current preset
 //!
 //! Controls:
@@ -189,8 +189,8 @@ pub extern "C" fn render() {
         camera_set(cam_x, cam_y, cam_z, 0.0, 0.0, 0.0);
         camera_fov(60.0);
 
-        // Draw the EPU environment background (push-only)
-        epu_draw(PRESETS[PRESET_INDEX as usize].as_ptr() as *const u64);
+        // Set the EPU environment config (push-only).
+        epu_set(PRESETS[PRESET_INDEX as usize].as_ptr() as *const u64);
 
         // Draw a shape to show lighting from the environment
         push_identity();
@@ -204,6 +204,9 @@ pub extern "C" fn render() {
             _ => TORUS_MESH,
         };
         draw_mesh(mesh);
+
+        // Draw environment background after 3D so it fills only background pixels.
+        draw_epu();
 
         // Draw UI overlay
         draw_ui();

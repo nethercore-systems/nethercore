@@ -79,7 +79,7 @@ impl DebugSky {
         }
     }
 
-    /// Apply sky settings and draw (call in render())
+    /// Apply sky settings and draw (call in render()).
     ///
     /// Uses the EPU API with a simple RAMP layer for sky gradient.
     pub fn apply_and_draw(&self) {
@@ -90,11 +90,12 @@ impl DebugSky {
             light_color(0, self.sun_color);
             light_intensity(0, 1.0);
 
-            epu_draw(EPU_SKY.as_ptr() as *const u64);
+            epu_set(EPU_SKY.as_ptr() as *const u64);
+            draw_epu();
         }
     }
 
-    /// Apply settings (also draws environment).
+    /// Apply settings (does not draw environment).
     pub fn apply(&self) {
         unsafe {
             // Use lighting API
@@ -102,8 +103,13 @@ impl DebugSky {
             light_color(0, self.sun_color);
             light_intensity(0, 1.0);
 
-            epu_draw(EPU_SKY.as_ptr() as *const u64);
+            epu_set(EPU_SKY.as_ptr() as *const u64);
         }
+    }
+
+    /// Draw the environment background for the current viewport/pass.
+    pub fn draw(&self) {
+        unsafe { draw_epu() }
     }
 }
 
