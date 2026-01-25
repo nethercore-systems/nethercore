@@ -316,7 +316,7 @@ extern "C" {
     /// Saves data to a slot.
     ///
     /// # Arguments
-    /// * `slot` — Save slot (0-7)
+    /// * `slot` — Save slot (0-7). Slots 0-3 are controller-backed persistent for local players; slots 4-7 are ephemeral.
     /// * `data_ptr` — Pointer to data in WASM memory
     /// * `data_len` — Length of data in bytes (max 64KB)
     ///
@@ -327,7 +327,7 @@ extern "C" {
     /// Loads data from a slot.
     ///
     /// # Arguments
-    /// * `slot` — Save slot (0-7)
+    /// * `slot` — Save slot (0-7). Slots 0-3 are controller-backed persistent for local players; slots 4-7 are ephemeral.
     /// * `data_ptr` — Pointer to buffer in WASM memory
     /// * `max_len` — Maximum bytes to read
     ///
@@ -336,6 +336,8 @@ extern "C" {
     pub fn load(slot: u32, data_ptr: *mut u8, max_len: u32) -> u32;
 
     /// Deletes a save slot.
+    ///
+    /// Slots 0-3 clear controller-backed persistent data for local players; slots 4-7 are ephemeral.
     ///
     /// # Returns
     /// 0 on success, 1 if invalid slot.

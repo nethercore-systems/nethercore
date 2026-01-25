@@ -79,7 +79,7 @@ NCZX_IMPORT uint32_t local_player_mask(void);
 /** Saves data to a slot. */
 /**  */
 /** # Arguments */
-/** * `slot` — Save slot (0-7) */
+/** * `slot` — Save slot (0-7). Slots 0-3 are controller-backed persistent for local players; slots 4-7 are ephemeral. */
 /** * `data_ptr` — Pointer to data in WASM memory */
 /** * `data_len` — Length of data in bytes (max 64KB) */
 /**  */
@@ -90,7 +90,7 @@ NCZX_IMPORT uint32_t save(uint32_t slot, const uint8_t* data_ptr, uint32_t data_
 /** Loads data from a slot. */
 /**  */
 /** # Arguments */
-/** * `slot` — Save slot (0-7) */
+/** * `slot` — Save slot (0-7). Slots 0-3 are controller-backed persistent for local players; slots 4-7 are ephemeral. */
 /** * `data_ptr` — Pointer to buffer in WASM memory */
 /** * `max_len` — Maximum bytes to read */
 /**  */
@@ -99,6 +99,8 @@ NCZX_IMPORT uint32_t save(uint32_t slot, const uint8_t* data_ptr, uint32_t data_
 NCZX_IMPORT uint32_t load(uint32_t slot, uint8_t* data_ptr, uint32_t max_len);
 
 /** Deletes a save slot. */
+/**  */
+/** Slots 0-3 clear controller-backed persistent data for local players; slots 4-7 are ephemeral. */
 /**  */
 /** # Returns */
 /** 0 on success, 1 if invalid slot. */

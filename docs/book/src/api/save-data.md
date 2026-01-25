@@ -5,9 +5,10 @@ Persistent storage for game saves (8 slots, 64KB each).
 ## Overview
 
 - **8 save slots** (indices 0-7)
+- **Slots 0-3** are persistent and controller-backed (per-machine, per-game)
+- **Slots 4-7** are reserved and ephemeral (in-memory only)
 - **64KB maximum** per slot
-- Data persists across sessions
-- Stored locally per-game
+- **Netplay-safe:** only local session slots persist; remote players cannot overwrite your save files
 
 ---
 
@@ -45,7 +46,7 @@ pub extern fn save(slot: u32, data_ptr: [*]const u8, data_len: u32) u32;
 
 | Name | Type | Description |
 |------|------|-------------|
-| slot | `u32` | Save slot (0-7) |
+| slot | `u32` | Save slot (0-7). Slots 0-3 persist locally for local players; slots 4-7 are ephemeral |
 | data_ptr | `*const u8` | Pointer to data to save |
 | data_len | `u32` | Size of data in bytes |
 
@@ -171,7 +172,7 @@ pub extern fn load(slot: u32, data_ptr: [*]u8, max_len: u32) u32;
 
 | Name | Type | Description |
 |------|------|-------------|
-| slot | `u32` | Save slot (0-7) |
+| slot | `u32` | Save slot (0-7). Slots 0-3 persist locally for local players; slots 4-7 are ephemeral |
 | data_ptr | `*mut u8` | Destination buffer |
 | max_len | `u32` | Maximum bytes to read |
 
@@ -291,7 +292,7 @@ pub extern fn delete_save(slot: u32) u32;
 
 | Name | Type | Description |
 |------|------|-------------|
-| slot | `u32` | Save slot (0-7) |
+| slot | `u32` | Save slot (0-7). Slots 0-3 persist locally for local players; slots 4-7 are ephemeral |
 
 **Returns:**
 
