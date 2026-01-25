@@ -3,8 +3,8 @@
 //! This module handles processing draw commands from ZXFFIState and converting
 //! them into GPU rendering operations.
 
-use super::ZXGraphics;
 use super::render_state::TextureHandle;
+use super::ZXGraphics;
 
 impl ZXGraphics {
     /// Process all draw commands from ZXFFIState and execute them
@@ -55,9 +55,9 @@ impl ZXGraphics {
 
         // 1.5. Process GPU-instanced quads (billboards, sprites)
         // Accumulate all instances and upload once, then create batched draw commands
-        if !z_state.quad_batches.is_empty() {
-            let total_instances: usize =
-                z_state.quad_batches.iter().map(|b| b.instances.len()).sum();
+        let quad_batches = z_state.quad_batches();
+        if !quad_batches.is_empty() {
+            let total_instances: usize = quad_batches.iter().map(|b| b.instances.len()).sum();
 
             // Compute absolute offsets for view/proj matrices in unified_transforms
             // Layout: [models | views | projs]
@@ -76,12 +76,12 @@ impl ZXGraphics {
                 self.quad_instance_scratch
                     .reserve(total_instances - self.quad_instance_scratch.capacity());
             }
-            if self.quad_batch_scratch.capacity() < z_state.quad_batches.len() {
+            if self.quad_batch_scratch.capacity() < quad_batches.len() {
                 self.quad_batch_scratch
-                    .reserve(z_state.quad_batches.len() - self.quad_batch_scratch.capacity());
+                    .reserve(quad_batches.len() - self.quad_batch_scratch.capacity());
             }
 
-            for batch in &z_state.quad_batches {
+            for batch in quad_batches {
                 if batch.instances.is_empty() {
                     continue;
                 }

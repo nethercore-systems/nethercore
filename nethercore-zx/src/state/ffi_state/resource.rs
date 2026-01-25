@@ -1,6 +1,6 @@
 //! Resource management and frame cleanup methods for ZXFFIState
 
-use super::{DEFAULT_Z_INDEX, ZXFFIState};
+use super::{ZXFFIState, DEFAULT_Z_INDEX};
 use crate::state::QuadBatch;
 use glam::{Mat4, Vec3};
 
@@ -14,27 +14,45 @@ impl ZXFFIState {
         let is_screen_space = instance.mode == crate::graphics::QuadMode::ScreenSpace as u32;
 
         // Check if we can add to the current batch or need a new one
-        if let Some(last_batch) = self.quad_batches.last_mut()
-            && last_batch.textures == self.bound_textures
-            && last_batch.is_screen_space == is_screen_space
-            && last_batch.viewport == self.current_viewport
-            && last_batch.pass_id == self.current_pass_id
-            && last_batch.z_index == z_index
-        {
-            // Same textures, mode, viewport, pass, and z_index - add to current batch
-            last_batch.instances.push(instance);
-            return;
+        if self.quad_batches_used > 0 {
+            let last_batch = &mut self.quad_batches[self.quad_batches_used - 1];
+            if last_batch.textures == self.bound_textures
+                && last_batch.is_screen_space == is_screen_space
+                && last_batch.viewport == self.current_viewport
+                && last_batch.pass_id == self.current_pass_id
+                && last_batch.z_index == z_index
+            {
+                // Same textures, mode, viewport, pass, and z_index - add to current batch
+                last_batch.instances.push(instance);
+                return;
+            }
         }
 
         // Need a new batch (first batch, textures changed, mode changed, viewport changed, pass changed, or z_index changed)
-        self.quad_batches.push(QuadBatch {
-            is_screen_space,
-            textures: self.bound_textures,
-            instances: vec![instance],
-            viewport: self.current_viewport,
-            pass_id: self.current_pass_id,
-            z_index,
-        });
+        let batch = if self.quad_batches_used < self.quad_batches.len() {
+            let batch = &mut self.quad_batches[self.quad_batches_used];
+            batch.instances.clear();
+            batch
+        } else {
+            self.quad_batches.push(QuadBatch {
+                is_screen_space,
+                textures: self.bound_textures,
+                instances: Vec::new(),
+                viewport: self.current_viewport,
+                pass_id: self.current_pass_id,
+                z_index,
+            });
+            self.quad_batches.last_mut().expect("QuadBatch just pushed")
+        };
+
+        batch.is_screen_space = is_screen_space;
+        batch.textures = self.bound_textures;
+        batch.viewport = self.current_viewport;
+        batch.pass_id = self.current_pass_id;
+        batch.z_index = z_index;
+        batch.instances.push(instance);
+
+        self.quad_batches_used += 1;
     }
 
     /// Clear all per-frame commands and reset for next frame
@@ -89,7 +107,10 @@ impl ZXFFIState {
         self.shading_state_dirty = true; // Mark dirty so first draw creates state 0
 
         // Clear GPU-instanced quad batches for next frame
-        self.quad_batches.clear();
+        for batch in self.quad_batches.iter_mut().take(self.quad_batches_used) {
+            batch.instances.clear();
+        }
+        self.quad_batches_used = 0;
 
         // Clear immediate bone matrices for next frame
         // The bone_matrices buffer accumulates during the frame and must be reset

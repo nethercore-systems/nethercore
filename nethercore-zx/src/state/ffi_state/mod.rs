@@ -149,7 +149,8 @@ pub struct ZXFFIState {
     pub shading_state_dirty: bool,
 
     // GPU-instanced quad rendering (batched by texture)
-    pub quad_batches: Vec<super::QuadBatch>,
+    quad_batches: Vec<super::QuadBatch>,
+    quad_batches_used: usize,
 
     // Diagnostics (reset each frame)
     pub mvp_shading_overflowed_this_frame: bool,
@@ -253,6 +254,7 @@ impl Default for ZXFFIState {
             current_shading_state: crate::graphics::PackedUnifiedShadingState::default(),
             shading_state_dirty: true, // Start dirty so first draw creates state 0
             quad_batches: Vec::new(),
+            quad_batches_used: 0,
             mvp_shading_overflowed_this_frame: false,
             mvp_shading_overflow_count: 0,
             // EPU (instruction-based) state (push-only)
@@ -263,6 +265,10 @@ impl Default for ZXFFIState {
 }
 
 impl ZXFFIState {
+    pub fn quad_batches(&self) -> &[super::QuadBatch] {
+        &self.quad_batches[..self.quad_batches_used]
+    }
+
     /// Create new FFI state with default values (test helper)
     #[cfg(test)]
     pub fn new() -> Self {
