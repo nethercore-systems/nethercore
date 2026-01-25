@@ -23,6 +23,7 @@ pub mod replay;
 pub mod rollback;
 pub mod runner;
 pub mod runtime;
+pub mod save_store;
 #[cfg(test)]
 pub mod test_utils;
 pub mod wasm;
