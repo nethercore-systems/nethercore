@@ -414,6 +414,103 @@ pub fn pack_vertex_data(data: &[f32], format: u8) -> Vec<u8> {
     packed
 }
 
+/// Pack unpacked f32 vertex data to GPU-ready packed format and append to `out`.
+///
+/// This is an append-style variant of [`pack_vertex_data`] that avoids per-call
+/// allocations by writing directly into a caller-provided buffer.
+pub fn pack_vertex_data_into(data: &[f32], format: u8, out: &mut Vec<u8>) {
+    let has_uv = format & FORMAT_UV != 0;
+    let has_color = format & FORMAT_COLOR != 0;
+    let has_normal = format & FORMAT_NORMAL != 0;
+    let has_tangent = format & FORMAT_TANGENT != 0;
+    let has_skinning = format & FORMAT_SKINNED != 0;
+
+    let mut f32_stride = 3; // Position
+    if has_uv {
+        f32_stride += 2;
+    }
+    if has_color {
+        f32_stride += 3;
+    }
+    if has_normal {
+        f32_stride += 3;
+    }
+    if has_tangent {
+        f32_stride += 4; // Tangent: xyz + handedness
+    }
+    if has_skinning {
+        f32_stride += 5;
+    }
+
+    debug_assert_eq!(
+        data.len() % f32_stride,
+        0,
+        "vertex data length must be a multiple of the format stride"
+    );
+
+    let vertex_count = data.len() / f32_stride;
+    let packed_stride = vertex_stride_packed(format) as usize;
+    out.reserve(vertex_count * packed_stride);
+
+    for i in 0..vertex_count {
+        let base = i * f32_stride;
+        let mut offset = base;
+
+        // Position: f32x3 -> f16x4
+        let pos = pack_position_f16(data[offset], data[offset + 1], data[offset + 2]);
+        out.extend_from_slice(cast_slice(&pos));
+        offset += 3;
+
+        // UV: f32x2 -> unorm16x2
+        if has_uv {
+            let uv = pack_uv_unorm16(data[offset], data[offset + 1]);
+            out.extend_from_slice(cast_slice(&uv));
+            offset += 2;
+        }
+
+        // Color: f32x3 -> unorm8x4
+        if has_color {
+            let color = pack_color_rgba_unorm8(data[offset], data[offset + 1], data[offset + 2], 1.0);
+            out.extend_from_slice(cast_slice(&color));
+            offset += 3;
+        }
+
+        // Normal: f32x3 -> octahedral u32
+        if has_normal {
+            let normal = pack_normal_octahedral(data[offset], data[offset + 1], data[offset + 2]);
+            out.extend_from_slice(&normal.to_le_bytes());
+            offset += 3;
+        }
+
+        // Tangent: f32x4 (xyz + handedness) -> octahedral u32 with sign bit
+        if has_tangent {
+            let tangent = pack_tangent(
+                [data[offset], data[offset + 1], data[offset + 2]],
+                data[offset + 3],
+            );
+            out.extend_from_slice(&tangent.to_le_bytes());
+            offset += 4;
+        }
+
+        // Skinning: bone indices + weights
+        if has_skinning {
+            let packed_indices_u32 = data[offset].to_bits();
+            out.extend_from_slice(&packed_indices_u32.to_le_bytes());
+            offset += 1;
+
+            let bone_weights = pack_bone_weights_unorm8([
+                data[offset],
+                data[offset + 1],
+                data[offset + 2],
+                data[offset + 3],
+            ]);
+            out.extend_from_slice(&bone_weights);
+            offset += 4;
+        }
+        let _ = offset;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -527,5 +624,34 @@ mod tests {
 
         assert_eq!(sign_pos, 1.0, "Positive handedness should be preserved");
         assert_eq!(sign_neg, -1.0, "Negative handedness should be preserved");
+    }
+
+    #[test]
+    fn test_pack_vertex_data_into_appends() {
+        let format = FORMAT_UV | FORMAT_COLOR | FORMAT_NORMAL;
+
+        // Two simple vertices: pos(3) uv(2) color(3) normal(3) = 11 f32 each
+        let v0 = [
+            1.0, 2.0, 3.0, // pos
+            0.25, 0.75, // uv
+            1.0, 0.0, 0.0, // color
+            0.0, 1.0, 0.0, // normal
+        ];
+        let v1 = [
+            -1.0, -2.0, -3.0, // pos
+            0.0, 1.0, // uv
+            0.0, 1.0, 0.0, // color
+            0.0, 0.0, 1.0, // normal
+        ];
+
+        let mut out = vec![0xAA, 0xBB];
+        pack_vertex_data_into(&v0, format, &mut out);
+        pack_vertex_data_into(&v1, format, &mut out);
+
+        let mut expected = vec![0xAA, 0xBB];
+        expected.extend_from_slice(&pack_vertex_data(&v0, format));
+        expected.extend_from_slice(&pack_vertex_data(&v1, format));
+
+        assert_eq!(out, expected);
     }
 }

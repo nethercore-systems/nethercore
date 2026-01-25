@@ -13,6 +13,7 @@ bitcode = { workspace = true }
 chrono = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
+bytemuck = { workspace = true }
 
 # Screenshot signing
 sha2 = { workspace = true }

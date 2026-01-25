@@ -1,12 +1,13 @@
 //! ZXGraphics main implementation
 
 use anyhow::{Context, Result};
-use hashbrown::HashMap;
-use std::time::Instant;
+use hashbrown::{HashMap, HashSet};
+use std::fmt::Write as _;
+use std::time::{Duration, Instant};
 
 use crate::graphics::{
-    BufferManager, MeshHandle, QuadBatchInfo, QuadInstance, RetainedMesh, TextureHandle,
-    VirtualRenderPass, epu::EpuRuntime,
+    BufferManager, MeshHandle, MvpShadingIndices, QuadBatchInfo, QuadInstance, RetainedMesh,
+    TextureHandle, VirtualRenderPass, epu::EpuRuntime,
 };
 
 use super::init::RenderTarget;
@@ -108,11 +109,16 @@ pub struct ZXGraphics {
     pub(super) quad_instance_scratch: Vec<QuadInstance>,
     /// Batch info for creating quad draw commands
     pub(super) quad_batch_scratch: Vec<QuadBatchInfo>,
+    /// Scratch for per-frame absolute MVP index upload (avoids allocation per frame)
+    pub(super) mvp_indices_scratch: Vec<MvpShadingIndices>,
 
     // EPU (Environment Processing Unit) runtime for precomputed environment maps
     pub(super) epu_runtime: EpuRuntime,
     /// EPU sampler for environment map sampling (linear filtering)
     pub(super) epu_sampler: wgpu::Sampler,
+
+    /// Optional per-second perf logging (render thread only)
+    pub(super) perf: ZXPerf,
 }
 
 impl ZXGraphics {
@@ -527,6 +533,169 @@ impl ZXGraphics {
     /// Get the offset where immediate bone matrices should be written
     pub fn immediate_bone_offset(&self) -> usize {
         self.animation_static_end
+    }
+}
+
+pub(super) struct ZXPerf {
+    enabled: bool,
+    last_log: Instant,
+
+    pub(super) frames: u32,
+
+    // Timing accumulators (ns)
+    pub(super) draw_process_ns: u64,
+    pub(super) render_frame_ns: u64,
+    pub(super) sort_ns: u64,
+    pub(super) pack_immediate_ns: u64,
+    pub(super) upload_immediate_ns: u64,
+    pub(super) upload_transforms_ns: u64,
+    pub(super) upload_shading_ns: u64,
+    pub(super) upload_mvp_ns: u64,
+    pub(super) upload_bones_ns: u64,
+    pub(super) encode_ns: u64,
+
+    // Counters (aggregated)
+    pub(super) cmd_mesh: u64,
+    pub(super) cmd_indexed_mesh: u64,
+    pub(super) cmd_quad: u64,
+    pub(super) cmd_environment: u64,
+
+    pub(super) immediate_vertex_prepack_bytes: [u64; super::VERTEX_FORMAT_COUNT],
+    pub(super) immediate_vertex_packed_bytes: [u64; super::VERTEX_FORMAT_COUNT],
+    pub(super) immediate_index_bytes: [u64; super::VERTEX_FORMAT_COUNT],
+
+    pub(super) unique_texture_sets: u64,
+    pub(super) pipeline_switches: u64,
+    pub(super) render_pass_segments: u64,
+
+    // Scratch (retains allocations)
+    pub(super) texture_set_scratch: HashSet<[u32; 4]>,
+}
+
+impl ZXPerf {
+    pub fn new() -> Self {
+        let enabled = std::env::var("NETHERCORE_ZX_PERF").map_or(false, |v| v != "0");
+        Self {
+            enabled,
+            last_log: Instant::now(),
+            frames: 0,
+            draw_process_ns: 0,
+            render_frame_ns: 0,
+            sort_ns: 0,
+            pack_immediate_ns: 0,
+            upload_immediate_ns: 0,
+            upload_transforms_ns: 0,
+            upload_shading_ns: 0,
+            upload_mvp_ns: 0,
+            upload_bones_ns: 0,
+            encode_ns: 0,
+            cmd_mesh: 0,
+            cmd_indexed_mesh: 0,
+            cmd_quad: 0,
+            cmd_environment: 0,
+            immediate_vertex_prepack_bytes: [0; super::VERTEX_FORMAT_COUNT],
+            immediate_vertex_packed_bytes: [0; super::VERTEX_FORMAT_COUNT],
+            immediate_index_bytes: [0; super::VERTEX_FORMAT_COUNT],
+            unique_texture_sets: 0,
+            pipeline_switches: 0,
+            render_pass_segments: 0,
+            texture_set_scratch: HashSet::new(),
+        }
+    }
+
+    #[inline]
+    pub fn enabled(&self) -> bool {
+        self.enabled
+    }
+
+    pub fn maybe_log(&mut self) {
+        if !self.enabled {
+            return;
+        }
+
+        if self.last_log.elapsed() < Duration::from_secs(1) {
+            return;
+        }
+
+        let frames = self.frames.max(1) as f64;
+
+        let mut prepack_total = 0u64;
+        let mut packed_total = 0u64;
+        let mut index_total = 0u64;
+        for i in 0..super::VERTEX_FORMAT_COUNT {
+            prepack_total += self.immediate_vertex_prepack_bytes[i];
+            packed_total += self.immediate_vertex_packed_bytes[i];
+            index_total += self.immediate_index_bytes[i];
+        }
+
+        let mut immediate_by_format = String::new();
+        for (format, (&pre, &packed)) in self
+            .immediate_vertex_prepack_bytes
+            .iter()
+            .zip(self.immediate_vertex_packed_bytes.iter())
+            .enumerate()
+        {
+            if pre == 0 && packed == 0 {
+                continue;
+            }
+            let _ = write!(&mut immediate_by_format, "{format}:{pre}/{packed} ");
+        }
+
+        tracing::info!(
+            "zx-perf: frames={frames_per_s:.0} cmds={cmds_total} mesh={cmd_mesh} imesh={cmd_imesh} quad={cmd_quad} env={cmd_env} \
+            sort_ms={sort_ms:.3} pack_ms={pack_ms:.3} upload_ms={upload_ms:.3} encode_ms={encode_ms:.3} render_ms={render_ms:.3} draw_ms={draw_ms:.3} \
+            imm_bytes_pre={imm_pre} imm_bytes_packed={imm_packed} imm_index_bytes={imm_index} unique_tex_sets={unique_tex} pipe_switches={pipe_sw} pass_segments={pass_seg} \
+            imm_by_format=\"{imm_by_format}\"",
+            frames_per_s = self.frames,
+            cmds_total = self.cmd_mesh + self.cmd_indexed_mesh + self.cmd_quad + self.cmd_environment,
+            cmd_mesh = self.cmd_mesh,
+            cmd_imesh = self.cmd_indexed_mesh,
+            cmd_quad = self.cmd_quad,
+            cmd_env = self.cmd_environment,
+            sort_ms = (self.sort_ns as f64) / 1_000_000.0 / frames,
+            pack_ms = (self.pack_immediate_ns as f64) / 1_000_000.0 / frames,
+            upload_ms = ((self.upload_immediate_ns
+                + self.upload_transforms_ns
+                + self.upload_shading_ns
+                + self.upload_mvp_ns
+                + self.upload_bones_ns) as f64)
+                / 1_000_000.0
+                / frames,
+            encode_ms = (self.encode_ns as f64) / 1_000_000.0 / frames,
+            render_ms = (self.render_frame_ns as f64) / 1_000_000.0 / frames,
+            draw_ms = (self.draw_process_ns as f64) / 1_000_000.0 / frames,
+            imm_pre = prepack_total,
+            imm_packed = packed_total,
+            imm_index = index_total,
+            unique_tex = self.unique_texture_sets,
+            pipe_sw = self.pipeline_switches,
+            pass_seg = self.render_pass_segments,
+            imm_by_format = immediate_by_format.trim_end(),
+        );
+
+        self.frames = 0;
+        self.draw_process_ns = 0;
+        self.render_frame_ns = 0;
+        self.sort_ns = 0;
+        self.pack_immediate_ns = 0;
+        self.upload_immediate_ns = 0;
+        self.upload_transforms_ns = 0;
+        self.upload_shading_ns = 0;
+        self.upload_mvp_ns = 0;
+        self.upload_bones_ns = 0;
+        self.encode_ns = 0;
+        self.cmd_mesh = 0;
+        self.cmd_indexed_mesh = 0;
+        self.cmd_quad = 0;
+        self.cmd_environment = 0;
+        self.immediate_vertex_prepack_bytes.fill(0);
+        self.immediate_vertex_packed_bytes.fill(0);
+        self.immediate_index_bytes.fill(0);
+        self.unique_texture_sets = 0;
+        self.pipeline_switches = 0;
+        self.render_pass_segments = 0;
+        self.texture_set_scratch.clear();
+        self.last_log = Instant::now();
     }
 }
 

@@ -7,22 +7,85 @@
 //! - Executing draw commands with state tracking
 
 use super::super::ZXGraphics;
-use super::super::command_buffer::{BufferSource, CommandSortKey, VRPCommand};
+use super::super::command_buffer::{BufferSource, VRPCommand};
 use super::super::pipeline::PipelineKey;
 use super::super::render_state::{CullMode, PassConfig, RenderState, TextureHandle};
-use super::super::vertex::VERTEX_FORMAT_COUNT;
+use super::super::vertex::{VERTEX_FORMAT_COUNT, vertex_stride};
+use super::super::TextureHandleTable;
 use super::bind_group_cache::BindGroupKey;
-use glam::Mat4;
-use zx_common::pack_vertex_data;
+use std::time::Instant;
 
 impl ZXGraphics {
     pub fn render_frame(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
         z_state: &crate::state::ZXFFIState,
-        texture_map: &hashbrown::HashMap<u32, TextureHandle>,
+        texture_table: &TextureHandleTable,
         clear_color: [f32; 4],
     ) {
+        let perf_enabled = self.perf.enabled();
+        let perf_frame_t0 = perf_enabled.then(Instant::now);
+
+        if perf_enabled {
+            self.perf.frames = self.perf.frames.wrapping_add(1);
+            self.perf.pack_immediate_ns = self
+                .perf
+                .pack_immediate_ns
+                .wrapping_add(self.command_buffer.pack_immediate_ns());
+
+            // Per-format immediate byte counts (pre-pack f32 vs packed GPU bytes).
+            for format in 0..VERTEX_FORMAT_COUNT as u8 {
+                let format_idx = format as usize;
+                let vertex_count = self.command_buffer.vertex_count(format) as u64;
+                let prepack_bytes = vertex_count * vertex_stride(format) as u64;
+                let packed_bytes = self.command_buffer.vertex_data(format).len() as u64;
+                let index_bytes = (self.command_buffer.index_count(format) as u64) * 2;
+
+                self.perf.immediate_vertex_prepack_bytes[format_idx] = self
+                    .perf
+                    .immediate_vertex_prepack_bytes[format_idx]
+                    .wrapping_add(prepack_bytes);
+                self.perf.immediate_vertex_packed_bytes[format_idx] = self
+                    .perf
+                    .immediate_vertex_packed_bytes[format_idx]
+                    .wrapping_add(packed_bytes);
+                self.perf.immediate_index_bytes[format_idx] = self.perf.immediate_index_bytes
+                    [format_idx]
+                    .wrapping_add(index_bytes);
+            }
+
+            // Command counts + unique texture-slot combinations (FFI handles for meshes, TextureHandle IDs for quads).
+            self.perf.texture_set_scratch.clear();
+            for cmd in self.command_buffer.commands() {
+                match cmd {
+                    VRPCommand::Mesh { textures, .. } => {
+                        self.perf.cmd_mesh = self.perf.cmd_mesh.wrapping_add(1);
+                        self.perf.texture_set_scratch.insert(*textures);
+                    }
+                    VRPCommand::IndexedMesh { textures, .. } => {
+                        self.perf.cmd_indexed_mesh = self.perf.cmd_indexed_mesh.wrapping_add(1);
+                        self.perf.texture_set_scratch.insert(*textures);
+                    }
+                    VRPCommand::Quad { texture_slots, .. } => {
+                        self.perf.cmd_quad = self.perf.cmd_quad.wrapping_add(1);
+                        self.perf.texture_set_scratch.insert([
+                            texture_slots[0].0,
+                            texture_slots[1].0,
+                            texture_slots[2].0,
+                            texture_slots[3].0,
+                        ]);
+                    }
+                    VRPCommand::EpuEnvironment { .. } => {
+                        self.perf.cmd_environment = self.perf.cmd_environment.wrapping_add(1);
+                    }
+                }
+            }
+            self.perf.unique_texture_sets = self
+                .perf
+                .unique_texture_sets
+                .wrapping_add(self.perf.texture_set_scratch.len() as u64);
+        }
+
         // If no commands, just clear render target
         // (blit is handled separately via blit_to_window())
         if self.command_buffer.commands().is_empty() {
@@ -58,23 +121,28 @@ impl ZXGraphics {
                     occlusion_query_set: None,
                 });
             }
+            if let Some(t0) = perf_frame_t0 {
+                self.perf.render_frame_ns = self
+                    .perf
+                    .render_frame_ns
+                    .wrapping_add(t0.elapsed().as_nanos() as u64);
+                self.perf.maybe_log();
+            }
             return;
         }
 
         // Upload vertex/index data from command buffer to GPU buffers
+        let upload_immediate_t0 = perf_enabled.then(Instant::now);
         for format in 0..VERTEX_FORMAT_COUNT as u8 {
             let vertex_data = self.command_buffer.vertex_data(format);
             if !vertex_data.is_empty() {
-                // Convert f32 bytes → f32 slice → packed bytes for GPU
-                let floats: &[f32] = bytemuck::cast_slice(vertex_data);
-                let packed_data = pack_vertex_data(floats, format);
-
+                // Vertex data is already packed at record time.
                 self.buffer_manager
                     .vertex_buffer_mut(format)
-                    .ensure_capacity(&self.device, &self.queue, packed_data.len() as u64);
+                    .ensure_capacity(&self.device, &self.queue, vertex_data.len() as u64);
                 self.buffer_manager
                     .vertex_buffer(format)
-                    .write_at(&self.queue, 0, &packed_data);
+                    .write_at(&self.queue, 0, vertex_data);
             }
 
             let index_data = self.command_buffer.index_data(format);
@@ -90,48 +158,22 @@ impl ZXGraphics {
         }
 
         // OPTIMIZATION 3: Sort draw commands IN-PLACE by CommandSortKey to minimize state changes
+        if let Some(t0) = upload_immediate_t0 {
+            self.perf.upload_immediate_ns = self
+                .perf
+                .upload_immediate_ns
+                .wrapping_add(t0.elapsed().as_nanos() as u64);
+        }
+
         // Commands are reset at the start of next frame, so no need to preserve original order or clone
+        let sort_t0 = perf_enabled.then(Instant::now);
         // Sort order: pass_id → viewport → z_index → render_type → cull → textures
         self.command_buffer
             .commands_mut()
-            .sort_unstable_by_key(|cmd| match cmd {
-                VRPCommand::Mesh {
-                    format,
-                    cull_mode,
-                    textures,
-                    viewport,
-                    pass_id,
-                    ..
-                } => CommandSortKey::mesh(*pass_id, *viewport, *format, *cull_mode, *textures),
-                VRPCommand::IndexedMesh {
-                    format,
-                    cull_mode,
-                    textures,
-                    viewport,
-                    pass_id,
-                    ..
-                } => CommandSortKey::mesh(*pass_id, *viewport, *format, *cull_mode, *textures),
-                VRPCommand::Quad {
-                    texture_slots,
-                    viewport,
-                    pass_id,
-                    z_index,
-                    ..
-                } => CommandSortKey::quad(
-                    *pass_id,
-                    *viewport,
-                    *z_index,
-                    [
-                        texture_slots[0].0,
-                        texture_slots[1].0,
-                        texture_slots[2].0,
-                        texture_slots[3].0,
-                    ],
-                ),
-                VRPCommand::EpuEnvironment {
-                    viewport, pass_id, ..
-                } => CommandSortKey::environment(*pass_id, *viewport),
-            });
+            .sort_unstable_by_key(VRPCommand::sort_key);
+        if let Some(t0) = sort_t0 {
+            self.perf.sort_ns = self.perf.sort_ns.wrapping_add(t0.elapsed().as_nanos() as u64);
+        }
 
         // =================================================================
         // UNIFIED BUFFER UPLOADS
@@ -144,24 +186,46 @@ impl ZXGraphics {
         let total_transforms = model_count + view_count + proj_count;
 
         if total_transforms > 0 {
+            let t0 = perf_enabled.then(Instant::now);
             self.ensure_unified_transforms_capacity(total_transforms);
 
-            // Build contiguous data: models, then views, then projs
-            let mut transform_data =
-                Vec::with_capacity(total_transforms * std::mem::size_of::<Mat4>());
-            transform_data.extend_from_slice(bytemuck::cast_slice(&z_state.model_matrices));
-            transform_data.extend_from_slice(bytemuck::cast_slice(&z_state.view_matrices));
-            transform_data.extend_from_slice(bytemuck::cast_slice(&z_state.proj_matrices));
+            // Write models, then views, then projs directly (avoids per-frame staging alloc).
+            let model_bytes: &[u8] = bytemuck::cast_slice(&z_state.model_matrices);
+            let view_bytes: &[u8] = bytemuck::cast_slice(&z_state.view_matrices);
+            let proj_bytes: &[u8] = bytemuck::cast_slice(&z_state.proj_matrices);
 
             self.queue
-                .write_buffer(&self.unified_transforms_buffer, 0, &transform_data);
+                .write_buffer(&self.unified_transforms_buffer, 0, model_bytes);
+            self.queue.write_buffer(
+                &self.unified_transforms_buffer,
+                model_bytes.len() as u64,
+                view_bytes,
+            );
+            self.queue.write_buffer(
+                &self.unified_transforms_buffer,
+                (model_bytes.len() + view_bytes.len()) as u64,
+                proj_bytes,
+            );
+            if let Some(t0) = t0 {
+                self.perf.upload_transforms_ns = self
+                    .perf
+                    .upload_transforms_ns
+                    .wrapping_add(t0.elapsed().as_nanos() as u64);
+            }
         }
 
         // 2. Upload shading states
         if !z_state.shading_pool.is_empty() {
+            let t0 = perf_enabled.then(Instant::now);
             self.ensure_shading_state_buffer_capacity(z_state.shading_pool.len());
             let data = bytemuck::cast_slice(z_state.shading_pool.as_slice());
             self.queue.write_buffer(&self.shading_state_buffer, 0, data);
+            if let Some(t0) = t0 {
+                self.perf.upload_shading_ns = self
+                    .perf
+                    .upload_shading_ns
+                    .wrapping_add(t0.elapsed().as_nanos() as u64);
+            }
         }
 
         // 3. Upload MVP + shading indices with ABSOLUTE offsets into unified_transforms
@@ -170,42 +234,53 @@ impl ZXGraphics {
         // proj_idx → proj_idx + model_count + view_count
         let state_count = z_state.mvp_shading_states.len();
         if state_count > 0 {
+            let t0 = perf_enabled.then(Instant::now);
             self.ensure_mvp_indices_buffer_capacity(state_count);
 
             // Transform relative indices to absolute indices
             let view_offset = model_count as u32;
             let proj_offset = (model_count + view_count) as u32;
 
-            let absolute_indices: Vec<super::super::MvpShadingIndices> = z_state
-                .mvp_shading_states
-                .iter()
-                .map(|idx| super::super::MvpShadingIndices {
+            self.mvp_indices_scratch.clear();
+            self.mvp_indices_scratch.reserve(state_count);
+            for idx in &z_state.mvp_shading_states {
+                self.mvp_indices_scratch.push(super::super::MvpShadingIndices {
                     model_idx: idx.model_idx,
                     view_idx: idx.view_idx + view_offset,
                     proj_idx: idx.proj_idx + proj_offset,
                     shading_idx: idx.shading_idx,
-                })
-                .collect();
+                });
+            }
 
-            let data = bytemuck::cast_slice(&absolute_indices);
+            let data = bytemuck::cast_slice(self.mvp_indices_scratch.as_slice());
             self.queue.write_buffer(&self.mvp_indices_buffer, 0, data);
+            if let Some(t0) = t0 {
+                self.perf.upload_mvp_ns = self
+                    .perf
+                    .upload_mvp_ns
+                    .wrapping_add(t0.elapsed().as_nanos() as u64);
+            }
         }
 
         // 6. Upload immediate bone matrices to unified_animation (dynamic section)
         // Bones are appended after static data (inverse_bind + keyframes)
         if !z_state.bone_matrices.is_empty() {
+            let t0 = perf_enabled.then(Instant::now);
             let bone_count = z_state.bone_matrices.len().min(256);
-            let mut bone_data: Vec<f32> = Vec::with_capacity(bone_count * 12);
-            for matrix in &z_state.bone_matrices[..bone_count] {
-                bone_data.extend_from_slice(&matrix.to_array());
-            }
+            let bone_bytes: &[u8] = bytemuck::cast_slice(&z_state.bone_matrices[..bone_count]);
             // Write after static sections (inverse_bind + keyframes)
             let byte_offset = (self.animation_static_end * 48) as u64;
             self.queue.write_buffer(
                 &self.unified_animation_buffer,
                 byte_offset,
-                bytemuck::cast_slice(&bone_data),
+                bone_bytes,
             );
+            if let Some(t0) = t0 {
+                self.perf.upload_bones_ns = self
+                    .perf
+                    .upload_bones_ns
+                    .wrapping_add(t0.elapsed().as_nanos() as u64);
+            }
         }
 
         // NOTE: Inverse bind matrices are uploaded once during init via upload_static_inverse_bind()
@@ -452,24 +527,7 @@ impl ZXGraphics {
 
         // Helper closure to resolve FFI texture handles to TextureHandle
         let resolve_textures = |textures: &[u32; 4]| -> [TextureHandle; 4] {
-            [
-                texture_map
-                    .get(&textures[0])
-                    .copied()
-                    .unwrap_or(TextureHandle::INVALID),
-                texture_map
-                    .get(&textures[1])
-                    .copied()
-                    .unwrap_or(TextureHandle::INVALID),
-                texture_map
-                    .get(&textures[2])
-                    .copied()
-                    .unwrap_or(TextureHandle::INVALID),
-                texture_map
-                    .get(&textures[3])
-                    .copied()
-                    .unwrap_or(TextureHandle::INVALID),
-            ]
+            texture_table.resolve4(textures)
         };
 
         // Process commands in segments, restarting render pass when depth_clear is needed
@@ -480,7 +538,11 @@ impl ZXGraphics {
         // First render pass: clear color, depth, and stencil
         let mut is_first_pass = true;
 
+        let encode_t0 = perf_enabled.then(Instant::now);
         while cmd_idx < commands.len() {
+            if perf_enabled {
+                self.perf.render_pass_segments = self.perf.render_pass_segments.wrapping_add(1);
+            }
             // Determine what load ops we need for this render pass segment
             let first_cmd = &commands[cmd_idx];
             let first_pass_id = match first_cmd {
@@ -811,6 +873,10 @@ impl ZXGraphics {
                 if bound_pipeline != Some(pipeline_key) {
                     render_pass.set_pipeline(&pipeline_entry.pipeline);
                     bound_pipeline = Some(pipeline_key);
+                    if perf_enabled {
+                        self.perf.pipeline_switches =
+                            self.perf.pipeline_switches.wrapping_add(1);
+                    }
                 }
 
                 // Set frame bind group once (unified across all draws)
@@ -932,6 +998,9 @@ impl ZXGraphics {
             is_first_pass = false;
         }
         // Outer while loop ends
+        if let Some(t0) = encode_t0 {
+            self.perf.encode_ns = self.perf.encode_ns.wrapping_add(t0.elapsed().as_nanos() as u64);
+        }
 
         // Move texture cache back into self (preserving allocations for next frame)
         self.texture_bind_groups = texture_bind_groups;
@@ -939,5 +1008,13 @@ impl ZXGraphics {
         // NOTE: Blit is handled separately via blit_to_window()
         // This allows us to re-blit the last rendered frame on high refresh rate monitors
         // without re-rendering the game content
+
+        if let Some(t0) = perf_frame_t0 {
+            self.perf.render_frame_ns = self
+                .perf
+                .render_frame_ns
+                .wrapping_add(t0.elapsed().as_nanos() as u64);
+            self.perf.maybe_log();
+        }
     }
 }

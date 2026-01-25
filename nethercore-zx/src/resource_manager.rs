@@ -4,7 +4,7 @@
 //! graphics backend handles (TextureHandle, MeshHandle).
 
 use crate::graphics::epu::{EpuConfig, RampParams, epu_begin, epu_finish};
-use crate::graphics::{MeshHandle, TextureHandle, ZXGraphics, pack_vertex_data};
+use crate::graphics::{MeshHandle, TextureHandleTable, ZXGraphics, pack_vertex_data};
 use crate::state::{
     BoneMatrix3x4, KeyframeGpuInfo, LoadedKeyframeCollection, SkeletonData, SkeletonGpuInfo,
     ZXFFIState,
@@ -96,7 +96,7 @@ fn default_environment() -> EpuConfig {
 /// graphics backend handles (TextureHandle, MeshHandle).
 pub struct ZResourceManager {
     /// Mapping from game texture handles to graphics texture handles
-    pub texture_map: hashbrown::HashMap<u32, TextureHandle>,
+    pub texture_table: TextureHandleTable,
     /// Mapping from game mesh handles to graphics mesh handles
     pub mesh_map: hashbrown::HashMap<u32, MeshHandle>,
 }
@@ -104,7 +104,7 @@ pub struct ZResourceManager {
 impl Default for ZResourceManager {
     fn default() -> Self {
         Self {
-            texture_map: hashbrown::HashMap::new(),
+            texture_table: TextureHandleTable::new(),
             mesh_map: hashbrown::HashMap::new(),
         }
     }
@@ -137,7 +137,7 @@ impl ConsoleResourceManager for ZResourceManager {
             );
             match result {
                 Ok(handle) => {
-                    self.texture_map.insert(pending.handle, handle);
+                    self.texture_table.insert(pending.handle, handle);
                     tracing::debug!(
                         "Loaded texture: game_handle={} -> graphics_handle={:?} ({:?})",
                         pending.handle,
@@ -153,9 +153,8 @@ impl ConsoleResourceManager for ZResourceManager {
 
         // Register built-in texture handles (font, white)
         // These are reserved handles used by draw_text and draw_rect
-        self.texture_map.insert(u32::MAX, graphics.white_texture());
-        self.texture_map
-            .insert(u32::MAX - 1, graphics.font_texture());
+        self.texture_table.insert(u32::MAX, graphics.white_texture());
+        self.texture_table.insert(u32::MAX - 1, graphics.font_texture());
 
         // Process pending unpacked meshes (f32 convenience API)
         // Convert to packed format before GPU upload for 37.5% memory savings
@@ -382,7 +381,7 @@ impl ConsoleResourceManager for ZResourceManager {
 
     fn execute_draw_commands(&mut self, graphics: &mut Self::Graphics, state: &mut Self::State) {
         // Process draw commands - ZXGraphics consumes draw commands directly
-        graphics.process_draw_commands(state, &self.texture_map);
+        graphics.process_draw_commands(state, &self.texture_table);
     }
 
     fn render_game_to_target(
@@ -437,6 +436,6 @@ impl ConsoleResourceManager for ZResourceManager {
         // =====================================================================
         // Main Render Pass
         // =====================================================================
-        graphics.render_frame(encoder, state, &self.texture_map, clear_color);
+        graphics.render_frame(encoder, state, &self.texture_table, clear_color);
     }
 }

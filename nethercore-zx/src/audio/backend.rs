@@ -16,6 +16,8 @@ pub struct ZXAudio {
     output: Option<AudioOutput>,
     /// Threaded audio output - for threaded mode
     threaded_output: Option<crate::audio_thread::ThreadedAudioOutput>,
+    /// Cached sound table for audio snapshots (avoids per-frame cloning in threaded mode)
+    cached_sounds: Option<Arc<Vec<Option<Sound>>>>,
     /// Master volume (0.0 - 1.0)
     master_volume: f32,
     /// Pre-allocated buffer for volume scaling (avoids allocation per push)
@@ -33,6 +35,7 @@ impl ZXAudio {
             Ok(output) => Ok(Self {
                 output: Some(output),
                 threaded_output: None,
+                cached_sounds: None,
                 master_volume: 1.0,
                 scale_buffer: Vec::with_capacity(2048), // Pre-allocate for typical frame size
                 frame_buffer: Vec::with_capacity(2048), // ~735*2 stereo samples at 60fps
@@ -43,6 +46,7 @@ impl ZXAudio {
                 Ok(Self {
                     output: None,
                     threaded_output: None,
+                    cached_sounds: None,
                     master_volume: 1.0,
                     scale_buffer: Vec::new(),
                     frame_buffer: Vec::new(),
@@ -61,6 +65,7 @@ impl ZXAudio {
             Ok(output) => Ok(Self {
                 output: None,
                 threaded_output: Some(output),
+                cached_sounds: None,
                 master_volume: 1.0,
                 scale_buffer: Vec::new(), // Not needed for threaded mode
                 frame_buffer: Vec::new(), // Not needed - uses lightweight advance
@@ -74,6 +79,7 @@ impl ZXAudio {
                 Ok(Self {
                     output: None,
                     threaded_output: None,
+                    cached_sounds: None,
                     master_volume: 1.0,
                     scale_buffer: Vec::new(),
                     frame_buffer: Vec::new(),
@@ -91,6 +97,7 @@ impl ZXAudio {
         Self {
             output: None,
             threaded_output: None,
+            cached_sounds: None,
             master_volume: 1.0,
             scale_buffer: Vec::new(),
             frame_buffer: Vec::new(),
@@ -169,6 +176,7 @@ impl Default for ZXAudio {
         Self::new().unwrap_or(Self {
             output: None,
             threaded_output: None,
+            cached_sounds: None,
             master_volume: 1.0,
             scale_buffer: Vec::new(),
             frame_buffer: Vec::new(),
@@ -232,11 +240,20 @@ impl nethercore_core::AudioGenerator for ZXAudioGenerator {
             //
             // The audio thread and main thread both advance positions by the same
             // amount, staying in sync.
+            let sounds = match &audio.cached_sounds {
+                Some(cached) if cached.len() == state.sounds.len() => Arc::clone(cached),
+                _ => {
+                    let cached = Arc::new(state.sounds.clone());
+                    audio.cached_sounds = Some(Arc::clone(&cached));
+                    cached
+                }
+            };
+
             let snapshot = crate::audio_thread::AudioGenSnapshot {
                 audio: rollback_state.audio,
                 tracker: rollback_state.tracker,
                 tracker_snapshot: state.tracker_engine.snapshot(),
-                sounds: Arc::new(state.sounds.clone()),
+                sounds,
                 frame_number: 0, // frame_number not used currently
                 tick_rate,
                 sample_rate,

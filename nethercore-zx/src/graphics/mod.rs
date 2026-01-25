@@ -22,6 +22,7 @@ mod matrix_packing;
 mod pipeline;
 mod quad_instance;
 mod render_state;
+mod texture_handle_table;
 mod texture_manager;
 mod trait_impls;
 pub(crate) mod unified_shading_state;
@@ -45,6 +46,7 @@ pub use quad_instance::{QuadInstance, QuadMode};
 pub use render_state::{
     CullMode, MatcapBlendMode, PassConfig, RenderState, TextureFilter, TextureHandle,
 };
+pub use texture_handle_table::TextureHandleTable;
 pub use unified_shading_state::{
     DEFAULT_FLAGS, FLAG_DITHER_OFFSET_X_MASK, FLAG_DITHER_OFFSET_X_SHIFT,
     FLAG_DITHER_OFFSET_Y_MASK, FLAG_DITHER_OFFSET_Y_SHIFT, FLAG_SKINNING_MODE,

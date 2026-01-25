@@ -29,6 +29,10 @@ pub struct BoneMatrix3x4 {
     pub row2: [f32; 4],
 }
 
+// Safety: BoneMatrix3x4 is repr(C) with only f32 fields.
+unsafe impl bytemuck::Pod for BoneMatrix3x4 {}
+unsafe impl bytemuck::Zeroable for BoneMatrix3x4 {}
+
 impl BoneMatrix3x4 {
     /// Identity bone matrix (no transformation)
     pub const IDENTITY: Self = Self {

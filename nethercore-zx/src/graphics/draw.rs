@@ -3,8 +3,9 @@
 //! This module handles processing draw commands from ZXFFIState and converting
 //! them into GPU rendering operations.
 
-use super::render_state::TextureHandle;
+use super::TextureHandleTable;
 use super::ZXGraphics;
+use std::time::Instant;
 
 impl ZXGraphics {
     /// Process all draw commands from ZXFFIState and execute them
@@ -18,8 +19,10 @@ impl ZXGraphics {
     pub fn process_draw_commands(
         &mut self,
         z_state: &mut crate::state::ZXFFIState,
-        texture_map: &hashbrown::HashMap<u32, TextureHandle>,
+        texture_table: &TextureHandleTable,
     ) {
+        let perf_t0 = self.perf.enabled().then(Instant::now);
+
         // Note: render mode is set once after init() in App::flush_post_init_resources()
         // No need to set it every frame
 
@@ -35,7 +38,7 @@ impl ZXGraphics {
         // NOTE: Texture handle remapping was removed here.
         // Mesh/IndexedMesh commands capture FFI texture handles at command creation time
         // (stored in `textures: [u32; 4]`), which are resolved to TextureHandle at render
-        // time in frame.rs via texture_map. This fixes the bug where deferred remapping
+        // time in frame.rs via texture_table. This fixes the bug where deferred remapping
         // used stale bound_textures state at frame end.
         //
         // Quad commands already work correctly - they capture textures via QuadBatch
@@ -124,22 +127,10 @@ impl ZXGraphics {
             for batch in &self.quad_batch_scratch {
                 // Map FFI texture handles to graphics texture handles for this batch
                 let texture_slots = [
-                    texture_map
-                        .get(&batch.textures[0])
-                        .copied()
-                        .unwrap_or(TextureHandle::INVALID),
-                    texture_map
-                        .get(&batch.textures[1])
-                        .copied()
-                        .unwrap_or(TextureHandle::INVALID),
-                    texture_map
-                        .get(&batch.textures[2])
-                        .copied()
-                        .unwrap_or(TextureHandle::INVALID),
-                    texture_map
-                        .get(&batch.textures[3])
-                        .copied()
-                        .unwrap_or(TextureHandle::INVALID),
+                    texture_table.resolve(batch.textures[0]),
+                    texture_table.resolve(batch.textures[1]),
+                    texture_table.resolve(batch.textures[2]),
+                    texture_table.resolve(batch.textures[3]),
                 ];
 
                 // Note: Quad instances contain their own shading_state_index in the instance data.
@@ -157,6 +148,17 @@ impl ZXGraphics {
                         pass_id: batch.pass_id,
                         z_index: batch.z_index,
                         is_screen_space: batch.is_screen_space,
+                        sort_key: super::command_buffer::CommandSortKey::quad(
+                            batch.pass_id,
+                            batch.viewport,
+                            batch.z_index,
+                            [
+                                texture_slots[0].0,
+                                texture_slots[1].0,
+                                texture_slots[2].0,
+                                texture_slots[3].0,
+                            ],
+                        ),
                     });
             }
         }
@@ -171,11 +173,19 @@ impl ZXGraphics {
                     mvp_index: *mvp_index,
                     viewport: *viewport,
                     pass_id: *pass_id,
+                    sort_key: super::command_buffer::CommandSortKey::environment(*pass_id, *viewport),
                 });
         }
 
         // Note: All per-frame cleanup (model_matrices, audio_commands, render_pass)
         // happens AFTER render_frame completes in app.rs via z_state.clear_frame()
         // This keeps cleanup centralized and ensures matrices survive until GPU upload
+
+        if let Some(t0) = perf_t0 {
+            self.perf.draw_process_ns = self
+                .perf
+                .draw_process_ns
+                .wrapping_add(t0.elapsed().as_nanos() as u64);
+        }
     }
 }

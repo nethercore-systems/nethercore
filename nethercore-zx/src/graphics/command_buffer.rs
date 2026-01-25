@@ -7,6 +7,9 @@
 use super::Viewport;
 use super::render_state::{CullMode, TextureHandle};
 use super::vertex::{VERTEX_FORMAT_COUNT, vertex_stride, vertex_stride_packed};
+use zx_common::pack_vertex_data_into;
+use std::sync::OnceLock;
+use std::time::Instant;
 
 /// Z-index value for commands that don't participate in 2D ordering
 ///
@@ -76,13 +79,15 @@ pub enum VRPCommand {
         base_vertex: u32,
         buffer_index: u32,
         /// FFI texture handles captured at command creation time.
-        /// Resolved to TextureHandle at render time via texture_map.
+        /// Resolved to TextureHandle at render time via texture_table.
         textures: [u32; 4],
         cull_mode: CullMode,
         /// Viewport for split-screen rendering (captured at command creation)
         viewport: Viewport,
         /// Pass ID for render pass ordering (execution barrier)
         pass_id: u32,
+        /// Cached sort key computed at command creation time
+        sort_key: CommandSortKey,
     },
     /// Indexed mesh draw (draw_mesh, load_mesh_indexed)
     IndexedMesh {
@@ -92,13 +97,15 @@ pub enum VRPCommand {
         first_index: u32,
         buffer_index: u32,
         /// FFI texture handles captured at command creation time.
-        /// Resolved to TextureHandle at render time via texture_map.
+        /// Resolved to TextureHandle at render time via texture_table.
         textures: [u32; 4],
         cull_mode: CullMode,
         /// Viewport for split-screen rendering (captured at command creation)
         viewport: Viewport,
         /// Pass ID for render pass ordering (execution barrier)
         pass_id: u32,
+        /// Cached sort key computed at command creation time
+        sort_key: CommandSortKey,
     },
     /// GPU-instanced quad draw (billboards, sprites, text, rects)
     /// All quads share a single unit quad mesh (4 vertices, 6 indices)
@@ -117,6 +124,8 @@ pub enum VRPCommand {
         z_index: u32,
         /// True if screen-space quad (always writes depth), false if billboard (uses PassConfig depth)
         is_screen_space: bool,
+        /// Cached sort key computed at command creation time
+        sort_key: CommandSortKey,
     },
     /// EPU environment draw (fullscreen procedural background)
     EpuEnvironment {
@@ -127,7 +136,21 @@ pub enum VRPCommand {
         viewport: Viewport,
         /// Pass ID for render pass ordering (execution barrier)
         pass_id: u32,
+        /// Cached sort key computed at command creation time
+        sort_key: CommandSortKey,
     },
+}
+
+impl VRPCommand {
+    #[inline]
+    pub fn sort_key(&self) -> CommandSortKey {
+        match self {
+            VRPCommand::Mesh { sort_key, .. }
+            | VRPCommand::IndexedMesh { sort_key, .. }
+            | VRPCommand::Quad { sort_key, .. }
+            | VRPCommand::EpuEnvironment { sort_key, .. } => *sort_key,
+        }
+    }
 }
 
 /// Sort key for draw command ordering
@@ -213,7 +236,7 @@ impl CommandSortKey {
 pub struct VirtualRenderPass {
     /// Draw commands accumulated this frame
     commands: Vec<VRPCommand>,
-    /// Per-format immediate vertex data (CPU side)
+    /// Per-format immediate vertex data in packed GPU format (CPU side)
     vertex_data: [Vec<u8>; VERTEX_FORMAT_COUNT],
     /// Per-format immediate index data (CPU side, u16 for memory efficiency)
     index_data: [Vec<u16>; VERTEX_FORMAT_COUNT],
@@ -221,9 +244,18 @@ pub struct VirtualRenderPass {
     vertex_counts: [u32; VERTEX_FORMAT_COUNT],
     /// Per-format index counts
     index_counts: [u32; VERTEX_FORMAT_COUNT],
+
+    // Perf counters (only used when NETHERCORE_ZX_PERF is enabled)
+    pack_immediate_ns: u64,
 }
 
 impl VirtualRenderPass {
+    #[inline]
+    fn perf_enabled() -> bool {
+        static ENABLED: OnceLock<bool> = OnceLock::new();
+        *ENABLED.get_or_init(|| std::env::var("NETHERCORE_ZX_PERF").map_or(false, |v| v != "0"))
+    }
+
     /// Create a new command buffer
     pub fn new() -> Self {
         Self {
@@ -232,6 +264,7 @@ impl VirtualRenderPass {
             index_data: std::array::from_fn(|_| Vec::with_capacity(16 * 1024)),
             vertex_counts: [0; VERTEX_FORMAT_COUNT],
             index_counts: [0; VERTEX_FORMAT_COUNT],
+            pack_immediate_ns: 0,
         }
     }
 
@@ -245,6 +278,11 @@ impl VirtualRenderPass {
         &mut self.commands
     }
 
+    #[inline]
+    pub fn pack_immediate_ns(&self) -> u64 {
+        self.pack_immediate_ns
+    }
+
     /// Add a draw command directly
     ///
     /// Used for direct conversion from ZVRPCommand without state mutation.
@@ -255,7 +293,7 @@ impl VirtualRenderPass {
     /// Record a non-indexed triangle draw (called from FFI)
     ///
     /// `textures` contains FFI texture handles captured at command creation time.
-    /// They are resolved to TextureHandle at render time via texture_map.
+    /// They are resolved to TextureHandle at render time via texture_table.
     #[allow(clippy::too_many_arguments)]
     pub fn record_triangles(
         &mut self,
@@ -272,9 +310,16 @@ impl VirtualRenderPass {
         let vertex_count = (vertex_data.len() * 4) / stride;
         let base_vertex = self.vertex_counts[format_idx];
 
-        // Write directly to buffer (no intermediate Vec)
-        let byte_data = bytemuck::cast_slice(vertex_data);
-        self.vertex_data[format_idx].extend_from_slice(byte_data);
+        // Pack once at record time and store GPU-ready bytes (avoids per-frame repacking).
+        if Self::perf_enabled() {
+            let t0 = Instant::now();
+            pack_vertex_data_into(vertex_data, format, &mut self.vertex_data[format_idx]);
+            self.pack_immediate_ns = self
+                .pack_immediate_ns
+                .wrapping_add(t0.elapsed().as_nanos() as u64);
+        } else {
+            pack_vertex_data_into(vertex_data, format, &mut self.vertex_data[format_idx]);
+        }
         self.vertex_counts[format_idx] += vertex_count as u32;
 
         self.commands.push(VRPCommand::Mesh {
@@ -286,13 +331,14 @@ impl VirtualRenderPass {
             cull_mode,
             viewport,
             pass_id,
+            sort_key: CommandSortKey::mesh(pass_id, viewport, format, cull_mode, textures),
         });
     }
 
     /// Record an indexed triangle draw (called from FFI)
     ///
     /// `textures` contains FFI texture handles captured at command creation time.
-    /// They are resolved to TextureHandle at render time via texture_map.
+    /// They are resolved to TextureHandle at render time via texture_table.
     #[allow(clippy::too_many_arguments)]
     pub fn record_triangles_indexed(
         &mut self,
@@ -311,9 +357,16 @@ impl VirtualRenderPass {
         let base_vertex = self.vertex_counts[format_idx];
         let first_index = self.index_counts[format_idx];
 
-        // Write directly to buffers
-        let byte_data = bytemuck::cast_slice(vertex_data);
-        self.vertex_data[format_idx].extend_from_slice(byte_data);
+        // Pack once at record time and store GPU-ready bytes (avoids per-frame repacking).
+        if Self::perf_enabled() {
+            let t0 = Instant::now();
+            pack_vertex_data_into(vertex_data, format, &mut self.vertex_data[format_idx]);
+            self.pack_immediate_ns = self
+                .pack_immediate_ns
+                .wrapping_add(t0.elapsed().as_nanos() as u64);
+        } else {
+            pack_vertex_data_into(vertex_data, format, &mut self.vertex_data[format_idx]);
+        }
         self.vertex_counts[format_idx] += vertex_count as u32;
 
         self.index_data[format_idx].extend_from_slice(index_data);
@@ -329,13 +382,14 @@ impl VirtualRenderPass {
             cull_mode,
             viewport,
             pass_id,
+            sort_key: CommandSortKey::mesh(pass_id, viewport, format, cull_mode, textures),
         });
     }
 
     /// Record a mesh draw (called from FFI)
     ///
     /// `textures` contains FFI texture handles captured at command creation time.
-    /// They are resolved to TextureHandle at render time via texture_map.
+    /// They are resolved to TextureHandle at render time via texture_table.
     #[allow(clippy::too_many_arguments)]
     pub fn record_mesh(
         &mut self,
@@ -367,6 +421,13 @@ impl VirtualRenderPass {
                 cull_mode,
                 viewport,
                 pass_id,
+                sort_key: CommandSortKey::mesh(
+                    pass_id,
+                    viewport,
+                    mesh_format,
+                    cull_mode,
+                    textures,
+                ),
             });
         } else {
             self.commands.push(VRPCommand::Mesh {
@@ -378,6 +439,13 @@ impl VirtualRenderPass {
                 cull_mode,
                 viewport,
                 pass_id,
+                sort_key: CommandSortKey::mesh(
+                    pass_id,
+                    viewport,
+                    mesh_format,
+                    cull_mode,
+                    textures,
+                ),
             });
         }
     }
@@ -392,6 +460,16 @@ impl VirtualRenderPass {
         &self.index_data[format as usize]
     }
 
+    /// Get vertex count for a format (for base_vertex and perf reporting)
+    pub fn vertex_count(&self, format: u8) -> u32 {
+        self.vertex_counts[format as usize]
+    }
+
+    /// Get index count for a format (for perf reporting)
+    pub fn index_count(&self, format: u8) -> u32 {
+        self.index_counts[format as usize]
+    }
+
     /// Reset the command buffer for the next frame
     pub fn reset(&mut self) {
         self.commands.clear();
@@ -403,6 +481,7 @@ impl VirtualRenderPass {
         }
         self.vertex_counts = [0; VERTEX_FORMAT_COUNT];
         self.index_counts = [0; VERTEX_FORMAT_COUNT];
+        self.pack_immediate_ns = 0;
     }
 }
 

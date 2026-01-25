@@ -311,8 +311,10 @@ impl ZXGraphics {
             unit_quad_first_index,
             quad_instance_scratch: Vec::new(),
             quad_batch_scratch: Vec::new(),
+            mvp_indices_scratch: Vec::new(),
             epu_runtime,
             epu_sampler,
+            perf: super::zx_graphics::ZXPerf::new(),
         };
 
         Ok(graphics)
