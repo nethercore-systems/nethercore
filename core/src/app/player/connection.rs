@@ -8,6 +8,7 @@ use anyhow::{Context, Result};
 use ggrs::PlayerType;
 
 use crate::console::{Audio, Console};
+use crate::net::nchs::SaveConfig;
 use crate::net::nchs::SessionStart;
 use crate::rollback::{LocalSocket, RollbackSession, SessionConfig};
 
@@ -45,14 +46,12 @@ pub(super) fn format_ggrs_addr(addr: &str, port: u16) -> String {
 }
 
 /// Performs NCHS handshake and creates P2P session from a session file
-pub(super) fn create_session_from_file<C>(
-    session_file: &std::path::Path,
-    _config: &StandaloneConfig,
-    specs: &crate::console::ConsoleSpecs,
-) -> Result<RollbackSession<C::Input, C::State, C::RollbackState>>
-where
-    C: Console + Clone,
-{
+pub struct SessionFileResult<C: Console> {
+    pub session: RollbackSession<C::Input, C::State, C::RollbackState>,
+    pub save_config: Option<SaveConfig>,
+}
+
+pub(super) fn decode_session_file(session_file: &std::path::Path) -> Result<SessionStart> {
     const MAX_SESSION_FILE_BYTES: u64 = 1024 * 1024; // 1 MiB
     let session_file_len = std::fs::metadata(session_file)
         .with_context(|| format!("Failed to stat session file: {}", session_file.display()))?
@@ -68,6 +67,19 @@ where
     let bytes = std::fs::read(session_file).context("Failed to read session file")?;
     let session_start: SessionStart =
         bitcode::decode(&bytes).map_err(|e| anyhow::anyhow!("Failed to decode session: {}", e))?;
+    Ok(session_start)
+}
+
+pub(super) fn create_session_from_file<C>(
+    session_file: &std::path::Path,
+    _config: &StandaloneConfig,
+    specs: &crate::console::ConsoleSpecs,
+) -> Result<SessionFileResult<C>>
+where
+    C: Console + Clone,
+{
+    let mut session_start = decode_session_file(session_file)?;
+    let save_config = session_start.save_config.take();
 
     tracing::info!(
         "Session mode: loading pre-negotiated session (local_player={}, player_count={}, seed={})",
@@ -261,7 +273,10 @@ where
         session.local_players()
     );
 
-    Ok(session)
+    Ok(SessionFileResult {
+        session,
+        save_config,
+    })
 }
 
 impl<C, L> StandaloneApp<C, L>
@@ -305,7 +320,13 @@ where
                             session.local_players()
                         );
                         if let Err(e) =
-                            runner.load_game_with_session(rom.console.clone(), &rom.code, session)
+                            runner.load_game_with_session(
+                                rom.console.clone(),
+                                &rom.code,
+                                session,
+                                None,
+                                &rom.game_id,
+                            )
                         {
                             tracing::error!("Failed to load game with P2P session: {}", e);
                             self.error_state = Some(super::super::GameError {
@@ -345,5 +366,52 @@ where
             return true;
         }
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Write;
+
+    use nethercore_shared::console::TickRate;
+    use tempfile::NamedTempFile;
+
+    use crate::net::nchs::{
+        NetworkConfig, PlayerConnectionInfo, PlayerInfo, SaveConfig, SaveMode, SessionStart,
+    };
+
+    #[test]
+    fn session_file_exposes_save_config() {
+        let mut file = NamedTempFile::new().expect("create temp session file");
+
+        let session_start = SessionStart {
+            local_player_handle: 0,
+            random_seed: 123,
+            start_frame: 0,
+            tick_rate: TickRate::Fixed60,
+            players: vec![PlayerConnectionInfo {
+                handle: 0,
+                active: true,
+                info: PlayerInfo::default(),
+                addr: "127.0.0.1".to_string(),
+                ggrs_port: 7000,
+            }],
+            player_count: 1,
+            network_config: NetworkConfig::default(),
+            save_config: Some(SaveConfig {
+                slot_index: 0,
+                mode: SaveMode::Synchronized,
+                synchronized_save: Some(vec![1, 2, 3]),
+            }),
+            extra_data: Vec::new(),
+        };
+
+        let encoded = bitcode::encode(&session_start);
+        file.write_all(&encoded)
+            .and_then(|_| file.flush())
+            .expect("write session file");
+
+        let decoded = super::decode_session_file(file.path()).expect("decode session file");
+        assert_eq!(decoded.save_config, session_start.save_config);
     }
 }

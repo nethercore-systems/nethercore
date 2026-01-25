@@ -1,5 +1,6 @@
 //! Tests for FFI functions
 
+use super::save::persist_controller_mapped_slot_from_state;
 use super::*;
 use crate::test_utils::TestInput;
 use crate::wasm::GameState;
@@ -196,6 +197,48 @@ fn test_rng_max_seed() {
 // ============================================================================
 // Save Data Tests
 // ============================================================================
+
+#[test]
+fn test_save_persists_only_local_slots() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let save_path = tmp.path().join("t.ncsav");
+
+    let mut ctx = WasmGameContext::<TestInput, (), ()>::new();
+    ctx.game.player_count = 4;
+    ctx.game.local_player_mask = 0b0100;
+    ctx.save_store = Some(crate::save_store::SaveStore::new(save_path.clone()));
+
+    ctx.game.save_data[2] = Some(vec![7]);
+    persist_controller_mapped_slot_from_state(&mut ctx, 2);
+
+    ctx.game.save_data[1] = Some(vec![9]);
+    persist_controller_mapped_slot_from_state(&mut ctx, 1);
+
+    let store = crate::save_store::SaveStore::load_or_new(save_path).unwrap();
+    assert_eq!(store.controller_slot(0).unwrap(), &[7]);
+    assert!(store.controller_slot(1).is_none());
+    assert!(store.controller_slot(2).is_none());
+    assert!(store.controller_slot(3).is_none());
+}
+
+#[test]
+fn test_delete_persists_for_local_slot() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let save_path = tmp.path().join("t.ncsav");
+
+    let mut ctx = WasmGameContext::<TestInput, (), ()>::new();
+    ctx.game.player_count = 4;
+    ctx.game.local_player_mask = 0b0100;
+    ctx.save_store = Some(crate::save_store::SaveStore::new(save_path.clone()));
+
+    ctx.game.save_data[2] = Some(vec![7]);
+    persist_controller_mapped_slot_from_state(&mut ctx, 2);
+    ctx.game.save_data[2] = None;
+    persist_controller_mapped_slot_from_state(&mut ctx, 2);
+
+    let store = crate::save_store::SaveStore::load_or_new(save_path).unwrap();
+    assert!(store.controller_slot(0).is_none());
+}
 
 #[test]
 fn test_save_data_slots() {
