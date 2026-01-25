@@ -48,7 +48,7 @@ where
         let console = rom.console.clone();
 
         if let Some(runner) = &mut self.runner {
-            if let Err(e) = runner.load_game(console, &rom.code, 1) {
+            if let Err(e) = runner.load_game(console, &rom.code, 1, &rom.game_id) {
                 tracing::error!("Failed to restart game: {}", e);
                 self.error_state = Some(GameError {
                     summary: "Restart Failed".to_string(),

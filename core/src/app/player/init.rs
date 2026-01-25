@@ -63,7 +63,7 @@ where
                 // Standard local session (no rollback)
                 let started = Instant::now();
                 runner
-                    .load_game(rom.console, &rom.code, self.config.num_players)
+                    .load_game(rom.console, &rom.code, self.config.num_players, &rom.game_id)
                     .context("Failed to load game")?;
                 tracing::info!("Game load (WASM compile/init) took {:?}", started.elapsed());
             }
@@ -77,7 +77,7 @@ where
                     .context("Failed to create sync test session")?;
                 let started = Instant::now();
                 runner
-                    .load_game_with_session(rom.console, &rom.code, session)
+                    .load_game_with_session(rom.console, &rom.code, session, None, &rom.game_id)
                     .context("Failed to load game with sync test session")?;
                 tracing::info!("Game load (WASM compile/init) took {:?}", started.elapsed());
                 tracing::info!(
@@ -125,7 +125,7 @@ where
                         .context("Failed to create P2P session")?;
                 let started = Instant::now();
                 runner
-                    .load_game_with_session(rom.console, &rom.code, session)
+                    .load_game_with_session(rom.console, &rom.code, session, None, &rom.game_id)
                     .context("Failed to load game with P2P session")?;
                 tracing::info!("Game load (WASM compile/init) took {:?}", started.elapsed());
                 tracing::info!(
@@ -178,21 +178,24 @@ where
                 );
                 let started = Instant::now();
                 runner
-                    .load_game_with_session(rom.console, &rom.code, session)
+                    .load_game_with_session(rom.console, &rom.code, session, None, &rom.game_id)
                     .context("Failed to load game with P2P session")?;
                 tracing::info!("Game load (WASM compile/init) took {:?}", started.elapsed());
             }
             ConnectionMode::Session { session_file } => {
                 // Session mode - pre-negotiated session from library lobby (NCHS protocol)
-                let session = super::connection::create_session_from_file::<C>(
+                let session_file_result = super::connection::create_session_from_file::<C>(
                     session_file,
                     &self.config,
                     specs,
                 )?;
 
+                let session = session_file_result.session;
+                let save_config = session_file_result.save_config;
+
                 let started = Instant::now();
                 runner
-                    .load_game_with_session(rom.console, &rom.code, session)
+                    .load_game_with_session(rom.console, &rom.code, session, save_config, &rom.game_id)
                     .context("Failed to load game with NCHS session")?;
                 tracing::info!("Game load (WASM compile/init) took {:?}", started.elapsed());
 

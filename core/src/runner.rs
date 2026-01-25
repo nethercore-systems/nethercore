@@ -16,6 +16,7 @@ use crate::{
     ffi::register_common_ffi,
     rollback::{RollbackSession, SessionEvent},
     runtime::Runtime,
+    save_store::SaveStore,
     wasm::{GameInstance, WasmEngine, WasmGameContext},
 };
 
@@ -122,7 +123,13 @@ impl<C: Console> ConsoleRunner<C> {
     ///
     /// # Errors
     /// Returns an error if the game fails to load or initialize.
-    pub fn load_game(&mut self, console: C, wasm_bytes: &[u8], num_players: usize) -> Result<()> {
+    pub fn load_game(
+        &mut self,
+        console: C,
+        wasm_bytes: &[u8],
+        num_players: usize,
+        game_id: &str,
+    ) -> Result<()> {
         // Load and validate the WASM module
         let module = self.wasm_engine.load_module(wasm_bytes)?;
         WasmEngine::validate_module_memory(&module, self.specs.ram_limit)?;
@@ -173,6 +180,33 @@ impl<C: Console> ConsoleRunner<C> {
             game.configure_session(player_count, local_mask);
         }
 
+        // Load persistent saves and prefill per-session save slots before init().
+        if !nethercore_shared::is_safe_game_id(game_id) {
+            tracing::warn!("Invalid game_id for save path: '{}'", game_id);
+        } else if let Some(data_dir) = crate::app::config::data_dir() {
+            let save_path = data_dir
+                .join("saves")
+                .join(self.specs.console_type)
+                .join(format!("{}.ncsav", game_id));
+
+            let store = match SaveStore::load_or_new(save_path.clone()) {
+                Ok(store) => store,
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to load save store ({}): {}",
+                        save_path.display(),
+                        e
+                    );
+                    SaveStore::new(save_path)
+                }
+            };
+
+            if let Some(game) = runtime.game_mut() {
+                store.prefill_game_save_data(game.state_mut());
+                game.store_mut().data_mut().save_store = Some(store);
+            }
+        }
+
         // Initialize console-specific FFI state before calling game init()
         // (e.g., set datapack for rom_* functions)
         runtime.initialize_console_state();
@@ -210,6 +244,8 @@ impl<C: Console> ConsoleRunner<C> {
         console: C,
         wasm_bytes: &[u8],
         session: RollbackSession<C::Input, C::State, C::RollbackState>,
+        save_config: Option<crate::net::nchs::SaveConfig>,
+        game_id: &str,
     ) -> Result<()> {
         // Load and validate the WASM module
         let module = self.wasm_engine.load_module(wasm_bytes)?;
@@ -257,6 +293,40 @@ impl<C: Console> ConsoleRunner<C> {
             && let Some(game) = runtime.game_mut()
         {
             game.configure_session(num_players, local_mask);
+        }
+
+        // Load persistent saves and prefill per-session save slots before init().
+        if !nethercore_shared::is_safe_game_id(game_id) {
+            tracing::warn!("Invalid game_id for save path: '{}'", game_id);
+        } else if let Some(data_dir) = crate::app::config::data_dir() {
+            let save_path = data_dir
+                .join("saves")
+                .join(self.specs.console_type)
+                .join(format!("{}.ncsav", game_id));
+
+            let store = match SaveStore::load_or_new(save_path.clone()) {
+                Ok(store) => store,
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to load save store ({}): {}",
+                        save_path.display(),
+                        e
+                    );
+                    SaveStore::new(save_path)
+                }
+            };
+
+            if let Some(game) = runtime.game_mut() {
+                store.prefill_game_save_data(game.state_mut());
+                game.store_mut().data_mut().save_store = Some(store);
+            }
+        }
+
+        // Apply netplay save mode overrides before init_game().
+        if let Some(save_config) = save_config
+            && let Some(game) = runtime.game_mut()
+        {
+            apply_save_config_override(game.state_mut(), save_config);
         }
 
         // Initialize console-specific FFI state before calling game init()
@@ -371,5 +441,100 @@ impl<C: Console> ConsoleRunner<C> {
             return game.state().quit_requested;
         }
         false
+    }
+}
+
+fn apply_save_config_override<I: crate::console::ConsoleInput>(
+    game_state: &mut crate::wasm::GameState<I>,
+    save_config: crate::net::nchs::SaveConfig,
+) {
+    match save_config.mode {
+        crate::net::nchs::SaveMode::PerPlayer => {}
+        crate::net::nchs::SaveMode::Synchronized => {
+            if let Some(mut data) = save_config.synchronized_save {
+                data.truncate(crate::MAX_SAVE_SIZE);
+                for slot in 0..4 {
+                    game_state.save_data[slot] = Some(data.clone());
+                }
+            }
+        }
+        crate::net::nchs::SaveMode::NewGame => {
+            for slot in 0..4 {
+                game_state.save_data[slot] = None;
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::apply_save_config_override;
+    use crate::net::nchs::{SaveConfig, SaveMode};
+    use crate::test_utils::TestInput;
+    use crate::wasm::{GameState, MAX_SAVE_SLOTS};
+
+    #[test]
+    fn save_config_new_game_clears_first_four_slots_only() {
+        let mut state = GameState::<TestInput>::new();
+        for i in 0..MAX_SAVE_SLOTS {
+            state.save_data[i] = Some(vec![i as u8]);
+        }
+
+        apply_save_config_override(
+            &mut state,
+            SaveConfig {
+                slot_index: 0,
+                mode: SaveMode::NewGame,
+                synchronized_save: None,
+            },
+        );
+
+        for i in 0..4 {
+            assert!(state.save_data[i].is_none());
+        }
+        for i in 4..MAX_SAVE_SLOTS {
+            assert_eq!(state.save_data[i].as_deref(), Some(&[i as u8][..]));
+        }
+    }
+
+    #[test]
+    fn save_config_synchronized_overwrites_first_four_slots() {
+        let mut state = GameState::<TestInput>::new();
+        for i in 0..MAX_SAVE_SLOTS {
+            state.save_data[i] = Some(vec![0xEE]);
+        }
+
+        apply_save_config_override(
+            &mut state,
+            SaveConfig {
+                slot_index: 0,
+                mode: SaveMode::Synchronized,
+                synchronized_save: Some(vec![1, 2, 3]),
+            },
+        );
+
+        for i in 0..4 {
+            assert_eq!(state.save_data[i].as_deref(), Some(&[1, 2, 3][..]));
+        }
+        for i in 4..MAX_SAVE_SLOTS {
+            assert_eq!(state.save_data[i].as_deref(), Some(&[0xEE][..]));
+        }
+    }
+
+    #[test]
+    fn save_config_per_player_does_not_override() {
+        let mut state = GameState::<TestInput>::new();
+        state.save_data[0] = Some(vec![9]);
+
+        apply_save_config_override(
+            &mut state,
+            SaveConfig {
+                slot_index: 0,
+                mode: SaveMode::PerPlayer,
+                synchronized_save: Some(vec![1, 2, 3]),
+            },
+        );
+
+        assert_eq!(state.save_data[0].as_deref(), Some(&[9][..]));
     }
 }

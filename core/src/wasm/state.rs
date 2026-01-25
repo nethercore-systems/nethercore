@@ -148,6 +148,8 @@ pub struct WasmGameContext<I: ConsoleInput, S, R: ConsoleRollbackState = ()> {
     pub rollback: R,
     /// RAM limit in bytes (for ResourceLimiter enforcement)
     pub ram_limit: usize,
+    /// Active save store for this game (host-managed persistent storage)
+    pub save_store: Option<crate::save_store::SaveStore>,
     /// Debug inspection registry (for runtime value inspection)
     pub debug_registry: DebugRegistry,
 }
@@ -163,6 +165,7 @@ impl<I: ConsoleInput, S: Default, R: ConsoleRollbackState> Default for WasmGameC
             ffi: S::default(),
             rollback: R::default(),
             ram_limit: DEFAULT_RAM_LIMIT, // Fallback default (use ConsoleSpecs in production)
+            save_store: None,
             debug_registry: DebugRegistry::new(),
         }
     }
@@ -181,6 +184,7 @@ impl<I: ConsoleInput, S: Default, R: ConsoleRollbackState> WasmGameContext<I, S,
             ffi: S::default(),
             rollback: R::default(),
             ram_limit,
+            save_store: None,
             debug_registry: DebugRegistry::new(),
         }
     }
