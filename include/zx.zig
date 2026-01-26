@@ -65,8 +65,13 @@ pub extern "C" fn local_player_mask() u32;
 
 /// Saves data to a slot.
 /// 
+/// Slot semantics:
+/// - Slots 0-3 are supported.
+/// - Persistence only applies for local controllers (see `local_player_mask()`);
+/// remote session slots never write to disk and never overwrite your local saves.
+/// 
 /// # Arguments
-/// * `slot` — Save slot (0-7). Slots 0-3 are controller-backed persistent for local players; slots 4-7 are ephemeral.
+/// * `slot` — Save slot (0-3)
 /// * `data_ptr` — Pointer to data in WASM memory
 /// * `data_len` — Length of data in bytes (max 64KB)
 /// 
@@ -76,8 +81,12 @@ pub extern "C" fn save(slot: u32, data_ptr: [*]const u8, data_len: u32) u32;
 
 /// Loads data from a slot.
 /// 
+/// Slot semantics:
+/// - Slots 0-3 are supported.
+/// - Persistent data only exists for local controllers (see `local_player_mask()`).
+/// 
 /// # Arguments
-/// * `slot` — Save slot (0-7). Slots 0-3 are controller-backed persistent for local players; slots 4-7 are ephemeral.
+/// * `slot` — Save slot (0-3)
 /// * `data_ptr` — Pointer to buffer in WASM memory
 /// * `max_len` — Maximum bytes to read
 /// 
@@ -87,7 +96,9 @@ pub extern "C" fn load(slot: u32, data_ptr: [*]u8, max_len: u32) u32;
 
 /// Deletes a save slot.
 /// 
-/// Slots 0-3 clear controller-backed persistent data for local players; slots 4-7 are ephemeral.
+/// Slot semantics:
+/// - Slots 0-3 are supported.
+/// - Persistence only applies for local controllers (see `local_player_mask()`).
 /// 
 /// # Returns
 /// 0 on success, 1 if invalid slot.

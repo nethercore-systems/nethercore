@@ -71,7 +71,7 @@ use crate::debug::registry::DebugRegistry;
 pub const MAX_PLAYERS: usize = 4;
 
 /// Maximum number of save slots
-pub const MAX_SAVE_SLOTS: usize = 8;
+pub const MAX_SAVE_SLOTS: usize = 4;
 
 /// Maximum save data size per slot (64KB)
 pub const MAX_SAVE_SIZE: usize = 64 * 1024;

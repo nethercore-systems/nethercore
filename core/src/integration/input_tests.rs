@@ -210,7 +210,7 @@ fn test_save_data_slot_limits() {
     let mut state = GameState::<TestInput>::new();
 
     // Verify constants
-    assert_eq!(MAX_SAVE_SLOTS, 8);
+    assert_eq!(MAX_SAVE_SLOTS, 4);
     assert_eq!(MAX_SAVE_SIZE, 64 * 1024);
 
     // All slots should be available

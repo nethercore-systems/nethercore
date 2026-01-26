@@ -1,14 +1,13 @@
 # Save Data Functions
 
-Persistent storage for game saves (8 slots, 64KB each).
+Persistent storage for game saves (4 slots, 64KB each).
 
 ## Overview
 
-- **8 save slots** (indices 0-7)
-- **Slots 0-3** are persistent and controller-backed (per-machine, per-game)
-- **Slots 4-7** are reserved and ephemeral (in-memory only)
+- **4 save slots** (indices 0-3)
 - **64KB maximum** per slot
-- **Netplay-safe:** only local session slots persist; remote players cannot overwrite your save files
+- Persistent data is stored locally per-game
+- Netplay safety: only local session slots persist; remote session slots never overwrite your saves
 
 ---
 
@@ -46,7 +45,7 @@ pub extern fn save(slot: u32, data_ptr: [*]const u8, data_len: u32) u32;
 
 | Name | Type | Description |
 |------|------|-------------|
-| slot | `u32` | Save slot (0-7). Slots 0-3 persist locally for local players; slots 4-7 are ephemeral |
+| slot | `u32` | Save slot (0-3) |
 | data_ptr | `*const u8` | Pointer to data to save |
 | data_len | `u32` | Size of data in bytes |
 
@@ -172,7 +171,7 @@ pub extern fn load(slot: u32, data_ptr: [*]u8, max_len: u32) u32;
 
 | Name | Type | Description |
 |------|------|-------------|
-| slot | `u32` | Save slot (0-7). Slots 0-3 persist locally for local players; slots 4-7 are ephemeral |
+| slot | `u32` | Save slot (0-3) |
 | data_ptr | `*mut u8` | Destination buffer |
 | max_len | `u32` | Maximum bytes to read |
 
@@ -292,7 +291,7 @@ pub extern fn delete_save(slot: u32) u32;
 
 | Name | Type | Description |
 |------|------|-------------|
-| slot | `u32` | Save slot (0-7). Slots 0-3 persist locally for local players; slots 4-7 are ephemeral |
+| slot | `u32` | Save slot (0-3) |
 
 **Returns:**
 
@@ -494,7 +493,7 @@ fn render_save_menu() {
     unsafe {
         draw_text(b"SAVE SLOTS".as_ptr(), 10, 200.0, 50.0, 24.0, 0xFFFFFFFF);
 
-        for slot in 0..8 {
+        for slot in 0..4 {
             let mut buffer = [0u8; 128];
             let read = load(slot, buffer.as_mut_ptr(), 128);
 
@@ -564,7 +563,7 @@ void render_save_menu() {
 fn render_save_menu() void {
     draw_text("SAVE SLOTS".ptr, 10, 200.0, 50.0, 24.0, 0xFFFFFFFF);
 
-    for (0..8) |slot| {
+    for (0..4) |slot| {
         var buffer: [128]u8 = undefined;
         const read = load(@intCast(slot), &buffer, 128);
 
@@ -616,13 +615,13 @@ fn update() {
 
 fn auto_save() {
     unsafe {
-        // Use slot 7 for auto-save
+        // Auto-save overwrites the controller 0 slot
         let mut save = create_save_data();
         save.checksum = save.calculate_checksum();
 
         let bytes = &save as *const SaveData as *const u8;
         let size = core::mem::size_of::<SaveData>();
-        save(7, bytes, size as u32);
+        save(0, bytes, size as u32);
     }
 }
 ```
@@ -642,13 +641,13 @@ NCZX_EXPORT void update() {
 }
 
 void auto_save() {
-    // Use slot 7 for auto-save
+    // Auto-save overwrites the controller 0 slot
     SaveData save_data = create_save_data();
     save_data.checksum = SaveData_calculate_checksum(&save_data);
 
     const uint8_t* bytes = (const uint8_t*)&save_data;
     uint32_t size = sizeof(SaveData);
-    save(7, bytes, size);
+    save(0, bytes, size);
 }
 ```
 {{#endtab}}
@@ -667,13 +666,13 @@ export fn update() void {
 }
 
 fn auto_save() void {
-    // Use slot 7 for auto-save
+    // Auto-save overwrites the controller 0 slot
     var save_data = create_save_data();
     save_data.checksum = save_data.calculate_checksum();
 
     const bytes: [*]const u8 = @ptrCast(&save_data);
     const size = @sizeOf(SaveData);
-    save(7, bytes, size);
+    save(0, bytes, size);
 }
 ```
 {{#endtab}}

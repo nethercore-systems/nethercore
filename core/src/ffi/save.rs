@@ -45,7 +45,7 @@ pub(super) fn persist_controller_mapped_slot_from_state<
     }
 }
 
-/// Save data to a slot (0-7)
+/// Save data to a slot (0-3)
 ///
 /// Returns: 0 = success, 1 = invalid slot, 2 = data too large
 pub(super) fn save<I: ConsoleInput, S, R: ConsoleRollbackState>(
@@ -86,7 +86,7 @@ pub(super) fn save<I: ConsoleInput, S, R: ConsoleRollbackState>(
     0
 }
 
-/// Load data from a slot (0-7)
+/// Load data from a slot (0-3)
 ///
 /// Returns: bytes read, or 0 if slot is empty/invalid
 pub(super) fn load<I: ConsoleInput, S, R: ConsoleRollbackState>(
@@ -123,7 +123,7 @@ pub(super) fn load<I: ConsoleInput, S, R: ConsoleRollbackState>(
     }
 }
 
-/// Delete data in a slot (0-7)
+/// Delete data in a slot (0-3)
 ///
 /// Returns: 0 = success, 1 = invalid slot
 pub(super) fn delete<I: ConsoleInput, S, R: ConsoleRollbackState>(

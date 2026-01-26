@@ -718,7 +718,7 @@ fn test_save_boundary_slot_values() {
     let mut linker: Linker<WasmGameContext<TestInput, ()>> = Linker::new(&engine);
     register_common_ffi(&mut linker).unwrap();
 
-    // Test slot boundary values (0-7 valid, 8+ invalid)
+    // Test slot boundary values (0-3 valid, 4+ invalid)
     let wat = r#"
         (module
             (import "env" "save" (func $save (param i32 i32 i32) (result i32)))
@@ -741,15 +741,15 @@ fn test_save_boundary_slot_values() {
         .get_typed_func::<i32, i32>(&mut store, "test_slot")
         .unwrap();
 
-    // Valid slots (0-7) should succeed
-    for slot in 0..8 {
+    // Valid slots (0-3) should succeed
+    for slot in 0..4 {
         let result = test_fn.call(&mut store, slot).unwrap();
         assert_eq!(result, 0, "Slot {} should be valid", slot);
     }
 
-    // Invalid slot (8) should fail
-    let result = test_fn.call(&mut store, 8).unwrap();
-    assert_eq!(result, 1, "Slot 8 should be invalid");
+    // Invalid slot (4) should fail
+    let result = test_fn.call(&mut store, 4).unwrap();
+    assert_eq!(result, 1, "Slot 4 should be invalid");
 }
 
 #[test]
