@@ -30,7 +30,7 @@ static CHECKERBOARD_TEX_DATA: &[u8] = include_bytes!("../../../assets/checkerboa
 // =============================================================================
 
 // Import the canonical FFI bindings
-#[path = "../../../../include/zx.rs"]
+#[path = "../../../../include/zx/mod.rs"]
 mod ffi;
 use ffi::*;
 

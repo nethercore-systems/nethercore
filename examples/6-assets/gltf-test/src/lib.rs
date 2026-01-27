@@ -41,7 +41,7 @@ fn panic(_info: &PanicInfo) -> ! {
 // ============================================================================
 
 // Import the canonical FFI bindings
-#[path = "../../../../include/zx.rs"]
+#[path = "../../../../include/zx/mod.rs"]
 mod ffi;
 use ffi::*;
 

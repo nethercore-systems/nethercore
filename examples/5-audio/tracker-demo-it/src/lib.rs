@@ -20,7 +20,7 @@ fn panic(_info: &PanicInfo) -> ! {
     core::arch::wasm32::unreachable()
 }
 
-#[path = "../../../../include/zx.rs"]
+#[path = "../../../../include/zx/mod.rs"]
 mod ffi;
 use ffi::*;
 

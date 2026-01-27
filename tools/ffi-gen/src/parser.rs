@@ -7,15 +7,157 @@ use syn::{ForeignItem, ForeignItemFn, Item, ItemForeignMod, ItemMod, ReturnType,
 
 use crate::model::{Category, Constant, ConstantModule, FfiFunction, FfiModel, Parameter, Type};
 
-/// Parse FFI declarations from a Rust source file
-pub fn parse_ffi_file(path: impl AsRef<Path>) -> Result<FfiModel> {
-    let content = std::fs::read_to_string(path.as_ref())
-        .with_context(|| format!("Failed to read {}", path.as_ref().display()))?;
+/// Files that don't contribute extern functions or constant modules for codegen.
+/// `stubs.rs` contains non-WASM test stubs, `helpers.rs` and `colors.rs` contain
+/// safe wrapper functions / color constants that aren't extern declarations.
+const SKIP_FILES: &[&str] = &["mod.rs", "stubs.rs", "helpers.rs", "colors.rs"];
 
-    parse_ffi_source(&content)
+/// Parse FFI declarations from a Rust source file or directory of submodules.
+///
+/// If `path` is a directory, each `.rs` file (except SKIP_FILES) is parsed
+/// individually and the filename (without extension) is used as the category
+/// name for all functions found in that file.
+///
+/// If `path` is a single `.rs` file, falls back to the legacy single-file
+/// parser that reads `// ====` section markers for category assignment.
+pub fn parse_ffi_file(path: impl AsRef<Path>) -> Result<FfiModel> {
+    let path = path.as_ref();
+
+    if path.is_dir() {
+        parse_ffi_directory(path)
+    } else {
+        let content = std::fs::read_to_string(path)
+            .with_context(|| format!("Failed to read {}", path.display()))?;
+        parse_ffi_source(&content)
+    }
 }
 
-/// Parse FFI declarations from Rust source code
+/// Parse a directory of submodule `.rs` files into a unified FfiModel.
+fn parse_ffi_directory(dir: &Path) -> Result<FfiModel> {
+    let mut all_functions = Vec::new();
+    let mut all_constants = Vec::new();
+    let mut all_categories = Vec::new();
+
+    // Collect and sort entries for deterministic output
+    let mut entries: Vec<_> = std::fs::read_dir(dir)
+        .with_context(|| format!("Failed to read directory {}", dir.display()))?
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            let name = e.file_name().to_string_lossy().to_string();
+            name.ends_with(".rs") && !SKIP_FILES.contains(&name.as_str())
+        })
+        .collect();
+    entries.sort_by_key(|e| e.file_name());
+
+    for entry in entries {
+        let file_path = entry.path();
+        let file_name = entry.file_name().to_string_lossy().to_string();
+        let category_name = file_name
+            .strip_suffix(".rs")
+            .unwrap()
+            .to_string();
+
+        // Prettify category name: "system" -> "System Functions", etc.
+        let pretty_category = prettify_category(&category_name);
+
+        let content = std::fs::read_to_string(&file_path)
+            .with_context(|| format!("Failed to read {}", file_path.display()))?;
+
+        let file = syn::parse_file(&content)
+            .with_context(|| format!("Failed to parse {}", file_path.display()))?;
+
+        let mut file_has_functions = false;
+
+        for item in &file.items {
+            match item {
+                Item::ForeignMod(foreign_mod) => {
+                    let (fns, _cats) = parse_foreign_mod_with_category(foreign_mod, &pretty_category)?;
+                    if !fns.is_empty() {
+                        file_has_functions = true;
+                    }
+                    all_functions.extend(fns);
+                }
+                Item::Mod(item_mod) => {
+                    if let Some(const_mod) = parse_const_module(item_mod)? {
+                        all_constants.push(const_mod);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        if file_has_functions {
+            all_categories.push(Category {
+                name: pretty_category,
+                comment: String::new(),
+            });
+        }
+    }
+
+    Ok(FfiModel {
+        functions: all_functions,
+        constants: all_constants,
+        categories: all_categories,
+    })
+}
+
+/// Prettify a filename-based category name.
+fn prettify_category(name: &str) -> String {
+    // Map specific filenames to pretty category names
+    match name {
+        "system" => "System Functions".to_string(),
+        "input" => "Input Functions".to_string(),
+        "camera" => "Camera Functions".to_string(),
+        "transform" => "Transform Functions".to_string(),
+        "render" => "Render State Functions".to_string(),
+        "viewport" => "Viewport Functions (Split-Screen)".to_string(),
+        "pass" => "Render Pass Functions (Execution Barriers & Depth/Stencil Control)".to_string(),
+        "texture" => "Texture Functions".to_string(),
+        "mesh" => "Mesh Functions (Retained Mode)".to_string(),
+        "procedural" => "Procedural Mesh Generation (init-only)".to_string(),
+        "drawing" => "Immediate Mode 3D Drawing & Billboards".to_string(),
+        "text" => "2D Drawing (Screen Space)".to_string(),
+        "epu" => "Environment Processing Unit (EPU) — Instruction-Based API".to_string(),
+        "material" => "Material Functions (Mode 2/3)".to_string(),
+        "lighting" => "Lighting Functions (Mode 2/3)".to_string(),
+        "skeleton" => "GPU Skinning".to_string(),
+        "animation" => "Keyframe Animation".to_string(),
+        "audio" => "Audio Functions".to_string(),
+        "music" => "Unified Music API (PCM + Tracker)".to_string(),
+        "assets" => "ROM Data Pack API (init-only)".to_string(),
+        "embedded" => "Embedded Asset API".to_string(),
+        "debug" => "Debug Inspection System".to_string(),
+        "constants" => "Constants".to_string(),
+        _ => {
+            // Fallback: capitalize first letter
+            let mut s = name.to_string();
+            if let Some(c) = s.get_mut(0..1) {
+                c.make_ascii_uppercase();
+            }
+            s
+        }
+    }
+}
+
+/// Parse extern "C" block, overriding category with the given name.
+fn parse_foreign_mod_with_category(
+    foreign_mod: &ItemForeignMod,
+    category: &str,
+) -> Result<(Vec<FfiFunction>, Vec<Category>)> {
+    let mut functions = Vec::new();
+    let categories = Vec::new();
+
+    for item in &foreign_mod.items {
+        if let ForeignItem::Fn(func) = item {
+            let function = parse_foreign_function(func, category)?;
+            functions.push(function);
+        }
+    }
+
+    Ok((functions, categories))
+}
+
+/// Parse FFI declarations from Rust source code (legacy single-file mode)
 pub fn parse_ffi_source(source: &str) -> Result<FfiModel> {
     let file = syn::parse_file(source).context("Failed to parse Rust source")?;
 
@@ -52,7 +194,7 @@ pub fn parse_ffi_source(source: &str) -> Result<FfiModel> {
     })
 }
 
-/// Parse extern "C" block
+/// Parse extern "C" block (legacy: reads category from `// ====` markers)
 fn parse_foreign_mod(foreign_mod: &ItemForeignMod) -> Result<(Vec<FfiFunction>, Vec<Category>)> {
     let mut functions = Vec::new();
     let mut categories = Vec::new();
@@ -271,7 +413,7 @@ mod tests {
         assert_eq!(module.name, "button");
         assert_eq!(module.constants.len(), 2);
         assert_eq!(module.constants[0].name, "UP");
-        assert_eq!(module.constants[0].value, "0");
+        assert_eq!(model.constants[0].constants[0].value, "0");
     }
 
     #[test]
@@ -284,5 +426,12 @@ mod tests {
             type_to_string(&syn::parse_str::<SynType>("()").unwrap()),
             "()"
         );
+    }
+
+    #[test]
+    fn test_prettify_category() {
+        assert_eq!(prettify_category("system"), "System Functions");
+        assert_eq!(prettify_category("input"), "Input Functions");
+        assert_eq!(prettify_category("unknown"), "Unknown");
     }
 }

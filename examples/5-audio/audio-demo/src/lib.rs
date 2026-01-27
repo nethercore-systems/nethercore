@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 
-#[path = "../../../../include/zx.rs"]
+#[path = "../../../../include/zx/mod.rs"]
 mod ffi;
 use ffi::*;
 

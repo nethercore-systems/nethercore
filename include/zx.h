@@ -16,956 +16,8 @@ extern "C" {
 #endif
 
 // =============================================================================
-// System
+// Keyframe Animation
 // =============================================================================
-
-/** Returns the fixed timestep duration in seconds. */
-/**  */
-/** This is a **constant value** based on the configured tick rate, NOT wall-clock time. */
-/** - 60fps → 0.01666... (1/60) */
-/** - 30fps → 0.03333... (1/30) */
-/**  */
-/** Safe for rollback netcode: identical across all clients regardless of frame timing. */
-NCZX_IMPORT float delta_time(void);
-
-/** Returns total elapsed game time since start in seconds. */
-/**  */
-/** This is the **accumulated fixed timestep**, NOT wall-clock time. */
-/** Calculated as `tick_count * delta_time`. */
-/**  */
-/** Safe for rollback netcode: deterministic and identical across all clients. */
-NCZX_IMPORT float elapsed_time(void);
-
-/** Returns the current tick number (starts at 0, increments by 1 each update). */
-/**  */
-/** Perfectly deterministic: same inputs always produce the same tick count. */
-/** Safe for rollback netcode. */
-NCZX_IMPORT uint64_t tick_count(void);
-
-/** Logs a message to the console output. */
-/**  */
-/** # Arguments */
-/** * `ptr` — Pointer to UTF-8 string data */
-/** * `len` — Length of string in bytes */
-NCZX_IMPORT void log(const uint8_t* ptr, uint32_t len);
-
-/** Exits the game and returns to the library. */
-NCZX_IMPORT void quit(void);
-
-/** Returns a deterministic random u32 from the host's seeded RNG. */
-/** Always use this instead of external random sources for rollback compatibility. */
-NCZX_IMPORT uint32_t random(void);
-
-/** Returns a random i32 in range [min, max). */
-/** Uses host's seeded RNG for rollback compatibility. */
-NCZX_IMPORT int32_t random_range(int32_t min, int32_t max);
-
-/** Returns a random f32 in range [0.0, 1.0). */
-/** Uses host's seeded RNG for rollback compatibility. */
-NCZX_IMPORT float random_f32(void);
-
-/** Returns a random f32 in range [min, max). */
-/** Uses host's seeded RNG for rollback compatibility. */
-NCZX_IMPORT float random_f32_range(float min, float max);
-
-/** Returns the number of players in the session (1-4). */
-NCZX_IMPORT uint32_t player_count(void);
-
-/** Returns a bitmask of which players are local to this client. */
-/**  */
-/** Example: `(local_player_mask() & (1 << player_id)) != 0` checks if player is local. */
-NCZX_IMPORT uint32_t local_player_mask(void);
-
-/** Saves data to a slot. */
-/**  */
-/** Slot semantics: */
-/** - Slots 0-3 are supported. */
-/** - Persistence only applies for local controllers (see `local_player_mask()`); */
-/** remote session slots never write to disk and never overwrite your local saves. */
-/**  */
-/** # Arguments */
-/** * `slot` — Save slot (0-3) */
-/** * `data_ptr` — Pointer to data in WASM memory */
-/** * `data_len` — Length of data in bytes (max 64KB) */
-/**  */
-/** # Returns */
-/** 0 on success, 1 if invalid slot, 2 if data too large. */
-NCZX_IMPORT uint32_t save(uint32_t slot, const uint8_t* data_ptr, uint32_t data_len);
-
-/** Loads data from a slot. */
-/**  */
-/** Slot semantics: */
-/** - Slots 0-3 are supported. */
-/** - Persistent data only exists for local controllers (see `local_player_mask()`). */
-/**  */
-/** # Arguments */
-/** * `slot` — Save slot (0-3) */
-/** * `data_ptr` — Pointer to buffer in WASM memory */
-/** * `max_len` — Maximum bytes to read */
-/**  */
-/** # Returns */
-/** Bytes read (0 if empty or error). */
-NCZX_IMPORT uint32_t load(uint32_t slot, uint8_t* data_ptr, uint32_t max_len);
-
-/** Deletes a save slot. */
-/**  */
-/** Slot semantics: */
-/** - Slots 0-3 are supported. */
-/** - Persistence only applies for local controllers (see `local_player_mask()`). */
-/**  */
-/** # Returns */
-/** 0 on success, 1 if invalid slot. */
-NCZX_IMPORT uint32_t delete(uint32_t slot);
-
-/** Set the clear/background color. Must be called during `init()`. */
-/**  */
-/** # Arguments */
-/** * `color` — Color in 0xRRGGBBAA format (default: black) */
-NCZX_IMPORT void set_clear_color(uint32_t color);
-
-/** Set the camera position and target (look-at point). */
-/**  */
-/** Uses a Y-up, right-handed coordinate system. */
-NCZX_IMPORT void camera_set(float x, float y, float z, float target_x, float target_y, float target_z);
-
-/** Set the camera field of view. */
-/**  */
-/** # Arguments */
-/** * `fov_degrees` — Field of view in degrees (typically 45-90, default 60) */
-NCZX_IMPORT void camera_fov(float fov_degrees);
-
-/** Push a custom view matrix (16 floats, column-major order). */
-NCZX_IMPORT void push_view_matrix(float m0, float m1, float m2, float m3, float m4, float m5, float m6, float m7, float m8, float m9, float m10, float m11, float m12, float m13, float m14, float m15);
-
-/** Push a custom projection matrix (16 floats, column-major order). */
-NCZX_IMPORT void push_projection_matrix(float m0, float m1, float m2, float m3, float m4, float m5, float m6, float m7, float m8, float m9, float m10, float m11, float m12, float m13, float m14, float m15);
-
-/** Push identity matrix onto the transform stack. */
-NCZX_IMPORT void push_identity(void);
-
-/** Set the current transform from a 4x4 matrix pointer (16 floats, column-major). */
-NCZX_IMPORT void transform_set(const float* matrix_ptr);
-
-/** Push a translation transform. */
-NCZX_IMPORT void push_translate(float x, float y, float z);
-
-/** Push a rotation around the X axis. */
-/**  */
-/** # Arguments */
-/** * `angle_deg` — Rotation angle in degrees */
-NCZX_IMPORT void push_rotate_x(float angle_deg);
-
-/** Push a rotation around the Y axis. */
-/**  */
-/** # Arguments */
-/** * `angle_deg` — Rotation angle in degrees */
-NCZX_IMPORT void push_rotate_y(float angle_deg);
-
-/** Push a rotation around the Z axis. */
-/**  */
-/** # Arguments */
-/** * `angle_deg` — Rotation angle in degrees */
-NCZX_IMPORT void push_rotate_z(float angle_deg);
-
-/** Push a rotation around an arbitrary axis. */
-/**  */
-/** # Arguments */
-/** * `angle_deg` — Rotation angle in degrees */
-/** * `axis_x`, `axis_y`, `axis_z` — Rotation axis (will be normalized) */
-NCZX_IMPORT void push_rotate(float angle_deg, float axis_x, float axis_y, float axis_z);
-
-/** Push a non-uniform scale transform. */
-NCZX_IMPORT void push_scale(float x, float y, float z);
-
-/** Push a uniform scale transform. */
-NCZX_IMPORT void push_scale_uniform(float s);
-
-/** Check if a button is currently held. */
-/**  */
-/** # Button indices */
-/** 0=UP, 1=DOWN, 2=LEFT, 3=RIGHT, 4=A, 5=B, 6=X, 7=Y, */
-/** 8=L1, 9=R1, 10=L3, 11=R3, 12=START, 13=SELECT */
-/**  */
-/** # Returns */
-/** 1 if held, 0 otherwise. */
-NCZX_IMPORT uint32_t button_held(uint32_t player, uint32_t button);
-
-/** Check if a button was just pressed this tick. */
-/**  */
-/** # Returns */
-/** 1 if just pressed, 0 otherwise. */
-NCZX_IMPORT uint32_t button_pressed(uint32_t player, uint32_t button);
-
-/** Check if a button was just released this tick. */
-/**  */
-/** # Returns */
-/** 1 if just released, 0 otherwise. */
-NCZX_IMPORT uint32_t button_released(uint32_t player, uint32_t button);
-
-/** Get bitmask of all held buttons. */
-NCZX_IMPORT uint32_t buttons_held(uint32_t player);
-
-/** Get bitmask of all buttons just pressed this tick. */
-NCZX_IMPORT uint32_t buttons_pressed(uint32_t player);
-
-/** Get bitmask of all buttons just released this tick. */
-NCZX_IMPORT uint32_t buttons_released(uint32_t player);
-
-/** Get left stick X axis value (-1.0 to 1.0). */
-NCZX_IMPORT float left_stick_x(uint32_t player);
-
-/** Get left stick Y axis value (-1.0 to 1.0). */
-NCZX_IMPORT float left_stick_y(uint32_t player);
-
-/** Get right stick X axis value (-1.0 to 1.0). */
-NCZX_IMPORT float right_stick_x(uint32_t player);
-
-/** Get right stick Y axis value (-1.0 to 1.0). */
-NCZX_IMPORT float right_stick_y(uint32_t player);
-
-/** Get both left stick axes at once (more efficient). */
-/**  */
-/** Writes X and Y values to the provided pointers. */
-NCZX_IMPORT void left_stick(uint32_t player, float* out_x, float* out_y);
-
-/** Get both right stick axes at once (more efficient). */
-/**  */
-/** Writes X and Y values to the provided pointers. */
-NCZX_IMPORT void right_stick(uint32_t player, float* out_x, float* out_y);
-
-/** Get left trigger value (0.0 to 1.0). */
-NCZX_IMPORT float trigger_left(uint32_t player);
-
-/** Get right trigger value (0.0 to 1.0). */
-NCZX_IMPORT float trigger_right(uint32_t player);
-
-/** Set the uniform tint color (multiplied with vertex colors and textures). */
-/**  */
-/** # Arguments */
-/** * `color` — Color in 0xRRGGBBAA format */
-NCZX_IMPORT void set_color(uint32_t color);
-
-/** Set the EPU environment index (`env_id`) used for subsequent draw calls. */
-/**  */
-/** This selects which EPU environment textures are sampled for: */
-/** - `draw_epu()` background rendering */
-/** - Ambient lighting in lit render modes (0/2/3) */
-/** - Reflections in lit render modes (1/2/3) */
-/**  */
-/** Notes: */
-/** - `env_id` is clamped to the supported range (0..255). */
-/** - Default is 0. */
-NCZX_IMPORT void environment_index(uint32_t env_id);
-
-/** Set the face culling mode. */
-/**  */
-/** # Arguments */
-/** * `mode` — 0=none (default), 1=back, 2=front */
-NCZX_IMPORT void cull_mode(uint32_t mode);
-
-/** Set the texture filtering mode. */
-/**  */
-/** # Arguments */
-/** * `filter` — 0=nearest (pixelated), 1=linear (smooth) */
-NCZX_IMPORT void texture_filter(uint32_t filter);
-
-/** Set uniform alpha level for dither transparency. */
-/**  */
-/** # Arguments */
-/** * `level` — 0-15 (0=fully transparent, 15=fully opaque, default=15) */
-/**  */
-/** Controls the dither pattern threshold for screen-door transparency. */
-/** The dither pattern is always active, but with level=15 (default) all fragments pass. */
-NCZX_IMPORT void uniform_alpha(uint32_t level);
-
-/** Set dither offset for dither transparency. */
-/**  */
-/** # Arguments */
-/** * `x` — 0-3 pixel shift in X axis */
-/** * `y` — 0-3 pixel shift in Y axis */
-/**  */
-/** Use different offsets for stacked dithered meshes to prevent pattern cancellation. */
-/** When two transparent objects overlap with the same alpha level and offset, their */
-/** dither patterns align and pixels cancel out. Different offsets shift the pattern */
-/** so both objects remain visible. */
-NCZX_IMPORT void dither_offset(uint32_t x, uint32_t y);
-
-/** Set z-index for 2D ordering control within a pass. */
-/**  */
-/** # Arguments */
-/** * `n` — Z-index value (0 = back, higher = front) */
-/**  */
-/** Higher z-index values are drawn on top of lower values. */
-/** Use this to ensure UI elements appear over game content */
-/** regardless of texture bindings or draw order. */
-/**  */
-/** Note: z_index only affects ordering within the same pass_id. */
-/** Default: 0 (resets each frame) */
-NCZX_IMPORT void z_index(uint32_t n);
-
-/** Set the viewport for subsequent draw calls. */
-/**  */
-/** All 3D and 2D rendering will be clipped to this region. */
-/** Camera aspect ratio automatically adjusts to viewport dimensions. */
-/** 2D coordinates (draw_sprite, draw_text, etc.) become viewport-relative. */
-/**  */
-/** # Arguments */
-/** * `x` — Left edge in pixels (0-959) */
-/** * `y` — Top edge in pixels (0-539) */
-/** * `width` — Width in pixels (1-960) */
-/** * `height` — Height in pixels (1-540) */
-/**  */
-/** # Example (2-player horizontal split) */
-/** ```rust,ignore */
-/** // Player 1: left half */
-/** viewport(0, 0, 480, 540); */
-/** camera_set(p1_x, p1_y, p1_z, p1_tx, p1_ty, p1_tz); */
-/** epu_set(env_config_ptr); */
-/** draw_mesh(scene); */
-/** draw_epu(); */
-/**  */
-/** // Player 2: right half */
-/** viewport(480, 0, 480, 540); */
-/** camera_set(p2_x, p2_y, p2_z, p2_tx, p2_ty, p2_tz); */
-/** epu_set(env_config_ptr); */
-/** draw_mesh(scene); */
-/** draw_epu(); */
-/**  */
-/** // Reset for HUD */
-/** viewport_clear(); */
-/** draw_text_str("PAUSED", 400.0, 270.0, 32.0, 0xFFFFFFFF); */
-/** ``` */
-NCZX_IMPORT void viewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height);
-
-/** Reset viewport to fullscreen (960×540). */
-/**  */
-/** Call this at the end of split-screen rendering to restore full-screen */
-/** coordinates for HUD elements or between frames. */
-NCZX_IMPORT void viewport_clear(void);
-
-/** Begin a new render pass with optional depth clear. */
-/**  */
-/** Provides an execution barrier - commands in this pass complete before */
-/** the next pass begins. Use for layered rendering like FPS viewmodels. */
-/**  */
-/** # Arguments */
-/** * `clear_depth` — Non-zero to clear depth buffer at pass start */
-/**  */
-/** # Example (FPS viewmodel rendering) */
-/** ```rust,ignore */
-/** // Draw world first (pass 0) */
-/** draw_mesh(world_mesh); */
-/** epu_set(env_config_ptr); */
-/** draw_epu(); */
-/**  */
-/** // Draw gun on top (pass 1 with depth clear) */
-/** begin_pass(1);  // Clear depth so gun renders on top */
-/** draw_mesh(gun_mesh); */
-/** ``` */
-NCZX_IMPORT void begin_pass(uint32_t clear_depth);
-
-/** Begin a stencil write pass (mask creation mode). */
-/**  */
-/** After calling this, subsequent draw calls write to the stencil buffer */
-/** but NOT to the color buffer. Use this to create a mask shape. */
-/** Depth testing is disabled to prevent mask geometry from polluting depth. */
-/**  */
-/** # Arguments */
-/** * `ref_value` — Stencil reference value to write (typically 1) */
-/** * `clear_depth` — Non-zero to clear depth buffer at pass start */
-/**  */
-/** # Example (scope mask) */
-/** ```rust,ignore */
-/** begin_pass_stencil_write(1, 0);  // Start mask creation */
-/** draw_mesh(circle_mesh);          // Draw circle to stencil only */
-/** begin_pass_stencil_test(1, 0);   // Enable testing */
-/** epu_set(env_config_ptr); */
-/** draw_epu();                      // Only visible inside circle */
-/** begin_pass(0);                    // Back to normal rendering */
-/** ``` */
-NCZX_IMPORT void begin_pass_stencil_write(uint32_t ref_value, uint32_t clear_depth);
-
-/** Begin a stencil test pass (render inside mask). */
-/**  */
-/** After calling this, subsequent draw calls only render where */
-/** the stencil buffer equals ref_value (inside the mask). */
-/**  */
-/** # Arguments */
-/** * `ref_value` — Stencil reference value to test against (must match write pass) */
-/** * `clear_depth` — Non-zero to clear depth buffer at pass start */
-NCZX_IMPORT void begin_pass_stencil_test(uint32_t ref_value, uint32_t clear_depth);
-
-/** Begin a render pass with full control over depth and stencil state. */
-/**  */
-/** This is the "escape hatch" for advanced effects not covered by the */
-/** convenience functions. Most games should use begin_pass, begin_pass_stencil_write, */
-/** or begin_pass_stencil_test instead. */
-/**  */
-/** # Arguments */
-/** * `depth_compare` — Depth comparison function (see compare::* constants) */
-/** * `depth_write` — Non-zero to write to depth buffer */
-/** * `clear_depth` — Non-zero to clear depth buffer at pass start */
-/** * `stencil_compare` — Stencil comparison function (see compare::* constants) */
-/** * `stencil_ref` — Stencil reference value (0-255) */
-/** * `stencil_pass_op` — Operation when stencil test passes (see stencil_op::* constants) */
-/** * `stencil_fail_op` — Operation when stencil test fails */
-/** * `stencil_depth_fail_op` — Operation when depth test fails */
-NCZX_IMPORT void begin_pass_full(uint32_t depth_compare, uint32_t depth_write, uint32_t clear_depth, uint32_t stencil_compare, uint32_t stencil_ref, uint32_t stencil_pass_op, uint32_t stencil_fail_op, uint32_t stencil_depth_fail_op);
-
-/** Load a texture from RGBA pixel data. */
-/**  */
-/** # Arguments */
-/** * `width`, `height` — Texture dimensions */
-/** * `pixels_ptr` — Pointer to RGBA8 pixel data (width × height × 4 bytes) */
-/**  */
-/** # Returns */
-/** Texture handle (>0) on success, 0 on failure. */
-NCZX_IMPORT uint32_t load_texture(uint32_t width, uint32_t height, const uint8_t* pixels_ptr);
-
-/** Bind a texture to slot 0 (albedo). */
-NCZX_IMPORT void texture_bind(uint32_t handle);
-
-/** Bind a texture to a specific slot. */
-/**  */
-/** # Arguments */
-/** * `slot` — 0=albedo, 1=MRE/matcap, 2=reserved, 3=matcap */
-NCZX_IMPORT void texture_bind_slot(uint32_t handle, uint32_t slot);
-
-/** Set matcap blend mode for a texture slot (Mode 1 only). */
-/**  */
-/** # Arguments */
-/** * `slot` — Matcap slot (1-3) */
-/** * `mode` — 0=Multiply, 1=Add, 2=HSV Modulate */
-NCZX_IMPORT void matcap_blend_mode(uint32_t slot, uint32_t mode);
-
-/** Load a non-indexed mesh. */
-/**  */
-/** # Vertex format flags */
-/** - 1 (FORMAT_UV): Has UV coordinates (2 floats) */
-/** - 2 (FORMAT_COLOR): Has per-vertex color (3 floats RGB) */
-/** - 4 (FORMAT_NORMAL): Has normals (3 floats) */
-/** - 8 (FORMAT_SKINNED): Has bone indices/weights */
-/**  */
-/** # Returns */
-/** Mesh handle (>0) on success, 0 on failure. */
-NCZX_IMPORT uint32_t load_mesh(const float* data_ptr, uint32_t vertex_count, uint32_t format);
-
-/** Load an indexed mesh. */
-/**  */
-/** # Returns */
-/** Mesh handle (>0) on success, 0 on failure. */
-NCZX_IMPORT uint32_t load_mesh_indexed(const float* data_ptr, uint32_t vertex_count, const uint16_t* index_ptr, uint32_t index_count, uint32_t format);
-
-/** Load packed mesh data (power user API, f16/snorm16/unorm8 encoding). */
-NCZX_IMPORT uint32_t load_mesh_packed(const uint8_t* data_ptr, uint32_t vertex_count, uint32_t format);
-
-/** Load indexed packed mesh data (power user API). */
-NCZX_IMPORT uint32_t load_mesh_indexed_packed(const uint8_t* data_ptr, uint32_t vertex_count, const uint16_t* index_ptr, uint32_t index_count, uint32_t format);
-
-/** Draw a retained mesh with current transform and render state. */
-NCZX_IMPORT void draw_mesh(uint32_t handle);
-
-/** Generate a cube mesh. **Init-only.** */
-/**  */
-/** # Arguments */
-/** * `size_x`, `size_y`, `size_z` — Half-extents along each axis */
-NCZX_IMPORT uint32_t cube(float size_x, float size_y, float size_z);
-
-/** Generate a UV sphere mesh. **Init-only.** */
-/**  */
-/** # Arguments */
-/** * `radius` — Sphere radius */
-/** * `segments` — Longitudinal divisions (3-256) */
-/** * `rings` — Latitudinal divisions (2-256) */
-NCZX_IMPORT uint32_t sphere(float radius, uint32_t segments, uint32_t rings);
-
-/** Generate a cylinder or cone mesh. **Init-only.** */
-/**  */
-/** # Arguments */
-/** * `radius_bottom`, `radius_top` — Radii (>= 0.0, use 0 for cone tip) */
-/** * `height` — Cylinder height */
-/** * `segments` — Radial divisions (3-256) */
-NCZX_IMPORT uint32_t cylinder(float radius_bottom, float radius_top, float height, uint32_t segments);
-
-/** Generate a plane mesh on the XZ plane. **Init-only.** */
-/**  */
-/** # Arguments */
-/** * `size_x`, `size_z` — Dimensions */
-/** * `subdivisions_x`, `subdivisions_z` — Subdivisions (1-256) */
-NCZX_IMPORT uint32_t plane(float size_x, float size_z, uint32_t subdivisions_x, uint32_t subdivisions_z);
-
-/** Generate a torus (donut) mesh. **Init-only.** */
-/**  */
-/** # Arguments */
-/** * `major_radius` — Distance from center to tube center */
-/** * `minor_radius` — Tube radius */
-/** * `major_segments`, `minor_segments` — Segment counts (3-256) */
-NCZX_IMPORT uint32_t torus(float major_radius, float minor_radius, uint32_t major_segments, uint32_t minor_segments);
-
-/** Generate a capsule (pill shape) mesh. **Init-only.** */
-/**  */
-/** # Arguments */
-/** * `radius` — Capsule radius */
-/** * `height` — Height of cylindrical section (total = height + 2*radius) */
-/** * `segments` — Radial divisions (3-256) */
-/** * `rings` — Divisions per hemisphere (1-128) */
-NCZX_IMPORT uint32_t capsule(float radius, float height, uint32_t segments, uint32_t rings);
-
-/** Generate a UV sphere mesh with equirectangular texture mapping. **Init-only.** */
-NCZX_IMPORT uint32_t sphere_uv(float radius, uint32_t segments, uint32_t rings);
-
-/** Generate a plane mesh with UV mapping. **Init-only.** */
-NCZX_IMPORT uint32_t plane_uv(float size_x, float size_z, uint32_t subdivisions_x, uint32_t subdivisions_z);
-
-/** Generate a cube mesh with box-unwrapped UV mapping. **Init-only.** */
-NCZX_IMPORT uint32_t cube_uv(float size_x, float size_y, float size_z);
-
-/** Generate a cylinder mesh with cylindrical UV mapping. **Init-only.** */
-NCZX_IMPORT uint32_t cylinder_uv(float radius_bottom, float radius_top, float height, uint32_t segments);
-
-/** Generate a torus mesh with wrapped UV mapping. **Init-only.** */
-NCZX_IMPORT uint32_t torus_uv(float major_radius, float minor_radius, uint32_t major_segments, uint32_t minor_segments);
-
-/** Generate a capsule mesh with hybrid UV mapping. **Init-only.** */
-NCZX_IMPORT uint32_t capsule_uv(float radius, float height, uint32_t segments, uint32_t rings);
-
-/** Generate a sphere mesh with tangent data for normal mapping. **Init-only.** */
-/**  */
-/** Tangent follows direction of increasing U (longitude). */
-/** Use with material_normal() for normal-mapped rendering. */
-NCZX_IMPORT uint32_t sphere_tangent(float radius, uint32_t segments, uint32_t rings);
-
-/** Generate a plane mesh with tangent data for normal mapping. **Init-only.** */
-/**  */
-/** Tangent points along +X, bitangent along +Z, normal along +Y. */
-NCZX_IMPORT uint32_t plane_tangent(float size_x, float size_z, uint32_t subdivisions_x, uint32_t subdivisions_z);
-
-/** Generate a cube mesh with tangent data for normal mapping. **Init-only.** */
-/**  */
-/** Each face has correct tangent space for normal map sampling. */
-NCZX_IMPORT uint32_t cube_tangent(float size_x, float size_y, float size_z);
-
-/** Generate a torus mesh with tangent data for normal mapping. **Init-only.** */
-/**  */
-/** Tangent follows the major circle direction. */
-NCZX_IMPORT uint32_t torus_tangent(float major_radius, float minor_radius, uint32_t major_segments, uint32_t minor_segments);
-
-/** Draw triangles immediately (non-indexed). */
-/**  */
-/** # Arguments */
-/** * `vertex_count` — Must be multiple of 3 */
-/** * `format` — Vertex format flags (0-15) */
-NCZX_IMPORT void draw_triangles(const float* data_ptr, uint32_t vertex_count, uint32_t format);
-
-/** Draw indexed triangles immediately. */
-/**  */
-/** # Arguments */
-/** * `index_count` — Must be multiple of 3 */
-/** * `format` — Vertex format flags (0-15) */
-NCZX_IMPORT void draw_triangles_indexed(const float* data_ptr, uint32_t vertex_count, const uint16_t* index_ptr, uint32_t index_count, uint32_t format);
-
-/** Draw a billboard (camera-facing quad) with full texture. */
-/**  */
-/** Uses the color set by `set_color()`. */
-/**  */
-/** # Arguments */
-/** * `w`, `h` — Billboard size in world units */
-/** * `mode` — 1=spherical, 2=cylindrical Y, 3=cylindrical X, 4=cylindrical Z */
-NCZX_IMPORT void draw_billboard(float w, float h, uint32_t mode);
-
-/** Draw a billboard with a UV region from the texture. */
-/**  */
-/** Uses the color set by `set_color()`. */
-/**  */
-/** # Arguments */
-/** * `w`, `h` — Billboard size in world units */
-/** * `src_x`, `src_y`, `src_w`, `src_h` — UV region (0.0-1.0) */
-/** * `mode` — 1=spherical, 2=cylindrical Y, 3=cylindrical X, 4=cylindrical Z */
-NCZX_IMPORT void draw_billboard_region(float w, float h, float src_x, float src_y, float src_w, float src_h, uint32_t mode);
-
-/** Draw a sprite with the bound texture. */
-/**  */
-/** # Arguments */
-/** * `x`, `y` — Screen position in pixels (0,0 = top-left) */
-/** * `w`, `h` — Sprite size in pixels */
-NCZX_IMPORT void draw_sprite(float x, float y, float w, float h);
-
-/** Draw a region of a sprite sheet. */
-/**  */
-/** # Arguments */
-/** * `src_x`, `src_y`, `src_w`, `src_h` — UV region (0.0-1.0) */
-NCZX_IMPORT void draw_sprite_region(float x, float y, float w, float h, float src_x, float src_y, float src_w, float src_h);
-
-/** Draw a sprite with full control (rotation, origin, UV region). */
-/**  */
-/** # Arguments */
-/** * `origin_x`, `origin_y` — Rotation pivot point (in pixels from sprite top-left) */
-/** * `angle_deg` — Rotation angle in degrees (clockwise) */
-NCZX_IMPORT void draw_sprite_ex(float x, float y, float w, float h, float src_x, float src_y, float src_w, float src_h, float origin_x, float origin_y, float angle_deg);
-
-/** Draw a solid color rectangle. */
-NCZX_IMPORT void draw_rect(float x, float y, float w, float h);
-
-/** Draw text with the current font. */
-/**  */
-/** # Arguments */
-/** * `ptr` — Pointer to UTF-8 string data */
-/** * `len` — Length in bytes */
-/** * `size` — Font size in pixels */
-NCZX_IMPORT void draw_text(const uint8_t* ptr, uint32_t len, float x, float y, float size);
-
-/** Measure the width of text when rendered. */
-/**  */
-/** # Arguments */
-/** * `ptr` — Pointer to UTF-8 string data */
-/** * `len` — Length in bytes */
-/** * `size` — Font size in pixels */
-/**  */
-/** # Returns */
-/** Width in pixels that the text would occupy when rendered. */
-NCZX_IMPORT float text_width(const uint8_t* ptr, uint32_t len, float size);
-
-/** Draw a line between two points. */
-/**  */
-/** # Arguments */
-/** * `x1`, `y1` — Start point in screen pixels */
-/** * `x2`, `y2` — End point in screen pixels */
-/** * `thickness` — Line thickness in pixels */
-NCZX_IMPORT void draw_line(float x1, float y1, float x2, float y2, float thickness);
-
-/** Draw a filled circle. */
-/**  */
-/** # Arguments */
-/** * `x`, `y` — Center position in screen pixels */
-/** * `radius` — Circle radius in pixels */
-/**  */
-/** Rendered as a 16-segment triangle fan. */
-NCZX_IMPORT void draw_circle(float x, float y, float radius);
-
-/** Draw a circle outline. */
-/**  */
-/** # Arguments */
-/** * `x`, `y` — Center position in screen pixels */
-/** * `radius` — Circle radius in pixels */
-/** * `thickness` — Line thickness in pixels */
-/**  */
-/** Rendered as 16 line segments. */
-NCZX_IMPORT void draw_circle_outline(float x, float y, float radius, float thickness);
-
-/** Load a fixed-width bitmap font. */
-/**  */
-/** # Arguments */
-/** * `texture` — Texture atlas handle */
-/** * `char_width`, `char_height` — Glyph dimensions in pixels */
-/** * `first_codepoint` — Unicode codepoint of first glyph */
-/** * `char_count` — Number of glyphs */
-/**  */
-/** # Returns */
-/** Font handle (use with `font_bind()`). */
-NCZX_IMPORT uint32_t load_font(uint32_t texture, uint32_t char_width, uint32_t char_height, uint32_t first_codepoint, uint32_t char_count);
-
-/** Load a variable-width bitmap font. */
-/**  */
-/** # Arguments */
-/** * `widths_ptr` — Pointer to array of char_count u8 widths */
-NCZX_IMPORT uint32_t load_font_ex(uint32_t texture, const uint8_t* widths_ptr, uint32_t char_height, uint32_t first_codepoint, uint32_t char_count);
-
-/** Bind a font for subsequent draw_text() calls. */
-/**  */
-/** Pass 0 for the built-in 8×8 monospace font. */
-NCZX_IMPORT void font_bind(uint32_t font_handle);
-
-/** Bind a matcap texture to a slot (Mode 1 only). */
-/**  */
-/** # Arguments */
-/** * `slot` — Matcap slot (1-3) */
-NCZX_IMPORT void matcap_set(uint32_t slot, uint32_t texture);
-
-/** Store an EPU configuration (128-byte) for the current `environment_index(...)`. */
-/**  */
-/** Reads a 128-byte (8 x 128-bit = 16 x u64) environment configuration from WASM memory */
-/** and stores it for the current render frame. The EPU compute pass runs automatically before */
-/** rendering to build environment textures (EnvRadiance + SH9) for any referenced `env_id`. */
-/**  */
-/** # Arguments */
-/** * `config_ptr` — Pointer to 16 u64 values (128 bytes total) in WASM memory */
-/**  */
-/** # Configuration Layout */
-/** Each environment is exactly 8 x 128-bit instructions (each stored as [hi, lo]): */
-/** - Slots 0-3: Enclosure/bounds layers (`0x01..0x07`) */
-/** - Slots 4-7: Radiance/feature layers (`0x08..0x1F`) */
-/**  */
-/** # Instruction Bit Layout (per 128-bit = 2 x u64) */
-/** ```text */
-/** u64 hi [bits 127..64]: */
-/** 63..59  opcode     (5)   Which algorithm to run (32 opcodes) */
-/** 58..56  region     (3)   Bitfield: SKY=0b100, WALLS=0b010, FLOOR=0b001 */
-/** 55..53  blend      (3)   8 blend modes */
-/** 52..48  meta5      (5)   (domain_id<<3)|variant_id; use 0 when unused */
-/** 47..24  color_a    (24)  RGB24 primary color */
-/** 23..0   color_b    (24)  RGB24 secondary color */
-/**  */
-/** u64 lo [bits 63..0]: */
-/** 63..56  intensity  (8)   Layer brightness */
-/** 55..48  param_a    (8)   Opcode-specific */
-/** 47..40  param_b    (8)   Opcode-specific */
-/** 39..32  param_c    (8)   Opcode-specific */
-/** 31..24  param_d    (8)   Opcode-specific */
-/** 23..8   direction  (16)  Octahedral-encoded direction */
-/** 7..4    alpha_a    (4)   color_a alpha (0-15) */
-/** 3..0    alpha_b    (4)   color_b alpha (0-15) */
-/** ``` */
-/**  */
-/** # Opcodes (common) */
-/** - 0x00: NOP (disable layer) */
-/** - 0x01: RAMP (enclosure gradient) */
-/** - 0x02: SECTOR (enclosure modifier) */
-/** - 0x03: SILHOUETTE (enclosure modifier) */
-/** - 0x04: SPLIT (enclosure source) */
-/** - 0x05: CELL (enclosure source) */
-/** - 0x06: PATCHES (enclosure source) */
-/** - 0x07: APERTURE (enclosure modifier) */
-/** - 0x08: DECAL (sharp SDF shape) */
-/** - 0x09: GRID (repeating lines/panels) */
-/** - 0x0A: SCATTER (point field) */
-/** - 0x0B: FLOW (animated noise/streaks) */
-/** - 0x0C..0x13: radiance opcodes (TRACE/VEIL/ATMOSPHERE/PLANE/CELESTIAL/PORTAL/LOBE_RADIANCE/BAND_RADIANCE) */
-/**  */
-/** # Blend Modes */
-/** - 0: ADD (dst + src * a) */
-/** - 1: MULTIPLY (dst * mix(1, src, a)) */
-/** - 2: MAX (max(dst, src * a)) */
-/** - 3: LERP (mix(dst, src, a)) */
-/** - 4: SCREEN (1 - (1-dst)*(1-src*a)) */
-/** - 5: HSV_MOD (HSV shift dst by src) */
-/** - 6: MIN (min(dst, src * a)) */
-/** - 7: OVERLAY (Photoshop-style overlay) */
-/**  */
-/** Store the environment configuration for the current `environment_index(...)`. */
-/**  */
-/** Use this to set the active environment config for this frame without */
-/** doing a fullscreen background draw. */
-/**  */
-/** # Usage */
-/** ```rust,ignore */
-/** fn render() { */
-/** // Set environment configuration at the start of the pass/frame */
-/** epu_set(config.as_ptr()); */
-/**  */
-/** // Draw scene geometry */
-/** draw_mesh(terrain); */
-/** draw_mesh(player); */
-/**  */
-/** // Draw environment background last (fills only background pixels) */
-/** draw_epu(); */
-/** } */
-/** ``` */
-/**  */
-/** # Notes */
-/** - The EPU compute pass runs automatically before rendering */
-/** - To set up multiple environments in a frame: call `environment_index(env_id)`, then `epu_set(config_ptr)` */
-/** - Determinism: the EPU has no host-managed time; animate by changing instruction parameters from the game */
-NCZX_IMPORT void epu_set(const uint64_t* config_ptr);
-
-/** Draw the environment background for the current viewport/pass. */
-/**  */
-/** This draws a fullscreen background using the config selected by */
-/** `environment_index(...)` (and previously provided via `epu_set(...)`). */
-/**  */
-/** For split-screen / multi-pass, set `viewport(...)` and call `draw_epu()` */
-/** once per viewport/pass where you want an environment background. */
-NCZX_IMPORT void draw_epu(void);
-
-/** Bind an MRE texture (Metallic-Roughness-Emissive) to slot 1. */
-NCZX_IMPORT void material_mre(uint32_t texture);
-
-/** Bind an albedo texture to slot 0. */
-NCZX_IMPORT void material_albedo(uint32_t texture);
-
-/** Bind a normal map texture to slot 3. */
-/**  */
-/** # Arguments */
-/** * `texture` — Handle to a BC5 or RGBA normal map texture */
-/**  */
-/** Normal maps perturb surface normals for detailed lighting without extra geometry. */
-/** Requires mesh with tangent data (FORMAT_TANGENT) and UVs. */
-/** Works in all lit modes (0=Lambert, 2=PBR, 3=Hybrid) and Mode 1 (Matcap). */
-NCZX_IMPORT void material_normal(uint32_t texture);
-
-/** Skip normal map sampling (use vertex normal instead). */
-/**  */
-/** # Arguments */
-/** * `skip` — 1 to skip normal map, 0 to use normal map (default) */
-/**  */
-/** When a mesh has tangent data, normal mapping is enabled by default. */
-/** Use this flag to opt out temporarily for debugging or artistic control. */
-NCZX_IMPORT void skip_normal_map(uint32_t skip);
-
-/** Set material metallic value (0.0 = dielectric, 1.0 = metal). */
-NCZX_IMPORT void material_metallic(float value);
-
-/** Set material roughness value (0.0 = smooth, 1.0 = rough). */
-NCZX_IMPORT void material_roughness(float value);
-
-/** Set material emissive intensity (0.0 = no emission, >1.0 for HDR). */
-NCZX_IMPORT void material_emissive(float value);
-
-/** Set rim lighting parameters. */
-/**  */
-/** # Arguments */
-/** * `intensity` — Rim brightness (0.0-1.0) */
-/** * `power` — Falloff sharpness (0.0-32.0, higher = tighter) */
-NCZX_IMPORT void material_rim(float intensity, float power);
-
-/** Enable/disable uniform color override. */
-/**  */
-/** When enabled, uses the last set_color() value for all subsequent draws, */
-/** overriding vertex colors and material albedo. */
-/**  */
-/** # Arguments */
-/** * `enabled` — 1 to enable, 0 to disable */
-NCZX_IMPORT void use_uniform_color(uint32_t enabled);
-
-/** Enable/disable uniform metallic override. */
-/**  */
-/** When enabled, uses the last material_metallic() value for all subsequent draws, */
-/** overriding per-vertex or per-material metallic values. */
-/**  */
-/** # Arguments */
-/** * `enabled` — 1 to enable, 0 to disable */
-NCZX_IMPORT void use_uniform_metallic(uint32_t enabled);
-
-/** Enable/disable uniform roughness override. */
-/**  */
-/** When enabled, uses the last material_roughness() value for all subsequent draws, */
-/** overriding per-vertex or per-material roughness values. */
-/**  */
-/** # Arguments */
-/** * `enabled` — 1 to enable, 0 to disable */
-NCZX_IMPORT void use_uniform_roughness(uint32_t enabled);
-
-/** Enable/disable uniform emissive override. */
-/**  */
-/** When enabled, uses the last material_emissive() value for all subsequent draws, */
-/** overriding per-vertex or per-material emissive values. */
-/**  */
-/** # Arguments */
-/** * `enabled` — 1 to enable, 0 to disable */
-NCZX_IMPORT void use_uniform_emissive(uint32_t enabled);
-
-/** Set shininess (Mode 3 alias for roughness). */
-NCZX_IMPORT void material_shininess(float value);
-
-/** Set specular color (Mode 3 only). */
-/**  */
-/** # Arguments */
-/** * `color` — Specular color (0xRRGGBBAA, alpha ignored) */
-NCZX_IMPORT void material_specular(uint32_t color);
-
-/** Set light direction (and enable the light). */
-/**  */
-/** # Arguments */
-/** * `index` — Light index (0-3) */
-/** * `x`, `y`, `z` — Direction rays travel (from light toward surface) */
-/**  */
-/** For a light from above, use (0, -1, 0). */
-NCZX_IMPORT void light_set(uint32_t index, float x, float y, float z);
-
-/** Set light color. */
-/**  */
-/** # Arguments */
-/** * `color` — Light color (0xRRGGBBAA, alpha ignored) */
-NCZX_IMPORT void light_color(uint32_t index, uint32_t color);
-
-/** Set light intensity multiplier. */
-/**  */
-/** # Arguments */
-/** * `intensity` — Typically 0.0-10.0 */
-NCZX_IMPORT void light_intensity(uint32_t index, float intensity);
-
-/** Enable a light. */
-NCZX_IMPORT void light_enable(uint32_t index);
-
-/** Disable a light (preserves settings for re-enabling). */
-NCZX_IMPORT void light_disable(uint32_t index);
-
-/** Convert a light to a point light at world position. */
-/**  */
-/** # Arguments */
-/** * `index` — Light index (0-3) */
-/** * `x`, `y`, `z` — World-space position */
-/**  */
-/** Enables the light automatically. Default range is 10.0 units. */
-NCZX_IMPORT void light_set_point(uint32_t index, float x, float y, float z);
-
-/** Set point light falloff distance. */
-/**  */
-/** # Arguments */
-/** * `index` — Light index (0-3) */
-/** * `range` — Distance at which light reaches zero intensity */
-/**  */
-/** Only affects point lights (ignored for directional). */
-NCZX_IMPORT void light_range(uint32_t index, float range);
-
-/** Load a skeleton's inverse bind matrices to GPU. */
-/**  */
-/** Call once during `init()` after loading skinned meshes. */
-/** The inverse bind matrices transform vertices from model space */
-/** to bone-local space at bind time. */
-/**  */
-/** # Arguments */
-/** * `inverse_bind_ptr` — Pointer to array of 3×4 matrices (12 floats per bone, column-major) */
-/** * `bone_count` — Number of bones (max 256) */
-/**  */
-/** # Returns */
-/** Skeleton handle (>0) on success, 0 on error. */
-NCZX_IMPORT uint32_t load_skeleton(const float* inverse_bind_ptr, uint32_t bone_count);
-
-/** Bind a skeleton for subsequent skinned mesh rendering. */
-/**  */
-/** When bound, `set_bones()` expects model-space transforms and the GPU */
-/** automatically applies the inverse bind matrices. */
-/**  */
-/** # Arguments */
-/** * `skeleton` — Skeleton handle from `load_skeleton()`, or 0 to unbind (raw mode) */
-/**  */
-/** # Behavior */
-/** - skeleton > 0: Enable inverse bind mode. `set_bones()` receives model transforms. */
-/** - skeleton = 0: Disable inverse bind mode (raw). `set_bones()` receives final matrices. */
-NCZX_IMPORT void skeleton_bind(uint32_t skeleton);
-
-/** Set bone transform matrices for skeletal animation. */
-/**  */
-/** # Arguments */
-/** * `matrices_ptr` — Pointer to array of 3×4 matrices (12 floats per bone, column-major) */
-/** * `count` — Number of bones (max 256) */
-/**  */
-/** Each bone matrix is 12 floats in column-major order: */
-/** ```text */
-/** [col0.x, col0.y, col0.z]  // X axis */
-/** [col1.x, col1.y, col1.z]  // Y axis */
-/** [col2.x, col2.y, col2.z]  // Z axis */
-/** [tx,     ty,     tz    ]  // translation */
-/** // implicit 4th row [0, 0, 0, 1] */
-/** ``` */
-NCZX_IMPORT void set_bones(const float* matrices_ptr, uint32_t count);
-
-/** Set bone transform matrices for skeletal animation using 4x4 matrices. */
-/**  */
-/** Alternative to `set_bones()` that accepts full 4x4 matrices instead of 3x4. */
-/**  */
-/** # Arguments */
-/** * `matrices_ptr` — Pointer to array of 4×4 matrices (16 floats per bone, column-major) */
-/** * `count` — Number of bones (max 256) */
-/**  */
-/** Each bone matrix is 16 floats in column-major order: */
-/** ```text */
-/** [col0.x, col0.y, col0.z, col0.w]  // X axis + w */
-/** [col1.x, col1.y, col1.z, col1.w]  // Y axis + w */
-/** [col2.x, col2.y, col2.z, col2.w]  // Z axis + w */
-/** [tx,     ty,     tz,     tw    ]  // translation + w */
-/** ``` */
-NCZX_IMPORT void set_bones_4x4(const float* matrices_ptr, uint32_t count);
 
 /** Load keyframe animation data from WASM memory. */
 /**  */
@@ -1041,166 +93,9 @@ NCZX_IMPORT void keyframe_read(uint32_t handle, uint32_t index, uint8_t* out_ptr
 /** - Frame index out of bounds */
 NCZX_IMPORT void keyframe_bind(uint32_t handle, uint32_t index);
 
-/** Load raw PCM sound data (22.05kHz, 16-bit signed, mono). */
-/**  */
-/** Must be called during `init()`. */
-/**  */
-/** # Arguments */
-/** * `data_ptr` — Pointer to i16 PCM samples */
-/** * `byte_len` — Length in bytes (must be even) */
-/**  */
-/** # Returns */
-/** Sound handle for use with playback functions. */
-NCZX_IMPORT uint32_t load_sound(const int16_t* data_ptr, uint32_t byte_len);
-
-/** Play sound on next available channel (fire-and-forget). */
-/**  */
-/** # Arguments */
-/** * `volume` — 0.0 to 1.0 */
-/** * `pan` — -1.0 (left) to 1.0 (right), 0.0 = center */
-NCZX_IMPORT void play_sound(uint32_t sound, float volume, float pan);
-
-/** Play sound on a specific channel (for managed/looping audio). */
-/**  */
-/** # Arguments */
-/** * `channel` — Channel index (0-15) */
-/** * `looping` — 1 = loop, 0 = play once */
-NCZX_IMPORT void channel_play(uint32_t channel, uint32_t sound, float volume, float pan, uint32_t looping);
-
-/** Update channel parameters (call every frame for positional audio). */
-NCZX_IMPORT void channel_set(uint32_t channel, float volume, float pan);
-
-/** Stop a channel. */
-NCZX_IMPORT void channel_stop(uint32_t channel);
-
-/** Load a tracker module from ROM data pack by ID. */
-/**  */
-/** Must be called during `init()`. */
-/** Returns a handle with bit 31 set (tracker handle). */
-/**  */
-/** # Arguments */
-/** * `id_ptr` — Pointer to tracker ID string */
-/** * `id_len` — Length of tracker ID string */
-/**  */
-/** # Returns */
-/** Tracker handle (>0) on success, 0 on failure. */
-NCZX_IMPORT uint32_t rom_tracker(const uint8_t* id_ptr, uint32_t id_len);
-
-/** Load a tracker module from raw XM data. */
-/**  */
-/** Must be called during `init()`. */
-/** Returns a handle with bit 31 set (tracker handle). */
-/**  */
-/** # Arguments */
-/** * `data_ptr` — Pointer to XM file data */
-/** * `data_len` — Length of XM data in bytes */
-/**  */
-/** # Returns */
-/** Tracker handle (>0) on success, 0 on failure. */
-NCZX_IMPORT uint32_t load_tracker(const uint8_t* data_ptr, uint32_t data_len);
-
-/** Play music (PCM sound or tracker module). */
-/**  */
-/** Automatically stops any currently playing music of the other type. */
-/** Handle type is detected by bit 31 (0=PCM, 1=tracker). */
-/**  */
-/** # Arguments */
-/** * `handle` — Sound handle (from load_sound) or tracker handle (from rom_tracker) */
-/** * `volume` — 0.0 to 1.0 */
-/** * `looping` — 1 = loop, 0 = play once */
-NCZX_IMPORT void music_play(uint32_t handle, float volume, uint32_t looping);
-
-/** Stop music (both PCM and tracker). */
-NCZX_IMPORT void music_stop(void);
-
-/** Pause or resume music (tracker only, no-op for PCM). */
-/**  */
-/** # Arguments */
-/** * `paused` — 1 = pause, 0 = resume */
-NCZX_IMPORT void music_pause(uint32_t paused);
-
-/** Set music volume (works for both PCM and tracker). */
-/**  */
-/** # Arguments */
-/** * `volume` — 0.0 to 1.0 */
-NCZX_IMPORT void music_set_volume(float volume);
-
-/** Check if music is currently playing. */
-/**  */
-/** # Returns */
-/** 1 if playing (and not paused), 0 otherwise. */
-NCZX_IMPORT uint32_t music_is_playing(void);
-
-/** Get current music type. */
-/**  */
-/** # Returns */
-/** 0 = none, 1 = PCM, 2 = tracker */
-NCZX_IMPORT uint32_t music_type(void);
-
-/** Jump to a specific position (tracker only, no-op for PCM). */
-/**  */
-/** Use for dynamic music systems (e.g., jump to outro pattern). */
-/**  */
-/** # Arguments */
-/** * `order` — Order position (0-based) */
-/** * `row` — Row within the pattern (0-based) */
-NCZX_IMPORT void music_jump(uint32_t order, uint32_t row);
-
-/** Get current music position. */
-/**  */
-/** For tracker: (order << 16) | row */
-/** For PCM: sample position */
-/**  */
-/** # Returns */
-/** Position value (format depends on music type). */
-NCZX_IMPORT uint32_t music_position(void);
-
-/** Get music length. */
-/**  */
-/** For tracker: number of orders in the song. */
-/** For PCM: number of samples. */
-/**  */
-/** # Arguments */
-/** * `handle` — Music handle (PCM or tracker) */
-/**  */
-/** # Returns */
-/** Length value. */
-NCZX_IMPORT uint32_t music_length(uint32_t handle);
-
-/** Set music speed (tracker only, ticks per row). */
-/**  */
-/** # Arguments */
-/** * `speed` — 1-31 (XM default is 6) */
-NCZX_IMPORT void music_set_speed(uint32_t speed);
-
-/** Set music tempo (tracker only, BPM). */
-/**  */
-/** # Arguments */
-/** * `bpm` — 32-255 (XM default is 125) */
-NCZX_IMPORT void music_set_tempo(uint32_t bpm);
-
-/** Get music info. */
-/**  */
-/** For tracker: (num_channels << 24) | (num_patterns << 16) | (num_instruments << 8) | song_length */
-/** For PCM: (sample_rate << 16) | (channels << 8) | bits_per_sample */
-/**  */
-/** # Arguments */
-/** * `handle` — Music handle (PCM or tracker) */
-/**  */
-/** # Returns */
-/** Packed info value. */
-NCZX_IMPORT uint32_t music_info(uint32_t handle);
-
-/** Get music name (tracker only, returns 0 for PCM). */
-/**  */
-/** # Arguments */
-/** * `handle` — Music handle */
-/** * `out_ptr` — Pointer to output buffer */
-/** * `max_len` — Maximum bytes to write */
-/**  */
-/** # Returns */
-/** Actual length written (0 if PCM or invalid handle). */
-NCZX_IMPORT uint32_t music_name(uint32_t handle, uint8_t* out_ptr, uint32_t max_len);
+// =============================================================================
+// ROM Data Pack API (init-only)
+// =============================================================================
 
 /** Load a texture from ROM data pack by ID. */
 /**  */
@@ -1255,27 +150,66 @@ NCZX_IMPORT uint32_t rom_data_len(const uint8_t* id_ptr, uint32_t id_len);
 /** Bytes written on success. Traps on failure. */
 NCZX_IMPORT uint32_t rom_data(const uint8_t* id_ptr, uint32_t id_len, const uint8_t* dst_ptr, uint32_t max_len);
 
-/** Load a mesh from .nczxmesh binary format. */
+// =============================================================================
+// Audio Functions
+// =============================================================================
+
+/** Load raw PCM sound data (22.05kHz, 16-bit signed, mono). */
+/**  */
+/** Must be called during `init()`. */
 /**  */
 /** # Arguments */
-/** * `data_ptr` — Pointer to .nczxmesh binary data */
-/** * `data_len` — Length of the data in bytes */
+/** * `data_ptr` — Pointer to i16 PCM samples */
+/** * `byte_len` — Length in bytes (must be even) */
 /**  */
 /** # Returns */
-/** Mesh handle (>0) on success, 0 on failure. */
-NCZX_IMPORT uint32_t load_zmesh(const uint8_t* data_ptr, uint32_t data_len);
+/** Sound handle for use with playback functions. */
+NCZX_IMPORT uint32_t load_sound(const int16_t* data_ptr, uint32_t byte_len);
 
-/** Load a texture from .nczxtex binary format. */
+/** Play sound on next available channel (fire-and-forget). */
 /**  */
-/** # Returns */
-/** Texture handle (>0) on success, 0 on failure. */
-NCZX_IMPORT uint32_t load_ztex(const uint8_t* data_ptr, uint32_t data_len);
+/** # Arguments */
+/** * `volume` — 0.0 to 1.0 */
+/** * `pan` — -1.0 (left) to 1.0 (right), 0.0 = center */
+NCZX_IMPORT void play_sound(uint32_t sound, float volume, float pan);
 
-/** Load a sound from .nczxsnd binary format. */
+/** Play sound on a specific channel (for managed/looping audio). */
 /**  */
-/** # Returns */
-/** Sound handle (>0) on success, 0 on failure. */
-NCZX_IMPORT uint32_t load_zsound(const uint8_t* data_ptr, uint32_t data_len);
+/** # Arguments */
+/** * `channel` — Channel index (0-15) */
+/** * `looping` — 1 = loop, 0 = play once */
+NCZX_IMPORT void channel_play(uint32_t channel, uint32_t sound, float volume, float pan, uint32_t looping);
+
+/** Update channel parameters (call every frame for positional audio). */
+NCZX_IMPORT void channel_set(uint32_t channel, float volume, float pan);
+
+/** Stop a channel. */
+NCZX_IMPORT void channel_stop(uint32_t channel);
+
+// =============================================================================
+// Camera Functions
+// =============================================================================
+
+/** Set the camera position and target (look-at point). */
+/**  */
+/** Uses a Y-up, right-handed coordinate system. */
+NCZX_IMPORT void camera_set(float x, float y, float z, float target_x, float target_y, float target_z);
+
+/** Set the camera field of view. */
+/**  */
+/** # Arguments */
+/** * `fov_degrees` — Field of view in degrees (typically 45-90, default 60) */
+NCZX_IMPORT void camera_fov(float fov_degrees);
+
+/** Push a custom view matrix (16 floats, column-major order). */
+NCZX_IMPORT void push_view_matrix(float m0, float m1, float m2, float m3, float m4, float m5, float m6, float m7, float m8, float m9, float m10, float m11, float m12, float m13, float m14, float m15);
+
+/** Push a custom projection matrix (16 floats, column-major order). */
+NCZX_IMPORT void push_projection_matrix(float m0, float m1, float m2, float m3, float m4, float m5, float m6, float m7, float m8, float m9, float m10, float m11, float m12, float m13, float m14, float m15);
+
+// =============================================================================
+// Debug Inspection System
+// =============================================================================
 
 /** Register an i8 value for debug inspection. */
 NCZX_IMPORT void debug_register_i8(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
@@ -1438,6 +372,1157 @@ NCZX_IMPORT int32_t debug_is_paused(void);
 NCZX_IMPORT float debug_get_time_scale(void);
 
 // =============================================================================
+// Immediate Mode 3D Drawing & Billboards
+// =============================================================================
+
+/** Draw triangles immediately (non-indexed). */
+/**  */
+/** # Arguments */
+/** * `vertex_count` — Must be multiple of 3 */
+/** * `format` — Vertex format flags (0-15) */
+NCZX_IMPORT void draw_triangles(const float* data_ptr, uint32_t vertex_count, uint32_t format);
+
+/** Draw indexed triangles immediately. */
+/**  */
+/** # Arguments */
+/** * `index_count` — Must be multiple of 3 */
+/** * `format` — Vertex format flags (0-15) */
+NCZX_IMPORT void draw_triangles_indexed(const float* data_ptr, uint32_t vertex_count, const uint16_t* index_ptr, uint32_t index_count, uint32_t format);
+
+/** Draw a billboard (camera-facing quad) with full texture. */
+/**  */
+/** Uses the color set by `set_color()`. */
+/**  */
+/** # Arguments */
+/** * `w`, `h` — Billboard size in world units */
+/** * `mode` — 1=spherical, 2=cylindrical Y, 3=cylindrical X, 4=cylindrical Z */
+NCZX_IMPORT void draw_billboard(float w, float h, uint32_t mode);
+
+/** Draw a billboard with a UV region from the texture. */
+/**  */
+/** Uses the color set by `set_color()`. */
+/**  */
+/** # Arguments */
+/** * `w`, `h` — Billboard size in world units */
+/** * `src_x`, `src_y`, `src_w`, `src_h` — UV region (0.0-1.0) */
+/** * `mode` — 1=spherical, 2=cylindrical Y, 3=cylindrical X, 4=cylindrical Z */
+NCZX_IMPORT void draw_billboard_region(float w, float h, float src_x, float src_y, float src_w, float src_h, uint32_t mode);
+
+// =============================================================================
+// Embedded Asset API
+// =============================================================================
+
+/** Load a mesh from .nczxmesh binary format. */
+/**  */
+/** # Arguments */
+/** * `data_ptr` — Pointer to .nczxmesh binary data */
+/** * `data_len` — Length of the data in bytes */
+/**  */
+/** # Returns */
+/** Mesh handle (>0) on success, 0 on failure. */
+NCZX_IMPORT uint32_t load_zmesh(const uint8_t* data_ptr, uint32_t data_len);
+
+/** Load a texture from .nczxtex binary format. */
+/**  */
+/** # Returns */
+/** Texture handle (>0) on success, 0 on failure. */
+NCZX_IMPORT uint32_t load_ztex(const uint8_t* data_ptr, uint32_t data_len);
+
+/** Load a sound from .nczxsnd binary format. */
+/**  */
+/** # Returns */
+/** Sound handle (>0) on success, 0 on failure. */
+NCZX_IMPORT uint32_t load_zsound(const uint8_t* data_ptr, uint32_t data_len);
+
+// =============================================================================
+// Environment Processing Unit (EPU) — Instruction-Based API
+// =============================================================================
+
+/** Store an EPU configuration (128-byte) for the current `environment_index(...)`. */
+/**  */
+/** Reads a 128-byte (8 x 128-bit = 16 x u64) environment configuration from WASM memory */
+/** and stores it for the current render frame. The EPU compute pass runs automatically before */
+/** rendering to build environment textures (EnvRadiance + SH9) for any referenced `env_id`. */
+/**  */
+/** # Arguments */
+/** * `config_ptr` — Pointer to 16 u64 values (128 bytes total) in WASM memory */
+/**  */
+/** # Configuration Layout */
+/** Each environment is exactly 8 x 128-bit instructions (each stored as [hi, lo]): */
+/** - Slots 0-3: Enclosure/bounds layers (`0x01..0x07`) */
+/** - Slots 4-7: Radiance/feature layers (`0x08..0x1F`) */
+/**  */
+/** # Instruction Bit Layout (per 128-bit = 2 x u64) */
+/** ```text */
+/** u64 hi [bits 127..64]: */
+/** 63..59  opcode     (5)   Which algorithm to run (32 opcodes) */
+/** 58..56  region     (3)   Bitfield: SKY=0b100, WALLS=0b010, FLOOR=0b001 */
+/** 55..53  blend      (3)   8 blend modes */
+/** 52..48  meta5      (5)   (domain_id<<3)|variant_id; use 0 when unused */
+/** 47..24  color_a    (24)  RGB24 primary color */
+/** 23..0   color_b    (24)  RGB24 secondary color */
+/**  */
+/** u64 lo [bits 63..0]: */
+/** 63..56  intensity  (8)   Layer brightness */
+/** 55..48  param_a    (8)   Opcode-specific */
+/** 47..40  param_b    (8)   Opcode-specific */
+/** 39..32  param_c    (8)   Opcode-specific */
+/** 31..24  param_d    (8)   Opcode-specific */
+/** 23..8   direction  (16)  Octahedral-encoded direction */
+/** 7..4    alpha_a    (4)   color_a alpha (0-15) */
+/** 3..0    alpha_b    (4)   color_b alpha (0-15) */
+/** ``` */
+/**  */
+/** # Opcodes (common) */
+/** - 0x00: NOP (disable layer) */
+/** - 0x01: RAMP (enclosure gradient) */
+/** - 0x02: SECTOR (enclosure modifier) */
+/** - 0x03: SILHOUETTE (enclosure modifier) */
+/** - 0x04: SPLIT (enclosure source) */
+/** - 0x05: CELL (enclosure source) */
+/** - 0x06: PATCHES (enclosure source) */
+/** - 0x07: APERTURE (enclosure modifier) */
+/** - 0x08: DECAL (sharp SDF shape) */
+/** - 0x09: GRID (repeating lines/panels) */
+/** - 0x0A: SCATTER (point field) */
+/** - 0x0B: FLOW (animated noise/streaks) */
+/** - 0x0C..0x13: radiance opcodes (TRACE/VEIL/ATMOSPHERE/PLANE/CELESTIAL/PORTAL/LOBE_RADIANCE/BAND_RADIANCE) */
+/**  */
+/** # Blend Modes */
+/** - 0: ADD (dst + src * a) */
+/** - 1: MULTIPLY (dst * mix(1, src, a)) */
+/** - 2: MAX (max(dst, src * a)) */
+/** - 3: LERP (mix(dst, src, a)) */
+/** - 4: SCREEN (1 - (1-dst)*(1-src*a)) */
+/** - 5: HSV_MOD (HSV shift dst by src) */
+/** - 6: MIN (min(dst, src * a)) */
+/** - 7: OVERLAY (Photoshop-style overlay) */
+/**  */
+/** Store the environment configuration for the current `environment_index(...)`. */
+/**  */
+/** Use this to set the active environment config for this frame without */
+/** doing a fullscreen background draw. */
+/**  */
+/** # Usage */
+/** ```rust,ignore */
+/** fn render() { */
+/** // Set environment configuration at the start of the pass/frame */
+/** epu_set(config.as_ptr()); */
+/**  */
+/** // Draw scene geometry */
+/** draw_mesh(terrain); */
+/** draw_mesh(player); */
+/**  */
+/** // Draw environment background last (fills only background pixels) */
+/** draw_epu(); */
+/** } */
+/** ``` */
+/**  */
+/** # Notes */
+/** - The EPU compute pass runs automatically before rendering */
+/** - To set up multiple environments in a frame: call `environment_index(env_id)`, then `epu_set(config_ptr)` */
+/** - Determinism: the EPU has no host-managed time; animate by changing instruction parameters from the game */
+NCZX_IMPORT void epu_set(const uint64_t* config_ptr);
+
+/** Draw the environment background for the current viewport/pass. */
+/**  */
+/** This draws a fullscreen background using the config selected by */
+/** `environment_index(...)` (and previously provided via `epu_set(...)`). */
+/**  */
+/** For split-screen / multi-pass, set `viewport(...)` and call `draw_epu()` */
+/** once per viewport/pass where you want an environment background. */
+NCZX_IMPORT void draw_epu(void);
+
+// =============================================================================
+// Input Functions
+// =============================================================================
+
+/** Check if a button is currently held. */
+/**  */
+/** # Button indices */
+/** 0=UP, 1=DOWN, 2=LEFT, 3=RIGHT, 4=A, 5=B, 6=X, 7=Y, */
+/** 8=L1, 9=R1, 10=L3, 11=R3, 12=START, 13=SELECT */
+/**  */
+/** # Returns */
+/** 1 if held, 0 otherwise. */
+NCZX_IMPORT uint32_t button_held(uint32_t player, uint32_t button);
+
+/** Check if a button was just pressed this tick. */
+/**  */
+/** # Returns */
+/** 1 if just pressed, 0 otherwise. */
+NCZX_IMPORT uint32_t button_pressed(uint32_t player, uint32_t button);
+
+/** Check if a button was just released this tick. */
+/**  */
+/** # Returns */
+/** 1 if just released, 0 otherwise. */
+NCZX_IMPORT uint32_t button_released(uint32_t player, uint32_t button);
+
+/** Get bitmask of all held buttons. */
+NCZX_IMPORT uint32_t buttons_held(uint32_t player);
+
+/** Get bitmask of all buttons just pressed this tick. */
+NCZX_IMPORT uint32_t buttons_pressed(uint32_t player);
+
+/** Get bitmask of all buttons just released this tick. */
+NCZX_IMPORT uint32_t buttons_released(uint32_t player);
+
+/** Get left stick X axis value (-1.0 to 1.0). */
+NCZX_IMPORT float left_stick_x(uint32_t player);
+
+/** Get left stick Y axis value (-1.0 to 1.0). */
+NCZX_IMPORT float left_stick_y(uint32_t player);
+
+/** Get right stick X axis value (-1.0 to 1.0). */
+NCZX_IMPORT float right_stick_x(uint32_t player);
+
+/** Get right stick Y axis value (-1.0 to 1.0). */
+NCZX_IMPORT float right_stick_y(uint32_t player);
+
+/** Get both left stick axes at once (more efficient). */
+/**  */
+/** Writes X and Y values to the provided pointers. */
+NCZX_IMPORT void left_stick(uint32_t player, float* out_x, float* out_y);
+
+/** Get both right stick axes at once (more efficient). */
+/**  */
+/** Writes X and Y values to the provided pointers. */
+NCZX_IMPORT void right_stick(uint32_t player, float* out_x, float* out_y);
+
+/** Get left trigger value (0.0 to 1.0). */
+NCZX_IMPORT float trigger_left(uint32_t player);
+
+/** Get right trigger value (0.0 to 1.0). */
+NCZX_IMPORT float trigger_right(uint32_t player);
+
+// =============================================================================
+// Lighting Functions (Mode 2/3)
+// =============================================================================
+
+/** Set light direction (and enable the light). */
+/**  */
+/** # Arguments */
+/** * `index` — Light index (0-3) */
+/** * `x`, `y`, `z` — Direction rays travel (from light toward surface) */
+/**  */
+/** For a light from above, use (0, -1, 0). */
+NCZX_IMPORT void light_set(uint32_t index, float x, float y, float z);
+
+/** Set light color. */
+/**  */
+/** # Arguments */
+/** * `color` — Light color (0xRRGGBBAA, alpha ignored) */
+NCZX_IMPORT void light_color(uint32_t index, uint32_t color);
+
+/** Set light intensity multiplier. */
+/**  */
+/** # Arguments */
+/** * `intensity` — Typically 0.0-10.0 */
+NCZX_IMPORT void light_intensity(uint32_t index, float intensity);
+
+/** Enable a light. */
+NCZX_IMPORT void light_enable(uint32_t index);
+
+/** Disable a light (preserves settings for re-enabling). */
+NCZX_IMPORT void light_disable(uint32_t index);
+
+/** Convert a light to a point light at world position. */
+/**  */
+/** # Arguments */
+/** * `index` — Light index (0-3) */
+/** * `x`, `y`, `z` — World-space position */
+/**  */
+/** Enables the light automatically. Default range is 10.0 units. */
+NCZX_IMPORT void light_set_point(uint32_t index, float x, float y, float z);
+
+/** Set point light falloff distance. */
+/**  */
+/** # Arguments */
+/** * `index` — Light index (0-3) */
+/** * `range` — Distance at which light reaches zero intensity */
+/**  */
+/** Only affects point lights (ignored for directional). */
+NCZX_IMPORT void light_range(uint32_t index, float range);
+
+// =============================================================================
+// Material Functions (Mode 2/3)
+// =============================================================================
+
+/** Bind an MRE texture (Metallic-Roughness-Emissive) to slot 1. */
+NCZX_IMPORT void material_mre(uint32_t texture);
+
+/** Bind an albedo texture to slot 0. */
+NCZX_IMPORT void material_albedo(uint32_t texture);
+
+/** Bind a normal map texture to slot 3. */
+/**  */
+/** # Arguments */
+/** * `texture` — Handle to a BC5 or RGBA normal map texture */
+/**  */
+/** Normal maps perturb surface normals for detailed lighting without extra geometry. */
+/** Requires mesh with tangent data (FORMAT_TANGENT) and UVs. */
+/** Works in all lit modes (0=Lambert, 2=PBR, 3=Hybrid) and Mode 1 (Matcap). */
+NCZX_IMPORT void material_normal(uint32_t texture);
+
+/** Skip normal map sampling (use vertex normal instead). */
+/**  */
+/** # Arguments */
+/** * `skip` — 1 to skip normal map, 0 to use normal map (default) */
+/**  */
+/** When a mesh has tangent data, normal mapping is enabled by default. */
+/** Use this flag to opt out temporarily for debugging or artistic control. */
+NCZX_IMPORT void skip_normal_map(uint32_t skip);
+
+/** Set material metallic value (0.0 = dielectric, 1.0 = metal). */
+NCZX_IMPORT void material_metallic(float value);
+
+/** Set material roughness value (0.0 = smooth, 1.0 = rough). */
+NCZX_IMPORT void material_roughness(float value);
+
+/** Set material emissive intensity (0.0 = no emission, >1.0 for HDR). */
+NCZX_IMPORT void material_emissive(float value);
+
+/** Set rim lighting parameters. */
+/**  */
+/** # Arguments */
+/** * `intensity` — Rim brightness (0.0-1.0) */
+/** * `power` — Falloff sharpness (0.0-32.0, higher = tighter) */
+NCZX_IMPORT void material_rim(float intensity, float power);
+
+/** Enable/disable uniform color override. */
+/**  */
+/** When enabled, uses the last set_color() value for all subsequent draws, */
+/** overriding vertex colors and material albedo. */
+/**  */
+/** # Arguments */
+/** * `enabled` — 1 to enable, 0 to disable */
+NCZX_IMPORT void use_uniform_color(uint32_t enabled);
+
+/** Enable/disable uniform metallic override. */
+/**  */
+/** When enabled, uses the last material_metallic() value for all subsequent draws, */
+/** overriding per-vertex or per-material metallic values. */
+/**  */
+/** # Arguments */
+/** * `enabled` — 1 to enable, 0 to disable */
+NCZX_IMPORT void use_uniform_metallic(uint32_t enabled);
+
+/** Enable/disable uniform roughness override. */
+/**  */
+/** When enabled, uses the last material_roughness() value for all subsequent draws, */
+/** overriding per-vertex or per-material roughness values. */
+/**  */
+/** # Arguments */
+/** * `enabled` — 1 to enable, 0 to disable */
+NCZX_IMPORT void use_uniform_roughness(uint32_t enabled);
+
+/** Enable/disable uniform emissive override. */
+/**  */
+/** When enabled, uses the last material_emissive() value for all subsequent draws, */
+/** overriding per-vertex or per-material emissive values. */
+/**  */
+/** # Arguments */
+/** * `enabled` — 1 to enable, 0 to disable */
+NCZX_IMPORT void use_uniform_emissive(uint32_t enabled);
+
+/** Set shininess (Mode 3 alias for roughness). */
+NCZX_IMPORT void material_shininess(float value);
+
+/** Set specular color (Mode 3 only). */
+/**  */
+/** # Arguments */
+/** * `color` — Specular color (0xRRGGBBAA, alpha ignored) */
+NCZX_IMPORT void material_specular(uint32_t color);
+
+// =============================================================================
+// Mesh Functions (Retained Mode)
+// =============================================================================
+
+/** Load a non-indexed mesh. */
+/**  */
+/** # Vertex format flags */
+/** - 1 (FORMAT_UV): Has UV coordinates (2 floats) */
+/** - 2 (FORMAT_COLOR): Has per-vertex color (3 floats RGB) */
+/** - 4 (FORMAT_NORMAL): Has normals (3 floats) */
+/** - 8 (FORMAT_SKINNED): Has bone indices/weights */
+/**  */
+/** # Returns */
+/** Mesh handle (>0) on success, 0 on failure. */
+NCZX_IMPORT uint32_t load_mesh(const float* data_ptr, uint32_t vertex_count, uint32_t format);
+
+/** Load an indexed mesh. */
+/**  */
+/** # Returns */
+/** Mesh handle (>0) on success, 0 on failure. */
+NCZX_IMPORT uint32_t load_mesh_indexed(const float* data_ptr, uint32_t vertex_count, const uint16_t* index_ptr, uint32_t index_count, uint32_t format);
+
+/** Load packed mesh data (power user API, f16/snorm16/unorm8 encoding). */
+NCZX_IMPORT uint32_t load_mesh_packed(const uint8_t* data_ptr, uint32_t vertex_count, uint32_t format);
+
+/** Load indexed packed mesh data (power user API). */
+NCZX_IMPORT uint32_t load_mesh_indexed_packed(const uint8_t* data_ptr, uint32_t vertex_count, const uint16_t* index_ptr, uint32_t index_count, uint32_t format);
+
+/** Draw a retained mesh with current transform and render state. */
+NCZX_IMPORT void draw_mesh(uint32_t handle);
+
+// =============================================================================
+// Unified Music API (PCM + Tracker)
+// =============================================================================
+
+/** Load a tracker module from ROM data pack by ID. */
+/**  */
+/** Must be called during `init()`. */
+/** Returns a handle with bit 31 set (tracker handle). */
+/**  */
+/** # Arguments */
+/** * `id_ptr` — Pointer to tracker ID string */
+/** * `id_len` — Length of tracker ID string */
+/**  */
+/** # Returns */
+/** Tracker handle (>0) on success, 0 on failure. */
+NCZX_IMPORT uint32_t rom_tracker(const uint8_t* id_ptr, uint32_t id_len);
+
+/** Load a tracker module from raw XM data. */
+/**  */
+/** Must be called during `init()`. */
+/** Returns a handle with bit 31 set (tracker handle). */
+/**  */
+/** # Arguments */
+/** * `data_ptr` — Pointer to XM file data */
+/** * `data_len` — Length of XM data in bytes */
+/**  */
+/** # Returns */
+/** Tracker handle (>0) on success, 0 on failure. */
+NCZX_IMPORT uint32_t load_tracker(const uint8_t* data_ptr, uint32_t data_len);
+
+/** Play music (PCM sound or tracker module). */
+/**  */
+/** Automatically stops any currently playing music of the other type. */
+/** Handle type is detected by bit 31 (0=PCM, 1=tracker). */
+/**  */
+/** # Arguments */
+/** * `handle` — Sound handle (from load_sound) or tracker handle (from rom_tracker) */
+/** * `volume` — 0.0 to 1.0 */
+/** * `looping` — 1 = loop, 0 = play once */
+NCZX_IMPORT void music_play(uint32_t handle, float volume, uint32_t looping);
+
+/** Stop music (both PCM and tracker). */
+NCZX_IMPORT void music_stop(void);
+
+/** Pause or resume music (tracker only, no-op for PCM). */
+/**  */
+/** # Arguments */
+/** * `paused` — 1 = pause, 0 = resume */
+NCZX_IMPORT void music_pause(uint32_t paused);
+
+/** Set music volume (works for both PCM and tracker). */
+/**  */
+/** # Arguments */
+/** * `volume` — 0.0 to 1.0 */
+NCZX_IMPORT void music_set_volume(float volume);
+
+/** Check if music is currently playing. */
+/**  */
+/** # Returns */
+/** 1 if playing (and not paused), 0 otherwise. */
+NCZX_IMPORT uint32_t music_is_playing(void);
+
+/** Get current music type. */
+/**  */
+/** # Returns */
+/** 0 = none, 1 = PCM, 2 = tracker */
+NCZX_IMPORT uint32_t music_type(void);
+
+/** Jump to a specific position (tracker only, no-op for PCM). */
+/**  */
+/** Use for dynamic music systems (e.g., jump to outro pattern). */
+/**  */
+/** # Arguments */
+/** * `order` — Order position (0-based) */
+/** * `row` — Row within the pattern (0-based) */
+NCZX_IMPORT void music_jump(uint32_t order, uint32_t row);
+
+/** Get current music position. */
+/**  */
+/** For tracker: (order << 16) | row */
+/** For PCM: sample position */
+/**  */
+/** # Returns */
+/** Position value (format depends on music type). */
+NCZX_IMPORT uint32_t music_position(void);
+
+/** Get music length. */
+/**  */
+/** For tracker: number of orders in the song. */
+/** For PCM: number of samples. */
+/**  */
+/** # Arguments */
+/** * `handle` — Music handle (PCM or tracker) */
+/**  */
+/** # Returns */
+/** Length value. */
+NCZX_IMPORT uint32_t music_length(uint32_t handle);
+
+/** Set music speed (tracker only, ticks per row). */
+/**  */
+/** # Arguments */
+/** * `speed` — 1-31 (XM default is 6) */
+NCZX_IMPORT void music_set_speed(uint32_t speed);
+
+/** Set music tempo (tracker only, BPM). */
+/**  */
+/** # Arguments */
+/** * `bpm` — 32-255 (XM default is 125) */
+NCZX_IMPORT void music_set_tempo(uint32_t bpm);
+
+/** Get music info. */
+/**  */
+/** For tracker: (num_channels << 24) | (num_patterns << 16) | (num_instruments << 8) | song_length */
+/** For PCM: (sample_rate << 16) | (channels << 8) | bits_per_sample */
+/**  */
+/** # Arguments */
+/** * `handle` — Music handle (PCM or tracker) */
+/**  */
+/** # Returns */
+/** Packed info value. */
+NCZX_IMPORT uint32_t music_info(uint32_t handle);
+
+/** Get music name (tracker only, returns 0 for PCM). */
+/**  */
+/** # Arguments */
+/** * `handle` — Music handle */
+/** * `out_ptr` — Pointer to output buffer */
+/** * `max_len` — Maximum bytes to write */
+/**  */
+/** # Returns */
+/** Actual length written (0 if PCM or invalid handle). */
+NCZX_IMPORT uint32_t music_name(uint32_t handle, uint8_t* out_ptr, uint32_t max_len);
+
+// =============================================================================
+// Render Pass Functions (Execution Barriers & Depth/Stencil Control)
+// =============================================================================
+
+/** Begin a new render pass with optional depth clear. */
+/**  */
+/** Provides an execution barrier - commands in this pass complete before */
+/** the next pass begins. Use for layered rendering like FPS viewmodels. */
+/**  */
+/** # Arguments */
+/** * `clear_depth` — Non-zero to clear depth buffer at pass start */
+/**  */
+/** # Example (FPS viewmodel rendering) */
+/** ```rust,ignore */
+/** // Draw world first (pass 0) */
+/** draw_mesh(world_mesh); */
+/** epu_set(env_config_ptr); */
+/** draw_epu(); */
+/**  */
+/** // Draw gun on top (pass 1 with depth clear) */
+/** begin_pass(1);  // Clear depth so gun renders on top */
+/** draw_mesh(gun_mesh); */
+/** ``` */
+NCZX_IMPORT void begin_pass(uint32_t clear_depth);
+
+/** Begin a stencil write pass (mask creation mode). */
+/**  */
+/** After calling this, subsequent draw calls write to the stencil buffer */
+/** but NOT to the color buffer. Use this to create a mask shape. */
+/** Depth testing is disabled to prevent mask geometry from polluting depth. */
+/**  */
+/** # Arguments */
+/** * `ref_value` — Stencil reference value to write (typically 1) */
+/** * `clear_depth` — Non-zero to clear depth buffer at pass start */
+/**  */
+/** # Example (scope mask) */
+/** ```rust,ignore */
+/** begin_pass_stencil_write(1, 0);  // Start mask creation */
+/** draw_mesh(circle_mesh);          // Draw circle to stencil only */
+/** begin_pass_stencil_test(1, 0);   // Enable testing */
+/** epu_set(env_config_ptr); */
+/** draw_epu();                      // Only visible inside circle */
+/** begin_pass(0);                    // Back to normal rendering */
+/** ``` */
+NCZX_IMPORT void begin_pass_stencil_write(uint32_t ref_value, uint32_t clear_depth);
+
+/** Begin a stencil test pass (render inside mask). */
+/**  */
+/** After calling this, subsequent draw calls only render where */
+/** the stencil buffer equals ref_value (inside the mask). */
+/**  */
+/** # Arguments */
+/** * `ref_value` — Stencil reference value to test against (must match write pass) */
+/** * `clear_depth` — Non-zero to clear depth buffer at pass start */
+NCZX_IMPORT void begin_pass_stencil_test(uint32_t ref_value, uint32_t clear_depth);
+
+/** Begin a render pass with full control over depth and stencil state. */
+/**  */
+/** This is the "escape hatch" for advanced effects not covered by the */
+/** convenience functions. Most games should use begin_pass, begin_pass_stencil_write, */
+/** or begin_pass_stencil_test instead. */
+/**  */
+/** # Arguments */
+/** * `depth_compare` — Depth comparison function (see compare::* constants) */
+/** * `depth_write` — Non-zero to write to depth buffer */
+/** * `clear_depth` — Non-zero to clear depth buffer at pass start */
+/** * `stencil_compare` — Stencil comparison function (see compare::* constants) */
+/** * `stencil_ref` — Stencil reference value (0-255) */
+/** * `stencil_pass_op` — Operation when stencil test passes (see stencil_op::* constants) */
+/** * `stencil_fail_op` — Operation when stencil test fails */
+/** * `stencil_depth_fail_op` — Operation when depth test fails */
+NCZX_IMPORT void begin_pass_full(uint32_t depth_compare, uint32_t depth_write, uint32_t clear_depth, uint32_t stencil_compare, uint32_t stencil_ref, uint32_t stencil_pass_op, uint32_t stencil_fail_op, uint32_t stencil_depth_fail_op);
+
+// =============================================================================
+// Procedural Mesh Generation (init-only)
+// =============================================================================
+
+/** Generate a cube mesh. **Init-only.** */
+/**  */
+/** # Arguments */
+/** * `size_x`, `size_y`, `size_z` — Half-extents along each axis */
+NCZX_IMPORT uint32_t cube(float size_x, float size_y, float size_z);
+
+/** Generate a UV sphere mesh. **Init-only.** */
+/**  */
+/** # Arguments */
+/** * `radius` — Sphere radius */
+/** * `segments` — Longitudinal divisions (3-256) */
+/** * `rings` — Latitudinal divisions (2-256) */
+NCZX_IMPORT uint32_t sphere(float radius, uint32_t segments, uint32_t rings);
+
+/** Generate a cylinder or cone mesh. **Init-only.** */
+/**  */
+/** # Arguments */
+/** * `radius_bottom`, `radius_top` — Radii (>= 0.0, use 0 for cone tip) */
+/** * `height` — Cylinder height */
+/** * `segments` — Radial divisions (3-256) */
+NCZX_IMPORT uint32_t cylinder(float radius_bottom, float radius_top, float height, uint32_t segments);
+
+/** Generate a plane mesh on the XZ plane. **Init-only.** */
+/**  */
+/** # Arguments */
+/** * `size_x`, `size_z` — Dimensions */
+/** * `subdivisions_x`, `subdivisions_z` — Subdivisions (1-256) */
+NCZX_IMPORT uint32_t plane(float size_x, float size_z, uint32_t subdivisions_x, uint32_t subdivisions_z);
+
+/** Generate a torus (donut) mesh. **Init-only.** */
+/**  */
+/** # Arguments */
+/** * `major_radius` — Distance from center to tube center */
+/** * `minor_radius` — Tube radius */
+/** * `major_segments`, `minor_segments` — Segment counts (3-256) */
+NCZX_IMPORT uint32_t torus(float major_radius, float minor_radius, uint32_t major_segments, uint32_t minor_segments);
+
+/** Generate a capsule (pill shape) mesh. **Init-only.** */
+/**  */
+/** # Arguments */
+/** * `radius` — Capsule radius */
+/** * `height` — Height of cylindrical section (total = height + 2*radius) */
+/** * `segments` — Radial divisions (3-256) */
+/** * `rings` — Divisions per hemisphere (1-128) */
+NCZX_IMPORT uint32_t capsule(float radius, float height, uint32_t segments, uint32_t rings);
+
+/** Generate a UV sphere mesh with equirectangular texture mapping. **Init-only.** */
+NCZX_IMPORT uint32_t sphere_uv(float radius, uint32_t segments, uint32_t rings);
+
+/** Generate a plane mesh with UV mapping. **Init-only.** */
+NCZX_IMPORT uint32_t plane_uv(float size_x, float size_z, uint32_t subdivisions_x, uint32_t subdivisions_z);
+
+/** Generate a cube mesh with box-unwrapped UV mapping. **Init-only.** */
+NCZX_IMPORT uint32_t cube_uv(float size_x, float size_y, float size_z);
+
+/** Generate a cylinder mesh with cylindrical UV mapping. **Init-only.** */
+NCZX_IMPORT uint32_t cylinder_uv(float radius_bottom, float radius_top, float height, uint32_t segments);
+
+/** Generate a torus mesh with wrapped UV mapping. **Init-only.** */
+NCZX_IMPORT uint32_t torus_uv(float major_radius, float minor_radius, uint32_t major_segments, uint32_t minor_segments);
+
+/** Generate a capsule mesh with hybrid UV mapping. **Init-only.** */
+NCZX_IMPORT uint32_t capsule_uv(float radius, float height, uint32_t segments, uint32_t rings);
+
+/** Generate a sphere mesh with tangent data for normal mapping. **Init-only.** */
+/**  */
+/** Tangent follows direction of increasing U (longitude). */
+/** Use with material_normal() for normal-mapped rendering. */
+NCZX_IMPORT uint32_t sphere_tangent(float radius, uint32_t segments, uint32_t rings);
+
+/** Generate a plane mesh with tangent data for normal mapping. **Init-only.** */
+/**  */
+/** Tangent points along +X, bitangent along +Z, normal along +Y. */
+NCZX_IMPORT uint32_t plane_tangent(float size_x, float size_z, uint32_t subdivisions_x, uint32_t subdivisions_z);
+
+/** Generate a cube mesh with tangent data for normal mapping. **Init-only.** */
+/**  */
+/** Each face has correct tangent space for normal map sampling. */
+NCZX_IMPORT uint32_t cube_tangent(float size_x, float size_y, float size_z);
+
+/** Generate a torus mesh with tangent data for normal mapping. **Init-only.** */
+/**  */
+/** Tangent follows the major circle direction. */
+NCZX_IMPORT uint32_t torus_tangent(float major_radius, float minor_radius, uint32_t major_segments, uint32_t minor_segments);
+
+// =============================================================================
+// Render State Functions
+// =============================================================================
+
+/** Set the uniform tint color (multiplied with vertex colors and textures). */
+/**  */
+/** # Arguments */
+/** * `color` — Color in 0xRRGGBBAA format */
+NCZX_IMPORT void set_color(uint32_t color);
+
+/** Set the EPU environment index (`env_id`) used for subsequent draw calls. */
+/**  */
+/** This selects which EPU environment textures are sampled for: */
+/** - `draw_epu()` background rendering */
+/** - Ambient lighting in lit render modes (0/2/3) */
+/** - Reflections in lit render modes (1/2/3) */
+/**  */
+/** Notes: */
+/** - `env_id` is clamped to the supported range (0..255). */
+/** - Default is 0. */
+NCZX_IMPORT void environment_index(uint32_t env_id);
+
+/** Set the face culling mode. */
+/**  */
+/** # Arguments */
+/** * `mode` — 0=none (default), 1=back, 2=front */
+NCZX_IMPORT void cull_mode(uint32_t mode);
+
+/** Set the texture filtering mode. */
+/**  */
+/** # Arguments */
+/** * `filter` — 0=nearest (pixelated), 1=linear (smooth) */
+NCZX_IMPORT void texture_filter(uint32_t filter);
+
+/** Set uniform alpha level for dither transparency. */
+/**  */
+/** # Arguments */
+/** * `level` — 0-15 (0=fully transparent, 15=fully opaque, default=15) */
+/**  */
+/** Controls the dither pattern threshold for screen-door transparency. */
+/** The dither pattern is always active, but with level=15 (default) all fragments pass. */
+NCZX_IMPORT void uniform_alpha(uint32_t level);
+
+/** Set dither offset for dither transparency. */
+/**  */
+/** # Arguments */
+/** * `x` — 0-3 pixel shift in X axis */
+/** * `y` — 0-3 pixel shift in Y axis */
+/**  */
+/** Use different offsets for stacked dithered meshes to prevent pattern cancellation. */
+/** When two transparent objects overlap with the same alpha level and offset, their */
+/** dither patterns align and pixels cancel out. Different offsets shift the pattern */
+/** so both objects remain visible. */
+NCZX_IMPORT void dither_offset(uint32_t x, uint32_t y);
+
+/** Set z-index for 2D ordering control within a pass. */
+/**  */
+/** # Arguments */
+/** * `n` — Z-index value (0 = back, higher = front) */
+/**  */
+/** Higher z-index values are drawn on top of lower values. */
+/** Use this to ensure UI elements appear over game content */
+/** regardless of texture bindings or draw order. */
+/**  */
+/** Note: z_index only affects ordering within the same pass_id. */
+/** Default: 0 (resets each frame) */
+NCZX_IMPORT void z_index(uint32_t n);
+
+// =============================================================================
+// GPU Skinning
+// =============================================================================
+
+/** Load a skeleton's inverse bind matrices to GPU. */
+/**  */
+/** Call once during `init()` after loading skinned meshes. */
+/** The inverse bind matrices transform vertices from model space */
+/** to bone-local space at bind time. */
+/**  */
+/** # Arguments */
+/** * `inverse_bind_ptr` — Pointer to array of 3×4 matrices (12 floats per bone, column-major) */
+/** * `bone_count` — Number of bones (max 256) */
+/**  */
+/** # Returns */
+/** Skeleton handle (>0) on success, 0 on error. */
+NCZX_IMPORT uint32_t load_skeleton(const float* inverse_bind_ptr, uint32_t bone_count);
+
+/** Bind a skeleton for subsequent skinned mesh rendering. */
+/**  */
+/** When bound, `set_bones()` expects model-space transforms and the GPU */
+/** automatically applies the inverse bind matrices. */
+/**  */
+/** # Arguments */
+/** * `skeleton` — Skeleton handle from `load_skeleton()`, or 0 to unbind (raw mode) */
+/**  */
+/** # Behavior */
+/** - skeleton > 0: Enable inverse bind mode. `set_bones()` receives model transforms. */
+/** - skeleton = 0: Disable inverse bind mode (raw). `set_bones()` receives final matrices. */
+NCZX_IMPORT void skeleton_bind(uint32_t skeleton);
+
+/** Set bone transform matrices for skeletal animation. */
+/**  */
+/** # Arguments */
+/** * `matrices_ptr` — Pointer to array of 3×4 matrices (12 floats per bone, column-major) */
+/** * `count` — Number of bones (max 256) */
+/**  */
+/** Each bone matrix is 12 floats in column-major order: */
+/** ```text */
+/** [col0.x, col0.y, col0.z]  // X axis */
+/** [col1.x, col1.y, col1.z]  // Y axis */
+/** [col2.x, col2.y, col2.z]  // Z axis */
+/** [tx,     ty,     tz    ]  // translation */
+/** // implicit 4th row [0, 0, 0, 1] */
+/** ``` */
+NCZX_IMPORT void set_bones(const float* matrices_ptr, uint32_t count);
+
+/** Set bone transform matrices for skeletal animation using 4x4 matrices. */
+/**  */
+/** Alternative to `set_bones()` that accepts full 4x4 matrices instead of 3x4. */
+/**  */
+/** # Arguments */
+/** * `matrices_ptr` — Pointer to array of 4×4 matrices (16 floats per bone, column-major) */
+/** * `count` — Number of bones (max 256) */
+/**  */
+/** Each bone matrix is 16 floats in column-major order: */
+/** ```text */
+/** [col0.x, col0.y, col0.z, col0.w]  // X axis + w */
+/** [col1.x, col1.y, col1.z, col1.w]  // Y axis + w */
+/** [col2.x, col2.y, col2.z, col2.w]  // Z axis + w */
+/** [tx,     ty,     tz,     tw    ]  // translation + w */
+/** ``` */
+NCZX_IMPORT void set_bones_4x4(const float* matrices_ptr, uint32_t count);
+
+// =============================================================================
+// System Functions
+// =============================================================================
+
+/** Returns the fixed timestep duration in seconds. */
+/**  */
+/** This is a **constant value** based on the configured tick rate, NOT wall-clock time. */
+/** - 60fps → 0.01666... (1/60) */
+/** - 30fps → 0.03333... (1/30) */
+/**  */
+/** Safe for rollback netcode: identical across all clients regardless of frame timing. */
+NCZX_IMPORT float delta_time(void);
+
+/** Returns total elapsed game time since start in seconds. */
+/**  */
+/** This is the **accumulated fixed timestep**, NOT wall-clock time. */
+/** Calculated as `tick_count * delta_time`. */
+/**  */
+/** Safe for rollback netcode: deterministic and identical across all clients. */
+NCZX_IMPORT float elapsed_time(void);
+
+/** Returns the current tick number (starts at 0, increments by 1 each update). */
+/**  */
+/** Perfectly deterministic: same inputs always produce the same tick count. */
+/** Safe for rollback netcode. */
+NCZX_IMPORT uint64_t tick_count(void);
+
+/** Logs a message to the console output. */
+/**  */
+/** # Arguments */
+/** * `ptr` — Pointer to UTF-8 string data */
+/** * `len` — Length of string in bytes */
+NCZX_IMPORT void log(const uint8_t* ptr, uint32_t len);
+
+/** Exits the game and returns to the library. */
+NCZX_IMPORT void quit(void);
+
+/** Returns a deterministic random u32 from the host's seeded RNG. */
+/** Always use this instead of external random sources for rollback compatibility. */
+NCZX_IMPORT uint32_t random(void);
+
+/** Returns a random i32 in range [min, max). */
+/** Uses host's seeded RNG for rollback compatibility. */
+NCZX_IMPORT int32_t random_range(int32_t min, int32_t max);
+
+/** Returns a random f32 in range [0.0, 1.0). */
+/** Uses host's seeded RNG for rollback compatibility. */
+NCZX_IMPORT float random_f32(void);
+
+/** Returns a random f32 in range [min, max). */
+/** Uses host's seeded RNG for rollback compatibility. */
+NCZX_IMPORT float random_f32_range(float min, float max);
+
+/** Returns the number of players in the session (1-4). */
+NCZX_IMPORT uint32_t player_count(void);
+
+/** Returns a bitmask of which players are local to this client. */
+/**  */
+/** Example: `(local_player_mask() & (1 << player_id)) != 0` checks if player is local. */
+NCZX_IMPORT uint32_t local_player_mask(void);
+
+/** Saves data to a slot. */
+/**  */
+/** Slot semantics: */
+/** - Slots 0-3 are supported. */
+/** - Persistence only applies for local controllers (see `local_player_mask()`); */
+/** remote session slots never write to disk and never overwrite your local saves. */
+/**  */
+/** # Arguments */
+/** * `slot` — Save slot (0-3) */
+/** * `data_ptr` — Pointer to data in WASM memory */
+/** * `data_len` — Length of data in bytes (max 64KB) */
+/**  */
+/** # Returns */
+/** 0 on success, 1 if invalid slot, 2 if data too large. */
+NCZX_IMPORT uint32_t save(uint32_t slot, const uint8_t* data_ptr, uint32_t data_len);
+
+/** Loads data from a slot. */
+/**  */
+/** Slot semantics: */
+/** - Slots 0-3 are supported. */
+/** - Persistent data only exists for local controllers (see `local_player_mask()`). */
+/**  */
+/** # Arguments */
+/** * `slot` — Save slot (0-3) */
+/** * `data_ptr` — Pointer to buffer in WASM memory */
+/** * `max_len` — Maximum bytes to read */
+/**  */
+/** # Returns */
+/** Bytes read (0 if empty or error). */
+NCZX_IMPORT uint32_t load(uint32_t slot, uint8_t* data_ptr, uint32_t max_len);
+
+/** Deletes a save slot. */
+/**  */
+/** Slot semantics: */
+/** - Slots 0-3 are supported. */
+/** - Persistence only applies for local controllers (see `local_player_mask()`). */
+/**  */
+/** # Returns */
+/** 0 on success, 1 if invalid slot. */
+NCZX_IMPORT uint32_t delete(uint32_t slot);
+
+/** Set the clear/background color. Must be called during `init()`. */
+/**  */
+/** # Arguments */
+/** * `color` — Color in 0xRRGGBBAA format (default: black) */
+NCZX_IMPORT void set_clear_color(uint32_t color);
+
+// =============================================================================
+// 2D Drawing (Screen Space)
+// =============================================================================
+
+/** Draw a sprite with the bound texture. */
+/**  */
+/** # Arguments */
+/** * `x`, `y` — Screen position in pixels (0,0 = top-left) */
+/** * `w`, `h` — Sprite size in pixels */
+NCZX_IMPORT void draw_sprite(float x, float y, float w, float h);
+
+/** Draw a region of a sprite sheet. */
+/**  */
+/** # Arguments */
+/** * `src_x`, `src_y`, `src_w`, `src_h` — UV region (0.0-1.0) */
+NCZX_IMPORT void draw_sprite_region(float x, float y, float w, float h, float src_x, float src_y, float src_w, float src_h);
+
+/** Draw a sprite with full control (rotation, origin, UV region). */
+/**  */
+/** # Arguments */
+/** * `origin_x`, `origin_y` — Rotation pivot point (in pixels from sprite top-left) */
+/** * `angle_deg` — Rotation angle in degrees (clockwise) */
+NCZX_IMPORT void draw_sprite_ex(float x, float y, float w, float h, float src_x, float src_y, float src_w, float src_h, float origin_x, float origin_y, float angle_deg);
+
+/** Draw a solid color rectangle. */
+NCZX_IMPORT void draw_rect(float x, float y, float w, float h);
+
+/** Draw text with the current font. */
+/**  */
+/** # Arguments */
+/** * `ptr` — Pointer to UTF-8 string data */
+/** * `len` — Length in bytes */
+/** * `size` — Font size in pixels */
+NCZX_IMPORT void draw_text(const uint8_t* ptr, uint32_t len, float x, float y, float size);
+
+/** Measure the width of text when rendered. */
+/**  */
+/** # Arguments */
+/** * `ptr` — Pointer to UTF-8 string data */
+/** * `len` — Length in bytes */
+/** * `size` — Font size in pixels */
+/**  */
+/** # Returns */
+/** Width in pixels that the text would occupy when rendered. */
+NCZX_IMPORT float text_width(const uint8_t* ptr, uint32_t len, float size);
+
+/** Draw a line between two points. */
+/**  */
+/** # Arguments */
+/** * `x1`, `y1` — Start point in screen pixels */
+/** * `x2`, `y2` — End point in screen pixels */
+/** * `thickness` — Line thickness in pixels */
+NCZX_IMPORT void draw_line(float x1, float y1, float x2, float y2, float thickness);
+
+/** Draw a filled circle. */
+/**  */
+/** # Arguments */
+/** * `x`, `y` — Center position in screen pixels */
+/** * `radius` — Circle radius in pixels */
+/**  */
+/** Rendered as a 16-segment triangle fan. */
+NCZX_IMPORT void draw_circle(float x, float y, float radius);
+
+/** Draw a circle outline. */
+/**  */
+/** # Arguments */
+/** * `x`, `y` — Center position in screen pixels */
+/** * `radius` — Circle radius in pixels */
+/** * `thickness` — Line thickness in pixels */
+/**  */
+/** Rendered as 16 line segments. */
+NCZX_IMPORT void draw_circle_outline(float x, float y, float radius, float thickness);
+
+/** Load a fixed-width bitmap font. */
+/**  */
+/** # Arguments */
+/** * `texture` — Texture atlas handle */
+/** * `char_width`, `char_height` — Glyph dimensions in pixels */
+/** * `first_codepoint` — Unicode codepoint of first glyph */
+/** * `char_count` — Number of glyphs */
+/**  */
+/** # Returns */
+/** Font handle (use with `font_bind()`). */
+NCZX_IMPORT uint32_t load_font(uint32_t texture, uint32_t char_width, uint32_t char_height, uint32_t first_codepoint, uint32_t char_count);
+
+/** Load a variable-width bitmap font. */
+/**  */
+/** # Arguments */
+/** * `widths_ptr` — Pointer to array of char_count u8 widths */
+NCZX_IMPORT uint32_t load_font_ex(uint32_t texture, const uint8_t* widths_ptr, uint32_t char_height, uint32_t first_codepoint, uint32_t char_count);
+
+/** Bind a font for subsequent draw_text() calls. */
+/**  */
+/** Pass 0 for the built-in 8×8 monospace font. */
+NCZX_IMPORT void font_bind(uint32_t font_handle);
+
+// =============================================================================
+// Texture Functions
+// =============================================================================
+
+/** Load a texture from RGBA pixel data. */
+/**  */
+/** # Arguments */
+/** * `width`, `height` — Texture dimensions */
+/** * `pixels_ptr` — Pointer to RGBA8 pixel data (width × height × 4 bytes) */
+/**  */
+/** # Returns */
+/** Texture handle (>0) on success, 0 on failure. */
+NCZX_IMPORT uint32_t load_texture(uint32_t width, uint32_t height, const uint8_t* pixels_ptr);
+
+/** Bind a texture to slot 0 (albedo). */
+NCZX_IMPORT void texture_bind(uint32_t handle);
+
+/** Bind a texture to a specific slot. */
+/**  */
+/** # Arguments */
+/** * `slot` — 0=albedo, 1=MRE/matcap, 2=reserved, 3=matcap */
+NCZX_IMPORT void texture_bind_slot(uint32_t handle, uint32_t slot);
+
+/** Set matcap blend mode for a texture slot (Mode 1 only). */
+/**  */
+/** # Arguments */
+/** * `slot` — Matcap slot (1-3) */
+/** * `mode` — 0=Multiply, 1=Add, 2=HSV Modulate */
+NCZX_IMPORT void matcap_blend_mode(uint32_t slot, uint32_t mode);
+
+/** Bind a matcap texture to a slot (Mode 1 only). */
+/**  */
+/** # Arguments */
+/** * `slot` — Matcap slot (1-3) */
+NCZX_IMPORT void matcap_set(uint32_t slot, uint32_t texture);
+
+// =============================================================================
+// Transform Functions
+// =============================================================================
+
+/** Push identity matrix onto the transform stack. */
+NCZX_IMPORT void push_identity(void);
+
+/** Set the current transform from a 4x4 matrix pointer (16 floats, column-major). */
+NCZX_IMPORT void transform_set(const float* matrix_ptr);
+
+/** Push a translation transform. */
+NCZX_IMPORT void push_translate(float x, float y, float z);
+
+/** Push a rotation around the X axis. */
+/**  */
+/** # Arguments */
+/** * `angle_deg` — Rotation angle in degrees */
+NCZX_IMPORT void push_rotate_x(float angle_deg);
+
+/** Push a rotation around the Y axis. */
+/**  */
+/** # Arguments */
+/** * `angle_deg` — Rotation angle in degrees */
+NCZX_IMPORT void push_rotate_y(float angle_deg);
+
+/** Push a rotation around the Z axis. */
+/**  */
+/** # Arguments */
+/** * `angle_deg` — Rotation angle in degrees */
+NCZX_IMPORT void push_rotate_z(float angle_deg);
+
+/** Push a rotation around an arbitrary axis. */
+/**  */
+/** # Arguments */
+/** * `angle_deg` — Rotation angle in degrees */
+/** * `axis_x`, `axis_y`, `axis_z` — Rotation axis (will be normalized) */
+NCZX_IMPORT void push_rotate(float angle_deg, float axis_x, float axis_y, float axis_z);
+
+/** Push a non-uniform scale transform. */
+NCZX_IMPORT void push_scale(float x, float y, float z);
+
+/** Push a uniform scale transform. */
+NCZX_IMPORT void push_scale_uniform(float s);
+
+// =============================================================================
+// Viewport Functions (Split-Screen)
+// =============================================================================
+
+/** Set the viewport for subsequent draw calls. */
+/**  */
+/** All 3D and 2D rendering will be clipped to this region. */
+/** Camera aspect ratio automatically adjusts to viewport dimensions. */
+/** 2D coordinates (draw_sprite, draw_text, etc.) become viewport-relative. */
+/**  */
+/** # Arguments */
+/** * `x` — Left edge in pixels (0-959) */
+/** * `y` — Top edge in pixels (0-539) */
+/** * `width` — Width in pixels (1-960) */
+/** * `height` — Height in pixels (1-540) */
+/**  */
+/** # Example (2-player horizontal split) */
+/** ```rust,ignore */
+/** // Player 1: left half */
+/** viewport(0, 0, 480, 540); */
+/** camera_set(p1_x, p1_y, p1_z, p1_tx, p1_ty, p1_tz); */
+/** epu_set(env_config_ptr); */
+/** draw_mesh(scene); */
+/** draw_epu(); */
+/**  */
+/** // Player 2: right half */
+/** viewport(480, 0, 480, 540); */
+/** camera_set(p2_x, p2_y, p2_z, p2_tx, p2_ty, p2_tz); */
+/** epu_set(env_config_ptr); */
+/** draw_mesh(scene); */
+/** draw_epu(); */
+/**  */
+/** // Reset for HUD */
+/** viewport_clear(); */
+/** set_color(0xFFFFFFFF); */
+/** draw_text_str("PAUSED", 400.0, 270.0, 32.0); */
+/** ``` */
+NCZX_IMPORT void viewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height);
+
+/** Reset viewport to fullscreen (960×540). */
+/**  */
+/** Call this at the end of split-screen rendering to restore full-screen */
+/** coordinates for HUD elements or between frames. */
+NCZX_IMPORT void viewport_clear(void);
+
+// =============================================================================
 // Constants
 // =============================================================================
 
@@ -1511,18 +1596,6 @@ NCZX_IMPORT float debug_get_time_scale(void);
 #define NCZX_STENCIL_OP_INCREMENT_WRAP 6
 #define NCZX_STENCIL_OP_DECREMENT_WRAP 7
 
-// color constants
-#define NCZX_COLOR_WHITE 0xFFFFFFFF
-#define NCZX_COLOR_BLACK 0x000000FF
-#define NCZX_COLOR_RED 0xFF0000FF
-#define NCZX_COLOR_GREEN 0x00FF00FF
-#define NCZX_COLOR_BLUE 0x0000FFFF
-#define NCZX_COLOR_YELLOW 0xFFFF00FF
-#define NCZX_COLOR_CYAN 0x00FFFFFF
-#define NCZX_COLOR_MAGENTA 0xFF00FFFF
-#define NCZX_COLOR_ORANGE 0xFF8000FF
-#define NCZX_COLOR_TRANSPARENT 0x00000000
-
 #ifdef __cplusplus
 }
 #endif
@@ -1567,13 +1640,16 @@ static inline float nczx_absf(float x) {
 #define NCZX_LOG(str) log((const uint8_t*)(str), sizeof(str) - 1)
 
 #define NCZX_DRAW_TEXT(str, x, y, size, color) \
-    draw_text((const uint8_t*)(str), sizeof(str) - 1, (x), (y), (size), (color))
+    do { \
+        set_color((color)); \
+        draw_text((const uint8_t*)(str), (uint32_t)(sizeof(str) - 1), (x), (y), (size)); \
+    } while (0)
 
 // ROM loading helpers
-#define NCZX_ROM_TEXTURE(id) rom_texture((uint32_t)(id), sizeof(id) - 1)
-#define NCZX_ROM_MESH(id) rom_mesh((uint32_t)(id), sizeof(id) - 1)
-#define NCZX_ROM_SOUND(id) rom_sound((uint32_t)(id), sizeof(id) - 1)
-#define NCZX_ROM_FONT(id) rom_font((uint32_t)(id), sizeof(id) - 1)
-#define NCZX_ROM_SKELETON(id) rom_skeleton((uint32_t)(id), sizeof(id) - 1)
+#define NCZX_ROM_TEXTURE(id) rom_texture((const uint8_t*)(id), (uint32_t)(sizeof(id) - 1))
+#define NCZX_ROM_MESH(id) rom_mesh((const uint8_t*)(id), (uint32_t)(sizeof(id) - 1))
+#define NCZX_ROM_SOUND(id) rom_sound((const uint8_t*)(id), (uint32_t)(sizeof(id) - 1))
+#define NCZX_ROM_FONT(id) rom_font((const uint8_t*)(id), (uint32_t)(sizeof(id) - 1))
+#define NCZX_ROM_SKELETON(id) rom_skeleton((const uint8_t*)(id), (uint32_t)(sizeof(id) - 1))
 
 #endif /* NETHERCORE_ZX_H */

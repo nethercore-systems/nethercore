@@ -2,8 +2,8 @@
 //!
 //! Re-exports the canonical zx.rs FFI bindings.
 
-// Include the canonical FFI bindings from nethercore/include/zx.rs
-#[path = "../../../include/zx.rs"]
+// Include the canonical FFI bindings from nethercore/include/zx/
+#[path = "../../../include/zx/mod.rs"]
 mod zx;
 pub use zx::*;
 

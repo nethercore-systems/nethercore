@@ -4,18 +4,23 @@ on:
   push:
     branches: [main]
     paths:
+      - 'include/zx/**'
       - 'include/zx.rs'
       - 'include/zx.h'
       - 'include/zx.zig'
-      - 'include/chroma.rs'  # Future consoles
+      - 'include/chroma/**'  # Future consoles (directory module)
+      - 'include/chroma.rs'  # Future consoles (single file)
       - 'include/chroma.h'
       - 'include/chroma.zig'
+      - 'include/chromax/**'
       - 'include/chromax.rs'
       - 'include/chromax.h'
       - 'include/chromax.zig'
+      - 'include/z/**'
       - 'include/z.rs'
       - 'include/z.h'
       - 'include/z.zig'
+      - 'include/one/**'
       - 'include/one.rs'
       - 'include/one.h'
       - 'include/one.zig'
@@ -24,18 +29,23 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'include/zx/**'
       - 'include/zx.rs'
       - 'include/zx.h'
       - 'include/zx.zig'
-      - 'include/chroma.rs'  # Future consoles
+      - 'include/chroma/**'
+      - 'include/chroma.rs'
       - 'include/chroma.h'
       - 'include/chroma.zig'
+      - 'include/chromax/**'
       - 'include/chromax.rs'
       - 'include/chromax.h'
       - 'include/chromax.zig'
+      - 'include/z/**'
       - 'include/z.rs'
       - 'include/z.h'
       - 'include/z.zig'
+      - 'include/one/**'
       - 'include/one.rs'
       - 'include/one.h'
       - 'include/one.zig'

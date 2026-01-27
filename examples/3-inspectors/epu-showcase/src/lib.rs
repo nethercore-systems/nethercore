@@ -42,13 +42,13 @@ fn panic(_info: &PanicInfo) -> ! {
 mod constants;
 mod presets;
 
-use presets::{PRESETS, PRESET_COUNT, PRESET_NAMES};
+use presets::{ANIM_SPEEDS, PRESETS, PRESET_COUNT, PRESET_NAMES};
 
 // ============================================================================
 // FFI Declarations
 // ============================================================================
 
-#[path = "../../../../include/zx.rs"]
+#[path = "../../../../include/zx/mod.rs"]
 mod ffi;
 use ffi::*;
 
@@ -56,6 +56,7 @@ use ffi::*;
 // Game State
 // ============================================================================
 
+static mut FRAME: u32 = 0;
 static mut PRESET_INDEX: i32 = 0;
 static mut CAM_ANGLE: f32 = 0.0;
 static mut CAM_ELEVATION: f32 = 15.0;
@@ -147,6 +148,8 @@ pub extern "C" fn on_debug_change() {
 #[no_mangle]
 pub extern "C" fn update() {
     unsafe {
+        FRAME = FRAME.wrapping_add(1);
+
         // Cycle presets with A/B buttons
         if button_pressed(0, button::A) != 0 {
             PRESET_INDEX = (PRESET_INDEX + 1) % PRESET_COUNT as i32;
@@ -189,8 +192,19 @@ pub extern "C" fn render() {
         camera_set(cam_x, cam_y, cam_z, 0.0, 0.0, 0.0);
         camera_fov(60.0);
 
-        // Set the EPU environment config (push-only).
-        epu_set(PRESETS[PRESET_INDEX as usize].as_ptr() as *const u64);
+        // Copy preset to mutable buffer and patch animation phases
+        let idx = PRESET_INDEX as usize;
+        let mut buf = PRESETS[idx];
+        let speeds = &ANIM_SPEEDS[idx];
+        for layer in 0..8 {
+            let spd = speeds[layer] as u32;
+            if spd > 0 {
+                let phase = ((FRAME.wrapping_mul(spd)) & 0xFF) as u64;
+                // Patch param_d: bits 31..24 of the lo word (buf[layer][1])
+                buf[layer][1] = (buf[layer][1] & !0xFF000000) | (phase << 24);
+            }
+        }
+        epu_set(buf.as_ptr() as *const u64);
 
         // Draw a shape to show lighting from the environment
         push_identity();
@@ -218,9 +232,9 @@ fn opcode_name(opcode: u8) -> &'static [u8] {
     match opcode {
         0x00 => b"NOP",
         0x01 => b"RAMP",
-        0x02 => b"LOBE/SECTOR",
-        0x03 => b"BAND/SILHOUETTE",
-        0x04 => b"FOG/SPLIT",
+        0x02 => b"SECTOR",
+        0x03 => b"SILHOUETTE",
+        0x04 => b"SPLIT",
         0x05 => b"CELL",
         0x06 => b"PATCHES",
         0x07 => b"APERTURE",
@@ -234,8 +248,8 @@ fn opcode_name(opcode: u8) -> &'static [u8] {
         0x0F => b"PLANE",
         0x10 => b"CELESTIAL",
         0x11 => b"PORTAL",
-        0x12 => b"LOBE_RADIANCE",
-        0x13 => b"BAND_RADIANCE",
+        0x12 => b"LOBE",
+        0x13 => b"BAND",
         _ => b"???",
     }
 }

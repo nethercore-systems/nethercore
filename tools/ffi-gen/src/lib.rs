@@ -24,24 +24,43 @@ pub fn get_consoles() -> Result<Vec<String>> {
     for entry in std::fs::read_dir(&include_dir)? {
         let entry = entry?;
         let name = entry.file_name().to_string_lossy().to_string();
-        // New pattern: {console}.rs (exclude non-console files like mod.rs, lib.rs)
+
+        // Directory module pattern: include/{console}/ (with mod.rs inside)
+        if entry.file_type()?.is_dir() {
+            let mod_rs = entry.path().join("mod.rs");
+            if mod_rs.exists() {
+                consoles.push(name);
+                continue;
+            }
+        }
+
+        // Legacy single-file pattern: {console}.rs
         if name.ends_with(".rs") && !["mod.rs", "lib.rs"].contains(&name.as_str()) {
-            // Extract console name: {console}.rs
             if let Some(console) = name.strip_suffix(".rs") {
                 consoles.push(console.to_string());
             }
         }
     }
 
+    consoles.dedup();
     Ok(consoles)
+}
+
+/// Resolve the FFI source path for a console (directory or single file).
+fn resolve_ffi_source(workspace_root: &Path, console: &str) -> PathBuf {
+    let dir_path = workspace_root.join(format!("include/{}", console));
+    if dir_path.is_dir() {
+        dir_path
+    } else {
+        workspace_root.join(format!("include/{}.rs", console))
+    }
 }
 
 /// Generate bindings for a specific console
 pub fn generate_for_console(console: &str) -> Result<()> {
     let workspace_root = find_workspace_root()?;
 
-    // Construct console-specific paths
-    let ffi_source = workspace_root.join(format!("include/{}.rs", console));
+    let ffi_source = resolve_ffi_source(&workspace_root, console);
     let c_output = workspace_root.join(format!("include/{}.h", console));
     let zig_output = workspace_root.join(format!("include/{}.zig", console));
 
@@ -82,10 +101,10 @@ pub fn validate() -> Result<()> {
 /// Validate bindings for a specific console
 pub fn validate_for_console(console: &str) -> Result<()> {
     let workspace_root = find_workspace_root()?;
-    let ffi_source = workspace_root.join(format!("include/{}.rs", console));
+    let ffi_source = resolve_ffi_source(&workspace_root, console);
 
     // Parse FFI source
-    let model = parser::parse_ffi_file(&ffi_source).context("Failed to parse FFI source file")?;
+    let model = parser::parse_ffi_file(&ffi_source).context("Failed to parse FFI source")?;
 
     println!(
         "✓ Rust FFI: {} functions, {} constant modules",
@@ -102,7 +121,7 @@ pub fn check_for_console(console: &str) -> Result<bool> {
 
     let c_output = workspace_root.join(format!("include/{}.h", console));
     let zig_output = workspace_root.join(format!("include/{}.zig", console));
-    let ffi_source = workspace_root.join(format!("include/{}.rs", console));
+    let ffi_source = resolve_ffi_source(&workspace_root, console);
 
     // Parse FFI source
     let model = parser::parse_ffi_file(&ffi_source)
