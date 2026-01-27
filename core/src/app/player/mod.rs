@@ -25,6 +25,7 @@ use winit::window::Window;
 use crate::capture::ScreenCapture;
 use crate::console::Console;
 use crate::debug::FrameController;
+use crate::replay::ScriptExecutor;
 use crate::runner::ConsoleRunner;
 
 use super::ui::SharedSettingsUi;
@@ -78,6 +79,8 @@ where
     waiting_for_peer: Option<WaitingForPeer>,
     _vram_limit: usize,
     _loader_marker: std::marker::PhantomData<L>,
+    /// Active replay script executor (when --replay is used)
+    replay_executor: Option<ScriptExecutor>,
 }
 
 impl<C, L> StandaloneApp<C, L>
@@ -160,6 +163,7 @@ where
             waiting_for_peer: None,
             _vram_limit: vram_limit,
             _loader_marker: std::marker::PhantomData,
+            replay_executor: None,
         }
     }
 }

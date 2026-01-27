@@ -97,6 +97,20 @@ where
                     self.execute_draw_commands();
                 }
 
+                // Advance replay executor and request screenshots
+                if did_render {
+                    if let Some(ref mut executor) = self.replay_executor {
+                        if executor.needs_screenshot() {
+                            self.capture.request_screenshot();
+                        }
+                        executor.advance_frame();
+                        if executor.is_complete() {
+                            tracing::info!("Replay script complete");
+                            self.should_exit = true;
+                        }
+                    }
+                }
+
                 if !game_running {
                     tracing::info!("Game requested quit");
                     self.should_exit = true;

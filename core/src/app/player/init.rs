@@ -214,6 +214,39 @@ where
             self.capture.set_source_fps(session.runtime.tick_rate());
         }
 
+        // Load replay script if specified
+        if let Some(ref script_path) = self.config.replay_script {
+            match crate::replay::script::ReplayScript::from_file(script_path) {
+                Ok(script) => {
+                    if let Some(session) = runner.session() {
+                        if let Some(layout) = session.runtime.console().replay_input_layout() {
+                            match crate::replay::script::Compiler::new(layout.as_ref())
+                                .compile(&script)
+                            {
+                                Ok(compiled) => {
+                                    tracing::info!(
+                                        "Replay script loaded: {} frames, {} screenshots",
+                                        compiled.frame_count,
+                                        compiled.screenshot_frames.len()
+                                    );
+                                    self.replay_executor =
+                                        Some(crate::replay::ScriptExecutor::new(
+                                            compiled,
+                                        ));
+                                }
+                                Err(e) => {
+                                    tracing::error!("Failed to compile replay script: {}", e)
+                                }
+                            }
+                        } else {
+                            tracing::error!("Console does not support replay scripts");
+                        }
+                    }
+                }
+                Err(e) => tracing::error!("Failed to load replay script: {}", e),
+            }
+        }
+
         let egui_state = egui_winit::State::new(
             self.egui_ctx.clone(),
             egui::ViewportId::ROOT,

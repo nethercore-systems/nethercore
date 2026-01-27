@@ -106,27 +106,47 @@ where
             tracing::info!("run_game_frame: local_players = {:?}", local_players);
         }
 
-        // Get all player inputs and map to session player handles
-        // player_handle = the session's player slot (e.g., 0 for host, 1 for joiner)
-        let all_inputs = self.input_manager.get_all_inputs();
-        for &player_handle in local_players.iter() {
-            let raw_input = all_inputs[player_handle];
-            let console_input = session.runtime.console().map_input(&raw_input);
-
-            if let Some(game) = session.runtime.game_mut() {
-                game.set_input(player_handle, console_input);
+        // Get inputs: from replay script or from input manager
+        if let Some(ref executor) = self.replay_executor {
+            // Replay mode: use script inputs
+            if let Some(frame_inputs) = executor.current_inputs() {
+                let console = session.runtime.console().clone();
+                for (player_idx, bytes) in frame_inputs.iter().enumerate() {
+                    let console_input = console.decode_replay_bytes(bytes);
+                    if let Some(game) = session.runtime.game_mut() {
+                        game.set_input(player_idx, console_input);
+                    }
+                    if let Err(e) = session.runtime.add_local_input(player_idx, console_input) {
+                        tracing::error!(
+                            "Failed to add replay input for player {}: {:?}",
+                            player_idx,
+                            e
+                        );
+                    }
+                }
             }
+        } else {
+            // Normal mode: use input manager
+            let all_inputs = self.input_manager.get_all_inputs();
+            for &player_handle in local_players.iter() {
+                let raw_input = all_inputs[player_handle];
+                let console_input = session.runtime.console().map_input(&raw_input);
 
-            // Always add input - GGRS will handle synchronization
-            if let Err(e) = session
-                .runtime
-                .add_local_input(player_handle, console_input)
-            {
-                tracing::error!(
-                    "Failed to add local input for handle {}: {:?}",
-                    player_handle,
-                    e
-                );
+                if let Some(game) = session.runtime.game_mut() {
+                    game.set_input(player_handle, console_input);
+                }
+
+                // Always add input - GGRS will handle synchronization
+                if let Err(e) = session
+                    .runtime
+                    .add_local_input(player_handle, console_input)
+                {
+                    tracing::error!(
+                        "Failed to add local input for handle {}: {:?}",
+                        player_handle,
+                        e
+                    );
+                }
             }
         }
 
