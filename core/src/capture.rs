@@ -432,7 +432,7 @@ fn timestamped_filename(game_name: &str, suffix: &str, extension: &str) -> Strin
         "{}_{}_{}.{}",
         sanitized,
         suffix,
-        now.format("%Y-%m-%d_%H-%M-%S"),
+        now.format("%Y-%m-%d_%H-%M-%S-%3f"),
         extension
     )
 }
