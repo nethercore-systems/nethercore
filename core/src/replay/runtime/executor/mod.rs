@@ -104,6 +104,11 @@ impl ScriptExecutor {
         self.script.snap_frames.contains(&self.current_frame)
     }
 
+    /// Check if current frame needs a screenshot
+    pub fn needs_screenshot(&self) -> bool {
+        self.script.screenshot_frames.contains(&self.current_frame)
+    }
+
     /// Get assertions for the current frame
     pub fn current_assertions(&self) -> Vec<&CompiledAssertion> {
         self.script
