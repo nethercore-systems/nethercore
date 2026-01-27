@@ -4,67 +4,80 @@
 use crate::constants::*;
 
 // -----------------------------------------------------------------------------
-// Preset 17: "Volcanic Core" - Primordial/elemental
+// Preset 17: "Volcanic Core" — Inside active volcano
 // -----------------------------------------------------------------------------
-// L0: RAMP (sky=#100800, floor=#401000, walls=#201008)
-// L1: PLANE/STONE (volcanic black #181008)
-// L2: TRACE/CRACKS (orange #ff4000, lava veins)
-// L3: SPLIT/CROSS (dark red #300800 / bright orange #ff4000)
-// L4: FLOW (orange-red #ff2800, churning lava)
-// L5: SCATTER (bright orange #ff8000, rising sparks)
-// L6: LOBE (deep red #ff2000, heat glow from below)
-// L7: ATMOSPHERE/ABSORPTION (smoke black #100800)
+// L0: RAMP (sky=#100800, floor=#401000, walls=#201008, THRESH_INTERIOR)
+// L1: CELL/HEX (basalt columns, walls, LERP)
+// L2: PATCHES/DEBRIS (volcanic rubble, floor, ADD)
+// L3: PLANE/STONE (rocky volcanic floor, LERP)
+// L4: TRACE/CRACKS (lava veins, floor, ADD, TANGENT_LOCAL)
+// L5: FLOW (churning lava, floor, SCREEN)
+// L6: SCATTER/EMBERS (rising sparks, all, ADD)
+// L7: ATMOSPHERE/ABSORPTION (volcanic gas, all, LERP)
 pub(super) const PRESET_VOLCANIC_CORE: [[u64; 2]; 8] = [
     // L0: RAMP - black sky, magma floor, obsidian walls
     [
         hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x100800, 0x401000),
-        lo(255, 0x20, 0x10, 0x08, 0, DIR_UP, 15, 15),
+        lo(180, 0x20, 0x10, 0x08, THRESH_INTERIOR, DIR_UP, 15, 15),
     ],
-    // L1: PLANE/HEX - hexagonal basalt columns (volcanic black)
+    // L1: CELL/HEX - hexagonal basalt columns (bound)
+    [
+        hi_meta(
+            OP_CELL,
+            REGION_WALLS,
+            BLEND_LERP,
+            DOMAIN_DIRECT3D,
+            CELL_HEX,
+            0x181008,
+            0x100800,
+        ),
+        lo(160, 128, 0, 0, 0, DIR_UP, 15, 15),
+    ],
+    // L2: PATCHES/DEBRIS - volcanic rubble on floor (bound)
+    [
+        hi_meta(
+            OP_PATCHES,
+            REGION_FLOOR,
+            BLEND_ADD,
+            DOMAIN_DIRECT3D,
+            PATCHES_DEBRIS,
+            0x301800,
+            0x200c00,
+        ),
+        lo(140, 128, 64, 0, 0, DIR_UP, 15, 15),
+    ],
+    // L3: PLANE/STONE - rocky volcanic floor
     [
         hi_meta(
             OP_PLANE,
             REGION_FLOOR,
             BLEND_LERP,
             DOMAIN_DIRECT3D,
-            PLANE_HEX,
+            PLANE_STONE,
             0x181008,
-            0x000000,
+            0x100800,
         ),
-        lo(160, 128, 0, 0, 0, DIR_UP, 15, 0),
+        lo(160, 128, 0, 0, 0, DIR_UP, 15, 15),
     ],
-    // L2: TRACE/CRACKS - lava veins (orange)
+    // L4: TRACE/CRACKS - lava veins glowing through floor
     [
         hi_meta(
             OP_TRACE,
-            REGION_ALL,
+            REGION_FLOOR,
             BLEND_ADD,
             DOMAIN_TANGENT_LOCAL,
             TRACE_CRACKS,
             0xff4000,
             0x000000,
         ),
-        lo(200, 128, 64, 0, 0, DIR_UP, 15, 0),
+        lo(140, 128, 64, 0, 0, DIR_UP, 15, 0),
     ],
-    // L3: SPLIT/CROSS - volcanic cross pattern (dark red / bright orange)
+    // L5: FLOW - churning lava (orange-red)
     [
-        hi_meta(
-            OP_SPLIT,
-            REGION_ALL,
-            BLEND_ADD,
-            0,
-            SPLIT_CROSS,
-            0x300800,
-            0xff4000,
-        ),
-        lo(150, 128, 0, 0, 0, DIR_UP, 15, 15),
+        hi(OP_FLOW, REGION_FLOOR, BLEND_SCREEN, 0, 0xff2800, 0x000000),
+        lo(120, 128, 0, 0, 100, DIR_UP, 15, 0),
     ],
-    // L4: FLOW - churning lava (orange-red)
-    [
-        hi(OP_FLOW, REGION_FLOOR, BLEND_ADD, 0, 0xff2800, 0x000000),
-        lo(180, 128, 100, 0, 0, DIR_UP, 15, 0),
-    ],
-    // L5: SCATTER - rising sparks (bright orange)
+    // L6: SCATTER/EMBERS - rising sparks (bright orange)
     [
         hi_meta(
             OP_SCATTER,
@@ -75,14 +88,9 @@ pub(super) const PRESET_VOLCANIC_CORE: [[u64; 2]; 8] = [
             0xff8000,
             0x000000,
         ),
-        lo(180, 120, 100, 0x40, 0, DIR_UP, 15, 0),
+        lo(110, 120, 100, 0x40, 0, DIR_UP, 15, 0),
     ],
-    // L6: LOBE - intense heat glow from below (deep red)
-    [
-        hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0xff2000, 0x000000),
-        lo(200, 128, 0, 0, 3, DIR_DOWN, 15, 0), // param_d=3: heat pulse
-    ],
-    // L7: ATMOSPHERE/ABSORPTION - volcanic gases (smoke black)
+    // L7: ATMOSPHERE/ABSORPTION - volcanic gases
     [
         hi_meta(
             OP_ATMOSPHERE,
@@ -93,33 +101,59 @@ pub(super) const PRESET_VOLCANIC_CORE: [[u64; 2]; 8] = [
             0x100800,
             0x000000,
         ),
-        lo(160, 180, 0, 0, 0, DIR_UP, 15, 0),
+        lo(110, 180, 0, 0, 0, DIR_UP, 15, 0),
     ],
 ];
 
 // -----------------------------------------------------------------------------
-// Preset 18: "Digital Matrix" - Cyber/virtual reality
+// Preset 18: "Digital Matrix" — Cyber virtual reality
 // -----------------------------------------------------------------------------
-// L0: RAMP (sky=#000000, floor=#001000, walls=#002000)
-// L1: GRID (bright green #00ff00, all regions)
-// L2: SCATTER (green #00ff00, falling code rain, BLEND_SCREEN for glow)
-// L3: CELL/GRID (dark green #003000, data blocks)
-// L4: TRACE/FILAMENTS (cyan #00ffff, data streams)
-// L5: APERTURE/RECT (green #00ff00, rectangular data viewport)
-// L6: APERTURE/ROUNDED_RECT (green #00aa00, rounded terminal frame)
-// L7: FLOW (green #00dd00, code streaming)
+// L0: RAMP (sky=#000000, floor=#001000, walls=#002000, THRESH_BALANCED)
+// L1: SPLIT/CROSS (data grid structure, all, ADD, bound)
+// L2: CELL/GRID (data block cells, walls, LERP, bound)
+// L3: GRID (green wireframe, walls, ADD)
+// L4: SCATTER/RAIN (falling code rain, all, SCREEN, AXIS_CYL, DOWN)
+// L5: FLOW (code streaming, all, ADD, DOWN)
+// L6: DECAL (data HUD element, walls, ADD)
+// L7: PORTAL/RECT (data portal, walls, ADD, TANGENT_LOCAL)
 pub(super) const PRESET_DIGITAL_MATRIX: [[u64; 2]; 8] = [
     // L0: RAMP - black sky, dark green floor, matrix green walls
     [
         hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x000000, 0x001000),
-        lo(255, 0x00, 0x20, 0x00, 0, DIR_UP, 15, 15),
+        lo(220, 0x00, 0x20, 0x00, THRESH_BALANCED, DIR_UP, 15, 15),
     ],
-    // L1: GRID - digital grid (bright green, all regions)
+    // L1: SPLIT/CROSS - data grid structure (bound)
     [
-        hi(OP_GRID, REGION_ALL, BLEND_ADD, 0, 0x00ff00, 0x000000),
-        lo(160, 32, 0, 3, 0, DIR_UP, 15, 0), // param_c=3: matrix scroll
+        hi_meta(
+            OP_SPLIT,
+            REGION_ALL,
+            BLEND_ADD,
+            DOMAIN_DIRECT3D,
+            SPLIT_CROSS,
+            0x003000,
+            0x001800,
+        ),
+        lo(130, 128, 0, 0, 0, DIR_UP, 15, 15),
     ],
-    // L2: SCATTER - falling code rain with BLEND_SCREEN for bright glow
+    // L2: CELL/GRID - data block cells (bound)
+    [
+        hi_meta(
+            OP_CELL,
+            REGION_WALLS,
+            BLEND_LERP,
+            DOMAIN_DIRECT3D,
+            CELL_GRID,
+            0x003000,
+            0x001000,
+        ),
+        lo(140, 128, 0, 0, 0, DIR_UP, 15, 15),
+    ],
+    // L3: GRID - green wireframe overlay
+    [
+        hi(OP_GRID, REGION_WALLS, BLEND_ADD, 0, 0x00ff00, 0x000000),
+        lo(130, 32, 0, 3, 0, DIR_UP, 15, 0),
+    ],
+    // L4: SCATTER/RAIN - falling code rain (green, cylindrical, downward)
     [
         hi_meta(
             OP_SCATTER,
@@ -132,20 +166,17 @@ pub(super) const PRESET_DIGITAL_MATRIX: [[u64; 2]; 8] = [
         ),
         lo(180, 150, 200, 0, 0, DIR_DOWN, 15, 0),
     ],
-    // L3: CELL/GRID - data block structure (dark green)
+    // L5: FLOW - code streaming effect (green, downward)
     [
-        hi_meta(
-            OP_CELL,
-            REGION_ALL,
-            BLEND_MULTIPLY,
-            DOMAIN_DIRECT3D,
-            CELL_GRID,
-            0x003000,
-            0x000000,
-        ),
-        lo(140, 128, 0, 0, 0, DIR_UP, 15, 0),
+        hi(OP_FLOW, REGION_ALL, BLEND_ADD, 0, 0x00dd00, 0x000000),
+        lo(120, 128, 0, 0, 150, DIR_DOWN, 15, 0),
     ],
-    // L4: PORTAL/RECT - rectangular data portal (cyan)
+    // L6: DECAL - data HUD element (cyan)
+    [
+        hi(OP_DECAL, REGION_WALLS, BLEND_ADD, 0, 0x00ffff, 0x000000),
+        lo(120, 128, 64, 0, 0, DIR_UP, 15, 0),
+    ],
+    // L7: PORTAL/RECT - data portal (cyan/green, TANGENT_LOCAL)
     [
         hi_meta(
             OP_PORTAL,
@@ -154,84 +185,74 @@ pub(super) const PRESET_DIGITAL_MATRIX: [[u64; 2]; 8] = [
             DOMAIN_TANGENT_LOCAL,
             PORTAL_RECT,
             0x00ffff,
-            0x000000,
+            0x004000,
         ),
-        lo(170, 128, 64, 0, 0, DIR_UP, 15, 0),
-    ],
-    // L5: APERTURE/RECT - rectangular data viewport (green)
-    [
-        hi_meta(
-            OP_APERTURE,
-            REGION_WALLS,
-            BLEND_ADD,
-            DOMAIN_DIRECT3D,
-            APERTURE_RECT,
-            0x00ff00,
-            0x000000,
-        ),
-        lo(160, 128, 0, 0, 0, DIR_UP, 15, 0),
-    ],
-    // L6: APERTURE/ROUNDED_RECT - rounded terminal frame (green)
-    [
-        hi_meta(
-            OP_APERTURE,
-            REGION_ALL,
-            BLEND_MULTIPLY,
-            DOMAIN_DIRECT3D,
-            APERTURE_ROUNDED_RECT,
-            0x00aa00,
-            0x000000,
-        ),
-        lo(140, 128, 0, 0, 0, DIR_UP, 15, 0),
-    ],
-    // L7: FLOW - code streaming effect (green)
-    [
-        hi(OP_FLOW, REGION_ALL, BLEND_ADD, 0, 0x00dd00, 0x000000),
-        lo(120, 128, 150, 0, 0, DIR_DOWN, 15, 0),
+        lo(120, 128, 64, 0, 0, DIR_UP, 15, 15),
     ],
 ];
 
 // -----------------------------------------------------------------------------
-// Preset 19: "Noir Detective" - 1940s private eye office
+// Preset 19: "Noir Detective" — 1940s private eye office
 // -----------------------------------------------------------------------------
-// L0: RAMP (dark ceiling, worn wood floor, olive/brown walls)
-// L1: SPLIT/WEDGE (venetian blind shadow stripes - iconic noir lighting)
-// L2: GRID (window frame grid)
-// L3: LOBE (desk lamp cone of light)
-// L4: SCATTER (cigarette smoke particles)
-// L5: ATMOSPHERE/MIE (smoky haze)
-// L6: CELL/BRICK (subtle wall texture)
-// L7: APERTURE/RECT (window frame vignette)
+// L0: RAMP (sky=#101008, floor=#302820, walls=#383428, THRESH_INTERIOR)
+// L1: SECTOR/BOX (office box enclosure, all, LERP, bound)
+// L2: APERTURE/RECT (window frame, walls, LERP, bound)
+// L3: SPLIT/WEDGE (venetian blind shadows, walls, LERP, dir=SUN)
+// L4: LOBE (desk lamp glow, floor, ADD, dir=DOWN)
+// L5: SCATTER/DUST (cigarette smoke, all, ADD)
+// L6: ATMOSPHERE/MIE (smoky haze, all, LERP)
+// L7: FLOW (rain on window, walls, ADD, low intensity)
 pub(super) const PRESET_NOIR_DETECTIVE: [[u64; 2]; 8] = [
     // L0: RAMP - dark ceiling, worn wood floor, olive walls
     [
         hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x101008, 0x302820),
-        lo(255, 0x38, 0x34, 0x28, 0, DIR_UP, 15, 15),
+        lo(180, 0x38, 0x34, 0x28, THRESH_INTERIOR, DIR_UP, 15, 15),
     ],
-    // L1: SPLIT/WEDGE - venetian blind shadows (the defining noir look)
+    // L1: SECTOR/BOX - office box enclosure (bound)
+    [
+        hi_meta(
+            OP_SECTOR,
+            REGION_ALL,
+            BLEND_LERP,
+            DOMAIN_DIRECT3D,
+            SECTOR_BOX,
+            0x282418,
+            0x1a1810,
+        ),
+        lo(180, 128, 0, 0, 0, DIR_UP, 15, 15),
+    ],
+    // L2: APERTURE/RECT - window frame (bound)
+    [
+        hi_meta(
+            OP_APERTURE,
+            REGION_WALLS,
+            BLEND_LERP,
+            DOMAIN_DIRECT3D,
+            APERTURE_RECT,
+            0x101008,
+            0x282418,
+        ),
+        lo(160, 128, 0, 0, 0, DIR_UP, 15, 15),
+    ],
+    // L3: SPLIT/WEDGE - venetian blind shadows (iconic noir lighting)
     [
         hi_meta(
             OP_SPLIT,
-            REGION_ALL,
-            BLEND_MULTIPLY,
+            REGION_WALLS,
+            BLEND_LERP,
             DOMAIN_DIRECT3D,
             SPLIT_WEDGE,
-            0x000000,
-            0x404030,
+            0x101008,
+            0x383020,
         ),
-        lo(180, 128, 0, 0, 0, DIR_SUN, 15, 15),
+        lo(160, 128, 0, 0, 0, DIR_SUN, 15, 15),
     ],
-    // L2: GRID - window frame structure
+    // L4: LOBE - desk lamp cone of warm light (sine flicker)
     [
-        hi(OP_GRID, REGION_WALLS, BLEND_MULTIPLY, 0, 0x202018, 0x000000),
-        lo(120, 64, 0, 0, 0, DIR_UP, 15, 0),
+        hi(OP_LOBE, REGION_FLOOR, BLEND_ADD, 0, 0xffe0a0, 0x000000),
+        lo(130, 128, 0, 1, 1, DIR_DOWN, 15, 0),
     ],
-    // L3: LOBE - desk lamp cone of warm light
-    [
-        hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0xffe0a0, 0x000000),
-        lo(160, 128, 0, 0, 1, DIR_DOWN, 15, 0), // param_d=1: subtle flicker
-    ],
-    // L4: SCATTER - cigarette smoke particles
+    // L5: SCATTER/DUST - cigarette smoke particles
     [
         hi_meta(
             OP_SCATTER,
@@ -244,7 +265,7 @@ pub(super) const PRESET_NOIR_DETECTIVE: [[u64; 2]; 8] = [
         ),
         lo(100, 80, 40, 0x20, 0, DIR_UP, 10, 0),
     ],
-    // L5: ATMOSPHERE/MIE - smoky haze filling the room
+    // L6: ATMOSPHERE/MIE - smoky haze filling the room
     [
         hi_meta(
             OP_ATMOSPHERE,
@@ -257,80 +278,59 @@ pub(super) const PRESET_NOIR_DETECTIVE: [[u64; 2]; 8] = [
         ),
         lo(120, 150, 0, 0, 0, DIR_UP, 15, 0),
     ],
-    // L6: CELL/BRICK - subtle worn wall texture
+    // L7: FLOW - rain streaking on window (low intensity)
     [
-        hi_meta(
-            OP_CELL,
-            REGION_WALLS,
-            BLEND_MULTIPLY,
-            DOMAIN_DIRECT3D,
-            CELL_BRICK,
-            0x383028,
-            0x000000,
-        ),
-        lo(80, 128, 0, 0, 0, DIR_UP, 15, 0),
-    ],
-    // L7: APERTURE/RECT - window frame vignette
-    [
-        hi_meta(
-            OP_APERTURE,
-            REGION_ALL,
-            BLEND_MULTIPLY,
-            DOMAIN_DIRECT3D,
-            APERTURE_RECT,
-            0x000000,
-            0x000000,
-        ),
-        lo(140, 160, 0, 0, 0, DIR_UP, 15, 0),
+        hi(OP_FLOW, REGION_WALLS, BLEND_ADD, 0, 0x404030, 0x000000),
+        lo(80, 128, 0, 0, 60, DIR_DOWN, 15, 0),
     ],
 ];
 
 // -----------------------------------------------------------------------------
-// Preset 20: "Steampunk Airship" - Victorian observation deck
+// Preset 20: "Steampunk Airship" — Victorian observation deck
 // -----------------------------------------------------------------------------
-// L0: RAMP (amber sky, burnished brass floor, copper walls)
-// L1: APERTURE/MULTI (multiple circular portholes)
-// L2: CELL/HEX (riveted hex plate flooring)
-// L3: GRID (brass framework girders)
-// L4: CELESTIAL/SUN (setting sun through porthole)
-// L5: VEIL/PILLARS (steam columns rising)
-// L6: SCATTER (floating steam particles)
-// L7: ATMOSPHERE/MIE (warm amber haze)
+// L0: RAMP (sky=#ffa040, floor=#604020, walls=#805030, THRESH_SEMI)
+// L1: APERTURE/ROUNDED_RECT (porthole frames, walls, LERP, bound)
+// L2: CELL/HEX (riveted hex plates, floor, LERP, bound)
+// L3: GRID (brass girders, walls, ADD)
+// L4: CELESTIAL/SUN (setting sun, sky, ADD, dir=SUNSET)
+// L5: VEIL/PILLARS (steam columns, walls, ADD, AXIS_CYL)
+// L6: SCATTER/DUST (steam particles, all, ADD)
+// L7: ATMOSPHERE/MIE (warm amber haze, all, LERP)
 pub(super) const PRESET_STEAMPUNK_AIRSHIP: [[u64; 2]; 8] = [
     // L0: RAMP - amber sunset sky, burnished brass floor, copper walls
     [
         hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0xffa040, 0x604020),
-        lo(255, 0x80, 0x50, 0x30, 0, DIR_UP, 15, 15),
+        lo(190, 0x80, 0x50, 0x30, THRESH_SEMI, DIR_UP, 15, 15),
     ],
-    // L1: APERTURE/MULTI - multiple circular observation portholes
+    // L1: APERTURE/ROUNDED_RECT - porthole frames (bound)
     [
         hi_meta(
             OP_APERTURE,
             REGION_WALLS,
-            BLEND_MULTIPLY,
+            BLEND_LERP,
             DOMAIN_DIRECT3D,
-            APERTURE_MULTI,
+            APERTURE_ROUNDED_RECT,
             0x402010,
-            0x000000,
+            0x604030,
         ),
-        lo(200, 100, 0, 0, 0, DIR_UP, 15, 0),
+        lo(200, 100, 0, 0, 0, DIR_UP, 15, 15),
     ],
-    // L2: CELL/HEX - riveted hexagonal plate flooring
+    // L2: CELL/HEX - riveted hexagonal plate flooring (bound)
     [
         hi_meta(
             OP_CELL,
             REGION_FLOOR,
-            BLEND_MULTIPLY,
+            BLEND_LERP,
             DOMAIN_DIRECT3D,
             CELL_HEX,
             0x503020,
-            0x000000,
+            0x402010,
         ),
-        lo(150, 128, 0, 0, 0, DIR_UP, 15, 0),
+        lo(150, 128, 0, 0, 0, DIR_UP, 15, 15),
     ],
     // L3: GRID - brass framework and girders
     [
-        hi(OP_GRID, REGION_ALL, BLEND_ADD, 0, 0xc09040, 0x000000),
+        hi(OP_GRID, REGION_WALLS, BLEND_ADD, 0, 0xc09040, 0x000000),
         lo(100, 48, 0, 0, 0, DIR_UP, 12, 0),
     ],
     // L4: CELESTIAL/SUN - setting sun visible through porthole
@@ -344,13 +344,13 @@ pub(super) const PRESET_STEAMPUNK_AIRSHIP: [[u64; 2]; 8] = [
             0xffc060,
             0x000000,
         ),
-        lo(200, 128, 0, 0, 0, DIR_SUNSET, 15, 0),
+        lo(160, 128, 0, 0, 0, DIR_SUNSET, 15, 0),
     ],
     // L5: VEIL/PILLARS - steam columns rising from vents
     [
         hi_meta(
             OP_VEIL,
-            REGION_ALL,
+            REGION_WALLS,
             BLEND_ADD,
             DOMAIN_AXIS_CYL,
             VEIL_PILLARS,
@@ -359,7 +359,7 @@ pub(super) const PRESET_STEAMPUNK_AIRSHIP: [[u64; 2]; 8] = [
         ),
         lo(120, 128, 60, 0, 0, DIR_UP, 10, 0),
     ],
-    // L6: SCATTER - floating steam and dust particles
+    // L6: SCATTER/DUST - floating steam particles
     [
         hi_meta(
             OP_SCATTER,
@@ -370,7 +370,7 @@ pub(super) const PRESET_STEAMPUNK_AIRSHIP: [[u64; 2]; 8] = [
             0xffe8c0,
             0x000000,
         ),
-        lo(140, 100, 50, 0x20, 0, DIR_UP, 12, 0),
+        lo(100, 100, 50, 0x20, 0, DIR_UP, 12, 0),
     ],
     // L7: ATMOSPHERE/MIE - warm amber engine room haze
     [
@@ -386,4 +386,3 @@ pub(super) const PRESET_STEAMPUNK_AIRSHIP: [[u64; 2]; 8] = [
         lo(100, 120, 0, 0, 0, DIR_UP, 15, 0),
     ],
 ];
-

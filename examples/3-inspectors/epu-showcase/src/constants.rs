@@ -350,3 +350,18 @@ pub const DIR_SUNSET: u64 = 0xC190;
 
 /// NOP layer (disabled)
 pub const NOP_LAYER: [u64; 2] = [0, 0];
+
+// =============================================================================
+// RAMP Threshold Presets (param_d encoding)
+// =============================================================================
+
+/// Balanced outdoor: ceil_q=10 (y=+0.33), floor_q=5 (y=-0.33)
+pub const THRESH_BALANCED: u64 = 0xA5;
+/// Interior/enclosed: ceil_q=12 (y=+0.60), floor_q=3 (y=-0.60) — more wall region
+pub const THRESH_INTERIOR: u64 = 0xC3;
+/// Open sky: ceil_q=9 (y=+0.20), floor_q=6 (y=-0.20) — more sky region
+pub const THRESH_OPEN: u64 = 0x96;
+/// Vast open: ceil_q=8 (y=+0.07), floor_q=7 (y=-0.07) — almost all sky+floor
+pub const THRESH_VAST: u64 = 0x87;
+/// Semi-enclosed: ceil_q=11 (y=+0.47), floor_q=4 (y=-0.47)
+pub const THRESH_SEMI: u64 = 0xB4;

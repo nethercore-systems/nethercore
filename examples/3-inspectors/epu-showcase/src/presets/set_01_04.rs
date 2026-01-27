@@ -8,43 +8,54 @@ use crate::constants::*;
 // =============================================================================
 
 // -----------------------------------------------------------------------------
-// Preset 1: "Neon Metropolis" - Cyberpunk urban
+// Preset 1: "Neon Metropolis" - Rain-soaked cyberpunk alley
 // -----------------------------------------------------------------------------
-// L0: RAMP (sky=#1a0a2e, floor=#000000, walls RGB=#1c1c1c via param_a/b/c)
-// L1: SILHOUETTE/CITY (black #000000)
-// L2: GRID (cyan #00ffff, walls only)
-// L3: SCATTER (warm yellow #ffcc00, walls, windows-like)
-// L4: VEIL/LASER_BARS (magenta #ff00ff)
-// L5: ATMOSPHERE/MIE (gray #404050)
-// L6: FLOW (cyan #00ddff, rain effect)
-// L7: SECTOR/TUNNEL (BLEND_OVERLAY, #000000/#1a0a2e)
+// L0: RAMP (sky=#1a0a2e, floor=#080810, walls=#1c1c1c)
+// L1: SECTOR/TUNNEL (enclosure, #1a0a2e / #0a0618)
+// L2: SILHOUETTE/CITY (black skyline cutout, walls)
+// L3: GRID (cyan #00ffff, walls, scroll)
+// L4: SCATTER/WINDOWS (yellow #ffcc00, walls, AXIS_CYL)
+// L5: VEIL/LASER_BARS (magenta #ff00ff, walls, AXIS_CYL)
+// L6: FLOW (cyan #00ddff, rain, dir=DOWN)
+// L7: ATMOSPHERE/MIE (gray haze #404050)
 pub(super) const PRESET_NEON_METROPOLIS: [[u64; 2]; 8] = [
-    // L0: RAMP - deep purple sky, black floor, dark gray walls
-    // hi: opcode=RAMP, region=ALL, blend=LERP, meta5=0, color_a=sky, color_b=floor
-    // lo: intensity=255, param_a/b/c=wall RGB (0x1c each), param_d=0, dir=UP, alpha=15/15
+    // L0: RAMP - deep purple sky, near-black floor, dark gray walls
     [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x1a0a2e, 0x000000),
-        lo(255, 0x1c, 0x1c, 0x1c, 0, DIR_UP, 15, 15),
+        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x1a0a2e, 0x080810),
+        lo(220, 0x1c, 0x1c, 0x1c, THRESH_INTERIOR, DIR_UP, 15, 15),
     ],
-    // L1: SILHOUETTE/CITY - black city skyline cutout on walls
+    // L1: SECTOR/TUNNEL - tunnel enclosure bounding the scene
+    [
+        hi_meta(
+            OP_SECTOR,
+            REGION_ALL,
+            BLEND_LERP,
+            DOMAIN_DIRECT3D,
+            SECTOR_TUNNEL,
+            0x1a0a2e,
+            0x0a0618,
+        ),
+        lo(180, 80, 0, 0, 0, DIR_UP, 15, 15),
+    ],
+    // L2: SILHOUETTE/CITY - city skyline cutout on walls
     [
         hi_meta(
             OP_SILHOUETTE,
             REGION_WALLS,
-            BLEND_MULTIPLY,
+            BLEND_LERP,
             DOMAIN_DIRECT3D,
             SILHOUETTE_CITY,
-            0x000000,
+            0x0a0510,
             0x000000,
         ),
-        lo(200, 128, 0, 0, 0, DIR_UP, 15, 15),
+        lo(200, 128, 0, 0, 0, DIR_UP, 15, 0),
     ],
-    // L2: GRID - cyan grid on walls (vertical bars)
+    // L3: GRID - cyan neon grid on walls with scroll animation
     [
         hi(OP_GRID, REGION_WALLS, BLEND_ADD, 0, 0x00ffff, 0x000000),
-        lo(160, 32, 0, 3, 0, DIR_UP, 15, 0), // param_c=3: slow scroll animation
+        lo(120, 32, 0, 3, 0, DIR_UP, 15, 0),
     ],
-    // L3: SCATTER - warm yellow windows/lights on walls
+    // L4: SCATTER/WINDOWS - warm yellow window lights on walls
     [
         hi_meta(
             OP_SCATTER,
@@ -55,22 +66,27 @@ pub(super) const PRESET_NEON_METROPOLIS: [[u64; 2]; 8] = [
             0xffcc00,
             0x000000,
         ),
-        lo(180, 128, 0, 0x20, 0, DIR_UP, 15, 0),
+        lo(110, 128, 0, 0x20, 0, DIR_UP, 15, 0),
     ],
-    // L4: VEIL/LASER_BARS - magenta vertical laser beams
+    // L5: VEIL/LASER_BARS - magenta laser beams on walls
     [
         hi_meta(
             OP_VEIL,
-            REGION_ALL,
-            BLEND_ADD,
+            REGION_WALLS,
+            BLEND_SCREEN,
             DOMAIN_AXIS_CYL,
             VEIL_LASER_BARS,
             0xff00ff,
             0x000000,
         ),
-        lo(180, 64, 0, 0, 0, DIR_UP, 15, 0),
+        lo(100, 64, 0, 0, 0, DIR_UP, 15, 0),
     ],
-    // L5: ATMOSPHERE/MIE - subtle gray haze
+    // L6: FLOW - cyan rain effect (downward)
+    [
+        hi(OP_FLOW, REGION_ALL, BLEND_SCREEN, 0, 0x00ddff, 0x000000),
+        lo(90, 128, 0, 0, 200, DIR_DOWN, 15, 0),
+    ],
+    // L7: ATMOSPHERE/MIE - gray urban haze
     [
         hi_meta(
             OP_ATMOSPHERE,
@@ -83,75 +99,57 @@ pub(super) const PRESET_NEON_METROPOLIS: [[u64; 2]; 8] = [
         ),
         lo(60, 128, 0, 0, 0, DIR_UP, 15, 0),
     ],
-    // L6: FLOW - cyan rain effect (downward)
-    [
-        hi(OP_FLOW, REGION_ALL, BLEND_ADD, 0, 0x00ddff, 0x000000),
-        lo(140, 128, 200, 0, 0, DIR_DOWN, 15, 0),
-    ],
-    // L7: SECTOR/TUNNEL - tunnel enclosure effect with overlay blend
-    [
-        hi_meta(
-            OP_SECTOR,
-            REGION_ALL,
-            BLEND_OVERLAY,
-            0,
-            SECTOR_TUNNEL,
-            0x000000,
-            0x1a0a2e,
-        ),
-        lo(140, 128, 0, 0, 0, DIR_UP, 15, 15),
-    ],
 ];
 
 // -----------------------------------------------------------------------------
-// Preset 2: "Crimson Hellscape" - Horror/demonic
+// Preset 2: "Crimson Hellscape" - Volcanic hellscape with dimensional rifts
 // -----------------------------------------------------------------------------
 // L0: RAMP (sky=#4a0000, floor=#0a0000, walls=#2a0808)
-// L1: TRACE/CRACKS (orange-red #ff3300)
-// L2: PATCHES/MEMBRANE (dark red #330000)
-// L3: FLOW (ember orange #ff4400)
-// L4: SCATTER (bright orange #ff8800, embers)
-// L5: ATMOSPHERE/ABSORPTION (blood mist #400000)
-// L6: CELESTIAL/ECLIPSE (black #000000 with red #ff0000)
-// L7: PORTAL/RIFT (hellfire red #ff2200)
+// L1: PATCHES/MEMBRANE (dark red #330000, organic tissue, DIRECT3D)
+// L2: TRACE/CRACKS (lava veins #ff3300, floor, TANGENT_LOCAL)
+// L3: FLOW (churning lava #ff4400, floor)
+// L4: SCATTER/EMBERS (rising sparks #ff8800)
+// L5: CELESTIAL/ECLIPSE (blood eclipse #200000/#ff0000, dir=SUN)
+// L6: PORTAL/RIFT (dimensional tear #ff2200, walls, TANGENT_LOCAL)
+// L7: ATMOSPHERE/ABSORPTION (blood mist #400000)
 pub(super) const PRESET_CRIMSON_HELLSCAPE: [[u64; 2]; 8] = [
     // L0: RAMP - blood red sky, charred black floor, dark crimson walls
     [
         hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x4a0000, 0x0a0000),
-        lo(255, 0x2a, 0x08, 0x08, 0, DIR_UP, 15, 15),
+        lo(230, 0x2a, 0x08, 0x08, THRESH_BALANCED, DIR_UP, 15, 15),
     ],
-    // L1: TRACE/CRACKS - volcanic fissures on floor/walls
+    // L1: PATCHES/MEMBRANE - organic tissue texture on walls
+    [
+        hi_meta(
+            OP_PATCHES,
+            REGION_WALLS,
+            BLEND_SCREEN,
+            DOMAIN_DIRECT3D,
+            PATCHES_MEMBRANE,
+            0x330000,
+            0x1a0000,
+        ),
+        lo(150, 96, 32, 0, 0, DIR_UP, 15, 0),
+    ],
+    // L2: TRACE/CRACKS - volcanic lava veins on floor
     [
         hi_meta(
             OP_TRACE,
-            REGION_ALL,
+            REGION_FLOOR,
             BLEND_ADD,
             DOMAIN_TANGENT_LOCAL,
             TRACE_CRACKS,
             0xff3300,
             0x000000,
         ),
-        lo(180, 128, 64, 0, 0, DIR_UP, 15, 0),
+        lo(130, 90, 64, 0, 0, DIR_UP, 15, 0),
     ],
-    // L2: PATCHES/MEMBRANE - organic tissue texture
+    // L3: FLOW - churning lava glow on floor
     [
-        hi_meta(
-            OP_PATCHES,
-            REGION_ALL,
-            BLEND_MULTIPLY,
-            DOMAIN_DIRECT3D,
-            PATCHES_MEMBRANE,
-            0x330000,
-            0x000000,
-        ),
-        lo(150, 128, 32, 0, 0, DIR_UP, 15, 0),
+        hi(OP_FLOW, REGION_FLOOR, BLEND_SCREEN, 0, 0xff4400, 0x000000),
+        lo(120, 80, 0, 0, 64, DIR_UP, 15, 0),
     ],
-    // L3: FLOW - ember orange, slowly churning lava glow
-    [
-        hi(OP_FLOW, REGION_FLOOR, BLEND_ADD, 0, 0xff4400, 0x000000),
-        lo(160, 128, 64, 0, 0, DIR_UP, 15, 0),
-    ],
-    // L4: SCATTER - rising embers/sparks
+    // L4: SCATTER/EMBERS - rising sparks and embers
     [
         hi_meta(
             OP_SCATTER,
@@ -162,9 +160,35 @@ pub(super) const PRESET_CRIMSON_HELLSCAPE: [[u64; 2]; 8] = [
             0xff8800,
             0x000000,
         ),
-        lo(180, 100, 100, 0x30, 0, DIR_UP, 15, 0),
+        lo(110, 100, 100, 0x30, 0, DIR_UP, 15, 0),
     ],
-    // L5: ATMOSPHERE/ABSORPTION - thick blood mist
+    // L5: CELESTIAL/ECLIPSE - blood eclipse in the sky
+    [
+        hi_meta(
+            OP_CELESTIAL,
+            REGION_SKY,
+            BLEND_ADD,
+            DOMAIN_DIRECT3D,
+            CELESTIAL_ECLIPSE,
+            0x200000,
+            0xff0000,
+        ),
+        lo(160, 96, 0, 0, 0, DIR_SUN, 15, 15),
+    ],
+    // L6: PORTAL/RIFT - dimensional tear on walls
+    [
+        hi_meta(
+            OP_PORTAL,
+            REGION_WALLS,
+            BLEND_SCREEN,
+            DOMAIN_TANGENT_LOCAL,
+            PORTAL_RIFT,
+            0xff2200,
+            0x400000,
+        ),
+        lo(130, 90, 64, 0, 0, DIR_UP, 15, 0),
+    ],
+    // L7: ATMOSPHERE/ABSORPTION - thick blood mist
     [
         hi_meta(
             OP_ATMOSPHERE,
@@ -175,54 +199,41 @@ pub(super) const PRESET_CRIMSON_HELLSCAPE: [[u64; 2]; 8] = [
             0x400000,
             0x000000,
         ),
-        lo(180, 200, 0, 0, 0, DIR_UP, 15, 0),
-    ],
-    // L6: CELESTIAL/ECLIPSE - black sun with red corona
-    [
-        hi_meta(
-            OP_CELESTIAL,
-            REGION_SKY,
-            BLEND_ADD,
-            DOMAIN_DIRECT3D,
-            CELESTIAL_ECLIPSE,
-            0x000000,
-            0xff0000,
-        ),
-        lo(200, 128, 0, 0, 0, DIR_SUN, 15, 15),
-    ],
-    // L7: PORTAL/RIFT - hellfire dimensional tear on wall
-    [
-        hi_meta(
-            OP_PORTAL,
-            REGION_WALLS,
-            BLEND_ADD,
-            DOMAIN_TANGENT_LOCAL,
-            PORTAL_RIFT,
-            0xff2200,
-            0x000000,
-        ),
-        lo(180, 128, 64, 0, 0, DIR_UP, 15, 0),
+        lo(120, 200, 0, 0, 0, DIR_UP, 15, 0),
     ],
 ];
 
 // -----------------------------------------------------------------------------
-// Preset 3: "Frozen Tundra" - Arctic survival
+// Preset 3: "Frozen Tundra" - Arctic ice shelf, blizzard
 // -----------------------------------------------------------------------------
 // L0: RAMP (sky=#c8e0f0, floor=#f8f8ff, walls=#a0c8e0)
-// L1: PLANE/STONE (ice white #e8f4ff)
-// L2: CELL/SHATTER (pale cyan #d0f0ff)
-// L3: FLOW (white #ffffff, snow)
-// L4: SCATTER (white #ffffff, flakes)
-// L5: ATMOSPHERE/RAYLEIGH (arctic blue #b0d8f0)
-// L6: NOP_LAYER (disabled - reserved for aurora effect)
-// L7: APERTURE/CIRCLE (BLEND_MIN, icy vignette #d0f0ff)
+// L1: CELL/SHATTER (cracked ice #d0f0ff / #a0c8e0, floor)
+// L2: PLANE/STONE (frozen ground #e8f4ff / #c0d8e8, floor)
+// L3: SCATTER/SNOW (blizzard #ffffff, dir=DOWN)
+// L4: FLOW (drifting snow clouds #ffffff, sky, dir=DOWN)
+// L5: ATMOSPHERE/RAYLEIGH (crisp cold air #b0d8f0)
+// L6: LOBE (pale sun glow #e0f0ff, dir=SUN)
+// L7: NOP_LAYER
 pub(super) const PRESET_FROZEN_TUNDRA: [[u64; 2]; 8] = [
     // L0: RAMP - pale blue sky, white floor, ice blue walls
     [
         hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0xc8e0f0, 0xf8f8ff),
-        lo(255, 0xa0, 0xc8, 0xe0, 0, DIR_UP, 15, 15),
+        lo(240, 0xa0, 0xc8, 0xe0, THRESH_OPEN, DIR_UP, 15, 15),
     ],
-    // L1: PLANE/STONE - frozen ground texture (ice white)
+    // L1: CELL/SHATTER - cracked ice pattern on floor
+    [
+        hi_meta(
+            OP_CELL,
+            REGION_FLOOR,
+            BLEND_LERP,
+            DOMAIN_DIRECT3D,
+            CELL_SHATTER,
+            0xd0f0ff,
+            0xa0c8e0,
+        ),
+        lo(140, 80, 0, 0, 0, DIR_UP, 15, 15),
+    ],
+    // L2: PLANE/STONE - frozen ground texture on floor
     [
         hi_meta(
             OP_PLANE,
@@ -231,29 +242,11 @@ pub(super) const PRESET_FROZEN_TUNDRA: [[u64; 2]; 8] = [
             DOMAIN_DIRECT3D,
             PLANE_STONE,
             0xe8f4ff,
-            0x000000,
+            0xc0d8e8,
         ),
-        lo(150, 128, 0, 0, 0, DIR_UP, 15, 0),
+        lo(150, 96, 0, 0, 0, DIR_UP, 15, 15),
     ],
-    // L2: CELL/SHATTER - cracked ice pattern
-    [
-        hi_meta(
-            OP_CELL,
-            REGION_FLOOR,
-            BLEND_MULTIPLY,
-            DOMAIN_DIRECT3D,
-            CELL_SHATTER,
-            0xd0f0ff,
-            0x000000,
-        ),
-        lo(140, 128, 0, 0, 0, DIR_UP, 15, 0),
-    ],
-    // L3: FLOW - slow drifting snow
-    [
-        hi(OP_FLOW, REGION_ALL, BLEND_ADD, 0, 0xffffff, 0x000000),
-        lo(120, 128, 80, 3, 0, DIR_DOWN, 15, 0),
-    ],
-    // L4: SCATTER - snowfall with downward drift
+    // L3: SCATTER/SNOW - blizzard snowfall (downward)
     [
         hi_meta(
             OP_SCATTER,
@@ -264,9 +257,14 @@ pub(super) const PRESET_FROZEN_TUNDRA: [[u64; 2]; 8] = [
             0xffffff,
             0x000000,
         ),
-        lo(160, 128, 100, 0x20, 0, DIR_DOWN, 15, 0),
+        lo(100, 128, 100, 0x20, 0, DIR_DOWN, 15, 0),
     ],
-    // L5: ATMOSPHERE/RAYLEIGH - crisp cold air (arctic blue)
+    // L4: FLOW - drifting snow clouds in sky
+    [
+        hi(OP_FLOW, REGION_SKY, BLEND_ADD, 0, 0xffffff, 0x000000),
+        lo(120, 128, 0, 3, 80, DIR_DOWN, 15, 0),
+    ],
+    // L5: ATMOSPHERE/RAYLEIGH - crisp cold arctic air
     [
         hi_meta(
             OP_ATMOSPHERE,
@@ -279,91 +277,72 @@ pub(super) const PRESET_FROZEN_TUNDRA: [[u64; 2]; 8] = [
         ),
         lo(100, 128, 0, 0, 0, DIR_UP, 15, 0),
     ],
-    // L6: APERTURE/BARS - icy prison bars effect
+    // L6: LOBE - pale sun glow from above
     [
-        hi_meta(
-            OP_APERTURE,
-            REGION_ALL,
-            BLEND_MULTIPLY,
-            0,
-            APERTURE_BARS,
-            0xe0f0ff,
-            0x000000,
-        ),
-        lo(80, 64, 0, 0, 0, DIR_UP, 15, 0),
+        hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0xe0f0ff, 0x000000),
+        lo(100, 128, 0, 0, 0, DIR_SUN, 15, 0),
     ],
-    // L7: APERTURE/CIRCLE - icy vignette effect (pale cyan with min blend)
-    [
-        hi_meta(
-            OP_APERTURE,
-            REGION_ALL,
-            BLEND_MIN,
-            0,
-            APERTURE_CIRCLE,
-            0xd0f0ff,
-            0x000000,
-        ),
-        lo(140, 128, 0, 0, 0, DIR_UP, 15, 0),
-    ],
+    // L7: (empty)
+    NOP_LAYER,
 ];
 
 // -----------------------------------------------------------------------------
-// Preset 4: "Alien Jungle" - Sci-fi nature
+// Preset 4: "Alien Jungle" - Bioluminescent alien canopy
 // -----------------------------------------------------------------------------
 // L0: RAMP (sky=#3a0050, floor=#002020, walls=#004040)
-// L1: SILHOUETTE/FOREST (dark teal #001818)
-// L2: PATCHES/BLOBS (cyan #00ffaa)
-// L3: CELL/RADIAL (deep purple #200040)
-// L4: SCATTER (cyan #00ffcc, spores)
-// L5: VEIL/CURTAINS (purple #8000ff)
-// L6: ATMOSPHERE/ALIEN (green #004020)
-// L7: FLOW/CAUSTIC (cyan #00ddcc)
+// L1: SILHOUETTE/FOREST (alien tree silhouettes #001818 / #003030, walls)
+// L2: PATCHES/STREAKS (bioluminescent streaks #00ffaa / #004040, walls, AXIS_CYL)
+// L3: VEIL/CURTAINS (hanging bioluminescent vines #8000ff, walls, AXIS_CYL)
+// L4: SCATTER/DUST (floating spores #00ffcc)
+// L5: FLOW (rippling bioluminescence #00ddcc, floor)
+// L6: ATMOSPHERE/ALIEN (exotic gas #004020)
+// L7: LOBE (canopy glow #3a0050, sky, dir=UP)
 pub(super) const PRESET_ALIEN_JUNGLE: [[u64; 2]; 8] = [
-    // L0: RAMP - purple sky, bioluminescent floor, teal walls
+    // L0: RAMP - purple sky, dark teal floor, teal walls
     [
         hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x3a0050, 0x002020),
-        lo(255, 0x00, 0x40, 0x40, 0, DIR_UP, 15, 15),
+        lo(230, 0x00, 0x40, 0x40, THRESH_SEMI, DIR_UP, 15, 15),
     ],
-    // L1: SILHOUETTE/FOREST - alien tree silhouettes (dark teal)
+    // L1: SILHOUETTE/FOREST - alien tree silhouettes on walls
     [
         hi_meta(
             OP_SILHOUETTE,
             REGION_WALLS,
-            BLEND_MULTIPLY,
+            BLEND_LERP,
             DOMAIN_DIRECT3D,
             SILHOUETTE_FOREST,
             0x001818,
-            0x000000,
+            0x003030,
         ),
-        lo(180, 128, 0, 0, 0, DIR_UP, 15, 0),
+        lo(180, 128, 0, 0, 0, DIR_UP, 15, 15),
     ],
-    // L2: PATCHES/BLOBS - glowing fungal patches (bioluminescent cyan)
+    // L2: PATCHES/STREAKS - bioluminescent streaks on walls
     [
         hi_meta(
             OP_PATCHES,
-            REGION_ALL,
+            REGION_WALLS,
             BLEND_ADD,
             DOMAIN_AXIS_CYL,
             PATCHES_STREAKS,
             0x00ffaa,
-            0x000000,
+            0x004040,
         ),
-        lo(160, 128, 64, 0, 0, DIR_UP, 15, 0),
+        lo(100, 96, 64, 0, 0, DIR_UP, 15, 0),
     ],
-    // L3: CELL/RADIAL - organic radial cell structure (deep purple)
+    // L3: VEIL/CURTAINS - hanging bioluminescent vines on walls
     [
         hi_meta(
-            OP_CELL,
-            REGION_ALL,
-            BLEND_MULTIPLY,
-            DOMAIN_DIRECT3D,
-            CELL_RADIAL,
-            0x200040,
+            OP_VEIL,
+            REGION_WALLS,
+            BLEND_SCREEN,
+            DOMAIN_AXIS_CYL,
+            VEIL_CURTAINS,
+            0x8000ff,
             0x000000,
         ),
-        lo(140, 128, 0, 0, 0, DIR_UP, 15, 0),
+        lo(90, 96, 64, 0, 0, DIR_DOWN, 15, 0),
     ],
-    // L4: SCATTER - floating spores (cyan)
+    // L4: SCATTER/DUST - floating spores (cyan)
     [
         hi_meta(
             OP_SCATTER,
@@ -374,20 +353,12 @@ pub(super) const PRESET_ALIEN_JUNGLE: [[u64; 2]; 8] = [
             0x00ffcc,
             0x000000,
         ),
-        lo(170, 100, 80, 0x30, 0, DIR_UP, 15, 0),
+        lo(100, 100, 80, 0x30, 0, DIR_UP, 15, 0),
     ],
-    // L5: VEIL/CURTAINS - bioluminescent hanging vines (purple)
+    // L5: FLOW - rippling bioluminescence on floor
     [
-        hi_meta(
-            OP_VEIL,
-            REGION_ALL,
-            BLEND_ADD,
-            DOMAIN_AXIS_CYL,
-            VEIL_CURTAINS,
-            0x8000ff,
-            0x000000,
-        ),
-        lo(150, 128, 64, 0, 0, DIR_DOWN, 15, 0),
+        hi(OP_FLOW, REGION_FLOOR, BLEND_SCREEN, 0, 0x00ddcc, 0x000000),
+        lo(80, 96, 0, 0, 100, DIR_UP, 15, 0),
     ],
     // L6: ATMOSPHERE/ALIEN - exotic gas atmosphere (green tint)
     [
@@ -400,12 +371,11 @@ pub(super) const PRESET_ALIEN_JUNGLE: [[u64; 2]; 8] = [
             0x004020,
             0x000000,
         ),
-        lo(80, 128, 0, 0, 0, DIR_UP, 15, 0),
+        lo(80, 96, 0, 0, 0, DIR_UP, 15, 0),
     ],
-    // L7: FLOW - rippling bioluminescence (cyan caustics)
+    // L7: LOBE - canopy glow from above (purple, downward)
     [
-        hi(OP_FLOW, REGION_FLOOR, BLEND_ADD, 0, 0x00ddcc, 0x000000),
-        lo(140, 128, 100, 0, 0, DIR_UP, 15, 0),
+        hi(OP_LOBE, REGION_SKY, BLEND_ADD, 0, 0x3a0050, 0x000000),
+        lo(100, 128, 0, 0, 0, DIR_DOWN, 15, 0),
     ],
 ];
-

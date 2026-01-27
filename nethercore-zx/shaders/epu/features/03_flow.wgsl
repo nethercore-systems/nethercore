@@ -5,10 +5,10 @@
 //   color_b: Secondary flow color (RGB24) - mixed based on pattern
 //   intensity: Brightness (0..255 -> 0..1)
 //   param_a: Scale (0..255 -> 1..16)
-//   param_b: Phase (0..255 -> 0..1)
+//   param_b: Turbulence amount (0..255 -> 0..1)
 //   param_c[7:4]: Octaves (0..4)
 //   param_c[3:0]: Pattern (0=noise, 1=streaks, 2=caustic)
-//   param_d: Turbulence amount (0..255 -> 0..1)
+//   param_d: Phase (0..255 -> 0..1)
 //   direction: Flow direction (oct-u16)
 //   alpha_a: Flow alpha (0..15 -> 0..1)
 // ============================================================================
@@ -79,8 +79,8 @@ fn eval_flow(
     let octaves = min((pc >> 4u) & 0xFu, 4u);
     let pattern_type = pc & 0xFu;
 
-    // Turbulence from param_d - adds noise-based distortion to UV
-    let turbulence = u8_to_01(instr_d(instr));
+    // Turbulence from param_b - adds noise-based distortion to UV
+    let turbulence = u8_to_01(instr_b(instr));
 
     // NOTE: FLOW previously used 2D UV parameterizations (cylindrical / octahedral),
     // which necessarily introduce seams. Those seams become very noticeable once the
@@ -89,7 +89,7 @@ fn eval_flow(
     // Use a 3D domain based on the direction vector instead. This is continuous on the sphere,
     // so it eliminates hard seams for animated environments.
     var p = dir * scale;
-    let t = u8_to_01(instr_b(instr)) * TAU;
+    let t = u8_to_01(instr_d(instr)) * TAU;
 
     // Optional turbulence: add a small vector-valued distortion.
     if turbulence > 0.001 {

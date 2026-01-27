@@ -93,10 +93,10 @@ const DIR_UP: u64 = 0x80FF;
 
 /// Neon City: Purple sky to dark floor with cyan grid on walls
 static EPU_NEON_CITY: [[u64; 2]; 8] = [
-    // Layer 0: RAMP - Purple sky (#1A0A2E) to dark floor (#000000), gray walls
+    // Layer 0: RAMP - Purple sky (#1A0A2E) to dark floor (#000000), gray walls (#404060)
     [
         epu_hi(OP_RAMP, REGION_ALL, BLEND_ADD, 0, 0x1A0A2E, 0x000000),
-        epu_lo(200, 180, 160, 0xA5, 0, DIR_UP, 15, 15),
+        epu_lo(220, 0x40, 0x40, 0x60, 0xA5, DIR_UP, 15, 15),
     ],
     // Layer 1: GRID - Cyan grid lines on walls (#00FFFF)
     [
@@ -113,10 +113,10 @@ static EPU_NEON_CITY: [[u64; 2]; 8] = [
 
 /// Ember Glow: Orange sky to dark red floor with yellow-orange embers
 static EPU_EMBER_GLOW: [[u64; 2]; 8] = [
-    // Layer 0: RAMP - Orange sky (#FF6600) to dark red floor (#1A0000)
+    // Layer 0: RAMP - Orange sky (#FF6600) to dark red floor (#1A0000), dark orange walls (#401800)
     [
         epu_hi(OP_RAMP, REGION_ALL, BLEND_ADD, 0, 0xFF6600, 0x1A0000),
-        epu_lo(220, 180, 160, 0xA5, 0, DIR_UP, 15, 15),
+        epu_lo(220, 0x40, 0x18, 0x00, 0xA5, DIR_UP, 15, 15),
     ],
     // Layer 1: SCATTER - Yellow-orange embers (#FFCC00)
     [
@@ -133,15 +133,15 @@ static EPU_EMBER_GLOW: [[u64; 2]; 8] = [
 
 /// Frozen: Pale blue sky to white floor with white snow particles
 static EPU_FROZEN: [[u64; 2]; 8] = [
-    // Layer 0: RAMP - Pale blue sky (#CCE6FF) to white floor (#F0F8FF)
+    // Layer 0: RAMP - Pale blue sky (#CCE6FF) to white floor (#F0F8FF), bright icy walls (#C8D8E8)
     [
         epu_hi(OP_RAMP, REGION_ALL, BLEND_ADD, 0, 0xCCE6FF, 0xF0F8FF),
-        epu_lo(200, 200, 180, 0xA5, 0, DIR_UP, 15, 15),
+        epu_lo(230, 0xC8, 0xD8, 0xE8, 0xA5, DIR_UP, 15, 15),
     ],
     // Layer 1: FLOW - White snow particles (#FFFFFF)
     [
         epu_hi(OP_FLOW, REGION_SKY, BLEND_ADD, 0, 0xFFFFFF, 0xE0E8F0),
-        epu_lo(160, 48, 24, 16, 8, 0x40C0, 12, 8),
+        epu_lo(160, 48, 8, 16, 24, 0x40C0, 12, 8),
     ],
     [0, 0], // NOP
     [0, 0], // NOP
@@ -153,10 +153,10 @@ static EPU_FROZEN: [[u64; 2]; 8] = [
 
 /// Void: Deep blue sky to black floor with white stars
 static EPU_VOID: [[u64; 2]; 8] = [
-    // Layer 0: RAMP - Deep blue sky (#000D1A) to black floor (#000008)
+    // Layer 0: RAMP - Deep blue sky (#000D1A) to black floor (#000008), dark gray walls (#080810)
     [
         epu_hi(OP_RAMP, REGION_ALL, BLEND_ADD, 0, 0x000D1A, 0x000008),
-        epu_lo(180, 200, 180, 0xA5, 0, DIR_UP, 15, 15),
+        epu_lo(220, 0x08, 0x08, 0x10, 0xA5, DIR_UP, 15, 15),
     ],
     // Layer 1: SCATTER - White stars (#FFFFFF)
     [

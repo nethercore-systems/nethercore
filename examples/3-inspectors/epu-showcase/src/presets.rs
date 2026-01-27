@@ -44,6 +44,38 @@ pub static PRESETS: [Preset; PRESET_COUNT] = [
     set_21_24::PRESET_RITUAL_CHAMBER,
 ];
 
+/// Animation speeds per layer per preset.
+/// Each value is the phase increment per frame (0 = static, 1 = slow, 2 = medium, 4 = fast).
+/// Phase wraps at 256 (one full cycle = 256/speed frames).
+/// Only meaningful for opcodes that read param_d as phase:
+/// FLOW, LOBE, GRID, PLANE, PORTAL, BAND, DECAL.
+pub static ANIM_SPEEDS: [[u8; 8]; PRESET_COUNT] = [
+    [0, 0, 0, 1, 0, 0, 3, 0], //  0: Neon Metropolis
+    [0, 0, 0, 1, 0, 0, 3, 0], //  1: Crimson Hellscape
+    [0, 0, 1, 0, 2, 0, 0, 0], //  2: Frozen Tundra
+    [0, 0, 0, 0, 0, 1, 0, 0], //  3: Alien Jungle
+    [0, 0, 0, 0, 1, 0, 0, 0], //  4: Gothic Cathedral
+    [0, 0, 0, 1, 0, 0, 0, 1], //  5: Ocean Depths
+    [0, 0, 0, 1, 0, 0, 0, 3], //  6: Void Station
+    [0, 0, 0, 0, 1, 1, 0, 0], //  7: Desert Mirage
+    [0, 0, 2, 0, 0, 1, 2, 0], //  8: Neon Arcade
+    [0, 0, 3, 0, 0, 0, 0, 0], //  9: Storm Front
+    [0, 0, 0, 0, 0, 1, 1, 0], // 10: Crystal Cavern
+    [0, 0, 0, 0, 0, 2, 0, 3], // 11: War Zone
+    [0, 0, 0, 0, 0, 0, 0, 1], // 12: Enchanted Grove
+    [0, 0, 2, 0, 0, 0, 3, 0], // 13: Astral Void
+    [0; 8], // 14: Toxic Wasteland (no animatable layers)
+    [0; 8], // 15: Moonlit Graveyard (stillness is the horror)
+    [0, 0, 0, 0, 0, 2, 0, 0], // 16: Volcanic Core
+    [0, 0, 0, 3, 0, 4, 0, 2], // 17: Digital Matrix
+    [0, 0, 0, 0, 1, 0, 0, 1], // 18: Noir Detective
+    [0; 8], // 19: Steampunk Airship (static tableau)
+    [0, 0, 0, 3, 0, 0, 0, 2], // 20: Stormy Shores
+    [0, 0, 2, 0, 0, 0, 0, 0], // 21: Polar Aurora
+    [0, 0, 0, 0, 0, 0, 1, 0], // 22: Sacred Geometry
+    [0, 0, 0, 4, 1, 0, 0, 0], // 23: Ritual Chamber
+];
+
 /// Preset names for display
 pub const PRESET_NAMES: [&str; PRESET_COUNT] = [
     "Neon Metropolis",
