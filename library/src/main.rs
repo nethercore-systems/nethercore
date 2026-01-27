@@ -196,6 +196,11 @@ fn parse_player_options(args: &[String]) -> PlayerOptions {
                     options.preview_asset = Some(asset_name.clone());
                 }
             }
+            "--replay" => {
+                if let Some(path) = iter.next() {
+                    options.replay_script = Some(PathBuf::from(path));
+                }
+            }
             _ => {}
         }
     }

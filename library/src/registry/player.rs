@@ -147,6 +147,11 @@ fn build_cargo_run_player_command(
         }
     }
 
+    if let Some(ref replay) = options.replay_script {
+        cmd.arg("--replay");
+        cmd.arg(replay);
+    }
+
     Some(cmd)
 }
 
@@ -197,6 +202,11 @@ pub(crate) fn build_player_command(
             cmd.arg("--asset");
             cmd.arg(asset);
         }
+    }
+
+    if let Some(ref replay) = options.replay_script {
+        cmd.arg("--replay");
+        cmd.arg(replay);
     }
 
     cmd

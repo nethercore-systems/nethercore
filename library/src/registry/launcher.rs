@@ -39,6 +39,8 @@ pub struct PlayerOptions {
     pub preview: bool,
     /// Initial asset to focus in preview mode
     pub preview_asset: Option<String>,
+    /// Replay script path (.ncrs file)
+    pub replay_script: Option<PathBuf>,
 }
 
 /// Target for the player launcher (ROM path or game reference)
