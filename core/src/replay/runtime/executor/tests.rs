@@ -17,6 +17,7 @@ fn test_executor_basic() {
         player_count: 1,
         input_size: 1,
         inputs,
+        screenshot_frames: vec![],
         snap_frames: vec![0],
         assertions: vec![],
         actions: vec![],
@@ -49,6 +50,7 @@ fn test_assertion_evaluation_all_operators() {
         player_count: 1,
         input_size: 1,
         inputs: inputs.clone(),
+        screenshot_frames: vec![],
         snap_frames: vec![],
         assertions: vec![CompiledAssertion {
             frame: 0,
@@ -76,6 +78,7 @@ fn test_assertion_evaluation_all_operators() {
         player_count: 1,
         input_size: 1,
         inputs: inputs.clone(),
+        screenshot_frames: vec![],
         snap_frames: vec![],
         assertions: vec![CompiledAssertion {
             frame: 0,
@@ -102,6 +105,7 @@ fn test_assertion_evaluation_all_operators() {
         player_count: 1,
         input_size: 1,
         inputs: inputs.clone(),
+        screenshot_frames: vec![],
         snap_frames: vec![],
         assertions: vec![CompiledAssertion {
             frame: 0,
@@ -128,6 +132,7 @@ fn test_assertion_evaluation_all_operators() {
         player_count: 1,
         input_size: 1,
         inputs: inputs.clone(),
+        screenshot_frames: vec![],
         snap_frames: vec![],
         assertions: vec![CompiledAssertion {
             frame: 0,
@@ -154,6 +159,7 @@ fn test_assertion_evaluation_all_operators() {
         player_count: 1,
         input_size: 1,
         inputs: inputs.clone(),
+        screenshot_frames: vec![],
         snap_frames: vec![],
         assertions: vec![CompiledAssertion {
             frame: 0,
@@ -182,6 +188,7 @@ fn test_assertion_evaluation_all_operators() {
         player_count: 1,
         input_size: 1,
         inputs,
+        screenshot_frames: vec![],
         snap_frames: vec![],
         assertions: vec![CompiledAssertion {
             frame: 0,
@@ -214,6 +221,7 @@ fn test_assertion_prev_value() {
         player_count: 1,
         input_size: 1,
         inputs,
+        screenshot_frames: vec![],
         snap_frames: vec![0, 1],
         assertions: vec![CompiledAssertion {
             frame: 1,
@@ -254,6 +262,7 @@ fn test_assertion_variable_to_variable() {
         player_count: 1,
         input_size: 1,
         inputs,
+        screenshot_frames: vec![],
         snap_frames: vec![],
         assertions: vec![CompiledAssertion {
             frame: 0,
@@ -294,6 +303,7 @@ fn test_assertion_different_value_types() {
         player_count: 1,
         input_size: 1,
         inputs,
+        screenshot_frames: vec![],
         snap_frames: vec![],
         assertions: vec![CompiledAssertion {
             frame: 0,
@@ -330,6 +340,7 @@ fn test_assertion_different_value_types() {
         player_count: 1,
         input_size: 1,
         inputs: InputSequence::new(),
+        screenshot_frames: vec![],
         snap_frames: vec![],
         assertions: vec![CompiledAssertion {
             frame: 0,
@@ -383,6 +394,7 @@ fn test_executor_with_actions() {
         player_count: 1,
         input_size: 1,
         inputs,
+        screenshot_frames: vec![],
         snap_frames: vec![],
         assertions: vec![],
         actions: vec![CompiledAction {
@@ -425,6 +437,7 @@ fn test_executor_multiple_actions_same_frame() {
         player_count: 1,
         input_size: 1,
         inputs,
+        screenshot_frames: vec![],
         snap_frames: vec![],
         assertions: vec![],
         actions: vec![
@@ -491,6 +504,7 @@ fn test_executor_action_all_param_types() {
         player_count: 1,
         input_size: 1,
         inputs,
+        screenshot_frames: vec![],
         snap_frames: vec![],
         assertions: vec![],
         actions: vec![CompiledAction {

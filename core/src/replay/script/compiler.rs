@@ -59,6 +59,8 @@ pub struct CompiledScript {
     pub inputs: InputSequence,
     /// Frames that need snapshots
     pub snap_frames: Vec<u64>,
+    /// Frames that need screenshot capture
+    pub screenshot_frames: Vec<u64>,
     /// Assertions to evaluate
     pub assertions: Vec<CompiledAssertion>,
     /// Debug actions to invoke
@@ -123,6 +125,7 @@ impl<'a> Compiler<'a> {
         let max_frame = script.max_frame();
         let mut frame_inputs: HashMap<u64, Vec<Option<InputValue>>> = HashMap::new();
         let mut snap_frames = Vec::new();
+        let mut screenshot_frames = Vec::new();
         let mut assertions = Vec::new();
         let mut actions = Vec::new();
 
@@ -140,6 +143,9 @@ impl<'a> Compiler<'a> {
             // Track snap frames
             if entry.snap {
                 snap_frames.push(entry.f);
+            }
+            if entry.screenshot {
+                screenshot_frames.push(entry.f);
             }
 
             // Compile assertions
@@ -210,6 +216,7 @@ impl<'a> Compiler<'a> {
             input_size: self.layout.input_size() as u8,
             inputs,
             snap_frames,
+            screenshot_frames,
             assertions,
             actions,
             frame_count: max_frame + 1,
@@ -463,5 +470,46 @@ mod tests {
         assert_eq!(compiled.actions[0].frame, 0);
         assert_eq!(compiled.actions[0].name, "Load Level");
         assert!(compiled.actions[0].params.contains_key("level"));
+    }
+
+    #[test]
+    fn test_compile_with_screenshots() {
+        let script = ReplayScript {
+            console: "zx".to_string(),
+            seed: 0,
+            players: 1,
+            frames: vec![
+                FrameEntry {
+                    f: 0,
+                    p1: None,
+                    p2: None,
+                    p3: None,
+                    p4: None,
+                    snap: false,
+                    screenshot: true,
+                    assert: None,
+                    action: None,
+                    action_params: None,
+                },
+                FrameEntry {
+                    f: 10,
+                    p1: Some(InputValue::Symbolic("a".to_string())),
+                    p2: None,
+                    p3: None,
+                    p4: None,
+                    snap: false,
+                    screenshot: true,
+                    assert: None,
+                    action: None,
+                    action_params: None,
+                },
+            ],
+        };
+
+        let layout = MockLayout;
+        let compiler = Compiler::new(&layout);
+        let compiled = compiler.compile(&script).unwrap();
+
+        assert_eq!(compiled.screenshot_frames, vec![0, 10]);
     }
 }
