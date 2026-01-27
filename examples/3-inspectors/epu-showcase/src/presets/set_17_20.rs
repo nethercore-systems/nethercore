@@ -25,13 +25,13 @@ pub(super) const PRESET_VOLCANIC_CORE: [[u64; 2]; 8] = [
         hi_meta(
             OP_CELL,
             REGION_WALLS,
-            BLEND_LERP,
+            BLEND_ADD,
             DOMAIN_DIRECT3D,
             CELL_HEX,
-            0x181008,
-            0x100800,
+            0xff4000,
+            0x301008,
         ),
-        lo(160, 128, 0, 0, 0, DIR_UP, 15, 15),
+        lo(200, 128, 220, 50, 0, DIR_UP, 15, 15),
     ],
     // L2: PATCHES/DEBRIS - volcanic rubble on floor (bound)
     [
@@ -70,12 +70,12 @@ pub(super) const PRESET_VOLCANIC_CORE: [[u64; 2]; 8] = [
             0xff4000,
             0x000000,
         ),
-        lo(255, 128, 64, 0, 0, DIR_UP, 15, 0),
+        lo(150, 128, 64, 0, 0, DIR_UP, 15, 0),
     ],
     // L5: FLOW - churning lava (orange-red)
     [
-        hi(OP_FLOW, REGION_FLOOR, BLEND_SCREEN, 0, 0xff2800, 0x000000),
-        lo(200, 128, 0, 0, 100, DIR_UP, 15, 0),
+        hi(OP_FLOW, REGION_FLOOR, BLEND_LERP, 0, 0xff2800, 0x000000),
+        lo(80, 128, 0, 0x22, 100, DIR_UP, 15, 0),
     ],
     // L6: SCATTER/EMBERS - rising sparks (bright orange)
     [
@@ -88,7 +88,7 @@ pub(super) const PRESET_VOLCANIC_CORE: [[u64; 2]; 8] = [
             0xff8000,
             0x000000,
         ),
-        lo(110, 30, 25, 0x40, 0, DIR_UP, 15, 0),
+        lo(60, 30, 25, 0x40, 0, DIR_UP, 15, 0),
     ],
     // L7: ATMOSPHERE/ABSORPTION - volcanic gases
     [
@@ -101,7 +101,7 @@ pub(super) const PRESET_VOLCANIC_CORE: [[u64; 2]; 8] = [
             0x100800,
             0x000000,
         ),
-        lo(110, 80, 0, 0, 0, DIR_UP, 15, 0),
+        lo(150, 80, 0, 0, 0, DIR_UP, 15, 0),
     ],
 ];
 
@@ -169,7 +169,7 @@ pub(super) const PRESET_DIGITAL_MATRIX: [[u64; 2]; 8] = [
     // L5: FLOW - code streaming effect (green, downward)
     [
         hi(OP_FLOW, REGION_ALL, BLEND_ADD, 0, 0x00dd00, 0x000000),
-        lo(60, 128, 0, 0, 150, DIR_DOWN, 15, 0),
+        lo(60, 128, 0, 0x31, 150, DIR_DOWN, 15, 0),
     ],
     // L6: DECAL - data HUD element (cyan)
     [
@@ -229,23 +229,23 @@ pub(super) const PRESET_NOIR_DETECTIVE: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             APERTURE_RECT,
-            0x101008,
-            0x282418,
+            0x040404,
+            0x383830,
         ),
-        lo(160, 128, 0, 0, 0, DIR_UP, 15, 15),
+        lo(200, 128, 0, 0, 0, DIR_UP, 15, 15),
     ],
     // L3: SPLIT/WEDGE - venetian blind shadows (iconic noir lighting)
     [
         hi_meta(
             OP_SPLIT,
-            REGION_WALLS,
+            REGION_ALL,
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             SPLIT_WEDGE,
-            0x101008,
-            0x383020,
+            0x504030,
+            0x080404,
         ),
-        lo(160, 40, 0, 0, 0, DIR_SUN, 15, 15),
+        lo(240, 40, 0, 0, 0, DIR_SUN, 15, 15),
     ],
     // L4: LOBE - desk lamp cone of warm light (sine flicker)
     [
@@ -260,10 +260,10 @@ pub(super) const PRESET_NOIR_DETECTIVE: [[u64; 2]; 8] = [
             BLEND_ADD,
             DOMAIN_DIRECT3D,
             SCATTER_DUST,
-            0x808070,
+            0x504838,
             0x000000,
         ),
-        lo(100, 20, 40, 0x20, 0, DIR_UP, 10, 0),
+        lo(30, 20, 20, 0x20, 0, DIR_UP, 10, 0),
     ],
     // L6: ATMOSPHERE/MIE - smoky haze filling the room
     [
@@ -276,12 +276,12 @@ pub(super) const PRESET_NOIR_DETECTIVE: [[u64; 2]; 8] = [
             0x302820,
             0x000000,
         ),
-        lo(120, 70, 0, 0, 0, DIR_UP, 15, 0),
+        lo(60, 70, 0, 0, 0, DIR_UP, 15, 0),
     ],
     // L7: FLOW - rain streaking on window (low intensity)
     [
         hi(OP_FLOW, REGION_WALLS, BLEND_ADD, 0, 0x404030, 0x000000),
-        lo(80, 128, 0, 0, 60, DIR_DOWN, 15, 0),
+        lo(180, 128, 0, 0x21, 60, DIR_DOWN, 15, 0),
     ],
 ];
 

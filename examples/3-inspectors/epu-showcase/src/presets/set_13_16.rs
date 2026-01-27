@@ -17,8 +17,8 @@ use crate::constants::*;
 pub(super) const PRESET_ENCHANTED_GROVE: [[u64; 2]; 8] = [
     // L0: RAMP - golden sky, mossy floor, forest green walls
     [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0xe0d8a0, 0x204020),
-        lo(220, 0x1a, 0x38, 0x20, THRESH_OPEN, DIR_UP, 15, 15),
+        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x406030, 0x204020),
+        lo(220, 0x30, 0x40, 0x20, THRESH_OPEN, DIR_UP, 15, 15),
     ],
     // L1: SILHOUETTE/FOREST - tree silhouettes on walls (deep green)
     [
@@ -70,30 +70,30 @@ pub(super) const PRESET_ENCHANTED_GROVE: [[u64; 2]; 8] = [
             0xffdd00,
             0x000000,
         ),
-        lo(110, 25, 60, 0x20, 0, DIR_UP, 15, 0),
+        lo(50, 25, 60, 0x20, 0, DIR_UP, 15, 0),
     ],
     // L5: PATCHES/BLOBS - dappled sunlight filtering through canopy (yellow)
     [
         hi_meta(
             OP_PATCHES,
             REGION_SKY,
-            BLEND_SCREEN,
+            BLEND_OVERLAY,
             DOMAIN_DIRECT3D,
             PATCHES_BLOBS,
             0xfff080,
             0x000000,
         ),
-        lo(120, 128, 80, 0, 0, DIR_UP, 15, 0),
+        lo(50, 128, 80, 0, 0, DIR_UP, 15, 0),
     ],
     // L6: LOBE - golden sunbeam through canopy (sine pulse, dir=SUN)
     [
-        hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0xffd700, 0x000000),
-        lo(220, 128, 0, 1, 0, DIR_SUN, 15, 0),
+        hi(OP_LOBE, REGION_ALL, BLEND_SCREEN, 0, 0xffd700, 0x000000),
+        lo(40, 128, 0, 1, 0, DIR_SUN, 15, 0),
     ],
     // L7: FLOW - gentle leaf movement on forest floor (green)
     [
         hi(OP_FLOW, REGION_FLOOR, BLEND_ADD, 0, 0x60a060, 0x000000),
-        lo(80, 128, 0, 0, 60, DIR_UP, 15, 0),
+        lo(40, 128, 0, 0x12, 60, DIR_UP, 15, 0),
     ],
 ];
 
@@ -130,7 +130,7 @@ pub(super) const PRESET_ASTRAL_VOID: [[u64; 2]; 8] = [
     // L2: FLOW - swirling cosmic gases (purple)
     [
         hi(OP_FLOW, REGION_ALL, BLEND_SCREEN, 0, 0x4000a0, 0x000000),
-        lo(100, 128, 0, 4, 100, DIR_UP, 15, 0),
+        lo(100, 128, 0, 0x22, 100, DIR_UP, 15, 0),
     ],
     // L3: SCATTER/STARS - dense starfield (white)
     [
@@ -205,8 +205,8 @@ pub(super) const PRESET_ASTRAL_VOID: [[u64; 2]; 8] = [
 pub(super) const PRESET_TOXIC_WASTELAND: [[u64; 2]; 8] = [
     // L0: RAMP - sickly green sky, toxic floor, corroded walls
     [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x304010, 0x202008),
-        lo(220, 0x28, 0x30, 0x18, THRESH_BALANCED, DIR_UP, 15, 15),
+        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x181808, 0x100c04),
+        lo(220, 0x18, 0x20, 0x04, THRESH_BALANCED, DIR_UP, 15, 15),
     ],
     // L1: SILHOUETTE/INDUSTRIAL - factory smokestacks (dark olive)
     [
@@ -217,9 +217,9 @@ pub(super) const PRESET_TOXIC_WASTELAND: [[u64; 2]; 8] = [
             DOMAIN_DIRECT3D,
             SILHOUETTE_INDUSTRIAL,
             0x080400,
-            0x141008,
+            0x181008,
         ),
-        lo(160, 128, 0, 0, 0, DIR_UP, 15, 15),
+        lo(200, 128, 0, 0, 0, DIR_UP, 15, 15),
     ],
     // L2: PATCHES/ISLANDS - radioactive puddles on floor (toxic green)
     [
@@ -232,7 +232,7 @@ pub(super) const PRESET_TOXIC_WASTELAND: [[u64; 2]; 8] = [
             0x40a000,
             0x204000,
         ),
-        lo(110, 128, 64, 0, 0, DIR_UP, 15, 15),
+        lo(60, 128, 64, 0, 0, DIR_UP, 15, 15),
     ],
     // L3: PLANE/TILES - cracked industrial floor (brown)
     [
@@ -255,10 +255,10 @@ pub(super) const PRESET_TOXIC_WASTELAND: [[u64; 2]; 8] = [
             BLEND_SCREEN,
             DOMAIN_DIRECT3D,
             CELL_HEX,
-            0xe0e000,
-            0x000000,
+            0x607000,
+            0x181808,
         ),
-        lo(200, 128, 0, 0, 0, DIR_UP, 15, 0),
+        lo(120, 128, 200, 40, 0, DIR_UP, 15, 15),
     ],
     // L5: VEIL/PILLARS - toxic fume columns (green, cylindrical domain)
     [
@@ -268,10 +268,10 @@ pub(super) const PRESET_TOXIC_WASTELAND: [[u64; 2]; 8] = [
             BLEND_ADD,
             DOMAIN_AXIS_CYL,
             VEIL_PILLARS,
-            0x408020,
+            0x204010,
             0x000000,
         ),
-        lo(100, 128, 140, 0, 0, DIR_UP, 15, 0),
+        lo(30, 128, 140, 0, 0, DIR_UP, 15, 0),
     ],
     // L6: SCATTER/DUST - toxic particles (yellow-green)
     [
@@ -281,10 +281,10 @@ pub(super) const PRESET_TOXIC_WASTELAND: [[u64; 2]; 8] = [
             BLEND_ADD,
             DOMAIN_DIRECT3D,
             SCATTER_DUST,
-            0xa0c040,
+            0x608020,
             0x000000,
         ),
-        lo(100, 30, 60, 0x18, 0, DIR_UP, 15, 0),
+        lo(25, 30, 60, 0x18, 0, DIR_UP, 15, 0),
     ],
     // L7: ATMOSPHERE/ALIEN - poisonous atmosphere (dark green)
     [
@@ -297,7 +297,7 @@ pub(super) const PRESET_TOXIC_WASTELAND: [[u64; 2]; 8] = [
             0x203008,
             0x000000,
         ),
-        lo(130, 80, 0, 0, 0, DIR_UP, 15, 0),
+        lo(80, 80, 0, 0, 0, DIR_UP, 15, 0),
     ],
 ];
 

@@ -27,4 +27,10 @@ extern "C" {
     /// # Returns
     /// Sound handle (>0) on success, 0 on failure.
     pub fn load_zsound(data_ptr: *const u8, data_len: u32) -> u32;
+
+    /// Load a skeleton from .nczxskel binary format.
+    ///
+    /// # Returns
+    /// Skeleton handle (>0) on success, 0 on failure.
+    pub fn load_zskeleton(data_ptr: *const u8, data_len: u32) -> u32;
 }

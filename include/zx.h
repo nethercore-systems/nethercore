@@ -434,6 +434,12 @@ NCZX_IMPORT uint32_t load_ztex(const uint8_t* data_ptr, uint32_t data_len);
 /** Sound handle (>0) on success, 0 on failure. */
 NCZX_IMPORT uint32_t load_zsound(const uint8_t* data_ptr, uint32_t data_len);
 
+/** Load a skeleton from .nczxskel binary format. */
+/**  */
+/** # Returns */
+/** Skeleton handle (>0) on success, 0 on failure. */
+NCZX_IMPORT uint32_t load_zskeleton(const uint8_t* data_ptr, uint32_t data_len);
+
 // =============================================================================
 // Environment Processing Unit (EPU) — Instruction-Based API
 // =============================================================================
@@ -734,6 +740,45 @@ NCZX_IMPORT void material_shininess(float value);
 /** # Arguments */
 /** * `color` — Specular color (0xRRGGBBAA, alpha ignored) */
 NCZX_IMPORT void material_specular(uint32_t color);
+
+/** Set specular damping (Mode 3 alias for `material_metallic`). */
+/**  */
+/** # Arguments */
+/** * `value` — Damping value (0.0 = full specular, 1.0 = no specular) */
+NCZX_IMPORT void material_specular_damping(float value);
+
+/** Short alias for `material_specular_damping`. */
+NCZX_IMPORT void material_spec_damping(float value);
+
+/** Set specular color as RGB floats (Mode 3 only). */
+/**  */
+/** # Arguments */
+/** * `r`, `g`, `b` — Color components (0.0-1.0) */
+NCZX_IMPORT void material_specular_color(float r, float g, float b);
+
+/** Enable/disable uniform specular color override (Mode 3 only). */
+/**  */
+/** When enabled, uses the last `material_specular()` / `material_specular_color()` value */
+/** for all subsequent draws instead of sampling from a specular texture. */
+/**  */
+/** # Arguments */
+/** * `enabled` — 1 to enable, 0 to disable */
+NCZX_IMPORT void use_uniform_specular(uint32_t enabled);
+
+/** Enable/disable matcap reflection (Mode 1 only). */
+/**  */
+/** When enabled, matcap slots provide stylized reflection instead of the */
+/** procedural environment. */
+/**  */
+/** # Arguments */
+/** * `enabled` — 1 to enable, 0 to disable */
+NCZX_IMPORT void use_matcap_reflection(uint32_t enabled);
+
+/** Mode 3 alias for `use_uniform_metallic`. */
+NCZX_IMPORT void use_uniform_specular_damping(uint32_t enabled);
+
+/** Mode 3 alias for `use_uniform_roughness`. */
+NCZX_IMPORT void use_uniform_shininess(uint32_t enabled);
 
 // =============================================================================
 // Mesh Functions (Retained Mode)

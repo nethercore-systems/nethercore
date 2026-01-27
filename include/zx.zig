@@ -421,6 +421,12 @@ pub extern "C" fn load_ztex(data_ptr: [*]const u8, data_len: u32) u32;
 /// Sound handle (>0) on success, 0 on failure.
 pub extern "C" fn load_zsound(data_ptr: [*]const u8, data_len: u32) u32;
 
+/// Load a skeleton from .nczxskel binary format.
+/// 
+/// # Returns
+/// Skeleton handle (>0) on success, 0 on failure.
+pub extern "C" fn load_zskeleton(data_ptr: [*]const u8, data_len: u32) u32;
+
 // =============================================================================
 // Environment Processing Unit (EPU) — Instruction-Based API
 // =============================================================================
@@ -721,6 +727,45 @@ pub extern "C" fn material_shininess(value: f32) void;
 /// # Arguments
 /// * `color` — Specular color (0xRRGGBBAA, alpha ignored)
 pub extern "C" fn material_specular(color: u32) void;
+
+/// Set specular damping (Mode 3 alias for `material_metallic`).
+/// 
+/// # Arguments
+/// * `value` — Damping value (0.0 = full specular, 1.0 = no specular)
+pub extern "C" fn material_specular_damping(value: f32) void;
+
+/// Short alias for `material_specular_damping`.
+pub extern "C" fn material_spec_damping(value: f32) void;
+
+/// Set specular color as RGB floats (Mode 3 only).
+/// 
+/// # Arguments
+/// * `r`, `g`, `b` — Color components (0.0-1.0)
+pub extern "C" fn material_specular_color(r: f32, g: f32, b: f32) void;
+
+/// Enable/disable uniform specular color override (Mode 3 only).
+/// 
+/// When enabled, uses the last `material_specular()` / `material_specular_color()` value
+/// for all subsequent draws instead of sampling from a specular texture.
+/// 
+/// # Arguments
+/// * `enabled` — 1 to enable, 0 to disable
+pub extern "C" fn use_uniform_specular(enabled: u32) void;
+
+/// Enable/disable matcap reflection (Mode 1 only).
+/// 
+/// When enabled, matcap slots provide stylized reflection instead of the
+/// procedural environment.
+/// 
+/// # Arguments
+/// * `enabled` — 1 to enable, 0 to disable
+pub extern "C" fn use_matcap_reflection(enabled: u32) void;
+
+/// Mode 3 alias for `use_uniform_metallic`.
+pub extern "C" fn use_uniform_specular_damping(enabled: u32) void;
+
+/// Mode 3 alias for `use_uniform_roughness`.
+pub extern "C" fn use_uniform_shininess(enabled: u32) void;
 
 // =============================================================================
 // Mesh Functions (Retained Mode)

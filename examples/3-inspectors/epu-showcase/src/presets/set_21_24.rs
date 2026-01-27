@@ -17,7 +17,7 @@ use crate::constants::*;
 pub(super) const PRESET_STORMY_SHORES: [[u64; 2]; 8] = [
     // L0: RAMP - dark stormy sky, wet rocky shore, gray cliff walls
     [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x1a2028, 0x202830),
+        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x283040, 0x303840),
         lo(240, 0x30, 0x38, 0x40, THRESH_OPEN, DIR_UP, 15, 15),
     ],
     // L1: SILHOUETTE/WAVES - crashing waves on walls (bound)
@@ -28,10 +28,10 @@ pub(super) const PRESET_STORMY_SHORES: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             SILHOUETTE_WAVES,
-            0x101820,
-            0x1a2028,
+            0x081018,
+            0x202830,
         ),
-        lo(200, 128, 0, 0, 0, DIR_UP, 15, 15),
+        lo(220, 200, 0, 0, 0, DIR_UP, 15, 15),
     ],
     // L2: PLANE/STONE - wet rocky shoreline
     [
@@ -41,15 +41,15 @@ pub(super) const PRESET_STORMY_SHORES: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             PLANE_STONE,
-            0x303840,
-            0x202830,
+            0x405060,
+            0x304050,
         ),
         lo(150, 128, 0, 0, 0, DIR_UP, 15, 15),
     ],
     // L3: FLOW - sea foam and spray
     [
-        hi(OP_FLOW, REGION_WALLS, BLEND_ADD, 0, 0x607080, 0x000000),
-        lo(180, 128, 0, 3, 100, DIR_UP, 12, 0),
+        hi(OP_FLOW, REGION_WALLS, BLEND_ADD, 0, 0xc0d0e0, 0x000000),
+        lo(220, 128, 0, 0x12, 100, DIR_UP, 12, 0),
     ],
     // L4: SCATTER/RAIN - storm spray particles, falling downward
     [
@@ -75,7 +75,7 @@ pub(super) const PRESET_STORMY_SHORES: [[u64; 2]; 8] = [
             0x8090a0,
             0x000000,
         ),
-        lo(100, 128, 0, 0, 0, DIR_SUN, 10, 0),
+        lo(180, 128, 0, 0, 0, DIR_SUN, 10, 0),
     ],
     // L6: ATMOSPHERE/FULL - heavy coastal storm fog
     [
@@ -88,7 +88,7 @@ pub(super) const PRESET_STORMY_SHORES: [[u64; 2]; 8] = [
             0x283038,
             0x000000,
         ),
-        lo(120, 90, 0, 0, 0, DIR_UP, 15, 0),
+        lo(70, 90, 0, 0, 0, DIR_UP, 15, 0),
     ],
     // L7: LOBE - lighthouse beam sweeping through fog (sine)
     [
@@ -111,8 +111,8 @@ pub(super) const PRESET_STORMY_SHORES: [[u64; 2]; 8] = [
 pub(super) const PRESET_POLAR_AURORA: [[u64; 2]; 8] = [
     // L0: RAMP - dark arctic night sky, snow floor, ice walls
     [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x080818, 0xd0e0f0),
-        lo(240, 0x40, 0x50, 0x60, THRESH_OPEN, DIR_UP, 15, 15),
+        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x040810, 0x607080),
+        lo(240, 0x20, 0x28, 0x38, THRESH_OPEN, DIR_UP, 15, 15),
     ],
     // L1: CELL/RADIAL - radial ice pattern on floor (bound, AXIS_POLAR)
     [
@@ -130,7 +130,7 @@ pub(super) const PRESET_POLAR_AURORA: [[u64; 2]; 8] = [
     // L2: BAND - aurora horizon band (green/cyan)
     [
         hi(OP_BAND, REGION_SKY, BLEND_ADD, 0, 0x00ff80, 0x00ffff),
-        lo(220, 128, 0, 0, 0, DIR_UP, 15, 15),
+        lo(255, 128, 0, 0, 0, DIR_UP, 15, 15),
     ],
     // L3: VEIL/CURTAINS - aurora curtains (AXIS_POLAR)
     [
@@ -179,8 +179,8 @@ pub(super) const PRESET_POLAR_AURORA: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             PLANE_STONE,
-            0xe0f0ff,
-            0xc0d0e0,
+            0x90a0b0,
+            0x607080,
         ),
         lo(140, 128, 0, 0, 0, DIR_UP, 15, 15),
     ],
@@ -195,7 +195,7 @@ pub(super) const PRESET_POLAR_AURORA: [[u64; 2]; 8] = [
             0x102030,
             0x000000,
         ),
-        lo(80, 100, 0, 0, 0, DIR_UP, 15, 0),
+        lo(30, 100, 0, 0, 0, DIR_UP, 15, 0),
     ],
 ];
 
@@ -213,8 +213,8 @@ pub(super) const PRESET_POLAR_AURORA: [[u64; 2]; 8] = [
 pub(super) const PRESET_SACRED_GEOMETRY: [[u64; 2]; 8] = [
     // L0: RAMP - deep indigo sky, gold floor, purple walls
     [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x100828, 0xc0a040),
-        lo(200, 0x40, 0x20, 0x50, THRESH_SEMI, DIR_UP, 15, 15),
+        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x100828, 0x806030),
+        lo(200, 0x30, 0x18, 0x40, THRESH_SEMI, DIR_UP, 15, 15),
     ],
     // L1: SPLIT/PRISM - prismatic wall divisions (bound)
     [
@@ -227,7 +227,7 @@ pub(super) const PRESET_SACRED_GEOMETRY: [[u64; 2]; 8] = [
             0x402060,
             0x604080,
         ),
-        lo(130, 200, 0, 0, 0, DIR_UP, 12, 12),
+        lo(200, 200, 0, 0, 0, DIR_UP, 12, 12),
     ],
     // L2: CELL/GRID - geometric floor tiles (bound, AXIS_POLAR)
     [
@@ -237,15 +237,15 @@ pub(super) const PRESET_SACRED_GEOMETRY: [[u64; 2]; 8] = [
             BLEND_ADD,
             DOMAIN_AXIS_POLAR,
             CELL_GRID,
-            0xffd080,
+            0xffa040,
             0xa08040,
         ),
-        lo(130, 128, 0, 0, 0, DIR_UP, 12, 12),
+        lo(200, 80, 200, 50, 0, DIR_UP, 15, 15),
     ],
     // L3: GRID - geometric sacred frame lines
     [
-        hi(OP_GRID, REGION_WALLS, BLEND_ADD, 0, 0x806040, 0x000000),
-        lo(200, 64, 0, 0, 0, DIR_UP, 10, 0),
+        hi(OP_GRID, REGION_WALLS, BLEND_ADD, 0, 0xc08060, 0x000000),
+        lo(255, 64, 20, 0, 0, DIR_UP, 10, 0),
     ],
     // L4: TRACE/FILAMENTS - radial energy lines (AXIS_POLAR)
     [
@@ -268,15 +268,15 @@ pub(super) const PRESET_SACRED_GEOMETRY: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             APERTURE_CIRCLE,
-            0x200810,
-            0x402040,
+            0x100410,
+            0x301830,
         ),
-        lo(180, 128, 0, 0, 0, DIR_UP, 15, 15),
+        lo(120, 128, 0, 0, 0, DIR_UP, 15, 15),
     ],
     // L6: LOBE - divine central light beam (sine pulse)
     [
         hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0xfff0c0, 0x000000),
-        lo(140, 128, 0, 1, 2, DIR_DOWN, 15, 0),
+        lo(60, 128, 0, 1, 2, DIR_DOWN, 15, 0),
     ],
     // L7: SCATTER/DUST - golden sacred particles
     [

@@ -189,3 +189,29 @@ pub unsafe fn debug_group_begin(_name_ptr: *const u8, _name_len: u32) {}
 
 #[cfg(not(target_arch = "wasm32"))]
 pub unsafe fn debug_group_end() {}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub unsafe fn load_zskeleton(_data_ptr: *const u8, _data_len: u32) -> u32 {
+    0
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub unsafe fn material_specular_damping(_value: f32) {}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub unsafe fn material_spec_damping(_value: f32) {}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub unsafe fn material_specular_color(_r: f32, _g: f32, _b: f32) {}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub unsafe fn use_uniform_specular(_enabled: u32) {}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub unsafe fn use_matcap_reflection(_enabled: u32) {}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub unsafe fn use_uniform_specular_damping(_enabled: u32) {}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub unsafe fn use_uniform_shininess(_enabled: u32) {}

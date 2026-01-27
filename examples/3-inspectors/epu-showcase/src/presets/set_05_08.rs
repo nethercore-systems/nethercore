@@ -28,23 +28,23 @@ pub(super) const PRESET_GOTHIC_CATHEDRAL: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             APERTURE_ARCH,
-            0x181818,
-            0x303028,
+            0x0a0a10,
+            0x282420,
         ),
-        lo(180, 128, 0, 0, 0, DIR_UP, 15, 15),
+        lo(220, 128, 0, 0, 0, DIR_UP, 15, 15),
     ],
     // L2: CELL/BRICK - stone wall texture
     [
         hi_meta(
             OP_CELL,
             REGION_WALLS,
-            BLEND_LERP,
+            BLEND_ADD,
             DOMAIN_DIRECT3D,
             CELL_BRICK,
-            0x282828,
+            0x382818,
             0x1a1a18,
         ),
-        lo(140, 96, 0, 0, 0, DIR_UP, 15, 15),
+        lo(200, 96, 0, 0, 0, DIR_UP, 15, 15),
     ],
     // L3: TRACE/LEAD_LINES - stained glass leading (TANGENT_LOCAL)
     [
@@ -57,7 +57,7 @@ pub(super) const PRESET_GOTHIC_CATHEDRAL: [[u64; 2]; 8] = [
             0x806040,
             0x000000,
         ),
-        lo(160, 64, 0, 0, 0, DIR_UP, 15, 0),
+        lo(220, 64, 0, 0, 0, DIR_UP, 15, 0),
     ],
     // L4: LOBE - divine golden light from above (sine pulse)
     [
@@ -88,7 +88,7 @@ pub(super) const PRESET_GOTHIC_CATHEDRAL: [[u64; 2]; 8] = [
             0x302820,
             0x000000,
         ),
-        lo(100, 80, 0, 0, 0, DIR_UP, 15, 0),
+        lo(60, 80, 0, 0, 0, DIR_UP, 15, 0),
     ],
     // L7: NOP
     NOP_LAYER,
@@ -140,7 +140,7 @@ pub(super) const PRESET_OCEAN_DEPTHS: [[u64; 2]; 8] = [
     // L3: FLOW - animated caustic light patterns
     [
         hi(OP_FLOW, REGION_FLOOR, BLEND_ADD, 0, 0x00a0c0, 0x000000),
-        lo(200, 128, 0, 0, 100, DIR_UP, 15, 0),
+        lo(200, 128, 0, 0x22, 100, DIR_UP, 15, 0),
     ],
     // L4: SCATTER/BUBBLES - floating bubbles
     [
@@ -202,8 +202,8 @@ pub(super) const PRESET_OCEAN_DEPTHS: [[u64; 2]; 8] = [
 pub(super) const PRESET_VOID_STATION: [[u64; 2]; 8] = [
     // L0: RAMP - near-black sky, dark metal floor, gunmetal walls
     [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x000820, 0x101018),
-        lo(180, 0x20, 0x20, 0x30, THRESH_INTERIOR, DIR_UP, 15, 15),
+        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x000820, 0x181828),
+        lo(180, 0x28, 0x28, 0x38, THRESH_INTERIOR, DIR_UP, 15, 15),
     ],
     // L1: SECTOR/BOX - box enclosure
     [
@@ -213,8 +213,8 @@ pub(super) const PRESET_VOID_STATION: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             SECTOR_BOX,
-            0x101820,
-            0x0a0a18,
+            0x182030,
+            0x0c0c20,
         ),
         lo(180, 128, 0, 0, 0, DIR_UP, 15, 15),
     ],
@@ -226,15 +226,15 @@ pub(super) const PRESET_VOID_STATION: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             APERTURE_RECT,
-            0x0a0a14,
-            0x181820,
+            0x0c0c1c,
+            0x202830,
         ),
         lo(180, 128, 0, 0, 0, DIR_UP, 15, 15),
     ],
     // L3: GRID - blue panel lines on walls
     [
-        hi(OP_GRID, REGION_WALLS, BLEND_ADD, 0, 0x0044aa, 0x000000),
-        lo(240, 48, 0, 2, 0, DIR_UP, 15, 0),
+        hi(OP_GRID, REGION_WALLS, BLEND_ADD, 0, 0x0066cc, 0x000000),
+        lo(255, 48, 30, 0x10, 0, DIR_UP, 15, 0),
     ],
     // L4: CELL/GRID - floor grating pattern
     [
@@ -244,10 +244,10 @@ pub(super) const PRESET_VOID_STATION: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             CELL_GRID,
-            0x080820,
-            0x101018,
+            0x101030,
+            0x181828,
         ),
-        lo(150, 128, 0, 0, 0, DIR_UP, 15, 15),
+        lo(150, 128, 180, 30, 0, DIR_UP, 15, 15),
     ],
     // L5: SCATTER/STARS - stars visible through viewport
     [
@@ -260,7 +260,7 @@ pub(super) const PRESET_VOID_STATION: [[u64; 2]; 8] = [
             0xffffff,
             0x000000,
         ),
-        lo(230, 180, 0, 0x10, 0, DIR_UP, 15, 0),
+        lo(255, 180, 30, 0x10, 0, DIR_UP, 15, 0),
     ],
     // L6: CELESTIAL/BINARY - binary star system outside
     [
@@ -278,7 +278,7 @@ pub(super) const PRESET_VOID_STATION: [[u64; 2]; 8] = [
     // L7: DECAL - green status indicator
     [
         hi(OP_DECAL, REGION_WALLS, BLEND_ADD, 0, 0x00ff00, 0x000000),
-        lo(120, 0x20, 32, 0, 4, DIR_UP, 15, 0), // shape=RECT(2), soft=0, size=32
+        lo(200, 0x20, 32, 0, 4, DIR_UP, 15, 0), // shape=RECT(2), soft=0, size=32
     ],
 ];
 
@@ -341,7 +341,7 @@ pub(super) const PRESET_DESERT_MIRAGE: [[u64; 2]; 8] = [
     // L4: FLOW - heat shimmer effect (low intensity)
     [
         hi(OP_FLOW, REGION_WALLS, BLEND_ADD, 0, 0xf8f0e0, 0x000000),
-        lo(60, 128, 0, 0, 40, DIR_UP, 8, 0),
+        lo(60, 128, 0, 0x12, 40, DIR_UP, 8, 0),
     ],
     // L5: BAND - warm horizon glow
     [

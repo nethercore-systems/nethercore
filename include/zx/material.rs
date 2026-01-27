@@ -88,4 +88,43 @@ extern "C" {
     /// # Arguments
     /// * `color` — Specular color (0xRRGGBBAA, alpha ignored)
     pub fn material_specular(color: u32);
+
+    /// Set specular damping (Mode 3 alias for `material_metallic`).
+    ///
+    /// # Arguments
+    /// * `value` — Damping value (0.0 = full specular, 1.0 = no specular)
+    pub fn material_specular_damping(value: f32);
+
+    /// Short alias for `material_specular_damping`.
+    pub fn material_spec_damping(value: f32);
+
+    /// Set specular color as RGB floats (Mode 3 only).
+    ///
+    /// # Arguments
+    /// * `r`, `g`, `b` — Color components (0.0-1.0)
+    pub fn material_specular_color(r: f32, g: f32, b: f32);
+
+    /// Enable/disable uniform specular color override (Mode 3 only).
+    ///
+    /// When enabled, uses the last `material_specular()` / `material_specular_color()` value
+    /// for all subsequent draws instead of sampling from a specular texture.
+    ///
+    /// # Arguments
+    /// * `enabled` — 1 to enable, 0 to disable
+    pub fn use_uniform_specular(enabled: u32);
+
+    /// Enable/disable matcap reflection (Mode 1 only).
+    ///
+    /// When enabled, matcap slots provide stylized reflection instead of the
+    /// procedural environment.
+    ///
+    /// # Arguments
+    /// * `enabled` — 1 to enable, 0 to disable
+    pub fn use_matcap_reflection(enabled: u32);
+
+    /// Mode 3 alias for `use_uniform_metallic`.
+    pub fn use_uniform_specular_damping(enabled: u32);
+
+    /// Mode 3 alias for `use_uniform_roughness`.
+    pub fn use_uniform_shininess(enabled: u32);
 }

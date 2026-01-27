@@ -107,12 +107,14 @@ fn eval_flow(
 
     switch pattern_type {
         case 0u: { // NOISE
+            // Animate by scrolling the 3D sample position along the flow direction.
+            let p_anim = p + flow_dir * t * (1.0 / TAU);
             var amp = 1.0;
             var freq = 1.0;
             var sum = 0.0;
             var norm = 0.0;
             for (var i = 0u; i < octaves; i++) {
-                sum += value_noise3(p * freq) * amp;
+                sum += value_noise3(p_anim * freq) * amp;
                 norm += amp;
                 freq *= 2.0;
                 amp *= 0.5;
