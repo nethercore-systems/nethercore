@@ -339,6 +339,14 @@ impl Console for NethercoreZX {
         }
     }
 
+    fn decode_replay_bytes(&self, bytes: &[u8]) -> Self::Input {
+        crate::replay::ZxInputLayout::bytes_to_zinput(bytes)
+    }
+
+    fn replay_input_layout(&self) -> Option<Box<dyn nethercore_core::replay::script::InputLayout>> {
+        Some(Box::new(crate::replay::ZxInputLayout))
+    }
+
     fn create_resource_manager(&self) -> Self::ResourceManager {
         crate::resource_manager::ZResourceManager::new()
     }

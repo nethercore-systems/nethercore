@@ -171,6 +171,18 @@ impl Console for TestConsole {
         }
     }
 
+    fn decode_replay_bytes(&self, bytes: &[u8]) -> Self::Input {
+        let mut buttons = 0u16;
+        if !bytes.is_empty() {
+            buttons = bytes[0] as u16;
+        }
+        TestInput {
+            buttons,
+            x: 0,
+            y: 0,
+        }
+    }
+
     fn create_resource_manager(&self) -> Self::ResourceManager {
         TestResourceManager
     }

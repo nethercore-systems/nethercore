@@ -176,6 +176,18 @@ pub trait Console: Send + 'static {
     /// Map raw input to console-specific input format
     fn map_input(&self, raw: &RawInput) -> Self::Input;
 
+    /// Decode replay script raw bytes into console input.
+    ///
+    /// Used by the graphical replay runner to convert script-encoded
+    /// input bytes into the console's native input type.
+    fn decode_replay_bytes(&self, bytes: &[u8]) -> Self::Input;
+
+    /// Get the input layout for replay script compilation.
+    /// Returns None if the console doesn't support replay scripts.
+    fn replay_input_layout(&self) -> Option<Box<dyn crate::replay::script::InputLayout>> {
+        None
+    }
+
     /// Create a resource manager instance for this console
     ///
     /// Resource managers handle the mapping between game resource handles (u32)
