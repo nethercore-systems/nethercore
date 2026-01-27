@@ -51,6 +51,10 @@ pub struct FrameEntry {
     #[serde(default)]
     pub snap: bool,
 
+    /// Request a screenshot capture after rendering this frame
+    #[serde(default)]
+    pub screenshot: bool,
+
     /// Assertion condition (e.g., "$velocity_y < 0")
     #[serde(default)]
     pub assert: Option<String>,

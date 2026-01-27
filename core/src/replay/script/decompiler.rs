@@ -40,6 +40,7 @@ pub fn decompile(replay: &Replay, layout: &dyn InputLayout) -> ReplayScript {
             p3,
             p4,
             snap: false, // Binary format doesn't preserve snap flags
+            screenshot: false, // Binary format doesn't preserve screenshot flags
             assert,
             action: None, // Binary format doesn't preserve actions
             action_params: None,
