@@ -6,7 +6,7 @@ This guide covers how to package and distribute your Nethercore games as ROM fil
 
 1. [Overview](#overview)
 2. [Development Workflow](#development-workflow)
-3. [Creating a nether.toml Manifest](#creating-a-nethert oml-manifest)
+3. [Creating a nether.toml Manifest](#creating-a-nethertoml-manifest)
 4. [Building Your Game](#building-your-game)
 5. [Adding Assets (Thumbnails & Screenshots)](#adding-assets-thumbnails--screenshots)
 6. [Console-Specific Settings](#console-specific-settings)
@@ -73,21 +73,21 @@ author = "YourName"                      # Your name or studio
 version = "1.0.0"                        # Semantic version
 description = "A fun platforming adventure!"  # Game description
 tags = ["platformer", "action", "singleplayer"]  # Category tags
-render_mode = 2                          # 0=Lambert, 1=Matcap, 2=PBR (default), 3=Hybrid
+render_mode = 2                          # 0=Lambert (default), 1=Matcap, 2=MR-Blinn-Phong, 3=Specular-Shininess
 
 [build]
 # Build script to compile your game to WASM
 # For Rust projects:
-command = "cargo build --target wasm32-unknown-unknown --release"
-wasm_path = "target/wasm32-unknown-unknown/release/my_game.wasm"
+script = "cargo build --target wasm32-unknown-unknown --release"
+wasm = "target/wasm32-unknown-unknown/release/my_game.wasm"
 
 # For C projects:
-# command = "zig build"
-# wasm_path = "zig-out/bin/game.wasm"
+# script = "zig build"
+# wasm = "zig-out/bin/game.wasm"
 
 # For Zig projects:
-# command = "zig build"
-# wasm_path = "zig-out/bin/game.wasm"
+# script = "zig build"
+# wasm = "zig-out/bin/game.wasm"
 ```
 
 ### Required Fields
@@ -97,8 +97,8 @@ wasm_path = "target/wasm32-unknown-unknown/release/my_game.wasm"
 - **author**: Developer name or studio
 - **version**: Semantic version (MAJOR.MINOR.PATCH)
 - **description**: Brief game description
-- **build.command**: Command to compile your game
-- **build.wasm_path**: Path to compiled WASM output
+- **build.script**: Command to compile your game
+- **build.wasm**: Path to compiled WASM output
 
 ### Optional Fields
 
@@ -212,7 +212,7 @@ target_fps = 60
 
 [build]
 command = "cargo build --target wasm32-unknown-unknown --release"
-wasm_path = "target/wasm32-unknown-unknown/release/my_platformer.wasm"
+wasm = "target/wasm32-unknown-unknown/release/my_platformer.wasm"
 
 [[screenshots]]
 path = "assets/screenshot1.png"
@@ -243,19 +243,15 @@ The render mode determines the visual style of your game:
 
 ```toml
 [game]
-render_mode = 0  # Lambert (simple diffuse shading)
+render_mode = 0  # Lambert (simple diffuse shading) — default
 # render_mode = 1  # Matcap (matcap-based lighting)
-# render_mode = 2  # PBR-lite (physically-based rendering) - default
-# render_mode = 3  # Hybrid (mix of techniques)
+# render_mode = 2  # MR-Blinn-Phong (metallic-roughness PBR-style)
+# render_mode = 3  # Specular-Shininess (traditional Blinn-Phong)
 ```
 
-**Which to choose?**
-- **Lambert (0)**: Retro flat-shaded look (e.g., early 3D games)
-- **Matcap (1)**: Stylized lighting with matcap textures
-- **PBR-lite (2)**: Modern PBR look (most realistic) - **default**
-- **Hybrid (3)**: Mix matcap and PBR for unique styles
+If not specified, defaults to Lambert (mode 0).
 
-If not specified, defaults to PBR-lite (mode 2).
+For detailed descriptions, texture slots, and code examples for each mode, see the [Render Modes Guide](../book/src/guides/render-modes.md).
 
 #### Default Resolution
 
@@ -532,7 +528,7 @@ render_mode = 2  # Valid: 0, 1, 2, or 3
 
 **Fix:**
 1. Verify the build command works independently
-2. Check that `wasm_path` points to the correct output
+2. Check that `wasm` points to the correct output
 3. Ensure all build dependencies are installed
 
 ## Best Practices
@@ -610,7 +606,7 @@ target_fps = 60
 
 [build]
 command = "cargo build --target wasm32-unknown-unknown --release"
-wasm_path = "target/wasm32-unknown-unknown/release/my_platformer.wasm"
+wasm = "target/wasm32-unknown-unknown/release/my_platformer.wasm"
 
 [[screenshots]]
 path = "assets/screenshot1.png"

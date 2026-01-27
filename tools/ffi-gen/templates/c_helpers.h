@@ -37,11 +37,14 @@ static inline float nczx_absf(float x) {
 #define NCZX_LOG(str) log((const uint8_t*)(str), sizeof(str) - 1)
 
 #define NCZX_DRAW_TEXT(str, x, y, size, color) \
-    draw_text((const uint8_t*)(str), sizeof(str) - 1, (x), (y), (size), (color))
+    do { \
+        set_color((color)); \
+        draw_text((const uint8_t*)(str), (uint32_t)(sizeof(str) - 1), (x), (y), (size)); \
+    } while (0)
 
 // ROM loading helpers
-#define NCZX_ROM_TEXTURE(id) rom_texture((uint32_t)(id), sizeof(id) - 1)
-#define NCZX_ROM_MESH(id) rom_mesh((uint32_t)(id), sizeof(id) - 1)
-#define NCZX_ROM_SOUND(id) rom_sound((uint32_t)(id), sizeof(id) - 1)
-#define NCZX_ROM_FONT(id) rom_font((uint32_t)(id), sizeof(id) - 1)
-#define NCZX_ROM_SKELETON(id) rom_skeleton((uint32_t)(id), sizeof(id) - 1)
+#define NCZX_ROM_TEXTURE(id) rom_texture((const uint8_t*)(id), (uint32_t)(sizeof(id) - 1))
+#define NCZX_ROM_MESH(id) rom_mesh((const uint8_t*)(id), (uint32_t)(sizeof(id) - 1))
+#define NCZX_ROM_SOUND(id) rom_sound((const uint8_t*)(id), (uint32_t)(sizeof(id) - 1))
+#define NCZX_ROM_FONT(id) rom_font((const uint8_t*)(id), (uint32_t)(sizeof(id) - 1))
+#define NCZX_ROM_SKELETON(id) rom_skeleton((const uint8_t*)(id), (uint32_t)(sizeof(id) - 1))

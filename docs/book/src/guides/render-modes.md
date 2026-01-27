@@ -19,7 +19,7 @@ id = "my-game"
 title = "My Game"
 author = "Developer"
 version = "1.0.0"
-render_mode = 2  # 0=Lambert, 1=Matcap, 2=PBR, 3=Hybrid
+render_mode = 2  # 0=Lambert, 1=Matcap, 2=Metallic-Roughness, 3=Specular-Shininess
 ```
 
 If not specified, defaults to mode 0 (Lambert). The render mode cannot be changed at runtime.

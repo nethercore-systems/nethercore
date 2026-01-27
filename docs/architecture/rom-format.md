@@ -110,7 +110,7 @@ pub struct ZXMetadata {
     pub tool_version: String,
 
     // Z-specific settings
-    /// Render mode: 0=Lambert, 1=Matcap, 2=PBR, 3=Hybrid
+    /// Render mode: 0=Lambert, 1=Matcap, 2=MR-Blinn-Phong, 3=Specular-Shininess
     pub render_mode: Option<u32>,
 
     /// Default resolution (e.g., "640x480")
@@ -400,7 +400,7 @@ description = "A fun game!"
 tags = ["platformer", "action"]
 
 # ZX-only rendering settings (defaults shown)
-render_mode = 0         # 0=Lambert, 1=Matcap, 2=MR-Blinn-Phong, 3=Blinn-Phong
+render_mode = 0         # 0=Lambert (default), 1=Matcap, 2=MR-Blinn-Phong, 3=Specular-Shininess
 compress_textures = false
 
 # Netplay-critical config (baked into ROM metadata)
@@ -532,6 +532,6 @@ Large game with assets:
 
 ## See Also
 
-- [distributing-games.md](./distributing-games.md) - Complete guide for game developers
+- [distributing-games.md](../contributing/distributing-games.md) - Complete guide for game developers
 - [ffi.md](./ffi.md) - Nethercore FFI API reference
 - [nethercore-zx.md](./nethercore-zx.md) - ZX-specific API documentation

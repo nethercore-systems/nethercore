@@ -270,7 +270,7 @@ Consider setting build.wasm in nether.toml. Using newest: {}",
 
         if self.game.render_mode > 3 {
             anyhow::bail!(
-                "Invalid render_mode {} in nether.toml (must be 0-3: 0=Lambert, 1=Matcap, 2=PBR, 3=Hybrid)",
+                "Invalid render_mode {} in nether.toml (must be 0-3: 0=Lambert, 1=Matcap, 2=MR-Blinn-Phong, 3=Specular-Shininess)",
                 self.game.render_mode
             );
         }

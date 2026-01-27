@@ -304,7 +304,7 @@ fn update() {
 
 ## Save Data
 
-Save data is stored locally per-game. Maximum 64KB per save slot, 8 slots (0-7).
+Save data is stored locally per-game. Maximum 64KB per save slot, 4 slots (0-3).
 
 ### save
 

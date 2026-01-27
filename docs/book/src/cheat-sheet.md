@@ -82,7 +82,7 @@ set_clear_color(0xRRGGBBAA)            // Background color
 ```c
 void set_tick_rate(uint32_t fps);      // NCZX_TICK_RATE_24/30/60/120
 void set_clear_color(uint32_t color);  // Background color
-// render_mode set via nether.toml     // NCZX_RENDER_LAMBERT/MATCAP/PBR/HYBRID
+// render_mode set via nether.toml     // NCZX_RENDER_LAMBERT/MATCAP/MR_BLINN_PHONG/SPECULAR_SHININESS
 ```
 {{#endtab}}
 

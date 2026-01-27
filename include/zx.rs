@@ -636,7 +636,8 @@ extern "C" {
     ///
     /// // Reset for HUD
     /// viewport_clear();
-    /// draw_text_str("PAUSED", 400.0, 270.0, 32.0, 0xFFFFFFFF);
+    /// set_color(0xFFFFFFFF);
+    /// draw_text_str("PAUSED", 400.0, 270.0, 32.0);
     /// ```
     pub fn viewport(x: u32, y: u32, width: u32, height: u32);
 

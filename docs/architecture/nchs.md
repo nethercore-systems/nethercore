@@ -44,7 +44,7 @@ version = "0.1.0"
 tick_rate = 60      # Updates per second (30, 60, or 120)
 max_players = 4     # Maximum players supported (1-4)
 
-# ZX-only (0-3): 0=Lambert, 1=Matcap, 2=MR-Blinn-Phong, 3=Blinn-Phong
+# ZX-only (0-3): 0=Lambert, 1=Matcap, 2=MR-Blinn-Phong, 3=Specular-Shininess
 # Default: 0
 render_mode = 0
 
@@ -133,12 +133,12 @@ Default is `false` (RGBA8) for backward compatibility and pixel-art friendliness
 | Mode 0 (Lambert) | `compress_textures = false` | 2D/sprite games, RGBA8 preferred |
 | Mode 1 (Matcap) | `compress_textures = true` | 3D stylized, BC7 saves space |
 | Mode 2 (MR-Blinn-Phong) | `compress_textures = true` | 3D PBR, BC7 required for materials |
-| Mode 3 (Blinn-Phong) | `compress_textures = true` | 3D retro, BC7 saves space |
+| Mode 3 (Specular-Shininess) | `compress_textures = true` | 3D retro, BC7 saves space |
 
 The `nether build` command will warn if compression settings don't match render mode:
 
 ```
-WARNING: Detected render_mode 1 (Matcap/PBR/Hybrid) but compress_textures=false.
+WARNING: Detected render_mode 1+ (Matcap/MR-Blinn-Phong/Specular-Shininess) but compress_textures=false.
       Consider enabling texture compression for better performance:
       Add 'compress_textures = true' to [game] section in nether.toml
 ```
