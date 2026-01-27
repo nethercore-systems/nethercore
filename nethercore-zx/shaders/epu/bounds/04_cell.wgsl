@@ -253,8 +253,8 @@ fn eval_cell(
     // Determine if we're in a gap (near edge)
     let in_gap = d_edge < gap_width;
 
-    // Compute smooth AA at gap boundary
-    let gap_aa = smoothstep(gap_width, gap_width * 0.5, d_edge);
+    // Compute smooth AA at gap boundary (guard: no gap when gap_width near zero)
+    let gap_aa = select(smoothstep(gap_width, gap_width * 0.5, d_edge), 0.0, gap_width < 0.001);
 
     // Compute region weights
     // w_sky = gap regions or non-solid cells

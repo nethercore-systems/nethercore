@@ -17,7 +17,7 @@ use crate::constants::*;
 pub(super) const PRESET_ENCHANTED_GROVE: [[u64; 2]; 8] = [
     // L0: RAMP - golden sky, mossy floor, forest green walls
     [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0xfff8d0, 0x204020),
+        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0xe0d8a0, 0x204020),
         lo(220, 0x1a, 0x38, 0x20, THRESH_OPEN, DIR_UP, 15, 15),
     ],
     // L1: SILHOUETTE/FOREST - tree silhouettes on walls (deep green)
@@ -28,8 +28,8 @@ pub(super) const PRESET_ENCHANTED_GROVE: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             SILHOUETTE_FOREST,
-            0x0a2010,
-            0x1a3820,
+            0x000800,
+            0x0a1808,
         ),
         lo(160, 128, 0, 0, 0, DIR_UP, 15, 15),
     ],
@@ -70,7 +70,7 @@ pub(super) const PRESET_ENCHANTED_GROVE: [[u64; 2]; 8] = [
             0xffdd00,
             0x000000,
         ),
-        lo(110, 100, 60, 0x20, 0, DIR_UP, 15, 0),
+        lo(110, 25, 60, 0x20, 0, DIR_UP, 15, 0),
     ],
     // L5: PATCHES/BLOBS - dappled sunlight filtering through canopy (yellow)
     [
@@ -88,7 +88,7 @@ pub(super) const PRESET_ENCHANTED_GROVE: [[u64; 2]; 8] = [
     // L6: LOBE - golden sunbeam through canopy (sine pulse, dir=SUN)
     [
         hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0xffd700, 0x000000),
-        lo(120, 128, 0, 1, 0, DIR_SUN, 15, 0),
+        lo(220, 128, 0, 1, 0, DIR_SUN, 15, 0),
     ],
     // L7: FLOW - gentle leaf movement on forest floor (green)
     [
@@ -120,7 +120,7 @@ pub(super) const PRESET_ASTRAL_VOID: [[u64; 2]; 8] = [
             OP_PATCHES,
             REGION_ALL,
             BLEND_SCREEN,
-            DOMAIN_DIRECT3D,
+            DOMAIN_AXIS_POLAR,
             PATCHES_BLOBS,
             0x200840,
             0x100420,
@@ -143,7 +143,7 @@ pub(super) const PRESET_ASTRAL_VOID: [[u64; 2]; 8] = [
             0xffffff,
             0x000000,
         ),
-        lo(140, 160, 0, 0x40, 0, DIR_UP, 15, 0),
+        lo(140, 60, 0, 0x40, 0, DIR_UP, 15, 0),
     ],
     // L4: CELESTIAL/GAS_GIANT - massive gas giant (orange, dir=SUN)
     [
@@ -156,7 +156,7 @@ pub(super) const PRESET_ASTRAL_VOID: [[u64; 2]; 8] = [
             0xff6040,
             0x000000,
         ),
-        lo(160, 128, 0, 0, 0, DIR_SUN, 15, 0),
+        lo(160, 220, 0, 0, 0, DIR_SUN, 15, 0),
     ],
     // L5: CELESTIAL/RINGED - ringed planet (gold, dir=SUNSET)
     [
@@ -216,8 +216,8 @@ pub(super) const PRESET_TOXIC_WASTELAND: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             SILHOUETTE_INDUSTRIAL,
-            0x181808,
-            0x283018,
+            0x080400,
+            0x141008,
         ),
         lo(160, 128, 0, 0, 0, DIR_UP, 15, 15),
     ],
@@ -255,10 +255,10 @@ pub(super) const PRESET_TOXIC_WASTELAND: [[u64; 2]; 8] = [
             BLEND_SCREEN,
             DOMAIN_DIRECT3D,
             CELL_HEX,
-            0xa0a000,
+            0xe0e000,
             0x000000,
         ),
-        lo(110, 128, 0, 0, 0, DIR_UP, 15, 0),
+        lo(200, 128, 0, 0, 0, DIR_UP, 15, 0),
     ],
     // L5: VEIL/PILLARS - toxic fume columns (green, cylindrical domain)
     [
@@ -284,7 +284,7 @@ pub(super) const PRESET_TOXIC_WASTELAND: [[u64; 2]; 8] = [
             0xa0c040,
             0x000000,
         ),
-        lo(100, 120, 60, 0x18, 0, DIR_UP, 15, 0),
+        lo(100, 30, 60, 0x18, 0, DIR_UP, 15, 0),
     ],
     // L7: ATMOSPHERE/ALIEN - poisonous atmosphere (dark green)
     [
@@ -297,7 +297,7 @@ pub(super) const PRESET_TOXIC_WASTELAND: [[u64; 2]; 8] = [
             0x203008,
             0x000000,
         ),
-        lo(130, 160, 0, 0, 0, DIR_UP, 15, 0),
+        lo(130, 80, 0, 0, 0, DIR_UP, 15, 0),
     ],
 ];
 
@@ -355,7 +355,7 @@ pub(super) const PRESET_MOONLIT_GRAVEYARD: [[u64; 2]; 8] = [
             0xe0e8f0,
             0x000000,
         ),
-        lo(180, 128, 0, 0, 0, DIR_SUN, 15, 0),
+        lo(255, 220, 0, 0, 0, DIR_SUN, 15, 0),
     ],
     // L4: BAND - eerie blue horizon glow
     [
@@ -373,7 +373,7 @@ pub(super) const PRESET_MOONLIT_GRAVEYARD: [[u64; 2]; 8] = [
             0x8090a0,
             0x000000,
         ),
-        lo(100, 100, 40, 0x18, 0, DIR_UP, 15, 0),
+        lo(100, 25, 40, 0x18, 0, DIR_UP, 15, 0),
     ],
     // L6: VEIL/CURTAINS - hanging mist (gray, cylindrical domain)
     [
@@ -399,6 +399,6 @@ pub(super) const PRESET_MOONLIT_GRAVEYARD: [[u64; 2]; 8] = [
             0x101020,
             0x000000,
         ),
-        lo(140, 180, 0, 0, 0, DIR_UP, 15, 0),
+        lo(140, 80, 0, 0, 0, DIR_UP, 15, 0),
     ],
 ];

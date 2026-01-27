@@ -5,7 +5,7 @@
 // 128-bit packed fields:
 //   color_a: Opening/sky color (RGB24)
 //   color_b: Frame/wall color (RGB24)
-//   intensity: Frame edge softness (0..255 -> 0.005..0.1)
+//   intensity: Frame edge softness (0..255 -> 0.005..min(0.1, frame_thickness*0.45))
 //   param_a: Opening half-width (0..255 -> 0.1..1.5 tangent units)
 //   param_b: Opening half-height (0..255 -> 0.1..1.5 tangent units)
 //   param_c: Frame thickness (0..255 -> 0.02..0.5 tangent units)
@@ -158,10 +158,11 @@ fn eval_aperture(
     let center_dir = decode_dir16(instr_dir16(instr));
 
     // Extract parameters
-    let softness = mix(0.005, 0.1, u8_to_01(instr_intensity(instr)));
     let half_w = mix(0.1, 1.5, u8_to_01(instr_a(instr)));
     let half_h = mix(0.1, 1.5, u8_to_01(instr_b(instr)));
     let frame_thickness = mix(0.02, 0.5, u8_to_01(instr_c(instr)));
+    let raw_softness = mix(0.005, 0.1, u8_to_01(instr_intensity(instr)));
+    let softness = min(raw_softness, frame_thickness * 0.45);
     let param_d_raw = instr_d(instr);
     let variant = instr_variant_id(instr);
 

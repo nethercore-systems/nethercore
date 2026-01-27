@@ -4,7 +4,7 @@
 // 128-bit packed fields:
 //   color_a: Sky region base color (RGB24)
 //   color_b: Wall region base color (RGB24)
-//   param_a: Blend width (0..255 -> 0.0..0.2)
+//   param_a: Blend width (0..255 -> 0.0..1.0)
 //   param_b: Wedge angle (0..255 -> 0..180 degrees) - WEDGE variant
 //   param_c: Band count (0..255 -> 2..16) - BANDS; side count - PRISM
 //   param_d: Band offset (0..255 -> 0.0..1.0) - BANDS; rotation - PRISM
@@ -141,7 +141,7 @@ fn split_prism(dir: vec3f, n0: vec3f, basis: mat3x3f, side_count: f32, rotation:
     let sector_blend = smoothstep(0.0, bw * sectors, d_sector_edge);
 
     // Determine cap vs side based on z projection
-    let cap_threshold = 0.7;  // Above this is ceiling cap, below -threshold is floor cap
+    let cap_threshold = 0.95;  // Above this is ceiling cap, below -threshold is floor cap
     let ceiling_blend = smoothstep(cap_threshold - bw, cap_threshold + bw, z_proj);
     let floor_blend = smoothstep(-cap_threshold + bw, -cap_threshold - bw, z_proj);
 
@@ -174,7 +174,7 @@ fn eval_split(
     let pd = instr_d(instr);
 
     // blend_width: 0..255 -> 0.0..0.2
-    let blend_width = u8_to_01(pa) * 0.2;
+    let blend_width = u8_to_01(pa) * 1.0;
     // Minimum blend width for AA stability
     let bw = max(blend_width, 0.001);
 

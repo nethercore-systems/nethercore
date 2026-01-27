@@ -118,18 +118,17 @@ fn eval_celestial_sun(
     limb: f32,
     color_a: vec3f,
     color_b: vec3f,
-    intensity: f32,
     corona_extent: f32,
     alpha_b: f32
 ) -> LayerSample {
     // Disk with limb darkening (suns have pronounced limb darkening)
     let disk = smoothstep(1.02, 0.98, r);
-    let surface = limb * intensity;
+    let surface = limb;
 
     // Corona glow beyond disk: soft exponential falloff
     let corona_r = r / corona_extent;
     let corona = exp(-corona_r * 2.0) * (1.0 - disk * 0.8);
-    let corona_color = color_b * corona * alpha_b * intensity;
+    let corona_color = color_b * corona * alpha_b;
 
     let rgb = color_a * surface * disk + corona_color;
     let w = disk + corona * alpha_b;
@@ -223,7 +222,6 @@ fn eval_celestial_ringed(
     color_a: vec3f,
     color_b: vec3f,
     ring_tilt_deg: f32,
-    alpha_a: f32,
     alpha_b: f32
 ) -> LayerSample {
     // Ring geometry: rings are in a plane tilted from viewer
@@ -270,8 +268,8 @@ fn eval_celestial_ringed(
 
     // Combine: rings can be in front of or behind the planet depending on geometry
     // Simplified: rings always rendered on top for visual clarity
-    let rgb = planet_surface * alpha_a + ring_color * alpha_b;
-    let w = disk * alpha_a + ring_visible * alpha_b;
+    let rgb = planet_surface + ring_color * alpha_b;
+    let w = disk + ring_visible * alpha_b;
 
     return LayerSample(rgb, w);
 }
@@ -285,7 +283,6 @@ fn eval_celestial_binary(
     color_a: vec3f,
     color_b: vec3f,
     size_ratio: f32,
-    alpha_a: f32,
     alpha_b: f32
 ) -> LayerSample {
     // Offset secondary body by small angle (1.5x angular size)
@@ -319,8 +316,8 @@ fn eval_celestial_binary(
     let occluded = primary_disk > 0.5 && secondary_disk > 0.5;
     let final_secondary = select(secondary_rgb * alpha_b, vec3f(0.0), occluded);
 
-    let rgb = primary_rgb * alpha_a + final_secondary;
-    let w = primary_disk * alpha_a + secondary_disk * alpha_b * select(1.0, 0.0, occluded);
+    let rgb = primary_rgb + final_secondary;
+    let w = primary_disk + secondary_disk * alpha_b * select(1.0, 0.0, occluded);
 
     return LayerSample(rgb, w);
 }
@@ -331,7 +328,6 @@ fn eval_celestial_eclipse(
     color_a: vec3f,
     color_b: vec3f,
     corona_brightness: f32,
-    alpha_a: f32,
     alpha_b: f32
 ) -> LayerSample {
     // Dark disk (moon blocking sun)
@@ -355,8 +351,8 @@ fn eval_celestial_eclipse(
     // Corona color
     let corona_color = color_b * (corona + diamond + streamer);
 
-    let rgb = umbra_color * alpha_a + corona_color * alpha_b;
-    let w = disk * alpha_a * 0.1 + (corona + diamond) * alpha_b;
+    let rgb = umbra_color + corona_color * alpha_b;
+    let w = disk * 0.1 + (corona + diamond) * alpha_b;
 
     return LayerSample(rgb, w);
 }
@@ -430,7 +426,7 @@ fn eval_celestial(
         case CELESTIAL_VARIANT_SUN: {
             // param_d: Corona extent (0..255 -> 1.0..3.0)
             let corona_extent = mix(1.0, 3.0, param_d_raw);
-            sample = eval_celestial_sun(r, limb, color_a, color_b, intensity, corona_extent, alpha_b);
+            sample = eval_celestial_sun(r, limb, color_a, color_b, corona_extent, alpha_b);
         }
         case CELESTIAL_VARIANT_PLANET: {
             // param_d: Cloud band count (0..255 -> 0..8)
@@ -445,17 +441,17 @@ fn eval_celestial(
         case CELESTIAL_VARIANT_RINGED: {
             // param_d: Ring tilt (0..255 -> 0..90 degrees)
             let ring_tilt = param_d_raw * 90.0;
-            sample = eval_celestial_ringed(dir, body_dir, r, angular_size_rad, limb, color_a, color_b, ring_tilt, alpha_a, alpha_b);
+            sample = eval_celestial_ringed(dir, body_dir, r, angular_size_rad, limb, color_a, color_b, ring_tilt, alpha_b);
         }
         case CELESTIAL_VARIANT_BINARY: {
             // param_d: Secondary size ratio (0..255 -> 0.2..2.0)
             let size_ratio = mix(0.2, 2.0, param_d_raw);
-            sample = eval_celestial_binary(dir, body_dir, angular_size_rad, limb_exp, color_a, color_b, size_ratio, alpha_a, alpha_b);
+            sample = eval_celestial_binary(dir, body_dir, angular_size_rad, limb_exp, color_a, color_b, size_ratio, alpha_b);
         }
         case CELESTIAL_VARIANT_ECLIPSE: {
             // param_d: Corona brightness (0..255 -> 1.0..2.5)
             let corona_brightness = mix(1.0, 2.5, param_d_raw);
-            sample = eval_celestial_eclipse(r, color_a, color_b, corona_brightness, alpha_a, alpha_b);
+            sample = eval_celestial_eclipse(r, color_a, color_b, corona_brightness, alpha_b);
         }
         default: {
             // Reserved/unknown variants: no output.

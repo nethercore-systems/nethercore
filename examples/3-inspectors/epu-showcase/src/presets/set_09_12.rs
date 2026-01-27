@@ -31,7 +31,7 @@ pub(super) const PRESET_NEON_ARCADE: [[u64; 2]; 8] = [
             0x00ffff,
             0xff00ff,
         ),
-        lo(120, 128, 0, 0, 0, DIR_UP, 15, 15),
+        lo(120, 200, 0, 0, 0, DIR_UP, 15, 15),
     ],
     // L2: GRID - magenta wireframe grid on floor (retro style)
     [
@@ -67,7 +67,7 @@ pub(super) const PRESET_NEON_ARCADE: [[u64; 2]; 8] = [
     // L5: BAND - cyan horizon glow line
     [
         hi(OP_BAND, REGION_ALL, BLEND_ADD, 0, 0x00ffff, 0x000000),
-        lo(120, 128, 0, 0, 0, DIR_SUNSET, 15, 0),
+        lo(200, 128, 0, 0, 0, DIR_SUNSET, 15, 0),
     ],
     // L6: FLOW - purple pulsing ambient glow
     [
@@ -124,7 +124,7 @@ pub(super) const PRESET_STORM_FRONT: [[u64; 2]; 8] = [
             0xffffff,
             0x000000,
         ),
-        lo(200, 128, 0, 0, 0, DIR_UP, 15, 0),
+        lo(255, 128, 0, 0, 0, DIR_UP, 15, 0),
     ],
     // L4: VEIL/RAIN_WALL - heavy rain curtains (blue-gray, cylindrical)
     [
@@ -137,7 +137,7 @@ pub(super) const PRESET_STORM_FRONT: [[u64; 2]; 8] = [
             0x607080,
             0x000000,
         ),
-        lo(110, 128, 200, 0, 0, DIR_DOWN, 15, 0),
+        lo(60, 128, 80, 0, 0, DIR_DOWN, 15, 0),
     ],
     // L5: SCATTER/RAIN - raindrops (rain blue, cylindrical, falling)
     [
@@ -150,7 +150,7 @@ pub(super) const PRESET_STORM_FRONT: [[u64; 2]; 8] = [
             0x8090a0,
             0x000000,
         ),
-        lo(110, 140, 180, 0, 0, DIR_DOWN, 15, 0),
+        lo(110, 50, 180, 0, 0, DIR_DOWN, 15, 0),
     ],
     // L6: PLANE/PAVEMENT - rain-slicked wet ground
     [
@@ -205,10 +205,10 @@ pub(super) const PRESET_CRYSTAL_CAVERN: [[u64; 2]; 8] = [
             BLEND_ADD,
             DOMAIN_DIRECT3D,
             CELL_VORONOI,
+            0x8040ff,
             0x400080,
-            0x200040,
         ),
-        lo(120, 128, 0, 0, 0, DIR_UP, 15, 15),
+        lo(200, 128, 0, 0, 0, DIR_UP, 15, 15),
     ],
     // L2: PATCHES/DEBRIS - scattered crystal formations on floor (amethyst)
     [
@@ -234,7 +234,7 @@ pub(super) const PRESET_CRYSTAL_CAVERN: [[u64; 2]; 8] = [
             0x00e0ff,
             0x000000,
         ),
-        lo(120, 128, 0, 0, 0, DIR_UP, 15, 0),
+        lo(220, 128, 0, 0, 0, DIR_UP, 15, 0),
     ],
     // L4: SCATTER/DUST - glinting crystal facets (white sparks)
     [
@@ -247,7 +247,7 @@ pub(super) const PRESET_CRYSTAL_CAVERN: [[u64; 2]; 8] = [
             0xffffff,
             0x000000,
         ),
-        lo(110, 120, 0, 0x60, 0, DIR_UP, 15, 0),
+        lo(110, 30, 0, 0x60, 0, DIR_UP, 15, 0),
     ],
     // L5: LOBE - ambient crystal glow from below (purple)
     [
@@ -278,7 +278,7 @@ pub(super) const PRESET_CRYSTAL_CAVERN: [[u64; 2]; 8] = [
             0x200040,
             0x000000,
         ),
-        lo(140, 160, 0, 0, 0, DIR_UP, 15, 0),
+        lo(140, 80, 0, 0, 0, DIR_UP, 15, 0),
     ],
 ];
 
@@ -307,8 +307,8 @@ pub(super) const PRESET_WAR_ZONE: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             SILHOUETTE_RUINS,
-            0x201810,
-            0x302820,
+            0x080400,
+            0x181008,
         ),
         lo(180, 128, 0, 0, 0, DIR_UP, 15, 15),
     ],
@@ -349,7 +349,7 @@ pub(super) const PRESET_WAR_ZONE: [[u64; 2]; 8] = [
             0xff6600,
             0x000000,
         ),
-        lo(120, 100, 80, 0x30, 0, DIR_UP, 15, 0),
+        lo(120, 25, 20, 0x30, 0, DIR_UP, 15, 0),
     ],
     // L5: FLOW - smoke trails (gray)
     [
@@ -367,11 +367,11 @@ pub(super) const PRESET_WAR_ZONE: [[u64; 2]; 8] = [
             0x302820,
             0x000000,
         ),
-        lo(120, 180, 0, 0, 0, DIR_UP, 15, 0),
+        lo(120, 80, 0, 0, 0, DIR_UP, 15, 0),
     ],
     // L7: DECAL - burning fire spot on walls
     [
         hi(OP_DECAL, REGION_WALLS, BLEND_ADD, 0, 0xff4400, 0x200800),
-        lo(120, 64, 0, 0, 3, DIR_UP, 15, 15),
+        lo(255, 8, 64, 0, 3, DIR_UP, 15, 15), // shape=DISK(0), soft=8, size=64
     ],
 ];

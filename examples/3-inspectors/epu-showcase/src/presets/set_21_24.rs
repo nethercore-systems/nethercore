@@ -49,7 +49,7 @@ pub(super) const PRESET_STORMY_SHORES: [[u64; 2]; 8] = [
     // L3: FLOW - sea foam and spray
     [
         hi(OP_FLOW, REGION_WALLS, BLEND_ADD, 0, 0x607080, 0x000000),
-        lo(100, 128, 0, 3, 100, DIR_UP, 12, 0),
+        lo(180, 128, 0, 3, 100, DIR_UP, 12, 0),
     ],
     // L4: SCATTER/RAIN - storm spray particles, falling downward
     [
@@ -62,7 +62,7 @@ pub(super) const PRESET_STORMY_SHORES: [[u64; 2]; 8] = [
             0x90a0b0,
             0x000000,
         ),
-        lo(100, 120, 80, 0x30, 0, DIR_DOWN, 12, 0),
+        lo(100, 40, 80, 0x30, 0, DIR_DOWN, 12, 0),
     ],
     // L5: VEIL/SHARDS - light breaking through storm clouds (AXIS_CYL)
     [
@@ -88,12 +88,12 @@ pub(super) const PRESET_STORMY_SHORES: [[u64; 2]; 8] = [
             0x283038,
             0x000000,
         ),
-        lo(120, 200, 0, 0, 0, DIR_UP, 15, 0),
+        lo(120, 90, 0, 0, 0, DIR_UP, 15, 0),
     ],
     // L7: LOBE - lighthouse beam sweeping through fog (sine)
     [
         hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0xffffd0, 0x000000),
-        lo(110, 128, 0, 1, 3, DIR_SUNSET, 15, 0),
+        lo(230, 128, 0, 1, 3, DIR_SUNSET, 15, 0),
     ],
 ];
 
@@ -130,7 +130,7 @@ pub(super) const PRESET_POLAR_AURORA: [[u64; 2]; 8] = [
     // L2: BAND - aurora horizon band (green/cyan)
     [
         hi(OP_BAND, REGION_SKY, BLEND_ADD, 0, 0x00ff80, 0x00ffff),
-        lo(140, 128, 0, 0, 0, DIR_UP, 15, 15),
+        lo(220, 128, 0, 0, 0, DIR_UP, 15, 15),
     ],
     // L3: VEIL/CURTAINS - aurora curtains (AXIS_POLAR)
     [
@@ -143,7 +143,7 @@ pub(super) const PRESET_POLAR_AURORA: [[u64; 2]; 8] = [
             0x40ff80,
             0x000000,
         ),
-        lo(110, 128, 80, 0, 0, DIR_UP, 12, 0),
+        lo(200, 128, 80, 0, 0, DIR_UP, 12, 0),
     ],
     // L4: SCATTER/STARS - night starfield
     [
@@ -156,7 +156,7 @@ pub(super) const PRESET_POLAR_AURORA: [[u64; 2]; 8] = [
             0xffffff,
             0x000000,
         ),
-        lo(150, 200, 0, 0x10, 0, DIR_UP, 15, 0),
+        lo(150, 60, 0, 0x10, 0, DIR_UP, 15, 0),
     ],
     // L5: CELESTIAL/MOON - bright arctic moon
     [
@@ -227,7 +227,7 @@ pub(super) const PRESET_SACRED_GEOMETRY: [[u64; 2]; 8] = [
             0x402060,
             0x604080,
         ),
-        lo(130, 128, 0, 0, 0, DIR_UP, 12, 12),
+        lo(130, 200, 0, 0, 0, DIR_UP, 12, 12),
     ],
     // L2: CELL/GRID - geometric floor tiles (bound, AXIS_POLAR)
     [
@@ -245,7 +245,7 @@ pub(super) const PRESET_SACRED_GEOMETRY: [[u64; 2]; 8] = [
     // L3: GRID - geometric sacred frame lines
     [
         hi(OP_GRID, REGION_WALLS, BLEND_ADD, 0, 0x806040, 0x000000),
-        lo(100, 64, 0, 0, 0, DIR_UP, 10, 0),
+        lo(200, 64, 0, 0, 0, DIR_UP, 10, 0),
     ],
     // L4: TRACE/FILAMENTS - radial energy lines (AXIS_POLAR)
     [
@@ -258,7 +258,7 @@ pub(super) const PRESET_SACRED_GEOMETRY: [[u64; 2]; 8] = [
             0xffffff,
             0x000000,
         ),
-        lo(110, 128, 0, 0, 0, DIR_UP, 12, 0),
+        lo(200, 128, 0, 0, 0, DIR_UP, 12, 0),
     ],
     // L5: APERTURE/CIRCLE - central sacred opening
     [
@@ -339,7 +339,7 @@ pub(super) const PRESET_RITUAL_CHAMBER: [[u64; 2]; 8] = [
     // L3: DECAL - magic pentagram on floor (crimson)
     [
         hi(OP_DECAL, REGION_FLOOR, BLEND_ADD, 0, 0xff2000, 0x400000),
-        lo(160, 100, 0, 0, 3, DIR_UP, 15, 15), // param_d=3: ritual pulse
+        lo(255, 8, 100, 0, 3, DIR_UP, 15, 15), // shape=DISK(0), soft=8, size=100, param_d=3: ritual pulse
     ],
     // L4: PORTAL/CIRCLE - summoning portal (dark purple, TANGENT_LOCAL)
     [
@@ -352,7 +352,7 @@ pub(super) const PRESET_RITUAL_CHAMBER: [[u64; 2]; 8] = [
             0x8020ff,
             0x200040,
         ),
-        lo(140, 64, 0, 0, 0, DIR_UP, 15, 15),
+        lo(255, 128, 0, 0, 0, DIR_UP, 15, 15),
     ],
     // L5: TRACE/FILAMENTS - arcane energy veins (purple, TANGENT_LOCAL)
     [
@@ -365,7 +365,7 @@ pub(super) const PRESET_RITUAL_CHAMBER: [[u64; 2]; 8] = [
             0xa040ff,
             0x000000,
         ),
-        lo(110, 128, 0, 0, 0, DIR_UP, 12, 0),
+        lo(220, 128, 0, 0, 0, DIR_UP, 12, 0),
     ],
     // L6: SCATTER/EMBERS - magical sparks and embers
     [
@@ -378,7 +378,7 @@ pub(super) const PRESET_RITUAL_CHAMBER: [[u64; 2]; 8] = [
             0xff8040,
             0x000000,
         ),
-        lo(110, 120, 60, 0x30, 0, DIR_UP, 15, 0),
+        lo(110, 20, 60, 0x30, 0, DIR_UP, 15, 0),
     ],
     // L7: ATMOSPHERE/ALIEN - otherworldly oppressive atmosphere
     [
@@ -391,6 +391,6 @@ pub(super) const PRESET_RITUAL_CHAMBER: [[u64; 2]; 8] = [
             0x100010,
             0x000000,
         ),
-        lo(100, 150, 0, 0, 0, DIR_UP, 15, 0),
+        lo(100, 60, 0, 0, 0, DIR_UP, 15, 0),
     ],
 ];

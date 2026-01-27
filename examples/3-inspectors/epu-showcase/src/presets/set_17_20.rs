@@ -63,19 +63,19 @@ pub(super) const PRESET_VOLCANIC_CORE: [[u64; 2]; 8] = [
     [
         hi_meta(
             OP_TRACE,
-            REGION_FLOOR,
+            REGION_WALLS,
             BLEND_ADD,
             DOMAIN_TANGENT_LOCAL,
             TRACE_CRACKS,
             0xff4000,
             0x000000,
         ),
-        lo(140, 128, 64, 0, 0, DIR_UP, 15, 0),
+        lo(255, 128, 64, 0, 0, DIR_UP, 15, 0),
     ],
     // L5: FLOW - churning lava (orange-red)
     [
         hi(OP_FLOW, REGION_FLOOR, BLEND_SCREEN, 0, 0xff2800, 0x000000),
-        lo(120, 128, 0, 0, 100, DIR_UP, 15, 0),
+        lo(200, 128, 0, 0, 100, DIR_UP, 15, 0),
     ],
     // L6: SCATTER/EMBERS - rising sparks (bright orange)
     [
@@ -88,7 +88,7 @@ pub(super) const PRESET_VOLCANIC_CORE: [[u64; 2]; 8] = [
             0xff8000,
             0x000000,
         ),
-        lo(110, 120, 100, 0x40, 0, DIR_UP, 15, 0),
+        lo(110, 30, 25, 0x40, 0, DIR_UP, 15, 0),
     ],
     // L7: ATMOSPHERE/ABSORPTION - volcanic gases
     [
@@ -101,7 +101,7 @@ pub(super) const PRESET_VOLCANIC_CORE: [[u64; 2]; 8] = [
             0x100800,
             0x000000,
         ),
-        lo(110, 180, 0, 0, 0, DIR_UP, 15, 0),
+        lo(110, 80, 0, 0, 0, DIR_UP, 15, 0),
     ],
 ];
 
@@ -120,7 +120,7 @@ pub(super) const PRESET_DIGITAL_MATRIX: [[u64; 2]; 8] = [
     // L0: RAMP - black sky, dark green floor, matrix green walls
     [
         hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x000000, 0x001000),
-        lo(220, 0x00, 0x20, 0x00, THRESH_BALANCED, DIR_UP, 15, 15),
+        lo(220, 0x00, 0x08, 0x00, THRESH_BALANCED, DIR_UP, 15, 15),
     ],
     // L1: SPLIT/CROSS - data grid structure (bound)
     [
@@ -133,7 +133,7 @@ pub(super) const PRESET_DIGITAL_MATRIX: [[u64; 2]; 8] = [
             0x003000,
             0x001800,
         ),
-        lo(130, 128, 0, 0, 0, DIR_UP, 15, 15),
+        lo(130, 40, 0, 0, 0, DIR_UP, 15, 15),
     ],
     // L2: CELL/GRID - data block cells (bound)
     [
@@ -150,8 +150,8 @@ pub(super) const PRESET_DIGITAL_MATRIX: [[u64; 2]; 8] = [
     ],
     // L3: GRID - green wireframe overlay
     [
-        hi(OP_GRID, REGION_WALLS, BLEND_ADD, 0, 0x00ff00, 0x000000),
-        lo(130, 32, 0, 3, 0, DIR_UP, 15, 0),
+        hi(OP_GRID, REGION_WALLS, BLEND_ADD, 0, 0x00ff40, 0x000000),
+        lo(255, 32, 0, 3, 0, DIR_UP, 15, 0),
     ],
     // L4: SCATTER/RAIN - falling code rain (green, cylindrical, downward)
     [
@@ -164,17 +164,17 @@ pub(super) const PRESET_DIGITAL_MATRIX: [[u64; 2]; 8] = [
             0x00ff00,
             0x000000,
         ),
-        lo(180, 150, 200, 0, 0, DIR_DOWN, 15, 0),
+        lo(180, 40, 200, 0, 0, DIR_DOWN, 15, 0),
     ],
     // L5: FLOW - code streaming effect (green, downward)
     [
         hi(OP_FLOW, REGION_ALL, BLEND_ADD, 0, 0x00dd00, 0x000000),
-        lo(120, 128, 0, 0, 150, DIR_DOWN, 15, 0),
+        lo(60, 128, 0, 0, 150, DIR_DOWN, 15, 0),
     ],
     // L6: DECAL - data HUD element (cyan)
     [
         hi(OP_DECAL, REGION_WALLS, BLEND_ADD, 0, 0x00ffff, 0x000000),
-        lo(120, 128, 64, 0, 0, DIR_UP, 15, 0),
+        lo(120, 8, 64, 0, 0, DIR_UP, 15, 0), // shape=DISK(0), soft=8, size=64
     ],
     // L7: PORTAL/RECT - data portal (cyan/green, TANGENT_LOCAL)
     [
@@ -245,12 +245,12 @@ pub(super) const PRESET_NOIR_DETECTIVE: [[u64; 2]; 8] = [
             0x101008,
             0x383020,
         ),
-        lo(160, 128, 0, 0, 0, DIR_SUN, 15, 15),
+        lo(160, 40, 0, 0, 0, DIR_SUN, 15, 15),
     ],
     // L4: LOBE - desk lamp cone of warm light (sine flicker)
     [
         hi(OP_LOBE, REGION_FLOOR, BLEND_ADD, 0, 0xffe0a0, 0x000000),
-        lo(130, 128, 0, 1, 1, DIR_DOWN, 15, 0),
+        lo(255, 128, 0, 1, 1, DIR_DOWN, 15, 0),
     ],
     // L5: SCATTER/DUST - cigarette smoke particles
     [
@@ -263,7 +263,7 @@ pub(super) const PRESET_NOIR_DETECTIVE: [[u64; 2]; 8] = [
             0x808070,
             0x000000,
         ),
-        lo(100, 80, 40, 0x20, 0, DIR_UP, 10, 0),
+        lo(100, 20, 40, 0x20, 0, DIR_UP, 10, 0),
     ],
     // L6: ATMOSPHERE/MIE - smoky haze filling the room
     [
@@ -276,7 +276,7 @@ pub(super) const PRESET_NOIR_DETECTIVE: [[u64; 2]; 8] = [
             0x302820,
             0x000000,
         ),
-        lo(120, 150, 0, 0, 0, DIR_UP, 15, 0),
+        lo(120, 70, 0, 0, 0, DIR_UP, 15, 0),
     ],
     // L7: FLOW - rain streaking on window (low intensity)
     [
@@ -331,7 +331,7 @@ pub(super) const PRESET_STEAMPUNK_AIRSHIP: [[u64; 2]; 8] = [
     // L3: GRID - brass framework and girders
     [
         hi(OP_GRID, REGION_WALLS, BLEND_ADD, 0, 0xc09040, 0x000000),
-        lo(100, 48, 0, 0, 0, DIR_UP, 12, 0),
+        lo(180, 48, 0, 0, 0, DIR_UP, 12, 0),
     ],
     // L4: CELESTIAL/SUN - setting sun visible through porthole
     [
@@ -344,7 +344,7 @@ pub(super) const PRESET_STEAMPUNK_AIRSHIP: [[u64; 2]; 8] = [
             0xffc060,
             0x000000,
         ),
-        lo(160, 128, 0, 0, 0, DIR_SUNSET, 15, 0),
+        lo(160, 220, 0, 0, 0, DIR_SUNSET, 15, 0),
     ],
     // L5: VEIL/PILLARS - steam columns rising from vents
     [
@@ -370,7 +370,7 @@ pub(super) const PRESET_STEAMPUNK_AIRSHIP: [[u64; 2]; 8] = [
             0xffe8c0,
             0x000000,
         ),
-        lo(100, 100, 50, 0x20, 0, DIR_UP, 12, 0),
+        lo(100, 30, 50, 0x20, 0, DIR_UP, 12, 0),
     ],
     // L7: ATMOSPHERE/MIE - warm amber engine room haze
     [

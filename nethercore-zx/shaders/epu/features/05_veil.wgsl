@@ -8,7 +8,7 @@
 //   color_b: Edge/glow color (RGB24)
 //   intensity: Brightness (0..255 -> 0..1)
 //   param_a: Ribbon count (0..255 -> 2..32)
-//   param_b: Thickness (0..255 -> 0.01..0.3)
+//   param_b: Thickness (0..255 -> 0.002..0.5/ribbon_count, scales with spacing)
 //   param_c: Curvature/sway amplitude (0..255 -> 0..1)
 //   param_d: Reserved (set to 0)
 //   direction: Cylinder/polar axis (oct-u16)
@@ -321,8 +321,10 @@ fn eval_veil(
     // Extract parameters
     // param_a: Ribbon count (0..255 -> 2..32)
     let ribbon_count = 2u + (instr_a(instr) * 30u) / 255u;
-    // param_b: Thickness (0..255 -> 0.01..0.3)
-    let thickness = mix(0.01, 0.3, u8_to_01(instr_b(instr)));
+    // param_b: Thickness (scales with ribbon spacing)
+    let spacing = 1.0 / f32(ribbon_count);
+    let max_thickness = max(0.05, spacing * 0.5);
+    let thickness = mix(0.002, max_thickness, u8_to_01(instr_b(instr)));
     // param_c: Curvature/sway (0..255 -> 0..1)
     let curvature = u8_to_01(instr_c(instr));
 

@@ -160,8 +160,14 @@ fn eval_patches(
     var p: vec3f;
     switch domain_id {
         case 0u: {
-            // DIRECT3D: use direction directly for seamless spherical patterns
-            p = dir * scale;
+            // DIRECT3D: triplanar blending to avoid octahedral seams
+            let w = abs(dir);
+            let w3 = w * w * w;
+            let wn = w3 / (w3.x + w3.y + w3.z);
+            let px = vec3f(dir.y, dir.z, 0.0) * scale;
+            let py = vec3f(dir.x, dir.z, 0.0) * scale;
+            let pz = vec3f(dir.x, dir.y, 0.0) * scale;
+            p = px * wn.x + py * wn.y + pz * wn.z;
         }
         case 1u: {
             // AXIS_CYL: cylindrical UV mapping around axis

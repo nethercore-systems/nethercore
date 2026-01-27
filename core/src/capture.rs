@@ -364,6 +364,16 @@ pub fn read_render_target_pixels(
     drop(mapped);
     staging_buffer.unmap();
 
+    // PNG expects RGBA byte order; swap if the texture is BGRA
+    let format = texture.format();
+    if format == wgpu::TextureFormat::Bgra8Unorm
+        || format == wgpu::TextureFormat::Bgra8UnormSrgb
+    {
+        for pixel in pixels.chunks_exact_mut(4) {
+            pixel.swap(0, 2); // B,G,R,A → R,G,B,A
+        }
+    }
+
     pixels
 }
 

@@ -5,7 +5,7 @@
 //   color_b: Color variation (RGB24) - points randomly vary between a and b
 //   intensity: Brightness (0..255 -> 0..1)
 //   param_a: Density (0..255 -> 1..256)
-//   param_b: Point size (0..255 -> 0.001..0.05 rad)
+//   param_b: Point size (0..255 -> 0.001..0.5/density rad, scales with cell spacing)
 //   param_c[7:4]: Twinkle amount (0..15 -> 0..1)
 //   param_c[3:0]: Reserved (set to 0)
 //   param_d: Seed for randomization (0..255)
@@ -172,7 +172,7 @@ fn eval_scatter(
     }
 
     let density = mix(1.0, 256.0, u8_to_01(instr_a(instr)));
-    let base_size = mix(0.001, 0.05, u8_to_01(instr_b(instr)));
+    let base_size = mix(0.001, max(0.05, 0.5 / density), u8_to_01(instr_b(instr)));
     let size = base_size * scatter_size_mult(variant_id);
 
     let pc = instr_c(instr);

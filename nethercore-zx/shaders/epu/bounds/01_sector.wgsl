@@ -75,6 +75,9 @@ fn eval_sector(
         default: {}
     }
 
+    // Clamp open to [0,1] to prevent negative wall weight (TUNNEL can exceed 1.0)
+    open = min(open, 1.0);
+
     // Compute modified region weights (wall -> sky in opening)
     let opening_mask = open * baseline.wall;
     let modified_regions = RegionWeights(

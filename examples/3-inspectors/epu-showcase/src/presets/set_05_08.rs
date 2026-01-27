@@ -62,7 +62,7 @@ pub(super) const PRESET_GOTHIC_CATHEDRAL: [[u64; 2]; 8] = [
     // L4: LOBE - divine golden light from above (sine pulse)
     [
         hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0xffd700, 0x000000),
-        lo(120, 128, 0, 1, 0, DIR_SUN, 15, 0),
+        lo(220, 128, 0, 1, 0, DIR_SUN, 15, 0),
     ],
     // L5: SCATTER/DUST - golden dust motes in light beam
     [
@@ -75,7 +75,7 @@ pub(super) const PRESET_GOTHIC_CATHEDRAL: [[u64; 2]; 8] = [
             0xffcc00,
             0x000000,
         ),
-        lo(100, 80, 40, 0x20, 0, DIR_DOWN, 15, 0),
+        lo(100, 25, 15, 0x20, 0, DIR_DOWN, 15, 0),
     ],
     // L6: ATMOSPHERE/MIE - incense haze
     [
@@ -88,7 +88,7 @@ pub(super) const PRESET_GOTHIC_CATHEDRAL: [[u64; 2]; 8] = [
             0x302820,
             0x000000,
         ),
-        lo(100, 150, 0, 0, 0, DIR_UP, 15, 0),
+        lo(100, 80, 0, 0, 0, DIR_UP, 15, 0),
     ],
     // L7: NOP
     NOP_LAYER,
@@ -140,7 +140,7 @@ pub(super) const PRESET_OCEAN_DEPTHS: [[u64; 2]; 8] = [
     // L3: FLOW - animated caustic light patterns
     [
         hi(OP_FLOW, REGION_FLOOR, BLEND_ADD, 0, 0x00a0c0, 0x000000),
-        lo(100, 128, 0, 0, 100, DIR_UP, 15, 0),
+        lo(200, 128, 0, 0, 100, DIR_UP, 15, 0),
     ],
     // L4: SCATTER/BUBBLES - floating bubbles
     [
@@ -153,7 +153,7 @@ pub(super) const PRESET_OCEAN_DEPTHS: [[u64; 2]; 8] = [
             0x40a0a0,
             0x000000,
         ),
-        lo(90, 100, 60, 0x20, 0, DIR_UP, 15, 0),
+        lo(90, 25, 20, 0x20, 0, DIR_UP, 15, 0),
     ],
     // L5: VEIL/SHARDS - light shafts from surface (AXIS_CYL)
     [
@@ -166,7 +166,7 @@ pub(super) const PRESET_OCEAN_DEPTHS: [[u64; 2]; 8] = [
             0x80c0e0,
             0x000000,
         ),
-        lo(100, 128, 0, 0, 0, DIR_DOWN, 15, 0),
+        lo(180, 128, 0, 0, 0, DIR_DOWN, 15, 0),
     ],
     // L6: ATMOSPHERE/ABSORPTION - deep water fog
     [
@@ -179,12 +179,12 @@ pub(super) const PRESET_OCEAN_DEPTHS: [[u64; 2]; 8] = [
             0x000820,
             0x000000,
         ),
-        lo(120, 180, 0, 0, 0, DIR_UP, 15, 0),
+        lo(120, 90, 0, 0, 0, DIR_UP, 15, 0),
     ],
     // L7: DECAL - bioluminescent glow spot
     [
         hi(OP_DECAL, REGION_WALLS, BLEND_ADD, 0, 0x00ffaa, 0x000000),
-        lo(120, 64, 0, 0, 3, DIR_UP, 15, 0),
+        lo(120, 8, 64, 0, 3, DIR_UP, 15, 0), // shape=DISK(0), soft=8, size=64
     ],
 ];
 
@@ -202,8 +202,8 @@ pub(super) const PRESET_OCEAN_DEPTHS: [[u64; 2]; 8] = [
 pub(super) const PRESET_VOID_STATION: [[u64; 2]; 8] = [
     // L0: RAMP - near-black sky, dark metal floor, gunmetal walls
     [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x000008, 0x101018),
-        lo(180, 0x18, 0x18, 0x20, THRESH_INTERIOR, DIR_UP, 15, 15),
+        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x000820, 0x101018),
+        lo(180, 0x20, 0x20, 0x30, THRESH_INTERIOR, DIR_UP, 15, 15),
     ],
     // L1: SECTOR/BOX - box enclosure
     [
@@ -234,7 +234,7 @@ pub(super) const PRESET_VOID_STATION: [[u64; 2]; 8] = [
     // L3: GRID - blue panel lines on walls
     [
         hi(OP_GRID, REGION_WALLS, BLEND_ADD, 0, 0x0044aa, 0x000000),
-        lo(140, 48, 0, 2, 0, DIR_UP, 15, 0),
+        lo(240, 48, 0, 2, 0, DIR_UP, 15, 0),
     ],
     // L4: CELL/GRID - floor grating pattern
     [
@@ -260,7 +260,7 @@ pub(super) const PRESET_VOID_STATION: [[u64; 2]; 8] = [
             0xffffff,
             0x000000,
         ),
-        lo(150, 180, 0, 0x10, 0, DIR_UP, 15, 0),
+        lo(230, 180, 0, 0x10, 0, DIR_UP, 15, 0),
     ],
     // L6: CELESTIAL/BINARY - binary star system outside
     [
@@ -273,12 +273,12 @@ pub(super) const PRESET_VOID_STATION: [[u64; 2]; 8] = [
             0x00aa88,
             0x4488aa,
         ),
-        lo(140, 100, 0, 0, 0, DIR_SUN, 15, 15),
+        lo(255, 200, 0, 0, 0, DIR_SUN, 15, 15),
     ],
     // L7: DECAL - green status indicator
     [
         hi(OP_DECAL, REGION_WALLS, BLEND_ADD, 0, 0x00ff00, 0x000000),
-        lo(120, 32, 0, 0, 4, DIR_UP, 15, 0),
+        lo(120, 0x20, 32, 0, 4, DIR_UP, 15, 0), // shape=RECT(2), soft=0, size=32
     ],
 ];
 
@@ -307,8 +307,8 @@ pub(super) const PRESET_DESERT_MIRAGE: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             SILHOUETTE_DUNES,
-            0xb89860,
-            0xd0b080,
+            0x806030,
+            0xb09060,
         ),
         lo(160, 128, 0, 0, 0, DIR_UP, 15, 15),
     ],
@@ -336,7 +336,7 @@ pub(super) const PRESET_DESERT_MIRAGE: [[u64; 2]; 8] = [
             0xffffd8,
             0x000000,
         ),
-        lo(180, 128, 0, 0, 0, DIR_SUN, 15, 0),
+        lo(180, 220, 0, 0, 0, DIR_SUN, 15, 0),
     ],
     // L4: FLOW - heat shimmer effect (low intensity)
     [
@@ -346,7 +346,7 @@ pub(super) const PRESET_DESERT_MIRAGE: [[u64; 2]; 8] = [
     // L5: BAND - warm horizon glow
     [
         hi(OP_BAND, REGION_ALL, BLEND_ADD, 0, 0xffe0a0, 0x000000),
-        lo(100, 128, 0, 0, 0, DIR_SUNSET, 15, 0),
+        lo(180, 128, 0, 0, 0, DIR_SUNSET, 15, 0),
     ],
     // L6: ATMOSPHERE/MIE - desert haze
     [
