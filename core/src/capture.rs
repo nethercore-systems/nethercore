@@ -14,7 +14,8 @@ use nethercore_shared::screenshot::{
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::PathBuf;
-use std::sync::mpsc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, mpsc};
 use std::thread;
 
 /// Trait for graphics backends that support screen capture.
@@ -53,6 +54,8 @@ pub struct ScreenCapture {
     game_name: String,
     /// Console type for screenshot signing (e.g., "zx", "chroma")
     console_type: String,
+    /// Number of background save operations still in progress
+    pending_saves: Arc<AtomicUsize>,
 }
 
 /// GIF recorder state.
@@ -103,6 +106,7 @@ impl ScreenCapture {
             source_fps: 60,
             game_name,
             console_type,
+            pending_saves: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -189,6 +193,11 @@ impl ScreenCapture {
         self.gif_recorder.is_some()
     }
 
+    /// Check if there are screenshots/GIFs still being saved in background threads
+    pub fn has_pending_saves(&self) -> bool {
+        self.screenshot_pending || self.pending_saves.load(Ordering::Relaxed) > 0
+    }
+
     /// Check if a capture (screenshot or GIF frame) is needed this frame.
     pub fn needs_capture(&self) -> bool {
         if self.screenshot_pending {
@@ -215,11 +224,14 @@ impl ScreenCapture {
             let console_type = self.console_type.clone();
             let (tx, rx) = mpsc::channel();
             self.save_receiver = Some(rx);
+            let pending = self.pending_saves.clone();
+            pending.fetch_add(1, Ordering::Relaxed);
 
             thread::spawn(move || {
                 let result =
                     save_screenshot(screenshot_pixels, width, height, &game_name, &console_type);
                 let _ = tx.send(SaveResult::Screenshot(result));
+                pending.fetch_sub(1, Ordering::Relaxed);
             });
         }
 

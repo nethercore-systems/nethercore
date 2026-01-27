@@ -105,8 +105,10 @@ where
                         }
                         executor.advance_frame();
                         if executor.is_complete() {
-                            tracing::info!("Replay script complete");
-                            self.should_exit = true;
+                            if !self.capture.has_pending_saves() {
+                                tracing::info!("Replay complete, all screenshots saved");
+                                self.should_exit = true;
+                            }
                         }
                     }
                 }
