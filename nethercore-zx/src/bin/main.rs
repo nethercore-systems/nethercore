@@ -99,6 +99,11 @@ struct Args {
     #[arg(long, value_name = "FILE")]
     session: Option<PathBuf>,
 
+    // === Replay Mode ===
+    /// Run a replay script (.ncrs) for automated playback and screenshots
+    #[arg(long, value_name = "FILE")]
+    replay: Option<PathBuf>,
+
     // === Preview Mode ===
     /// Run in preview mode to inspect ROM assets
     #[arg(long)]
@@ -169,6 +174,7 @@ fn main() -> Result<()> {
         num_players: args.players,
         input_delay: args.input_delay,
         connection_mode,
+        replay_script: args.replay,
     };
 
     run(config)

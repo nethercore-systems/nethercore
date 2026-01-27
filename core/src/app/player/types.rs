@@ -75,4 +75,6 @@ pub struct StandaloneConfig {
     pub input_delay: usize,
     /// Connection mode for multiplayer
     pub connection_mode: ConnectionMode,
+    /// Replay script path (.ncrs file) for automated playback
+    pub replay_script: Option<PathBuf>,
 }
