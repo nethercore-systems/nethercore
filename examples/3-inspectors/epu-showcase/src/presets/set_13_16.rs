@@ -6,34 +6,31 @@ use crate::constants::*;
 // -----------------------------------------------------------------------------
 // Preset 13: "Enchanted Grove" - Fairy tale forest
 // -----------------------------------------------------------------------------
-// L0: RAMP (sky=#fff8d0, floor=#204020, walls=#1a3820)
-// L1: SILHOUETTE/FOREST (dark green #0a2010 / #1a3820, forest silhouette)
-// L2: PLANE/GRASS (green #308030 / #204020, lush floor)
-// L3: VEIL/CURTAINS (green #40a040, hanging moss, AXIS_CYL)
-// L4: SCATTER/DUST (gold #ffdd00, fairy dust)
-// L5: PATCHES/BLOBS (yellow #fff080, dappled sunlight)
-// L6: LOBE (gold #ffd700, sunbeam, dir=SUN)
-// L7: FLOW (green #60a060, gentle leaf movement)
+// Design: Forest clearing with golden sunbeam. NO harsh lines.
+// Use SECTOR for enclosure, not SILHOUETTE (which creates harsh horizon).
+// L0: SECTOR/CAVE - forest enclosure (soft, no harsh line)
+// L1: PLANE/GRASS - mossy floor
+// L2: VEIL/CURTAINS - soft tree canopy edges (not harsh silhouette)
+// L3: APERTURE/CIRCLE - clearing in canopy
+// L4: LOBE - HERO: golden sunbeam
+// L5: SCATTER/DUST - fairy motes
+// L6: CELESTIAL/SUN - sun disk
+// L7: ATMOSPHERE/MIE - golden haze
 pub(super) const PRESET_ENCHANTED_GROVE: [[u64; 2]; 8] = [
-    // L0: RAMP - readable forest base (not pitch black)
-    [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x304020, 0x182818),
-        lo(210, 0x20, 0x40, 0x28, THRESH_OPEN, DIR_UP, 15, 15),
-    ],
-    // L1: SILHOUETTE/FOREST - strong treeline shapes
+    // L0: SECTOR/CAVE - forest enclosure (soft edges, no harsh line)
     [
         hi_meta(
-            OP_SILHOUETTE,
-            REGION_WALLS,
+            OP_SECTOR,
+            REGION_ALL,
             BLEND_LERP,
             DOMAIN_DIRECT3D,
-            SILHOUETTE_FOREST,
-            0x000000,
-            0x183020,
+            SECTOR_CAVE,
+            0x102808,
+            0x305020,
         ),
-        lo(40, 200, 220, 0x40, 0, DIR_UP, 15, 0),
+        lo(220, 180, 0, 0, 0, DIR_UP, 15, 15),
     ],
-    // L2: PLANE/GRASS - lush ground
+    // L1: PLANE/GRASS - mossy forest floor
     [
         hi_meta(
             OP_PLANE,
@@ -41,25 +38,43 @@ pub(super) const PRESET_ENCHANTED_GROVE: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             PLANE_GRASS,
-            0x1a3a1a,
-            0x102010,
+            0x305030,
+            0x203820,
         ),
-        lo(160, 128, 0, 0, 0, DIR_UP, 15, 15),
+        lo(200, 100, 0, 0, 0, DIR_UP, 15, 15),
     ],
-    // L3: VEIL/SHARDS - volumetric god rays (many thin rays; avoid searchlight wedges)
+    // L2: VEIL/CURTAINS - soft hanging foliage (not harsh silhouette)
     [
         hi_meta(
             OP_VEIL,
-            REGION_SKY | REGION_WALLS,
-            BLEND_ADD,
+            REGION_WALLS,
+            BLEND_LERP,
             DOMAIN_AXIS_CYL,
-            VEIL_SHARDS,
-            0xffd080,
-            0xfff0c0,
+            VEIL_CURTAINS,
+            0x183010,
+            0x284820,
         ),
-        lo(45, 200, 30, 120, 0, DIR_UP, 12, 8),
+        lo(120, 140, 60, 100, 0, DIR_DOWN, 12, 10),
     ],
-    // L4: SCATTER/DUST - fairy motes (tiny + sparse)
+    // L3: APERTURE/CIRCLE - clearing in canopy showing golden sky
+    [
+        hi_meta(
+            OP_APERTURE,
+            REGION_SKY,
+            BLEND_LERP,
+            DOMAIN_DIRECT3D,
+            APERTURE_CIRCLE,
+            0x406028,
+            0xfff8d0,
+        ),
+        lo(240, 120, 140, 100, 0, DIR_UP, 15, 15),
+    ],
+    // L4: LOBE - HERO: golden sunbeam cone
+    [
+        hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0xffd060, 0x906030),
+        lo(255, 180, 80, 1, 0, DIR_SUN, 15, 12),
+    ],
+    // L5: SCATTER/DUST - sparse fairy motes
     [
         hi_meta(
             OP_SCATTER,
@@ -70,26 +85,22 @@ pub(super) const PRESET_ENCHANTED_GROVE: [[u64; 2]; 8] = [
             0xffd080,
             0xffffff,
         ),
-        lo(8, 6, 6, 0x40, 17, DIR_UP, 8, 0),
+        lo(40, 15, 10, 0x60, 17, DIR_UP, 10, 0),
     ],
-    // L5: FLOW/CAUSTIC - dappled light through canopy
+    // L6: CELESTIAL/SUN - sun disk visible through clearing
     [
-        hi(
-            OP_FLOW,
-            REGION_SKY | REGION_WALLS,
-            BLEND_SCREEN,
-            0,
-            0xffd080,
-            0x204020,
+        hi_meta(
+            OP_CELESTIAL,
+            REGION_SKY,
+            BLEND_ADD,
+            DOMAIN_DIRECT3D,
+            CELESTIAL_SUN,
+            0xfff0c0,
+            0x000000,
         ),
-        lo(120, 120, 100, 0x22, 0, DIR_SUN, 10, 0),
+        lo(180, 80, 200, 0, 100, DIR_SUN, 15, 10),
     ],
-    // L6: LOBE - primary sunbeam (hero)
-    [
-        hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0xffd080, 0x402010),
-        lo(170, 220, 80, 1, 0, DIR_SUN, 12, 0),
-    ],
-    // L7: ATMOSPHERE/MIE - warm volume around sun direction
+    // L7: ATMOSPHERE/MIE - warm golden forest haze
     [
         hi_meta(
             OP_ATMOSPHERE,
@@ -97,10 +108,10 @@ pub(super) const PRESET_ENCHANTED_GROVE: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             ATMO_MIE,
-            0xffd080,
-            0x102010,
+            0x504020,
+            0x102008,
         ),
-        lo(60, 80, 128, 120, 200, DIR_SUN, 10, 0),
+        lo(60, 100, 128, 80, 160, DIR_SUN, 10, 0),
     ],
 ];
 
@@ -201,36 +212,30 @@ pub(super) const PRESET_ASTRAL_VOID: [[u64; 2]; 8] = [
 // -----------------------------------------------------------------------------
 // Preset 15: "Toxic Wasteland" - Post-apocalyptic industrial
 // -----------------------------------------------------------------------------
-// Goal: Clearly "toxic/radioactive" with visible green glow as hero element.
-//
-// L0: RAMP - murky olive/brown base (brighter for readability)
-// L1: SILHOUETTE/INDUSTRIAL - factory smokestacks
-// L2: PLANE/TILES - cracked industrial floor
-// L3: CELL/HEX - hazmat hex pattern on walls
-// L4: FLOW - toxic puddle glow on floor (HERO - radioactive pools)
-// L5: VEIL/PILLARS - toxic fume columns
-// L6: LOBE - radioactive floor glow (green, upward)
-// L7: ATMOSPHERE/ALIEN - poisonous green haze
+// Design: Simple dark industrial with bright green toxic glow. No complex patterns.
+// L0: SECTOR/BOX - dark industrial enclosure
+// L1: PLANE/TILES - concrete floor
+// L2: PORTAL/VORTEX - HERO: glowing toxic pool (center)
+// L3: TRACE/CRACKS - toxic veins on floor
+// L4: SCATTER/EMBERS - toxic particles
+// L5: LOBE - radioactive upward glow
+// L6: FLOW - toxic smoke rising
+// L7: ATMOSPHERE/ALIEN - green haze
 pub(super) const PRESET_TOXIC_WASTELAND: [[u64; 2]; 8] = [
-    // L0: RAMP - murky olive sky, brown floor, corroded walls (BRIGHTER base)
-    [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x181808, 0x201810),
-        lo(200, 0x28, 0x30, 0x18, THRESH_BALANCED, DIR_UP, 15, 15),
-    ],
-    // L1: SILHOUETTE/INDUSTRIAL - factory smokestacks (more visible)
+    // L0: SECTOR/BOX - industrial enclosure (lighter to show glow)
     [
         hi_meta(
-            OP_SILHOUETTE,
-            REGION_WALLS,
+            OP_SECTOR,
+            REGION_ALL,
             BLEND_LERP,
             DOMAIN_DIRECT3D,
-            SILHOUETTE_INDUSTRIAL,
-            0x080400,
-            0x181008,
+            SECTOR_BOX,
+            0x101008,
+            0x281810,
         ),
-        lo(180, 160, 200, 0x30, 0, DIR_UP, 12, 10),
+        lo(220, 140, 0, 0, 0, DIR_UP, 15, 15),
     ],
-    // L2: PLANE/TILES - cracked industrial floor (more visible brown)
+    // L1: PLANE/TILES - cracked concrete floor (brown, not green)
     [
         hi_meta(
             OP_PLANE,
@@ -239,47 +244,60 @@ pub(super) const PRESET_TOXIC_WASTELAND: [[u64; 2]; 8] = [
             DOMAIN_DIRECT3D,
             PLANE_TILES,
             0x302010,
-            0x201408,
+            0x201008,
         ),
-        lo(160, 128, 0, 0, 0, DIR_UP, 15, 15),
+        lo(220, 100, 0, 0, 0, DIR_UP, 15, 15),
     ],
-    // L3: CELL/HEX - hazmat hex outlines on walls (visible green)
+    // L2: PORTAL/VORTEX - HERO: glowing toxic waste pool (BRIGHT)
     [
         hi_meta(
-            OP_CELL,
-            REGION_WALLS,
-            BLEND_LERP,
-            DOMAIN_DIRECT3D,
-            CELL_HEX,
-            0x182008,
-            0x101808,
-        ),
-        lo(180, 100, 200, 50, 0, DIR_UP, 10, 8),
-    ],
-    // L4: FLOW - HERO: toxic radioactive puddle glow on floor (bright green)
-    [
-        hi(OP_FLOW, REGION_FLOOR, BLEND_ADD, 0, 0x40ff20, 0x208010),
-        lo(100, 80, 60, 0x22, 0, DIR_UP, 15, 0),
-    ],
-    // L5: VEIL/PILLARS - toxic fume columns (visible green glow)
-    [
-        hi_meta(
-            OP_VEIL,
-            REGION_WALLS | REGION_SKY,
+            OP_PORTAL,
+            REGION_FLOOR,
             BLEND_ADD,
-            DOMAIN_AXIS_CYL,
-            VEIL_PILLARS,
-            0x306010,
-            0x000000,
+            DOMAIN_TANGENT_LOCAL,
+            PORTAL_VORTEX,
+            0x40ff20,
+            0x80ff40,
         ),
-        lo(60, 80, 100, 0, 0, DIR_UP, 12, 0),
+        lo(255, 120, 200, 140, 0, DIR_DOWN, 15, 15),
     ],
-    // L6: LOBE - radioactive floor glow (green, upward, stronger)
+    // L3: TRACE/CRACKS - bright toxic veins radiating from pool
     [
-        hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0x308010, 0x000000),
-        lo(80, 180, 60, 1, 0, DIR_UP, 12, 0),
+        hi_meta(
+            OP_TRACE,
+            REGION_FLOOR,
+            BLEND_ADD,
+            DOMAIN_TANGENT_LOCAL,
+            TRACE_CRACKS,
+            0x60ff30,
+            0x30c018,
+        ),
+        lo(255, 140, 100, 80, 0, DIR_UP, 15, 0),
     ],
-    // L7: ATMOSPHERE/ALIEN - green poisonous haze (more visible)
+    // L4: SCATTER/EMBERS - toxic green particles rising
+    [
+        hi_meta(
+            OP_SCATTER,
+            REGION_ALL,
+            BLEND_ADD,
+            DOMAIN_DIRECT3D,
+            SCATTER_EMBERS,
+            0x60ff40,
+            0x40c020,
+        ),
+        lo(100, 30, 20, 0x40, 7, DIR_UP, 15, 0),
+    ],
+    // L5: LOBE - BRIGHT radioactive glow from pool (HERO visibility)
+    [
+        hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0x60ff30, 0x40c020),
+        lo(255, 180, 120, 1, 0, DIR_UP, 15, 15),
+    ],
+    // L6: FLOW - toxic smoke rising (subtle, no harsh pattern)
+    [
+        hi(OP_FLOW, REGION_SKY | REGION_WALLS, BLEND_ADD, 0, 0x306010, 0x000000),
+        lo(60, 100, 40, 0x21, 0, DIR_UP, 10, 0),
+    ],
+    // L7: ATMOSPHERE/ALIEN - BRIGHT green poisonous haze (HERO)
     [
         hi_meta(
             OP_ATMOSPHERE,
@@ -287,8 +305,8 @@ pub(super) const PRESET_TOXIC_WASTELAND: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             ATMO_ALIEN,
-            0x182008,
-            0x080804,
+            0x40a020,
+            0x102008,
         ),
         lo(40, 100, 128, 0, 0, DIR_UP, 10, 0),
     ],
@@ -297,33 +315,43 @@ pub(super) const PRESET_TOXIC_WASTELAND: [[u64; 2]; 8] = [
 // -----------------------------------------------------------------------------
 // Preset 16: "Moonlit Graveyard" - Gothic horror
 // -----------------------------------------------------------------------------
-// L0: RAMP (sky=#0a0a1a, floor=#101010, walls=#181820)
-// L1: SILHOUETTE/SPIRES (dark #0a0810 / #141420, gothic tombstones)
-// L2: PLANE/STONE (gray #282828 / #1a1a20, weathered path)
-// L3: CELESTIAL/MOON (white #e0e8f0, full moon, dir=SUN)
-// L4: BAND (blue #202840, eerie horizon glow)
-// L5: SCATTER/DUST (blue-gray #8090a0, mist particles)
-// L6: VEIL/CURTAINS (gray #404050, hanging mist, AXIS_CYL)
-// L7: ATMOSPHERE/FULL (dark blue #101020, heavy night fog)
+// Design: Surrounded by gravestones with moon visible. SILHOUETTE as base.
+// LOW height_bias for gravestone-height shapes, NOT blocking the moon.
+// L0: SILHOUETTE/SPIRES - gravestone silhouettes as BASE (low height!)
+// L1: PLANE/STONE - weathered graveyard ground
+// L2: CELESTIAL/MOON - bright full moon (unobstructed)
+// L3: BAND - eerie horizon glow
+// L4: SCATTER/STARS - night sky stars
+// L5: VEIL/CURTAINS - ground mist
+// L6: LOBE - moonlight glow
+// L7: ATMOSPHERE/FULL - night fog
 pub(super) const PRESET_MOONLIT_GRAVEYARD: [[u64; 2]; 8] = [
-    // L0: RAMP - midnight blue sky, dark earth floor, slate walls
-    [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x0a0a1a, 0x101010),
-        lo(200, 0x18, 0x18, 0x20, THRESH_OPEN, DIR_UP, 15, 15),
-    ],
-    // L1: SILHOUETTE/SPIRES - gothic tombstone silhouettes (dark blue)
+    // L0: SILHOUETTE/SPIRES - gravestones as BASE (LOW height for tombstones)
     [
         hi_meta(
             OP_SILHOUETTE,
-            REGION_WALLS,
+            REGION_ALL,
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             SILHOUETTE_SPIRES,
-            0x0a0810,
-            0x141420,
+            0x000004,
+            0x182030,
         ),
-        // softness, height_bias, roughness, octaves
-        lo(40, 180, 220, 0x40, 0, DIR_UP, 15, 0),
+        // LOW height_bias=60 for short gravestones, high roughness for irregular shapes
+        lo(255, 60, 200, 0x50, 0, DIR_UP, 15, 15),
+    ],
+    // L1: PLANE/STONE - weathered graveyard ground
+    [
+        hi_meta(
+            OP_PLANE,
+            REGION_FLOOR,
+            BLEND_LERP,
+            DOMAIN_DIRECT3D,
+            PLANE_STONE,
+            0x202020,
+            0x141418,
+        ),
+        lo(180, 128, 0, 0, 0, DIR_UP, 15, 15),
     ],
     // L2: PLANE/STONE - weathered graveyard path (gray)
     [
@@ -356,18 +384,18 @@ pub(super) const PRESET_MOONLIT_GRAVEYARD: [[u64; 2]; 8] = [
         hi(OP_BAND, REGION_SKY, BLEND_ADD, 0, 0x202840, 0x000000),
         lo(110, 128, 0, 0, 0, DIR_SUNSET, 15, 0),
     ],
-    // L5: SCATTER/DUST - mist particles (reduced; avoid full-screen bokeh)
+    // L5: SCATTER/STARS - stars in sky only (not on ground)
     [
         hi_meta(
             OP_SCATTER,
-            REGION_ALL,
+            REGION_SKY,
             BLEND_ADD,
             DOMAIN_DIRECT3D,
-            SCATTER_DUST,
-            0x8090a0,
+            SCATTER_STARS,
+            0xc0c8d0,
             0x000000,
         ),
-        lo(20, 8, 12, 0x10, 7, DIR_UP, 8, 0),
+        lo(60, 40, 8, 0x30, 0, DIR_UP, 10, 0),
     ],
     // L6: VEIL/CURTAINS - hanging mist (thinner)
     [
@@ -382,7 +410,7 @@ pub(super) const PRESET_MOONLIT_GRAVEYARD: [[u64; 2]; 8] = [
         ),
         lo(40, 60, 40, 100, 0, DIR_DOWN, 6, 0),
     ],
-    // L7: ATMOSPHERE/FULL - heavy night fog (avoid horizon_y=-1 flat wash)
+    // L7: ATMOSPHERE/FULL - light night fog (reduced to show gravestones)
     [
         hi_meta(
             OP_ATMOSPHERE,
@@ -390,9 +418,9 @@ pub(super) const PRESET_MOONLIT_GRAVEYARD: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             ATMO_FULL,
-            0x101020,
+            0x101828,
             0x000000,
         ),
-        lo(100, 80, 128, 0, 0, DIR_UP, 12, 0),
+        lo(40, 100, 128, 0, 0, DIR_UP, 8, 0),
     ],
 ];

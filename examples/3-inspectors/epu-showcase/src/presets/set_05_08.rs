@@ -34,19 +34,18 @@ pub(super) const PRESET_GOTHIC_CATHEDRAL: [[u64; 2]; 8] = [
         // softness, half_w, half_h, frame_thickness, rise
         lo(200, 180, 240, 80, 200, DIR_FORWARD, 0, 0),
     ],
-    // L2: CELL/BRICK - stone blocks (bound; keep subtle)
+    // L2: SCATTER/DUST - dust motes in light beams (replaced brick - was too dominant)
     [
         hi_meta(
-            OP_CELL,
-            REGION_WALLS,
-            BLEND_LERP,
+            OP_SCATTER,
+            REGION_ALL,
+            BLEND_ADD,
             DOMAIN_DIRECT3D,
-            CELL_BRICK,
-            0x0a0a10,
-            0x2a2420,
+            SCATTER_DUST,
+            0xffd080,
+            0x000000,
         ),
-        // outline, density, fill, gap, seed
-        lo(120, 96, 220, 40, 7, DIR_UP, 8, 6),
+        lo(25, 16, 12, 0x20, 5, DIR_UP, 8, 0),
     ],
     // L3: TRACE/LEAD_LINES - stained-glass leading (tangent-local, aligned to window)
     [
@@ -232,18 +231,18 @@ pub(super) const PRESET_VOID_STATION: [[u64; 2]; 8] = [
         hi(OP_GRID, REGION_WALLS, BLEND_ADD, 0, 0x0066cc, 0x000000),
         lo(255, 48, 30, 0x10, 0, DIR_UP, 15, 0),
     ],
-    // L4: CELL/GRID - floor grating pattern
+    // L4: PLANE/GRATING - floor grating texture (replaced visible grid cells)
     [
         hi_meta(
-            OP_CELL,
+            OP_PLANE,
             REGION_FLOOR,
             BLEND_LERP,
             DOMAIN_DIRECT3D,
-            CELL_GRID,
-            0x101030,
-            0x181828,
+            PLANE_GRATING,
+            0x181830,
+            0x101020,
         ),
-        lo(150, 128, 180, 30, 0, DIR_UP, 15, 15),
+        lo(120, 80, 60, 40, 0, DIR_UP, 12, 10),
     ],
     // L5: SCATTER/STARS - stars visible through viewport
     [
@@ -336,10 +335,18 @@ pub(super) const PRESET_DESERT_MIRAGE: [[u64; 2]; 8] = [
         // intensity, angular_size, limb_exp, phase, corona_extent
         lo(130, 140, 200, 0, 180, DIR_SUN, 15, 10),
     ],
-    // L4: FLOW - heat shimmer (very subtle)
+    // L4: FLOW - heat shimmer (very subtle, tangent-local to avoid barrel lines)
     [
-        hi(OP_FLOW, REGION_WALLS, BLEND_ADD, 0, 0xf8f0e0, 0x000000),
-        lo(25, 96, 80, 0x10, 40, DIR_UP, 8, 0),
+        hi_meta(
+            OP_FLOW,
+            REGION_WALLS,
+            BLEND_ADD,
+            DOMAIN_TANGENT_LOCAL,
+            0,
+            0xf8f0e0,
+            0x000000,
+        ),
+        lo(20, 96, 80, 0x10, 40, DIR_UP, 6, 0),
     ],
     // L5: BAND - warm horizon glow (thin band around up-axis)
     [
@@ -359,9 +366,17 @@ pub(super) const PRESET_DESERT_MIRAGE: [[u64; 2]; 8] = [
         ),
         lo(40, 80, 128, 140, 180, DIR_SUN, 10, 0),
     ],
-    // L7: FLOW - wind-blown sand shimmer near the ground (keep subtle)
+    // L7: FLOW - wind-blown sand shimmer near the ground (tangent-local to avoid barrel lines)
     [
-        hi(OP_FLOW, REGION_FLOOR, BLEND_ADD, 0, 0xffe8d0, 0xb09060),
-        lo(35, 140, 60, 0x11, 0, DIR_RIGHT, 10, 0),
+        hi_meta(
+            OP_FLOW,
+            REGION_FLOOR,
+            BLEND_ADD,
+            DOMAIN_TANGENT_LOCAL,
+            0,
+            0xffe8d0,
+            0xb09060,
+        ),
+        lo(25, 140, 60, 0x11, 0, DIR_RIGHT, 8, 0),
     ],
 ];

@@ -22,7 +22,7 @@ pub(super) const PRESET_NEON_ARCADE: [[u64; 2]; 8] = [
         hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x040408, 0x060608),
         lo(220, 0x0c, 0x0c, 0x10, THRESH_INTERIOR, DIR_UP, 15, 15),
     ],
-    // L1: SECTOR/BOX - room enclosure (keeps it feeling indoors)
+    // L1: SECTOR/BOX - room enclosure (stronger to feel like walls/floor/ceiling)
     [
         hi_meta(
             OP_SECTOR,
@@ -30,12 +30,12 @@ pub(super) const PRESET_NEON_ARCADE: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             SECTOR_BOX,
-            0x080810,
-            0x020206,
+            0x101820,
+            0x040608,
         ),
-        lo(200, 128, 0, 0, 0, DIR_UP, 15, 15),
+        lo(255, 100, 0, 0, 0, DIR_UP, 15, 15),
     ],
-    // L2: APERTURE/RECT - main monitor/window in front
+    // L2: APERTURE/RECT - main monitor/window in front (smaller, like a TV screen)
     [
         hi_meta(
             OP_APERTURE,
@@ -46,8 +46,8 @@ pub(super) const PRESET_NEON_ARCADE: [[u64; 2]; 8] = [
             0x00c0ff,
             0x101018,
         ),
-        // softness, half_w, half_h, frame_thickness
-        lo(160, 140, 100, 60, 0, DIR_FORWARD, 0, 0),
+        // softness, half_w, half_h, frame_thickness (reduced from 140x100 to 60x40)
+        lo(160, 60, 40, 30, 0, DIR_FORWARD, 0, 0),
     ],
     // L3: PLANE/TILES - dark floor
     [
@@ -200,8 +200,8 @@ pub(super) const PRESET_STORM_FRONT: [[u64; 2]; 8] = [
 // Preset 11: "Crystal Cavern" — Fantasy underground geode
 // -----------------------------------------------------------------------------
 // L0: RAMP (sky=#100020, floor=#080010, walls=#180030)
-// L1: CELL/VORONOI (crystal purple #400080 / #200040, walls)
-// L2: PATCHES/DEBRIS (amethyst #6020a0 / #300060, floor)
+// L1: SECTOR/BOX - cave enclosure (provides structure)
+// L2: CELL/VORONOI (crystal purple #400080 / #200040, walls)
 // L3: TRACE/FILAMENTS (cyan #00e0ff, walls, TANGENT_LOCAL)
 // L4: SCATTER/DUST (white #ffffff, crystal sparkles)
 // L5: LOBE (purple #a040ff, glow from below)
@@ -213,7 +213,20 @@ pub(super) const PRESET_CRYSTAL_CAVERN: [[u64; 2]; 8] = [
         hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x020008, 0x020004),
         lo(255, 0x04, 0x00, 0x08, THRESH_INTERIOR, DIR_UP, 15, 15),
     ],
-    // L1: CELL/VORONOI - crystalline facets on walls (keep dark; cyan features pop)
+    // L1: SECTOR/BOX - cave enclosure (strong walls/ceiling/floor)
+    [
+        hi_meta(
+            OP_SECTOR,
+            REGION_ALL,
+            BLEND_LERP,
+            DOMAIN_DIRECT3D,
+            SECTOR_BOX,
+            0x100828,
+            0x040210,
+        ),
+        lo(220, 90, 0, 0, 0, DIR_UP, 15, 15),
+    ],
+    // L2: CELL/VORONOI - crystalline facets on walls (keep dark; cyan features pop)
     [
         hi_meta(
             OP_CELL,
@@ -221,23 +234,10 @@ pub(super) const PRESET_CRYSTAL_CAVERN: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             CELL_VORONOI,
-            0x020008,
-            0x120030,
+            0x080420,
+            0x180848,
         ),
-        lo(60, 128, 200, 30, 7, DIR_UP, 6, 4),
-    ],
-    // L2: PATCHES/DEBRIS - crystal rubble on floor (near-black)
-    [
-        hi_meta(
-            OP_PATCHES,
-            REGION_FLOOR,
-            BLEND_LERP,
-            DOMAIN_DIRECT3D,
-            PATCHES_DEBRIS,
-            0x060210,
-            0x040108,
-        ),
-        lo(60, 128, 64, 0, 0, DIR_UP, 6, 6),
+        lo(120, 128, 200, 30, 7, DIR_UP, 10, 8),
     ],
     // L3: TRACE/FILAMENTS - glowing energy veins in crystal walls (cyan, controlled)
     [
@@ -263,7 +263,7 @@ pub(super) const PRESET_CRYSTAL_CAVERN: [[u64; 2]; 8] = [
             0xa0c0ff,
             0xffffff,
         ),
-        lo(18, 20, 12, 0x10, 11, DIR_UP, 6, 0),
+        lo(14, 16, 10, 0x10, 11, DIR_UP, 5, 0),
     ],
     // L5: LOBE - ambient crystal glow from below (subtle)
     [
@@ -282,9 +282,9 @@ pub(super) const PRESET_CRYSTAL_CAVERN: [[u64; 2]; 8] = [
             0x00ffff,
         ),
         // intensity, size, edge_width, roughness, phase
-        lo(220, 140, 180, 0, 0, DIR_DOWN, 0, 15),
+        lo(200, 100, 140, 0, 0, DIR_DOWN, 0, 15),
     ],
-    // L7: ATMOSPHERE/ABSORPTION - purple cave mist (keep dark)
+    // L7: ATMOSPHERE/ABSORPTION - purple cave mist (adds depth)
     [
         hi_meta(
             OP_ATMOSPHERE,
@@ -292,68 +292,78 @@ pub(super) const PRESET_CRYSTAL_CAVERN: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             ATMO_ABSORPTION,
-            0x080010,
+            0x100420,
             0x000000,
         ),
-        lo(60, 100, 0, 0, 0, DIR_UP, 12, 0),
+        lo(80, 110, 0, 0, 0, DIR_UP, 12, 0),
     ],
 ];
 
 // -----------------------------------------------------------------------------
 // Preset 12: "War Zone" — Military/apocalyptic battlefield
 // -----------------------------------------------------------------------------
-// L0: RAMP (sky=#383030, floor=#282020, walls=#302820)
-// L1: SILHOUETTE/RUINS (dark #201810 / #302820, ruined buildings)
-// L2: APERTURE/IRREGULAR (sky, broken roof opening #201810 / #383030)
-// L3: PLANE/GRATING (industrial floor #484040 / #302820)
-// L4: SCATTER/EMBERS (orange #ff6600, floating ash)
-// L5: FLOW (gray #606060, smoke trails)
-// L6: ATMOSPHERE/ABSORPTION (war smoke #302820)
-// L7: DECAL (walls, burning fire #ff4400 / #200800)
+// Design: Ruined urban battlefield with fires, smoke. SECTOR for structure.
+// NO harsh silhouette line - use SECTOR/BOX for enclosed bombed-out building.
+// L0: SECTOR/BOX - ruined building enclosure (structure!)
+// L1: PLANE/TILES - rubble floor
+// L2: TRACE/CRACKS - structural damage cracks
+// L3: APERTURE/IRREGULAR - bombed-out roof/wall holes
+// L4: SCATTER/EMBERS - floating ash and sparks
+// L5: DECAL - burning fires
+// L6: FLOW - smoke trails
+// L7: ATMOSPHERE/ABSORPTION - war smoke
 pub(super) const PRESET_WAR_ZONE: [[u64; 2]; 8] = [
-    // L0: RAMP - smoke gray sky, rubble floor, charred walls
-    [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x181010, 0x282020),
-        lo(220, 0x30, 0x28, 0x20, THRESH_SEMI, DIR_UP, 15, 15),
-    ],
-    // L1: SILHOUETTE/RUINS - destroyed building silhouettes
+    // L0: SECTOR/BOX - ruined building enclosure as BASE (structure!)
     [
         hi_meta(
-            OP_SILHOUETTE,
-            REGION_WALLS,
+            OP_SECTOR,
+            REGION_ALL,
             BLEND_LERP,
             DOMAIN_DIRECT3D,
-            SILHOUETTE_RUINS,
-            0x080400,
-            0x100800,
+            SECTOR_BOX,
+            0x181410,
+            0x302820,
         ),
-        lo(180, 128, 0, 0, 0, DIR_UP, 15, 15),
+        lo(255, 140, 0, 0, 0, DIR_UP, 15, 15),
     ],
-    // L2: APERTURE/CIRCLE - shell crater blown through roof
-    [
-        hi_meta(
-            OP_APERTURE,
-            REGION_SKY,
-            BLEND_LERP,
-            DOMAIN_DIRECT3D,
-            APERTURE_CIRCLE,
-            0x201810,
-            0x383030,
-        ),
-        lo(200, 128, 0, 0, 0, DIR_UP, 15, 15),
-    ],
-    // L3: PLANE/GRATING - industrial floor grating (gray metal)
+    // L1: PLANE/TILES - rubble/debris floor
     [
         hi_meta(
             OP_PLANE,
             REGION_FLOOR,
             BLEND_LERP,
             DOMAIN_DIRECT3D,
-            PLANE_GRATING,
-            0x484040,
-            0x302820,
+            PLANE_TILES,
+            0x383028,
+            0x282018,
         ),
-        lo(140, 128, 0, 0, 0, DIR_UP, 15, 15),
+        lo(200, 100, 0, 0, 0, DIR_UP, 15, 15),
+    ],
+    // L2: TRACE/CRACKS - structural damage in walls
+    [
+        hi_meta(
+            OP_TRACE,
+            REGION_WALLS,
+            BLEND_LERP,
+            DOMAIN_TANGENT_LOCAL,
+            TRACE_CRACKS,
+            0x101008,
+            0x201810,
+        ),
+        lo(150, 100, 80, 60, 0, DIR_UP, 12, 10),
+    ],
+    // L3: APERTURE/IRREGULAR - bombed-out holes showing smoky sky
+    [
+        hi_meta(
+            OP_APERTURE,
+            REGION_SKY,
+            BLEND_LERP,
+            DOMAIN_DIRECT3D,
+            APERTURE_IRREGULAR,
+            0x282018,
+            0x504840,
+        ),
+        lo(200, 100, 80, 60, 0, DIR_UP, 15, 15),
     ],
     // L4: SCATTER/EMBERS - floating ash and embers (keep readable; avoid full-screen bokeh)
     [

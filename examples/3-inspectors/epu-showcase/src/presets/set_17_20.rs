@@ -20,18 +20,18 @@ pub(super) const PRESET_VOLCANIC_CORE: [[u64; 2]; 8] = [
         hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x080400, 0x200800),
         lo(180, 0x10, 0x08, 0x04, THRESH_INTERIOR, DIR_UP, 15, 15),
     ],
-    // L1: CELL/HEX - hexagonal basalt columns (very dark, near-black stone)
+    // L1: SECTOR/CAVE - volcanic cave enclosure (replaced hex - was too visible)
     [
         hi_meta(
-            OP_CELL,
-            REGION_WALLS,
+            OP_SECTOR,
+            REGION_ALL,
             BLEND_LERP,
             DOMAIN_DIRECT3D,
-            CELL_HEX,
-            0x0c0400,
-            0x060200,
+            SECTOR_CAVE,
+            0x100800,
+            0x080400,
         ),
-        lo(200, 128, 220, 50, 0, DIR_UP, 4, 4),
+        lo(200, 128, 0, 0, 0, DIR_UP, 15, 15),
     ],
     // L2: PATCHES/DEBRIS - volcanic rubble on floor (near-black)
     [
@@ -110,79 +110,78 @@ pub(super) const PRESET_VOLCANIC_CORE: [[u64; 2]; 8] = [
 // -----------------------------------------------------------------------------
 // Design: Total black void. Dense vertical green code rain dominates.
 // No geometric grids or rings — everything is streaming downward like
-// the iconic Matrix "digital rain" effect. A faint green tint in the
-// void and occasional bright code streaks breaking through.
+// the iconic Matrix "digital rain" effect. Uses TANGENT_LOCAL for straight
+// vertical rain without barrel distortion.
 //
-// L0: RAMP       ALL   LERP  sky=#000000, floor=#000800 - pure black void
-// L1: VEIL       ALL   ADD   #00ff40 - vertical code rain curtains
-// L2: SCATTER    ALL   SCREEN #00ff00 - falling code rain drops (CYL, DOWN)
-// L3: FLOW       ALL   ADD   #00aa00 - streaming code effect (DOWN)
-// L4: TRACE      WALLS ADD   #00ff60 - bright code veins on walls
-// L5: LOBE       ALL   ADD   #003000 - faint green ambient glow from below
-// L6: DECAL      WALLS ADD   #00ffff - single data HUD element
-// L7: ATMOSPHERE ALL   ADD   #000800 - faint green digital fog
+// L0: RAMP       ALL   LERP  sky=#000000, floor=#000400 - pure black void
+// L1: VEIL       ALL   ADD   #00ff40 - vertical code rain (TANGENT_LOCAL)
+// L2: FLOW       ALL   ADD   #00ff80 - streaming code motion
+// L3: FLOW       SKY   ADD   #00aa40 - secondary rain layer
+// L4: TRACE      ALL   ADD   #00ff60 - code circuit patterns
+// L5: LOBE       FLOOR ADD   #002000 - faint floor glow
+// L6: SCATTER    SKY   ADD   #00ff00 - sparse falling glyphs
+// L7: ATMOSPHERE ALL   ADD   #000400 - minimal green fog
 pub(super) const PRESET_DIGITAL_MATRIX: [[u64; 2]; 8] = [
-    // L0: RAMP - pure black void with faint green floor
+    // L0: RAMP - pure black void (VAST threshold for minimal structure)
     [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x000000, 0x000800),
-        lo(255, 0x00, 0x04, 0x00, THRESH_BALANCED, DIR_UP, 15, 15),
+        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x000000, 0x000400),
+        lo(255, 0x00, 0x02, 0x00, THRESH_VAST, DIR_UP, 15, 15),
     ],
-    // L1: VEIL/RAIN_WALL - dense code rain columns (many thin bars)
+    // L1: VEIL/RAIN_WALL - vertical code rain (TANGENT_LOCAL for straight lines)
     [
         hi_meta(
             OP_VEIL,
             REGION_ALL,
             BLEND_ADD,
-            DOMAIN_AXIS_CYL,
+            DOMAIN_TANGENT_LOCAL,
             VEIL_RAIN_WALL,
             0x00ff40,
             0x004010,
         ),
-        lo(160, 220, 30, 0, 0, DIR_UP, 10, 6),
+        lo(200, 255, 20, 180, 60, DIR_DOWN, 12, 4),
     ],
-    // L2: SCATTER/WINDOWS - glyph-like rectangles (looks like "characters")
+    // L2: FLOW - primary streaming code motion
     [
-        hi_meta(
-            OP_SCATTER,
-            REGION_ALL,
-            BLEND_ADD,
-            DOMAIN_AXIS_CYL,
-            SCATTER_WINDOWS,
-            0x00ff60,
-            0x00aa20,
-        ),
-        lo(100, 180, 20, 0x00, 42, DIR_UP, 10, 0),
+        hi(OP_FLOW, REGION_ALL, BLEND_ADD, 0, 0x00ff80, 0x006020),
+        lo(120, 220, 30, 0x21, 0, DIR_DOWN, 12, 0),
     ],
-    // L3: FLOW/STREAKS - extra motion streaks (reinforces "rain")
+    // L3: FLOW - secondary rain layer (sky emphasis)
     [
-        hi(OP_FLOW, REGION_ALL, BLEND_ADD, 0, 0x00ff80, 0x008000),
-        lo(90, 200, 40, 0x21, 0, DIR_DOWN, 12, 0),
+        hi(OP_FLOW, REGION_SKY | REGION_WALLS, BLEND_ADD, 0, 0x00aa40, 0x004010),
+        lo(80, 180, 50, 0x21, 0, DIR_DOWN, 10, 0),
     ],
-    // L4: TRACE/CRACKS - bright code veins on walls (Matrix circuit patterns)
+    // L4: TRACE/CRACKS - code circuit patterns (vertical emphasis)
     [
         hi_meta(
             OP_TRACE,
-            REGION_WALLS,
+            REGION_ALL,
             BLEND_ADD,
             DOMAIN_TANGENT_LOCAL,
             TRACE_CRACKS,
             0x00ff60,
+            0x003010,
+        ),
+        lo(80, 180, 40, 0, 0, DIR_DOWN, 12, 0),
+    ],
+    // L5: LOBE - subtle floor glow (minimal)
+    [
+        hi(OP_LOBE, REGION_FLOOR, BLEND_ADD, 0, 0x002000, 0x000000),
+        lo(30, 128, 0, 0, 0, DIR_UP, 8, 0),
+    ],
+    // L6: SCATTER/WINDOWS - sparse falling glyphs
+    [
+        hi_meta(
+            OP_SCATTER,
+            REGION_SKY,
+            BLEND_ADD,
+            DOMAIN_DIRECT3D,
+            SCATTER_WINDOWS,
+            0x00ff00,
             0x000000,
         ),
-        lo(60, 128, 64, 0, 0, DIR_DOWN, 15, 0),
+        lo(60, 80, 12, 0x10, 42, DIR_DOWN, 10, 0),
     ],
-    // L5: LOBE - faint green ambient glow from below
-    [
-        hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0x003000, 0x000000),
-        lo(20, 128, 0, 0, 0, DIR_UP, 10, 0),
-    ],
-    // L6: DECAL - data HUD element (rect)
-    [
-        hi(OP_DECAL, REGION_WALLS, BLEND_ADD, 0, 0x00ffff, 0x000000),
-        // shape=RECT(2), soft=8, size=64
-        lo(80, 0x28, 64, 80, 0, DIR_FORWARD, 12, 8),
-    ],
-    // L7: ATMOSPHERE/ALIEN - faint green digital fog
+    // L7: ATMOSPHERE/ALIEN - minimal green fog (keep void feel)
     [
         hi_meta(
             OP_ATMOSPHERE,
@@ -190,31 +189,28 @@ pub(super) const PRESET_DIGITAL_MATRIX: [[u64; 2]; 8] = [
             BLEND_ADD,
             DOMAIN_DIRECT3D,
             ATMO_ALIEN,
-            0x000800,
+            0x000400,
             0x000000,
         ),
-        lo(10, 80, 0, 0, 0, DIR_UP, 8, 0),
+        lo(15, 60, 0, 0, 0, DIR_UP, 6, 0),
     ],
 ];
 
 // -----------------------------------------------------------------------------
-// Preset 19: "Noir Detective" — 1940s private eye office
+// Preset 19: "Ancient Library" — Mystical archive
 // -----------------------------------------------------------------------------
-// L0: RAMP (sky=#101008, floor=#302820, walls=#383428, THRESH_INTERIOR)
-// L1: SECTOR/BOX (office box enclosure, all, LERP, bound)
-// L2: APERTURE/RECT (window frame, walls, LERP, bound)
-// L3: SPLIT/WEDGE (venetian blind shadows, walls, LERP, dir=SUN)
-// L4: LOBE (desk lamp glow, floor, ADD, dir=DOWN)
-// L5: SCATTER/DUST (cigarette smoke, all, ADD)
-// L6: ATMOSPHERE/MIE (smoky haze, all, LERP)
-// L7: FLOW (rain on window, walls, ADD, low intensity)
-pub(super) const PRESET_NOIR_DETECTIVE: [[u64; 2]; 8] = [
-    // L0: RAMP - dark ceiling, worn wood floor, olive walls
-    [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x101008, 0x302820),
-        lo(180, 0x38, 0x34, 0x28, THRESH_INTERIOR, DIR_UP, 15, 15),
-    ],
-    // L1: SECTOR/BOX - office box enclosure (bound)
+// Design: Ancient library with floating candles and magical tomes.
+// Warm amber/gold, NOT neon. Completely different from Metropolis/Arcade.
+// L0: SECTOR/BOX - enclosed library chamber
+// L1: PLANE/TILES - marble floor
+// L2: GRID - tall bookshelves
+// L3: SCATTER/EMBERS - floating candle flames
+// L4: LOBE - warm candlelight glow (HERO)
+// L5: TRACE/FILAMENTS - magical glyphs on books
+// L6: APERTURE/RECT - arched window with moonlight
+// L7: ATMOSPHERE/MIE - dusty warm haze
+pub(super) const PRESET_CYBER_SHRINE: [[u64; 2]; 8] = [
+    // L0: SECTOR/BOX - enclosed library chamber
     [
         hi_meta(
             OP_SECTOR,
@@ -222,12 +218,61 @@ pub(super) const PRESET_NOIR_DETECTIVE: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             SECTOR_BOX,
-            0x282418,
-            0x1a1810,
+            0x100808,
+            0x281810,
         ),
-        lo(180, 128, 0, 0, 0, DIR_UP, 15, 15),
+        lo(255, 140, 0, 0, 0, DIR_UP, 15, 15),
     ],
-    // L2: APERTURE/RECT - window frame (bound)
+    // L1: PLANE/TILES - polished marble floor
+    [
+        hi_meta(
+            OP_PLANE,
+            REGION_FLOOR,
+            BLEND_LERP,
+            DOMAIN_DIRECT3D,
+            PLANE_TILES,
+            0x403020,
+            0x281810,
+        ),
+        lo(200, 100, 0, 0, 0, DIR_UP, 15, 15),
+    ],
+    // L2: GRID - tall wooden bookshelves (warm brown)
+    [
+        hi(OP_GRID, REGION_WALLS, BLEND_LERP, 0, 0x402810, 0x281008),
+        lo(180, 30, 60, 0, 0, DIR_UP, 15, 12),
+    ],
+    // L3: SCATTER/EMBERS - floating candle flames (warm orange)
+    [
+        hi_meta(
+            OP_SCATTER,
+            REGION_ALL,
+            BLEND_ADD,
+            DOMAIN_DIRECT3D,
+            SCATTER_EMBERS,
+            0xff8040,
+            0xffc080,
+        ),
+        lo(80, 20, 15, 0x50, 13, DIR_UP, 12, 0),
+    ],
+    // L4: LOBE - warm candlelight glow (HERO - amber, not neon)
+    [
+        hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0xffa040, 0x804020),
+        lo(200, 160, 80, 1, 0, DIR_UP, 15, 10),
+    ],
+    // L5: TRACE/FILAMENTS - magical glyphs glowing on spines
+    [
+        hi_meta(
+            OP_TRACE,
+            REGION_WALLS,
+            BLEND_ADD,
+            DOMAIN_TANGENT_LOCAL,
+            TRACE_FILAMENTS,
+            0x80c0ff,
+            0x4080c0,
+        ),
+        lo(80, 80, 40, 60, 0, DIR_UP, 10, 0),
+    ],
+    // L6: APERTURE/RECT - arched window with cool moonlight
     [
         hi_meta(
             OP_APERTURE,
@@ -235,44 +280,12 @@ pub(super) const PRESET_NOIR_DETECTIVE: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             APERTURE_RECT,
-            0x040404,
-            0x383830,
+            0x201810,
+            0x4060a0,
         ),
-        lo(200, 128, 0, 0, 0, DIR_UP, 15, 15),
+        lo(180, 40, 100, 140, 0, DIR_FORWARD, 15, 15),
     ],
-    // L3: SPLIT/BANDS - venetian blind shadow stripes (keep subtle)
-    [
-        hi_meta(
-            OP_SPLIT,
-            REGION_WALLS | REGION_FLOOR,
-            BLEND_LERP,
-            DOMAIN_DIRECT3D,
-            SPLIT_BANDS,
-            0x302820,
-            0x101008,
-        ),
-        // blend_width, band_count, band_offset
-        lo(0, 20, 0, 200, 100, DIR_SUN, 15, 15),
-    ],
-    // L4: LOBE - desk lamp cone of warm light (sine flicker)
-    [
-        hi(OP_LOBE, REGION_FLOOR, BLEND_ADD, 0, 0xffe0a0, 0x000000),
-        lo(255, 128, 0, 1, 1, DIR_DOWN, 15, 0),
-    ],
-    // L5: SCATTER/DUST - cigarette smoke particles
-    [
-        hi_meta(
-            OP_SCATTER,
-            REGION_ALL,
-            BLEND_ADD,
-            DOMAIN_DIRECT3D,
-            SCATTER_DUST,
-            0x504838,
-            0x000000,
-        ),
-        lo(30, 20, 20, 0x20, 0, DIR_UP, 10, 0),
-    ],
-    // L6: ATMOSPHERE/MIE - smoky haze filling the room
+    // L7: ATMOSPHERE/MIE - dusty warm library haze
     [
         hi_meta(
             OP_ATMOSPHERE,
@@ -280,36 +293,47 @@ pub(super) const PRESET_NOIR_DETECTIVE: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             ATMO_MIE,
-            0x302820,
-            0x000000,
+            0x302010,
+            0x100804,
         ),
-        lo(60, 70, 0, 0, 0, DIR_UP, 15, 0),
-    ],
-    // L7: FLOW/STREAKS - rain streaking on the window
-    [
-        hi(OP_FLOW, REGION_WALLS, BLEND_SCREEN, 0, 0x8090a0, 0x000000),
-        lo(80, 180, 40, 0x21, 0, DIR_DOWN, 10, 0),
+        lo(50, 100, 128, 80, 160, DIR_UP, 10, 0),
     ],
 ];
 
 // -----------------------------------------------------------------------------
 // Preset 20: "Steampunk Airship" — Victorian observation deck
 // -----------------------------------------------------------------------------
-// L0: RAMP (sky=#ffa040, floor=#604020, walls=#805030, THRESH_SEMI)
-// L1: APERTURE/ROUNDED_RECT (porthole frames, walls, LERP, bound)
-// L2: CELL/HEX (riveted hex plates, floor, LERP, bound)
-// L3: GRID (brass girders, walls, ADD)
-// L4: CELESTIAL/SUN (setting sun, sky, ADD, dir=SUNSET)
-// L5: VEIL/PILLARS (steam columns, walls, ADD, AXIS_CYL)
-// L6: SCATTER/DUST (steam particles, all, ADD)
-// L7: ATMOSPHERE/MIE (warm amber haze, all, LERP)
+// Design: Airship cabin with visible internal structure - brass girders,
+// riveted panels, porthole windows. Key is the structural framing.
+//
+// L0: RAMP (amber sky, brass floor, copper walls, SEMI)
+// L1: SECTOR/BOX (cabin enclosure structure)
+// L2: APERTURE/MULTI (porthole windows)
+// L3: GRID (brass girder framework - key structural element)
+// L4: CELL/HEX (riveted hex plates on walls)
+// L5: CELESTIAL/SUN (setting sun through windows)
+// L6: PLANE/GRATING (brass deck plating)
+// L7: ATMOSPHERE/MIE (warm amber haze)
 pub(super) const PRESET_STEAMPUNK_AIRSHIP: [[u64; 2]; 8] = [
     // L0: RAMP - amber sunset sky, burnished brass floor, copper walls
     [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0xffa040, 0x604020),
-        lo(190, 0x80, 0x50, 0x30, THRESH_SEMI, DIR_UP, 15, 15),
+        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0xffa040, 0x503018),
+        lo(190, 0x70, 0x48, 0x28, THRESH_SEMI, DIR_UP, 15, 15),
     ],
-    // L1: APERTURE/MULTI - grid of porthole windows (bound)
+    // L1: SECTOR/BOX - cabin enclosure (creates interior structure)
+    [
+        hi_meta(
+            OP_SECTOR,
+            REGION_ALL,
+            BLEND_LERP,
+            DOMAIN_DIRECT3D,
+            SECTOR_BOX,
+            0x604028,
+            0x402818,
+        ),
+        lo(180, 128, 0, 0, 0, DIR_UP, 15, 15),
+    ],
+    // L2: APERTURE/MULTI - porthole windows
     [
         hi_meta(
             OP_APERTURE,
@@ -318,43 +342,18 @@ pub(super) const PRESET_STEAMPUNK_AIRSHIP: [[u64; 2]; 8] = [
             DOMAIN_DIRECT3D,
             APERTURE_MULTI,
             0x305070,
-            0x9a6a2a,
+            0x8a5a1a,
         ),
-        // softness, half_w, half_h, frame_thickness, cell_count
-        lo(80, 100, 50, 200, 4, DIR_BACK, 0, 0),
+        // softness=60, visible frame
+        lo(160, 60, 40, 180, 4, DIR_BACK, 15, 15),
     ],
-    // L2: PLANE/GRATING - brass deck plating (floor only)
+    // L3: GRID - brass girder framework (key structural element, stronger)
     [
-        hi_meta(
-            OP_PLANE,
-            REGION_FLOOR,
-            BLEND_LERP,
-            DOMAIN_DIRECT3D,
-            PLANE_GRATING,
-            0x6a4a24,
-            0x2a1808,
-        ),
-        lo(140, 90, 80, 60, 0, DIR_UP, 15, 0),
+        hi(OP_GRID, REGION_WALLS | REGION_SKY, BLEND_ADD, 0, 0xd0a050, 0x000000),
+        // Higher intensity (160), wider bars (60)
+        lo(160, 60, 30, 0, 0, DIR_UP, 15, 0),
     ],
-    // L3: GRID - brass framework and girders
-    [
-        hi(OP_GRID, REGION_WALLS, BLEND_ADD, 0, 0xc09040, 0x000000),
-        lo(100, 48, 0, 0, 0, DIR_UP, 12, 0),
-    ],
-    // L4: CELESTIAL/SUN - setting sun visible through porthole
-    [
-        hi_meta(
-            OP_CELESTIAL,
-            REGION_SKY,
-            BLEND_ADD,
-            DOMAIN_DIRECT3D,
-            CELESTIAL_SUN,
-            0xffc060,
-            0x000000,
-        ),
-        lo(160, 220, 0, 0, 0, DIR_SUNSET, 15, 0),
-    ],
-    // L5: VEIL/PILLARS - steam columns rising from vents
+    // L4: VEIL/PILLARS - steam columns (replaced hex - was too dominant)
     [
         hi_meta(
             OP_VEIL,
@@ -365,22 +364,35 @@ pub(super) const PRESET_STEAMPUNK_AIRSHIP: [[u64; 2]; 8] = [
             0xfff0d0,
             0x000000,
         ),
-        lo(60, 60, 60, 0, 0, DIR_UP, 8, 0),
+        lo(40, 60, 80, 0, 0, DIR_UP, 8, 0),
     ],
-    // L6: SCATTER/DUST - floating steam particles (very sparse)
+    // L5: CELESTIAL/SUN - setting sun visible through porthole
     [
         hi_meta(
-            OP_SCATTER,
-            REGION_ALL,
+            OP_CELESTIAL,
+            REGION_SKY,
             BLEND_ADD,
             DOMAIN_DIRECT3D,
-            SCATTER_DUST,
-            0xffe8c0,
+            CELESTIAL_SUN,
+            0xffc060,
             0x000000,
         ),
-        lo(20, 16, 12, 0x10, 9, DIR_UP, 6, 0),
+        lo(140, 200, 0, 0, 0, DIR_SUNSET, 15, 0),
     ],
-    // L7: ATMOSPHERE/MIE - warm amber engine room haze
+    // L6: PLANE/GRATING - brass deck plating (floor)
+    [
+        hi_meta(
+            OP_PLANE,
+            REGION_FLOOR,
+            BLEND_LERP,
+            DOMAIN_DIRECT3D,
+            PLANE_GRATING,
+            0x6a4a24,
+            0x3a2810,
+        ),
+        lo(160, 90, 80, 60, 0, DIR_UP, 15, 12),
+    ],
+    // L7: ATMOSPHERE/MIE - warm amber haze (subtle)
     [
         hi_meta(
             OP_ATMOSPHERE,
@@ -388,9 +400,9 @@ pub(super) const PRESET_STEAMPUNK_AIRSHIP: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             ATMO_MIE,
-            0x604020,
+            0x503020,
             0x000000,
         ),
-        lo(70, 120, 0, 0, 0, DIR_UP, 15, 0),
+        lo(50, 100, 0, 0, 0, DIR_UP, 12, 0),
     ],
 ];

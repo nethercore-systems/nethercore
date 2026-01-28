@@ -36,7 +36,7 @@ pub static PRESETS: [Preset; PRESET_COUNT] = [
     set_13_16::PRESET_MOONLIT_GRAVEYARD,
     set_17_20::PRESET_VOLCANIC_CORE,
     set_17_20::PRESET_DIGITAL_MATRIX,
-    set_17_20::PRESET_NOIR_DETECTIVE,
+    set_17_20::PRESET_CYBER_SHRINE,
     set_17_20::PRESET_STEAMPUNK_AIRSHIP,
     set_21_24::PRESET_STORMY_SHORES,
     set_21_24::PRESET_POLAR_AURORA,
@@ -61,19 +61,19 @@ pub static ANIM_SPEEDS: [[u8; 8]; PRESET_COUNT] = [
     [0, 0, 0, 2, 0, 0, 0, 4], //  6: Void Station     (L3=grid, L7=decal blink)
     [0, 0, 0, 0, 2, 2, 0, 0], //  7: Desert Mirage    (L4=shimmer flow, L5=band pulse)
     [0, 2, 3, 0, 0, 1, 2, 0], //  8: Neon Arcade      (L1=wall grid, L2=floor grid, L5=lobe, L6=flow)
-    [0, 0, 3, 0, 0, 0, 0, 0], //  9: Storm Front      (L2=cloud flow)
+    [0, 0, 3, 0, 4, 0, 0, 0], //  9: Storm Front      (L2=cloud flow, L4=rain fall)
     [0, 0, 0, 0, 0, 2, 2, 0], // 10: Crystal Cavern   (L5=lobe pulse, L6=portal spin)
     [0, 0, 0, 0, 0, 3, 0, 4], // 11: War Zone         (L5=smoke flow, L7=fire decal)
     [0, 0, 0, 0, 0, 1, 2, 0], // 12: Enchanted Grove  (L5=sunbeam pulse, L6=leaf flow)
     [0, 0, 3, 0, 0, 0, 4, 0], // 13: Astral Void      (L2=cosmic flow, L6=vortex spin)
-    [0, 0, 0, 0, 2, 0, 0, 0], // 14: Toxic Wasteland  (L4=toxic puddle flow)
+    [0, 0, 0, 0, 2, 0, 2, 0], // 14: Toxic Wasteland  (L4=toxic puddle flow, L6=smoke rise)
     [0; 8],                    // 15: Moonlit Graveyard (stillness is the horror)
     [0, 0, 0, 0, 0, 3, 0, 0], // 16: Volcanic Core    (L5=lava flow)
-    [0, 0, 0, 5, 0, 0, 0, 0], // 17: Digital Matrix   (L3=code flow fast)
-    [0, 0, 0, 0, 1, 0, 0, 2], // 18: Noir Detective   (L4=lamp flicker, L7=rain flow)
+    [0, 0, 4, 3, 0, 0, 0, 0], // 17: Digital Matrix   (L2=code flow, L3=secondary flow)
+    [0, 0, 0, 2, 1, 0, 0, 0], // 18: Ancient Library  (L3=candle flames, L4=glow flicker)
     [0; 8],                    // 19: Steampunk Airship (static tableau)
-    [0, 0, 0, 3, 0, 0, 0, 3], // 20: Stormy Shores    (L3=sea foam, L7=lighthouse sweep)
-    [0, 0, 3, 0, 0, 0, 0, 0], // 21: Polar Aurora     (L2=aurora band pulse)
+    [0, 0, 0, 3, 0, 6, 0, 3], // 20: Stormy Shores    (L3=sea foam, L5=lightning flicker, L7=lighthouse)
+    [0, 0, 3, 2, 0, 0, 2, 0], // 21: Polar Aurora     (L2=aurora band, L3=curtains, L6=shimmer flow)
     [0, 0, 0, 0, 0, 0, 2, 0], // 22: Sacred Geometry  (L6=divine light pulse)
     [0, 0, 0, 5, 2, 0, 0, 0], // 23: Ritual Chamber   (L3=pentagram, L4=portal spin)
 ];
@@ -98,7 +98,7 @@ pub const PRESET_NAMES: [&str; PRESET_COUNT] = [
     "Moonlit Graveyard",
     "Volcanic Core",
     "Digital Matrix",
-    "Noir Detective",
+    "Ancient Library",
     "Steampunk Airship",
     "Stormy Shores",
     "Polar Aurora",
