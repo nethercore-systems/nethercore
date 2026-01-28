@@ -10,19 +10,21 @@ use crate::constants::*;
 // -----------------------------------------------------------------------------
 // Preset 1: "Neon Metropolis" - Rain-soaked cyberpunk alley
 // -----------------------------------------------------------------------------
-// L0: RAMP (sky=#1a0a2e, floor=#080810, walls=#1c1c1c)
-// L1: SECTOR/TUNNEL (enclosure, #1a0a2e / #0a0618)
-// L2: SILHOUETTE/CITY (black skyline cutout, walls)
-// L3: GRID (cyan #00ffff, walls, scroll)
-// L4: SCATTER/WINDOWS (yellow #ffcc00, walls, AXIS_CYL)
-// L5: VEIL/LASER_BARS (magenta #ff00ff, walls, AXIS_CYL)
-// L6: FLOW (cyan #00ddff, rain, dir=DOWN)
-// L7: ATMOSPHERE/MIE (gray haze #404050)
+// Goal: unmistakably "city alley" (wet pavement, signage, rain) vs. Neon Arcade.
+//
+// L0: RAMP            ALL   LERP  base alley colors
+// L1: SECTOR/TUNNEL   ALL   LERP  tight alley enclosure
+// L2: SILHOUETTE/CITY WALLS LERP  skyline cutout band
+// L3: PLANE/PAVEMENT  FLOOR LERP  wet pavement texture
+// L4: GRID            WALLS ADD   subtle neon panel lines
+// L5: DECAL           WALLS ADD   big neon sign (rect)
+// L6: FLOW            ALL   SCREEN rain streaks (FLOW STREAKS)
+// L7: ATMOSPHERE/FULL ALL   LERP  thin wet haze
 pub(super) const PRESET_NEON_METROPOLIS: [[u64; 2]; 8] = [
     // L0: RAMP - deep purple sky, near-black floor, dark gray walls
     [
         hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x1a0a2e, 0x080810),
-        lo(220, 0x1c, 0x1c, 0x1c, THRESH_INTERIOR, DIR_UP, 15, 15),
+        lo(220, 0x12, 0x12, 0x18, THRESH_INTERIOR, DIR_UP, 15, 15),
     ],
     // L1: SECTOR/TUNNEL - tunnel enclosure bounding the scene
     [
@@ -32,10 +34,10 @@ pub(super) const PRESET_NEON_METROPOLIS: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             SECTOR_TUNNEL,
-            0x1a0a2e,
-            0x0a0618,
+            0x120020,
+            0x040408,
         ),
-        lo(180, 80, 0, 0, 0, DIR_UP, 15, 15),
+        lo(220, 80, 0, 0, 0, DIR_UP, 15, 15),
     ],
     // L2: SILHOUETTE/CITY - city skyline cutout on walls
     [
@@ -46,58 +48,53 @@ pub(super) const PRESET_NEON_METROPOLIS: [[u64; 2]; 8] = [
             DOMAIN_DIRECT3D,
             SILHOUETTE_CITY,
             0x0a0510,
-            0x000000,
+            0x140a20,
         ),
-        lo(200, 128, 0, 0, 0, DIR_UP, 15, 0),
+        // softness, height_bias, roughness, octaves
+        lo(60, 180, 180, 0x40, 0, DIR_UP, 15, 0),
     ],
-    // L3: GRID - cyan neon grid on walls with scroll animation
+    // L3: PLANE/PAVEMENT - wet asphalt underfoot
+    [
+        hi_meta(
+            OP_PLANE,
+            REGION_FLOOR,
+            BLEND_LERP,
+            DOMAIN_DIRECT3D,
+            PLANE_PAVEMENT,
+            0x0a0a10,
+            0x050508,
+        ),
+        lo(180, 128, 0, 0, 0, DIR_UP, 15, 15),
+    ],
+    // L4: GRID - subtle cyan panel lines (kept restrained to avoid "arcade" feel)
     [
         hi(OP_GRID, REGION_WALLS, BLEND_ADD, 0, 0x00ffff, 0x000000),
-        lo(220, 32, 0, 3, 0, DIR_UP, 15, 0),
+        lo(120, 48, 0, 3, 0, DIR_UP, 10, 0),
     ],
-    // L4: SCATTER/WINDOWS - warm yellow window lights on walls
+    // L5: DECAL - one big neon sign (rect) to sell "alley"
     [
-        hi_meta(
-            OP_SCATTER,
-            REGION_WALLS,
-            BLEND_ADD,
-            DOMAIN_AXIS_CYL,
-            SCATTER_WINDOWS,
-            0xffcc00,
-            0x000000,
-        ),
-        lo(180, 40, 0, 0x20, 0, DIR_UP, 15, 0),
+        hi(OP_DECAL, REGION_WALLS, BLEND_ADD, 0, 0xff00ff, 0x00ffff),
+        // shape=RECT(2), soft=4, size=80, glow_soft=160
+        lo(220, 0x24, 80, 160, 0, DIR_FORWARD, 12, 12),
     ],
-    // L5: VEIL/LASER_BARS - magenta laser beams on walls
+    // L6: FLOW/STREAKS - rain streaks (downward)
     [
-        hi_meta(
-            OP_VEIL,
-            REGION_WALLS,
-            BLEND_SCREEN,
-            DOMAIN_AXIS_CYL,
-            VEIL_LASER_BARS,
-            0xff00ff,
-            0x000000,
-        ),
-        lo(180, 64, 0, 0, 0, DIR_UP, 15, 0),
+        hi(OP_FLOW, REGION_ALL, BLEND_SCREEN, 0, 0x00ddff, 0x000000),
+        // intensity, scale, turbulence, octaves=2 + STREAKS(1)
+        lo(160, 180, 40, 0x21, 0, DIR_DOWN, 12, 0),
     ],
-    // L6: FLOW - cyan rain effect (downward)
-    [
-        hi(OP_FLOW, REGION_ALL, BLEND_ADD, 0, 0x00ddff, 0x000000),
-        lo(40, 128, 0, 0x20, 200, DIR_DOWN, 15, 0),
-    ],
-    // L7: ATMOSPHERE/MIE - gray urban haze
+    // L7: ATMOSPHERE/FULL - thin wet haze (keep horizon_y centered; avoid flat wash)
     [
         hi_meta(
             OP_ATMOSPHERE,
             REGION_ALL,
             BLEND_LERP,
             DOMAIN_DIRECT3D,
-            ATMO_MIE,
-            0x404050,
-            0x000000,
+            ATMO_FULL,
+            0x06060c,
+            0x101020,
         ),
-        lo(60, 80, 0, 0, 0, DIR_UP, 15, 0),
+        lo(60, 90, 128, 0, 0, DIR_UP, 10, 0),
     ],
 ];
 
@@ -144,10 +141,10 @@ pub(super) const PRESET_CRIMSON_HELLSCAPE: [[u64; 2]; 8] = [
         ),
         lo(130, 90, 64, 0, 0, DIR_UP, 15, 0),
     ],
-    // L3: FLOW - churning lava glow on floor
+    // L3: FLOW - churning lava glow on floor (intense, turbulent)
     [
         hi(OP_FLOW, REGION_FLOOR, BLEND_SCREEN, 0, 0xff4400, 0x000000),
-        lo(120, 80, 0, 0x22, 64, DIR_UP, 15, 0),
+        lo(200, 80, 60, 0x22, 64, DIR_UP, 15, 0),
     ],
     // L4: SCATTER/EMBERS - rising sparks and embers
     [
@@ -215,10 +212,10 @@ pub(super) const PRESET_CRIMSON_HELLSCAPE: [[u64; 2]; 8] = [
 // L6: LOBE (pale sun glow #e0f0ff, dir=SUN)
 // L7: NOP_LAYER
 pub(super) const PRESET_FROZEN_TUNDRA: [[u64; 2]; 8] = [
-    // L0: RAMP - steel blue sky, blue-gray floor, cold walls
+    // L0: RAMP - cold blue everywhere (sky/wall/floor nearly same to avoid seams)
     [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x506880, 0xa0b8d0),
-        lo(240, 0x60, 0x78, 0x90, THRESH_OPEN, DIR_UP, 15, 15),
+        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x90a8c0, 0x90a8c0),
+        lo(255, 0x90, 0xa8, 0xc0, THRESH_VAST, DIR_UP, 15, 15),
     ],
     // L1: CELL/SHATTER - cracked ice pattern on ALL regions (not just floor)
     [
@@ -259,10 +256,10 @@ pub(super) const PRESET_FROZEN_TUNDRA: [[u64; 2]; 8] = [
         ),
         lo(50, 60, 60, 0x20, 0, DIR_DOWN, 15, 0),
     ],
-    // L4: FLOW - drifting snow clouds in sky
+    // L4: FLOW - drifting snow clouds in sky (visible)
     [
-        hi(OP_FLOW, REGION_SKY, BLEND_ADD, 0, 0xffffff, 0x000000),
-        lo(40, 128, 0, 0x21, 80, DIR_DOWN, 15, 0),
+        hi(OP_FLOW, REGION_SKY, BLEND_ADD, 0, 0xd0e0ff, 0x000000),
+        lo(100, 128, 30, 0x21, 80, DIR_DOWN, 15, 0),
     ],
     // L5: ATMOSPHERE/RAYLEIGH - crisp cold arctic air
     [
@@ -298,10 +295,10 @@ pub(super) const PRESET_FROZEN_TUNDRA: [[u64; 2]; 8] = [
 // L6: ATMOSPHERE/ALIEN (exotic gas #004020)
 // L7: LOBE (canopy glow #3a0050, sky, dir=UP)
 pub(super) const PRESET_ALIEN_JUNGLE: [[u64; 2]; 8] = [
-    // L0: RAMP - purple sky, dark teal floor, teal walls
+    // L0: RAMP - jungle enclosure (keep region thresholds stable)
     [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x3a0050, 0x000c0c),
-        lo(230, 0x00, 0x18, 0x18, THRESH_SEMI, DIR_UP, 15, 15),
+        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x120020, 0x001008),
+        lo(255, 0x00, 0x20, 0x18, THRESH_BALANCED, DIR_UP, 15, 15),
     ],
     // L1: SILHOUETTE/FOREST - alien tree silhouettes on walls
     [
@@ -311,38 +308,32 @@ pub(super) const PRESET_ALIEN_JUNGLE: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             SILHOUETTE_FOREST,
-            0x000404,
-            0x000808,
+            0x000000,
+            0x1a0030,
         ),
-        lo(180, 128, 0, 0, 0, DIR_UP, 15, 15),
+        // softness, height_bias, roughness, octaves
+        lo(60, 120, 200, 0x60, 0, DIR_UP, 15, 0),
     ],
-    // L2: PATCHES/STREAKS - bioluminescent streaks on walls
+    // L2: PATCHES/BLOBS - punctual bioluminescent fungus patches (bound; avoid ADD)
     [
         hi_meta(
             OP_PATCHES,
             REGION_WALLS,
-            BLEND_ADD,
-            DOMAIN_AXIS_CYL,
-            PATCHES_STREAKS,
-            0x006644,
-            0x002020,
+            BLEND_LERP,
+            DOMAIN_DIRECT3D,
+            PATCHES_BLOBS,
+            0x1a0030,
+            0x00cc88,
         ),
-        lo(100, 96, 64, 0, 0, DIR_UP, 15, 0),
+        // intensity(unused), scale, coverage, sharpness, seed
+        lo(0, 120, 40, 40, 17, DIR_UP, 10, 10),
     ],
-    // L3: VEIL/CURTAINS - hanging bioluminescent vines on walls
+    // L3: FLOW/STREAKS - hanging purple vines (seam-free 3D flow domain)
     [
-        hi_meta(
-            OP_VEIL,
-            REGION_WALLS,
-            BLEND_SCREEN,
-            DOMAIN_AXIS_CYL,
-            VEIL_CURTAINS,
-            0x8000ff,
-            0x000000,
-        ),
-        lo(80, 96, 64, 0, 0, DIR_DOWN, 15, 0),
+        hi(OP_FLOW, REGION_WALLS, BLEND_ADD, 0, 0x8000ff, 0x200040),
+        lo(45, 80, 30, 0x21, 0, DIR_DOWN, 12, 0),
     ],
-    // L4: SCATTER/DUST - floating spores (cyan)
+    // L4: SCATTER/DUST - floating spores (cyan/purple variation)
     [
         hi_meta(
             OP_SCATTER,
@@ -350,17 +341,18 @@ pub(super) const PRESET_ALIEN_JUNGLE: [[u64; 2]; 8] = [
             BLEND_ADD,
             DOMAIN_DIRECT3D,
             SCATTER_DUST,
-            0x00aa88,
-            0x000000,
+            0x00ffb0,
+            0x8000ff,
         ),
-        lo(15, 30, 20, 0x30, 0, DIR_UP, 15, 0),
+        // Keep sparse; too much reads as "snow".
+        lo(10, 16, 10, 0x00, 23, DIR_UP, 6, 0),
     ],
-    // L5: FLOW - rippling bioluminescence on floor
+    // L5: FLOW/CAUSTIC - rippling bioluminescence on floor (animated)
     [
-        hi(OP_FLOW, REGION_FLOOR, BLEND_SCREEN, 0, 0x00ddcc, 0x000000),
-        lo(15, 96, 0, 0x22, 100, DIR_UP, 15, 0),
+        hi(OP_FLOW, REGION_FLOOR, BLEND_ADD, 0, 0x00ff80, 0x008866),
+        lo(45, 96, 40, 0x22, 0, DIR_UP, 12, 0),
     ],
-    // L6: ATMOSPHERE/ALIEN - exotic gas atmosphere (green tint)
+    // L6: ATMOSPHERE/ALIEN - purple/teal exotic haze (keep subtle)
     [
         hi_meta(
             OP_ATMOSPHERE,
@@ -368,14 +360,14 @@ pub(super) const PRESET_ALIEN_JUNGLE: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             ATMO_ALIEN,
-            0x004020,
-            0x000000,
+            0x120020,
+            0x002010,
         ),
-        lo(20, 50, 0, 0, 0, DIR_UP, 15, 0),
+        lo(30, 120, 128, 0, 0, DIR_UP, 10, 0),
     ],
-    // L7: LOBE - canopy glow from above (purple, downward)
+    // L7: LOBE - canopy glow from above (purple, restrained)
     [
-        hi(OP_LOBE, REGION_SKY, BLEND_ADD, 0, 0x3a0050, 0x000000),
-        lo(60, 128, 0, 0, 0, DIR_DOWN, 15, 0),
+        hi(OP_LOBE, REGION_SKY, BLEND_ADD, 0, 0x8000ff, 0x000000),
+        lo(40, 128, 0, 0, 0, DIR_DOWN, 12, 0),
     ],
 ];

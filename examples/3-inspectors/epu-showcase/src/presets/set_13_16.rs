@@ -1,4 +1,4 @@
-﻿//! Preset set 13-16
+//! Preset set 13-16
 
 #[allow(unused_imports)]
 use crate::constants::*;
@@ -15,12 +15,12 @@ use crate::constants::*;
 // L6: LOBE (gold #ffd700, sunbeam, dir=SUN)
 // L7: FLOW (green #60a060, gentle leaf movement)
 pub(super) const PRESET_ENCHANTED_GROVE: [[u64; 2]; 8] = [
-    // L0: RAMP - golden sky, mossy floor, forest green walls
+    // L0: RAMP - readable forest base (not pitch black)
     [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x406030, 0x204020),
-        lo(220, 0x30, 0x40, 0x20, THRESH_OPEN, DIR_UP, 15, 15),
+        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x304020, 0x182818),
+        lo(210, 0x20, 0x40, 0x28, THRESH_OPEN, DIR_UP, 15, 15),
     ],
-    // L1: SILHOUETTE/FOREST - tree silhouettes on walls (deep green)
+    // L1: SILHOUETTE/FOREST - strong treeline shapes
     [
         hi_meta(
             OP_SILHOUETTE,
@@ -28,12 +28,12 @@ pub(super) const PRESET_ENCHANTED_GROVE: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             SILHOUETTE_FOREST,
-            0x000800,
-            0x0a1808,
+            0x000000,
+            0x183020,
         ),
-        lo(160, 128, 0, 0, 0, DIR_UP, 15, 15),
+        lo(40, 200, 220, 0x40, 0, DIR_UP, 15, 0),
     ],
-    // L2: PLANE/GRASS - lush forest floor (vibrant green)
+    // L2: PLANE/GRASS - lush ground
     [
         hi_meta(
             OP_PLANE,
@@ -41,25 +41,25 @@ pub(super) const PRESET_ENCHANTED_GROVE: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             PLANE_GRASS,
-            0x308030,
-            0x204020,
+            0x1a3a1a,
+            0x102010,
         ),
-        lo(140, 128, 0, 0, 0, DIR_UP, 15, 15),
+        lo(160, 128, 0, 0, 0, DIR_UP, 15, 15),
     ],
-    // L3: VEIL/CURTAINS - hanging moss/vines (green, cylindrical domain)
+    // L3: VEIL/SHARDS - volumetric god rays (many thin rays; avoid searchlight wedges)
     [
         hi_meta(
             OP_VEIL,
-            REGION_WALLS,
+            REGION_SKY | REGION_WALLS,
             BLEND_ADD,
             DOMAIN_AXIS_CYL,
-            VEIL_CURTAINS,
-            0x40a040,
-            0x000000,
+            VEIL_SHARDS,
+            0xffd080,
+            0xfff0c0,
         ),
-        lo(100, 128, 160, 0, 0, DIR_DOWN, 15, 0),
+        lo(45, 200, 30, 120, 0, DIR_UP, 12, 8),
     ],
-    // L4: SCATTER/DUST - fairy dust particles (gold)
+    // L4: SCATTER/DUST - fairy motes (tiny + sparse)
     [
         hi_meta(
             OP_SCATTER,
@@ -67,33 +67,40 @@ pub(super) const PRESET_ENCHANTED_GROVE: [[u64; 2]; 8] = [
             BLEND_ADD,
             DOMAIN_DIRECT3D,
             SCATTER_DUST,
-            0xffdd00,
-            0x000000,
+            0xffd080,
+            0xffffff,
         ),
-        lo(50, 25, 60, 0x20, 0, DIR_UP, 15, 0),
+        lo(8, 6, 6, 0x40, 17, DIR_UP, 8, 0),
     ],
-    // L5: PATCHES/BLOBS - dappled sunlight filtering through canopy (yellow)
+    // L5: FLOW/CAUSTIC - dappled light through canopy
+    [
+        hi(
+            OP_FLOW,
+            REGION_SKY | REGION_WALLS,
+            BLEND_SCREEN,
+            0,
+            0xffd080,
+            0x204020,
+        ),
+        lo(120, 120, 100, 0x22, 0, DIR_SUN, 10, 0),
+    ],
+    // L6: LOBE - primary sunbeam (hero)
+    [
+        hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0xffd080, 0x402010),
+        lo(170, 220, 80, 1, 0, DIR_SUN, 12, 0),
+    ],
+    // L7: ATMOSPHERE/MIE - warm volume around sun direction
     [
         hi_meta(
-            OP_PATCHES,
-            REGION_SKY,
-            BLEND_OVERLAY,
+            OP_ATMOSPHERE,
+            REGION_ALL,
+            BLEND_LERP,
             DOMAIN_DIRECT3D,
-            PATCHES_BLOBS,
-            0xfff080,
-            0x000000,
+            ATMO_MIE,
+            0xffd080,
+            0x102010,
         ),
-        lo(50, 128, 80, 0, 0, DIR_UP, 15, 0),
-    ],
-    // L6: LOBE - golden sunbeam through canopy (sine pulse, dir=SUN)
-    [
-        hi(OP_LOBE, REGION_ALL, BLEND_SCREEN, 0, 0xffd700, 0x000000),
-        lo(40, 128, 0, 1, 0, DIR_SUN, 15, 0),
-    ],
-    // L7: FLOW - gentle leaf movement on forest floor (green)
-    [
-        hi(OP_FLOW, REGION_FLOOR, BLEND_ADD, 0, 0x60a060, 0x000000),
-        lo(40, 128, 0, 0x12, 60, DIR_UP, 15, 0),
+        lo(60, 80, 128, 120, 200, DIR_SUN, 10, 0),
     ],
 ];
 
@@ -203,12 +210,12 @@ pub(super) const PRESET_ASTRAL_VOID: [[u64; 2]; 8] = [
 // L6: SCATTER/DUST (yellow-green #a0c040, toxic particles)
 // L7: ATMOSPHERE/ALIEN (green #203008, poisonous air)
 pub(super) const PRESET_TOXIC_WASTELAND: [[u64; 2]; 8] = [
-    // L0: RAMP - sickly green sky, toxic floor, corroded walls
+    // L0: RAMP - dark murky olive sky, brown floor, corroded green-gray walls
     [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x181808, 0x100c04),
-        lo(220, 0x18, 0x20, 0x04, THRESH_BALANCED, DIR_UP, 15, 15),
+        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x060604, 0x0c0804),
+        lo(200, 0x10, 0x12, 0x08, THRESH_BALANCED, DIR_UP, 15, 15),
     ],
-    // L1: SILHOUETTE/INDUSTRIAL - factory smokestacks (dark olive)
+    // L1: SILHOUETTE/INDUSTRIAL - factory smokestacks (very dark, subtle)
     [
         hi_meta(
             OP_SILHOUETTE,
@@ -216,25 +223,12 @@ pub(super) const PRESET_TOXIC_WASTELAND: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             SILHOUETTE_INDUSTRIAL,
-            0x080400,
-            0x181008,
+            0x020100,
+            0x040302,
         ),
-        lo(200, 128, 0, 0, 0, DIR_UP, 15, 15),
+        lo(200, 128, 0, 0, 0, DIR_UP, 4, 4),
     ],
-    // L2: PATCHES/ISLANDS - radioactive puddles on floor (toxic green)
-    [
-        hi_meta(
-            OP_PATCHES,
-            REGION_FLOOR,
-            BLEND_ADD,
-            DOMAIN_DIRECT3D,
-            PATCHES_ISLANDS,
-            0x40a000,
-            0x204000,
-        ),
-        lo(60, 128, 64, 0, 0, DIR_UP, 15, 15),
-    ],
-    // L3: PLANE/TILES - cracked industrial floor (brown)
+    // L2: PLANE/TILES - cracked industrial floor (dark brown)
     [
         hi_meta(
             OP_PLANE,
@@ -242,25 +236,25 @@ pub(super) const PRESET_TOXIC_WASTELAND: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             PLANE_TILES,
-            0x483820,
-            0x302810,
+            0x201408,
+            0x140c04,
         ),
         lo(140, 128, 0, 0, 0, DIR_UP, 15, 15),
     ],
-    // L4: CELL/HEX - hazmat hex pattern on walls (yellow-green)
+    // L3: CELL/HEX - hazmat hex outlines on walls (dark green, subtle)
     [
         hi_meta(
             OP_CELL,
             REGION_WALLS,
-            BLEND_SCREEN,
+            BLEND_LERP,
             DOMAIN_DIRECT3D,
             CELL_HEX,
-            0x607000,
-            0x181808,
+            0x060a02,
+            0x040602,
         ),
-        lo(120, 128, 200, 40, 0, DIR_UP, 15, 15),
+        lo(160, 128, 200, 40, 0, DIR_UP, 2, 2),
     ],
-    // L5: VEIL/PILLARS - toxic fume columns (green, cylindrical domain)
+    // L4: VEIL/PILLARS - toxic fume columns (subtle green glow)
     [
         hi_meta(
             OP_VEIL,
@@ -268,12 +262,12 @@ pub(super) const PRESET_TOXIC_WASTELAND: [[u64; 2]; 8] = [
             BLEND_ADD,
             DOMAIN_AXIS_CYL,
             VEIL_PILLARS,
-            0x204010,
+            0x102008,
             0x000000,
         ),
-        lo(30, 128, 140, 0, 0, DIR_UP, 15, 0),
+        lo(15, 128, 140, 0, 0, DIR_UP, 10, 0),
     ],
-    // L6: SCATTER/DUST - toxic particles (yellow-green)
+    // L5: SCATTER/DUST - toxic particles (yellow-green, sparse)
     [
         hi_meta(
             OP_SCATTER,
@@ -281,23 +275,28 @@ pub(super) const PRESET_TOXIC_WASTELAND: [[u64; 2]; 8] = [
             BLEND_ADD,
             DOMAIN_DIRECT3D,
             SCATTER_DUST,
-            0x608020,
+            0x306010,
             0x000000,
         ),
-        lo(25, 30, 60, 0x18, 0, DIR_UP, 15, 0),
+        lo(15, 30, 60, 0x18, 0, DIR_UP, 10, 0),
     ],
-    // L7: ATMOSPHERE/ALIEN - poisonous atmosphere (dark green)
+    // L6: LOBE - radioactive floor glow (green, upward)
+    [
+        hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0x103000, 0x000000),
+        lo(20, 128, 0, 0, 0, DIR_UP, 10, 0),
+    ],
+    // L7: ATMOSPHERE/ALIEN - thin poisonous haze
     [
         hi_meta(
             OP_ATMOSPHERE,
             REGION_ALL,
-            BLEND_LERP,
+            BLEND_ADD,
             DOMAIN_DIRECT3D,
             ATMO_ALIEN,
-            0x203008,
+            0x060804,
             0x000000,
         ),
-        lo(80, 80, 0, 0, 0, DIR_UP, 15, 0),
+        lo(10, 80, 0, 0, 0, DIR_UP, 6, 0),
     ],
 ];
 
@@ -329,7 +328,8 @@ pub(super) const PRESET_MOONLIT_GRAVEYARD: [[u64; 2]; 8] = [
             0x0a0810,
             0x141420,
         ),
-        lo(160, 128, 0, 0, 0, DIR_UP, 15, 15),
+        // softness, height_bias, roughness, octaves
+        lo(40, 180, 220, 0x40, 0, DIR_UP, 15, 0),
     ],
     // L2: PLANE/STONE - weathered graveyard path (gray)
     [
@@ -344,7 +344,7 @@ pub(super) const PRESET_MOONLIT_GRAVEYARD: [[u64; 2]; 8] = [
         ),
         lo(140, 128, 0, 0, 0, DIR_UP, 15, 15),
     ],
-    // L3: CELESTIAL/MOON - full moon (pale silver, dir=SUN)
+    // L3: CELESTIAL/MOON - full moon (smaller; keep contrast)
     [
         hi_meta(
             OP_CELESTIAL,
@@ -355,14 +355,14 @@ pub(super) const PRESET_MOONLIT_GRAVEYARD: [[u64; 2]; 8] = [
             0xe0e8f0,
             0x000000,
         ),
-        lo(255, 220, 0, 0, 0, DIR_SUN, 15, 0),
+        lo(200, 160, 0, 0, 0, DIR_SUN, 15, 0),
     ],
     // L4: BAND - eerie blue horizon glow
     [
         hi(OP_BAND, REGION_SKY, BLEND_ADD, 0, 0x202840, 0x000000),
         lo(110, 128, 0, 0, 0, DIR_SUNSET, 15, 0),
     ],
-    // L5: SCATTER/DUST - mist particles (blue-gray)
+    // L5: SCATTER/DUST - mist particles (reduced; avoid full-screen bokeh)
     [
         hi_meta(
             OP_SCATTER,
@@ -373,9 +373,9 @@ pub(super) const PRESET_MOONLIT_GRAVEYARD: [[u64; 2]; 8] = [
             0x8090a0,
             0x000000,
         ),
-        lo(100, 25, 40, 0x18, 0, DIR_UP, 15, 0),
+        lo(20, 8, 12, 0x10, 7, DIR_UP, 8, 0),
     ],
-    // L6: VEIL/CURTAINS - hanging mist (gray, cylindrical domain)
+    // L6: VEIL/CURTAINS - hanging mist (thinner)
     [
         hi_meta(
             OP_VEIL,
@@ -386,9 +386,9 @@ pub(super) const PRESET_MOONLIT_GRAVEYARD: [[u64; 2]; 8] = [
             0x404050,
             0x000000,
         ),
-        lo(100, 128, 140, 0, 0, DIR_DOWN, 15, 0),
+        lo(40, 60, 40, 100, 0, DIR_DOWN, 6, 0),
     ],
-    // L7: ATMOSPHERE/FULL - heavy night fog (dark blue)
+    // L7: ATMOSPHERE/FULL - heavy night fog (avoid horizon_y=-1 flat wash)
     [
         hi_meta(
             OP_ATMOSPHERE,
@@ -399,6 +399,6 @@ pub(super) const PRESET_MOONLIT_GRAVEYARD: [[u64; 2]; 8] = [
             0x101020,
             0x000000,
         ),
-        lo(140, 80, 0, 0, 0, DIR_UP, 15, 0),
+        lo(100, 80, 128, 0, 0, DIR_UP, 12, 0),
     ],
 ];

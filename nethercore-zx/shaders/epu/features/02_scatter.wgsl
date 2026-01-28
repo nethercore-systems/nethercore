@@ -218,31 +218,39 @@ fn eval_scatter(
         }
     }
 
-    // Cell on direction sphere (cheap hash distribution).
+    // 3x3x3 neighborhood search to eliminate cell-boundary banding.
     let cell = floor(sample_coords);
-    let h = hash3(cell + vec3f(seed));
-    let point_offset = h.xyz * 2.0 - 1.0;
-    var v = cell + point_offset * 0.5;
-    if length(v) < 1e-5 {
-        v = vec3f(1.0, 0.0, 0.0);
-    }
-    let point_dir = normalize(v);
-
-    let dist = acos(epu_saturate(dot(dir_s, point_dir)));
-
-    // Variant-specific point shape
-    let point = scatter_point_shape(variant_id, dist, size, h);
-
-    // Variant-specific twinkle
-    let tw = scatter_twinkle_mod(variant_id, twinkle, h.w);
-
-    // color_a = primary point color, color_b = variation color
-    // Mix between colors based on hash for per-point variation
     let point_rgb = instr_color_a(instr);
     let var_rgb = instr_color_b(instr);
-    let rgb = mix(point_rgb, var_rgb, h.x);
+
+    var accum = 0.0;
+    var accum_rgb = vec3f(0.0);
+    for (var dz = -1i; dz <= 1i; dz++) {
+        for (var dy = -1i; dy <= 1i; dy++) {
+            for (var dx = -1i; dx <= 1i; dx++) {
+                let neighbor = cell + vec3f(f32(dx), f32(dy), f32(dz));
+                let h = hash3(neighbor + vec3f(seed));
+                let point_offset = h.xyz * 2.0 - 1.0;
+                var v = neighbor + point_offset * 0.5;
+                if length(v) < 1e-5 {
+                    v = vec3f(1.0, 0.0, 0.0);
+                }
+                let point_dir = normalize(v);
+                let dist = acos(epu_saturate(dot(dir_s, point_dir)));
+                let point = scatter_point_shape(variant_id, dist, size, h);
+                let tw = scatter_twinkle_mod(variant_id, twinkle, h.w);
+                let rgb = mix(point_rgb, var_rgb, h.x);
+                accum += point * tw;
+                accum_rgb += rgb * point * tw;
+            }
+        }
+    }
+
+    if accum > 0.001 {
+        accum_rgb /= accum;
+    }
 
     let intensity = u8_to_01(instr_intensity(instr));
     let alpha = instr_alpha_a_f32(instr);
-    return LayerSample(rgb, point * intensity * tw * alpha * region_w * domain_w);
+    return LayerSample(accum_rgb, accum * intensity * alpha * region_w * domain_w);
 }

@@ -10,19 +10,20 @@
 //   param_a: Ribbon count (0..255 -> 2..32)
 //   param_b: Thickness (0..255 -> 0.002..0.5/ribbon_count, scales with spacing)
 //   param_c: Curvature/sway amplitude (0..255 -> 0..1)
-//   param_d: Reserved (set to 0)
+//   param_d: Phase (0..255 -> 0..1, used by RAIN_WALL for animation)
 //   direction: Cylinder/polar axis (oct-u16)
 //   alpha_a: Ribbon alpha (0..15 -> 0..1)
 //   alpha_b: Glow alpha (0..15 -> 0..1)
 //
 // Meta (via meta5):
-//   domain_id: 1 AXIS_CYL (vertical ribbons), 2 AXIS_POLAR (radial spokes)
+//   domain_id: 1 AXIS_CYL, 2 AXIS_POLAR, 3 TANGENT_LOCAL
 //   variant_id: 0 CURTAINS, 1 PILLARS, 2 LASER_BARS, 3 RAIN_WALL, 4 SHARDS
 // ============================================================================
 
 // Domain IDs for VEIL
 const VEIL_DOMAIN_AXIS_CYL: u32 = 1u;      // Cylindrical (azimuth, height)
 const VEIL_DOMAIN_AXIS_POLAR: u32 = 2u;    // Polar (angle, radius from axis)
+const VEIL_DOMAIN_TANGENT_LOCAL: u32 = 3u; // Tangent-local (gnomonic projection)
 
 // Variant IDs for VEIL
 const VEIL_VARIANT_CURTAINS: u32 = 0u;     // Soft edges, variable thickness, transparency gradient
@@ -80,6 +81,26 @@ fn veil_polar_uv(dir: vec3f, axis: vec3f) -> vec2f {
     let angle = atan2(x, z) / TAU + 0.5;
     let rad = acos(clamp(y, -1.0, 1.0)) / PI; // 0 at axis, 1 at opposite
     return vec2f(angle, rad);
+}
+
+// Map direction to tangent-local UV (gnomonic projection)
+fn veil_tangent_uv(dir: vec3f, center: vec3f) -> vec3f {
+    // Returns (u, v, visibility_weight)
+    let d = dot(dir, center);
+    if d <= 0.0 {
+        return vec3f(0.0, 0.0, 0.0);
+    }
+
+    let up = select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(center.y) > 0.9);
+    let t = normalize(cross(up, center));
+    let b = normalize(cross(center, t));
+
+    let proj = dir - center * d;
+    let u = dot(proj, t) / d;
+    let v = dot(proj, b) / d;
+
+    let grazing_w = smoothstep(0.1, 0.3, d);
+    return vec3f(u, v, grazing_w);
 }
 
 // Compute ribbon distance with wrapping (handles seam correctly)
@@ -205,13 +226,14 @@ fn eval_veil_laser_bars(
     return vec3f(min_dist, ribbon_mask, glow);
 }
 
-// RAIN_WALL variant: many thin bars with per-bar v-scroll, slight flicker
+// RAIN_WALL variant: many thin bars with per-bar phase offsets, slight flicker
 fn eval_veil_rain_wall(
     u: f32,
     v: f32,
     ribbon_count: u32,
     thickness: f32,
-    curvature: f32
+    curvature: f32,
+    phase: f32
 ) -> vec3f {
     var min_dist = 1000.0;
     var best_flicker = 1.0;
@@ -224,22 +246,27 @@ fn eval_veil_rain_wall(
 
     let u_scrolled = fract(u);
 
+    // Wind slant from curvature parameter
+    let wind = (curvature - 0.5) * 0.15;
+
     for (var i = 0u; i < actual_count; i++) {
         let fi = f32(i);
         let center_u = (fi + 0.5) / f32(actual_count);
         let h = veil_hash23(vec2f(fi * 11.3, 17.7));
 
-        // Per-bar v-scroll (downward rain effect)
-        // Each bar has slightly different fall speed
-        let fall_speed = 0.5 + h.x * 1.0;
-        let v_offset = fract(v * 0.5 + 0.5);
-        let v_adjusted = v_offset * 2.0 - 1.0;
+        // Per-bar v-position using deterministic phase offset
+        let v01 = v * 0.5 + 0.5;
 
-        // Bar length variation (rain drops are short segments)
-        let bar_length = 0.1 + h.y * 0.15;
-        let bar_visible = smoothstep(bar_length, bar_length * 0.9, abs(v_adjusted - 0.3));
+        // Each bar has different fall speed and starting offset
+        let fall_speed = 0.3 + h.x * 1.4;
+        let drop_pos = fract(h.y + phase * fall_speed);
 
-        let d = ribbon_dist_wrapped(u_scrolled, center_u);
+        // Short streak segments
+        let half_len = 0.02 + h.z * 0.06;
+        let dv = abs(v01 - drop_pos);
+        let bar_visible = 1.0 - smoothstep(half_len, half_len * 1.6, dv);
+
+        let d = ribbon_dist_wrapped(u_scrolled + v * wind, center_u);
 
         if d < min_dist && bar_visible > 0.5 {
             min_dist = d;
@@ -327,6 +354,8 @@ fn eval_veil(
     let thickness = mix(0.002, max_thickness, u8_to_01(instr_b(instr)));
     // param_c: Curvature/sway (0..255 -> 0..1)
     let curvature = u8_to_01(instr_c(instr));
+    // param_d: Phase (0..255 -> 0..1, used by RAIN_WALL)
+    let phase = u8_to_01(instr_d(instr));
 
     // Decode axis direction
     let axis = decode_dir16(instr_dir16(instr));
@@ -345,6 +374,11 @@ fn eval_veil(
             uv = veil_polar_uv(dir, axis);
             // Axis fade near center (rad near 0)
             domain_w = smoothstep(0.05, 0.2, uv.y);
+        }
+        case VEIL_DOMAIN_TANGENT_LOCAL: {
+            let result = veil_tangent_uv(dir, axis);
+            uv = vec2f(result.x * 0.5 + 0.5, clamp(result.y, -1.0, 1.0));
+            domain_w = result.z;
         }
         default: {
             // Default to AXIS_CYL with Y-up
@@ -370,7 +404,7 @@ fn eval_veil(
             result = eval_veil_laser_bars(u, v, ribbon_count, thickness, curvature);
         }
         case VEIL_VARIANT_RAIN_WALL: {
-            result = eval_veil_rain_wall(u, v, ribbon_count, thickness, curvature);
+            result = eval_veil_rain_wall(u, v, ribbon_count, thickness, curvature, phase);
         }
         case VEIL_VARIANT_SHARDS: {
             result = eval_veil_shards(u, v, ribbon_count, thickness, curvature);

@@ -284,8 +284,9 @@ fn eval_cell(
     // Blend colors based on weights
     let base_rgb = sky_color * w_sky + wall_color * w_wall;
 
-    // Add outline (additive, bright)
-    let rgb = base_rgb + vec3f(outline);
+    // Outline tinted by the brighter of the two cell colors (not hardcoded white)
+    let outline_color = max(sky_color, wall_color);
+    let rgb = base_rgb + outline_color * outline;
 
     // Total weight
     let w = w_sky + w_wall;

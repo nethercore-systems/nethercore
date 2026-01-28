@@ -175,6 +175,20 @@ fn is_rom_path(arg: &str) -> Option<PathBuf> {
 
     // If it contains path separators and exists, treat it as a path
     if (arg.contains('/') || arg.contains('\\')) && path.exists() {
+        // If it's a directory, look for a ROM file inside it
+        if path.is_dir() {
+            if let Ok(entries) = std::fs::read_dir(&path) {
+                for entry in entries.flatten() {
+                    let entry_path = entry.path();
+                    if let Some(ext) = entry_path.extension().and_then(|e| e.to_str()) {
+                        if is_supported_rom_extension(ext) {
+                            return Some(entry_path);
+                        }
+                    }
+                }
+            }
+            return None;
+        }
         return Some(path);
     }
 

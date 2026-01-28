@@ -1,0 +1,53 @@
+console = "zx"
+seed = 0
+players = 1
+
+# Target: Preset 11 (index 10) - Crystal Cavern
+
+# Allow initial frames to settle, then advance presets.
+# NOTE: Inputs are treated as held; include gaps between presses.
+
+[[frames]]
+f = 10
+p1 = "a"
+
+[[frames]]
+f = 12
+p1 = "a"
+
+[[frames]]
+f = 14
+p1 = "a"
+
+[[frames]]
+f = 16
+p1 = "a"
+
+[[frames]]
+f = 18
+p1 = "a"
+
+[[frames]]
+f = 20
+p1 = "a"
+
+[[frames]]
+f = 22
+p1 = "a"
+
+[[frames]]
+f = 24
+p1 = "a"
+
+[[frames]]
+f = 26
+p1 = "a"
+
+[[frames]]
+f = 28
+p1 = "a"
+
+[[frames]]
+# Give the shader a few frames, then capture.
+f = 38
+screenshot = true

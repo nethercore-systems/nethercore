@@ -755,9 +755,9 @@ impl EpuBuilder {
             alpha_b: 15,
             intensity: p.intensity,
             param_a: p.scale,
-            param_b: p.phase,
+            param_b: p.turbulence,
             param_c,
-            param_d: p.turbulence,
+            param_d: p.phase,
             direction: encode_direction_u16(p.dir),
         });
     }

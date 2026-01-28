@@ -15,12 +15,12 @@ use crate::constants::*;
 // L6: ATMO/MIE    ALL   LERP  #302820 / #000000 - incense haze
 // L7: NOP
 pub(super) const PRESET_GOTHIC_CATHEDRAL: [[u64; 2]; 8] = [
-    // L0: RAMP - deep blue sky, dark stone floor, gray walls
+    // L0: RAMP - dark stone interior (keep contrast; avoid beige wash)
     [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x0a0a20, 0x1a1a1a),
-        lo(180, 0x20, 0x20, 0x20, THRESH_INTERIOR, DIR_UP, 15, 15),
+        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x050510, 0x0c0c0c),
+        lo(220, 0x18, 0x18, 0x18, THRESH_INTERIOR, DIR_UP, 15, 15),
     ],
-    // L1: APERTURE/ARCH - gothic arch window frames
+    // L1: APERTURE/ARCH - big stained-glass window (place at FORWARD so it reads)
     [
         hi_meta(
             OP_APERTURE,
@@ -28,25 +28,27 @@ pub(super) const PRESET_GOTHIC_CATHEDRAL: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             APERTURE_ARCH,
-            0x0a0a10,
-            0x282420,
+            0xff60c0,
+            0x080808,
         ),
-        lo(220, 128, 0, 0, 0, DIR_UP, 15, 15),
+        // softness, half_w, half_h, frame_thickness, rise
+        lo(200, 180, 240, 80, 200, DIR_FORWARD, 0, 0),
     ],
-    // L2: CELL/BRICK - stone wall texture
+    // L2: CELL/BRICK - stone blocks (bound; keep subtle)
     [
         hi_meta(
             OP_CELL,
             REGION_WALLS,
-            BLEND_ADD,
+            BLEND_LERP,
             DOMAIN_DIRECT3D,
             CELL_BRICK,
-            0x382818,
-            0x1a1a18,
+            0x0a0a10,
+            0x2a2420,
         ),
-        lo(200, 96, 0, 0, 0, DIR_UP, 15, 15),
+        // outline, density, fill, gap, seed
+        lo(120, 96, 220, 40, 7, DIR_UP, 8, 6),
     ],
-    // L3: TRACE/LEAD_LINES - stained glass leading (TANGENT_LOCAL)
+    // L3: TRACE/LEAD_LINES - stained-glass leading (tangent-local, aligned to window)
     [
         hi_meta(
             OP_TRACE,
@@ -54,30 +56,23 @@ pub(super) const PRESET_GOTHIC_CATHEDRAL: [[u64; 2]; 8] = [
             BLEND_ADD,
             DOMAIN_TANGENT_LOCAL,
             TRACE_LEAD_LINES,
-            0x806040,
-            0x000000,
+            0x080808,
+            0xff60c0,
         ),
-        lo(220, 64, 0, 0, 0, DIR_UP, 15, 0),
+        // count, thickness, jitter, seed/vertex_count
+        lo(140, 200, 60, 180, 0x38, DIR_FORWARD, 15, 8),
     ],
-    // L4: LOBE - divine golden light from above (sine pulse)
+    // L4: LOBE - warm light spill from the window (focused)
     [
-        hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0xffd700, 0x000000),
-        lo(220, 128, 0, 1, 0, DIR_SUN, 15, 0),
+        hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0xffd080, 0x402010),
+        lo(180, 220, 80, 1, 0, DIR_FORWARD, 12, 0),
     ],
-    // L5: SCATTER/DUST - golden dust motes in light beam
+    // L5: LOBE - stained glass glow (avoid flat decal panel)
     [
-        hi_meta(
-            OP_SCATTER,
-            REGION_ALL,
-            BLEND_ADD,
-            DOMAIN_DIRECT3D,
-            SCATTER_DUST,
-            0xffcc00,
-            0x000000,
-        ),
-        lo(100, 25, 15, 0x20, 0, DIR_DOWN, 15, 0),
+        hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0xff60c0, 0x40a0ff),
+        lo(70, 200, 80, 1, 0, DIR_FORWARD, 10, 0),
     ],
-    // L6: ATMOSPHERE/MIE - incense haze
+    // L6: ATMOSPHERE/MIE - light haze around the window direction
     [
         hi_meta(
             OP_ATMOSPHERE,
@@ -85,10 +80,11 @@ pub(super) const PRESET_GOTHIC_CATHEDRAL: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             ATMO_MIE,
-            0x302820,
+            0xffd080,
             0x000000,
         ),
-        lo(60, 80, 0, 0, 0, DIR_UP, 15, 0),
+        // intensity, falloff, horizon_y, mie_conc, mie_exp
+        lo(60, 80, 128, 120, 220, DIR_FORWARD, 10, 0),
     ],
     // L7: NOP
     NOP_LAYER,
@@ -124,11 +120,11 @@ pub(super) const PRESET_OCEAN_DEPTHS: [[u64; 2]; 8] = [
         ),
         lo(180, 128, 0, 0, 0, DIR_UP, 15, 15),
     ],
-    // L2: PLANE/WATER - caustic floor
+    // L2: PLANE/WATER - shimmering water surface above
     [
         hi_meta(
             OP_PLANE,
-            REGION_FLOOR,
+            REGION_SKY,
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             PLANE_WATER,
@@ -137,23 +133,23 @@ pub(super) const PRESET_OCEAN_DEPTHS: [[u64; 2]; 8] = [
         ),
         lo(160, 128, 80, 0, 0, DIR_UP, 15, 15),
     ],
-    // L3: FLOW - animated caustic light patterns
+    // L3: FLOW - animated caustic light from above (vivid, turbulent)
     [
-        hi(OP_FLOW, REGION_FLOOR, BLEND_ADD, 0, 0x00a0c0, 0x000000),
-        lo(200, 128, 0, 0x22, 100, DIR_UP, 15, 0),
+        hi(OP_FLOW, REGION_SKY, BLEND_ADD, 0, 0x00a0c0, 0x000000),
+        lo(220, 128, 50, 0x22, 100, DIR_UP, 15, 0),
     ],
-    // L4: SCATTER/BUBBLES - floating bubbles
+    // L4: SCATTER/BUBBLES - floating bubbles (keep sparse; bubbles easily overpower)
     [
         hi_meta(
             OP_SCATTER,
-            REGION_ALL,
+            REGION_SKY | REGION_WALLS,
             BLEND_ADD,
             DOMAIN_DIRECT3D,
             SCATTER_BUBBLES,
             0x40a0a0,
             0x000000,
         ),
-        lo(90, 25, 20, 0x20, 0, DIR_UP, 15, 0),
+        lo(50, 20, 6, 0x10, 3, DIR_UP, 10, 0),
     ],
     // L5: VEIL/SHARDS - light shafts from surface (AXIS_CYL)
     [
@@ -294,10 +290,10 @@ pub(super) const PRESET_VOID_STATION: [[u64; 2]; 8] = [
 // L6: ATMO/MIE      ALL   LERP  #e8d8c0 / #000000 - desert haze
 // L7: SCATTER/DUST  FLOOR ADD   #c8b080 / #000000 - blowing sand
 pub(super) const PRESET_DESERT_MIRAGE: [[u64; 2]; 8] = [
-    // L0: RAMP - bleached sky, sand floor, tan walls
+    // L0: RAMP - bright desert, but preserve contrast/detail
     [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0xf0e8d0, 0xd4b896),
-        lo(240, 0xc8, 0xa8, 0x78, THRESH_VAST, DIR_UP, 15, 15),
+        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0xe0d0b8, 0xb09060),
+        lo(220, 0x80, 0x60, 0x30, THRESH_VAST, DIR_UP, 15, 15),
     ],
     // L1: SILHOUETTE/DUNES - sand dune silhouettes
     [
@@ -310,7 +306,8 @@ pub(super) const PRESET_DESERT_MIRAGE: [[u64; 2]; 8] = [
             0x806030,
             0xb09060,
         ),
-        lo(160, 128, 0, 0, 0, DIR_UP, 15, 15),
+        // softness, height_bias, roughness, octaves
+        lo(50, 140, 220, 0x20, 0, DIR_UP, 15, 0),
     ],
     // L2: PLANE/SAND - textured sand floor
     [
@@ -325,7 +322,7 @@ pub(super) const PRESET_DESERT_MIRAGE: [[u64; 2]; 8] = [
         ),
         lo(150, 96, 0, 0, 0, DIR_UP, 15, 15),
     ],
-    // L3: CELESTIAL/SUN - blazing desert sun
+    // L3: CELESTIAL/SUN - bright, but not nuclear
     [
         hi_meta(
             OP_CELESTIAL,
@@ -336,19 +333,20 @@ pub(super) const PRESET_DESERT_MIRAGE: [[u64; 2]; 8] = [
             0xffffd8,
             0x000000,
         ),
-        lo(180, 220, 0, 0, 0, DIR_SUN, 15, 0),
+        // intensity, angular_size, limb_exp, phase, corona_extent
+        lo(130, 140, 200, 0, 180, DIR_SUN, 15, 10),
     ],
-    // L4: FLOW - heat shimmer effect (low intensity)
+    // L4: FLOW - heat shimmer (very subtle)
     [
         hi(OP_FLOW, REGION_WALLS, BLEND_ADD, 0, 0xf8f0e0, 0x000000),
-        lo(60, 128, 0, 0x12, 40, DIR_UP, 8, 0),
+        lo(25, 96, 80, 0x10, 40, DIR_UP, 8, 0),
     ],
-    // L5: BAND - warm horizon glow
+    // L5: BAND - warm horizon glow (thin band around up-axis)
     [
-        hi(OP_BAND, REGION_ALL, BLEND_ADD, 0, 0xffe0a0, 0x000000),
-        lo(180, 128, 0, 0, 0, DIR_SUNSET, 15, 0),
+        hi(OP_BAND, REGION_SKY, BLEND_ADD, 0, 0xffd080, 0x000000),
+        lo(80, 40, 128, 200, 0, DIR_UP, 10, 0),
     ],
-    // L6: ATMOSPHERE/MIE - desert haze
+    // L6: ATMOSPHERE/MIE - desert haze around the sun direction
     [
         hi_meta(
             OP_ATMOSPHERE,
@@ -359,19 +357,11 @@ pub(super) const PRESET_DESERT_MIRAGE: [[u64; 2]; 8] = [
             0xe8d8c0,
             0x000000,
         ),
-        lo(100, 128, 0, 0, 0, DIR_UP, 15, 0),
+        lo(40, 80, 128, 140, 180, DIR_SUN, 10, 0),
     ],
-    // L7: SCATTER/DUST - blowing sand particles
+    // L7: FLOW - wind-blown sand shimmer near the ground (keep subtle)
     [
-        hi_meta(
-            OP_SCATTER,
-            REGION_FLOOR,
-            BLEND_ADD,
-            DOMAIN_DIRECT3D,
-            SCATTER_DUST,
-            0xc8b080,
-            0x000000,
-        ),
-        lo(120, 100, 60, 0x20, 0, DIR_DOWN, 12, 0),
+        hi(OP_FLOW, REGION_FLOOR, BLEND_ADD, 0, 0xffe8d0, 0xb09060),
+        lo(35, 140, 60, 0x11, 0, DIR_RIGHT, 10, 0),
     ],
 ];

@@ -49,31 +49,33 @@ pub static PRESETS: [Preset; PRESET_COUNT] = [
 /// Phase wraps at 256 (one full cycle = 256/speed frames).
 /// Only meaningful for opcodes that read param_d as phase:
 /// FLOW, LOBE, GRID, PLANE, PORTAL, BAND, DECAL.
+/// For SCATTER, patching param_d changes the seed — produces shimmer/respawn, not smooth motion.
 pub static ANIM_SPEEDS: [[u8; 8]; PRESET_COUNT] = [
-    [0, 0, 0, 1, 0, 0, 3, 0], //  0: Neon Metropolis
-    [0, 0, 0, 1, 0, 0, 3, 0], //  1: Crimson Hellscape
-    [0, 0, 1, 0, 2, 0, 0, 0], //  2: Frozen Tundra
-    [0, 0, 0, 0, 0, 1, 0, 0], //  3: Alien Jungle
-    [0, 0, 0, 0, 1, 0, 0, 0], //  4: Gothic Cathedral
-    [0, 0, 0, 1, 0, 0, 0, 1], //  5: Ocean Depths
-    [0, 0, 0, 1, 0, 0, 0, 3], //  6: Void Station
-    [0, 0, 0, 0, 1, 1, 0, 0], //  7: Desert Mirage
-    [0, 0, 2, 0, 0, 1, 2, 0], //  8: Neon Arcade
-    [0, 0, 3, 0, 0, 0, 0, 0], //  9: Storm Front
-    [0, 0, 0, 0, 0, 1, 1, 0], // 10: Crystal Cavern
-    [0, 0, 0, 0, 0, 2, 0, 3], // 11: War Zone
-    [0, 0, 0, 0, 0, 0, 0, 1], // 12: Enchanted Grove
-    [0, 0, 2, 0, 0, 0, 3, 0], // 13: Astral Void
-    [0; 8], // 14: Toxic Wasteland (no animatable layers)
-    [0; 8], // 15: Moonlit Graveyard (stillness is the horror)
-    [0, 0, 0, 0, 0, 2, 0, 0], // 16: Volcanic Core
-    [0, 0, 0, 3, 0, 4, 0, 2], // 17: Digital Matrix
-    [0, 0, 0, 0, 1, 0, 0, 1], // 18: Noir Detective
-    [0; 8], // 19: Steampunk Airship (static tableau)
-    [0, 0, 0, 3, 0, 0, 0, 2], // 20: Stormy Shores
-    [0, 0, 2, 0, 0, 0, 0, 0], // 21: Polar Aurora
-    [0, 0, 0, 0, 0, 0, 1, 0], // 22: Sacred Geometry
-    [0, 0, 0, 4, 1, 0, 0, 0], // 23: Ritual Chamber
+    //                                   L0 L1 L2 L3 L4 L5 L6 L7
+    [0, 0, 0, 2, 0, 0, 4, 0], //  0: Neon Metropolis  (L3=grid scroll, L6=rain flow)
+    [0, 0, 0, 2, 0, 0, 4, 0], //  1: Crimson Hellscape (L3=lava flow, L6=portal pulse)
+    [0, 0, 2, 0, 3, 0, 0, 0], //  2: Frozen Tundra    (L2=plane, L4=snow drift flow)
+    [0, 0, 0, 0, 0, 2, 0, 0], //  3: Alien Jungle     (L5=biolum flow)
+    [0, 0, 0, 0, 2, 0, 0, 0], //  4: Gothic Cathedral (L4=divine lobe pulse)
+    [0, 0, 0, 3, 0, 0, 0, 2], //  5: Ocean Depths     (L3=caustic flow, L7=bio glow)
+    [0, 0, 0, 2, 0, 0, 0, 4], //  6: Void Station     (L3=grid, L7=decal blink)
+    [0, 0, 0, 0, 2, 2, 0, 0], //  7: Desert Mirage    (L4=shimmer flow, L5=band pulse)
+    [0, 2, 3, 0, 0, 1, 2, 0], //  8: Neon Arcade      (L1=wall grid, L2=floor grid, L5=lobe, L6=flow)
+    [0, 0, 4, 0, 0, 0, 0, 0], //  9: Storm Front      (L2=storm flow — fast)
+    [0, 0, 0, 0, 0, 2, 2, 0], // 10: Crystal Cavern   (L5=lobe pulse, L6=portal spin)
+    [0, 0, 0, 0, 0, 3, 0, 4], // 11: War Zone         (L5=smoke flow, L7=fire decal)
+    [0, 0, 0, 0, 0, 1, 2, 0], // 12: Enchanted Grove  (L5=sunbeam pulse, L6=leaf flow)
+    [0, 0, 3, 0, 0, 0, 4, 0], // 13: Astral Void      (L2=cosmic flow, L6=vortex spin)
+    [0; 8],                    // 14: Toxic Wasteland   (static desolation)
+    [0; 8],                    // 15: Moonlit Graveyard (stillness is the horror)
+    [0, 0, 0, 0, 0, 3, 0, 0], // 16: Volcanic Core    (L5=lava flow)
+    [0, 0, 0, 5, 0, 0, 0, 0], // 17: Digital Matrix   (L3=code flow fast)
+    [0, 0, 0, 0, 1, 0, 0, 2], // 18: Noir Detective   (L4=lamp flicker, L7=rain flow)
+    [0; 8],                    // 19: Steampunk Airship (static tableau)
+    [0, 0, 0, 4, 0, 0, 0, 3], // 20: Stormy Shores    (L3=sea flow, L7=lighthouse sweep)
+    [0, 0, 3, 0, 0, 0, 0, 0], // 21: Polar Aurora     (L2=aurora band pulse)
+    [0, 0, 0, 0, 0, 0, 2, 0], // 22: Sacred Geometry  (L6=divine light pulse)
+    [0, 0, 0, 5, 2, 0, 0, 0], // 23: Ritual Chamber   (L3=pentagram, L4=portal spin)
 ];
 
 /// Preset names for display

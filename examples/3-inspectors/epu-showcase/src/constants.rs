@@ -161,7 +161,7 @@ pub const OP_APERTURE: u64 = 0x07;
 pub const OP_TRACE: u64 = 0x0C;
 
 /// VEIL - Curtain/ribbon effects
-/// Domains: 1=AXIS_CYL, 2=AXIS_POLAR
+/// Domains: 1=AXIS_CYL, 2=AXIS_POLAR, 3=TANGENT_LOCAL
 /// Variants: 0=CURTAINS, 1=PILLARS, 2=LASER_BARS, 3=RAIN_WALL, 4=SHARDS
 pub const OP_VEIL: u64 = 0x0D;
 
@@ -339,6 +339,14 @@ pub const BLEND_OVERLAY: u64 = 7;
 pub const DIR_UP: u64 = 0x80FF;
 /// Direction for -Y (down) in octahedral encoding: u=128, v=0
 pub const DIR_DOWN: u64 = 0x8000;
+/// Direction for +Z (forward) in octahedral encoding: u=128, v=128
+pub const DIR_FORWARD: u64 = 0x8080;
+/// Direction for -Z (back) in octahedral encoding: u=255, v=255
+pub const DIR_BACK: u64 = 0xFFFF;
+/// Direction for +X (right) in octahedral encoding: u=255, v=128
+pub const DIR_RIGHT: u64 = 0xFF80;
+/// Direction for -X (left) in octahedral encoding: u=0, v=128
+pub const DIR_LEFT: u64 = 0x0080;
 /// Direction for sun (0.5, 0.7, 0.3 normalized): approximately
 pub const DIR_SUN: u64 = 0xC0A0;
 /// Direction for a low sun near the horizon (setting sun)
