@@ -6,21 +6,23 @@ use crate::constants::*;
 // -----------------------------------------------------------------------------
 // Preset 21: "Stormy Shores" - Coastal cliffs, crashing waves
 // -----------------------------------------------------------------------------
-// L0: RAMP (dark stormy sky, wet rocky shore, gray cliffs)
-// L1: SILHOUETTE/WAVES (crashing waves on walls)
-// L2: PLANE/STONE (wet rocky shore)
-// L3: FLOW (sea foam and spray)
-// L4: VEIL/RAIN_WALL (driving rain, TANGENT_LOCAL)
-// L5: VEIL/SHARDS (light through storm clouds, AXIS_CYL)
-// L6: ATMOSPHERE/FULL (coastal storm fog)
-// L7: LOBE (lighthouse beam, dir=SUNSET)
+// Goal: Dramatic coastal storm with visible lightning and lighthouse beam.
+//
+// L0: RAMP - dark stormy blue-gray (more contrast)
+// L1: SILHOUETTE/WAVES - wave patterns on walls
+// L2: PLANE/WATER - churning ocean surface
+// L3: FLOW - sea foam spray (animated)
+// L4: VEIL/RAIN_WALL - driving rain
+// L5: TRACE/LIGHTNING - HERO: bright lightning bolt
+// L6: ATMOSPHERE/FULL - coastal fog (lighter)
+// L7: LOBE - HERO: lighthouse beam sweep
 pub(super) const PRESET_STORMY_SHORES: [[u64; 2]; 8] = [
-    // L0: RAMP - dark stormy sky, wet rocky shore, gray cliff walls
+    // L0: RAMP - dark stormy blue-gray with visible differentiation
     [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x283040, 0x303840),
-        lo(240, 0x30, 0x38, 0x40, THRESH_OPEN, DIR_UP, 15, 15),
+        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x1a2028, 0x283848),
+        lo(200, 0x38, 0x40, 0x50, THRESH_OPEN, DIR_UP, 15, 15),
     ],
-    // L1: SILHOUETTE/WAVES - crashing waves on walls (bound)
+    // L1: SILHOUETTE/WAVES - crashing waves on walls (darker for contrast)
     [
         hi_meta(
             OP_SILHOUETTE,
@@ -29,11 +31,11 @@ pub(super) const PRESET_STORMY_SHORES: [[u64; 2]; 8] = [
             DOMAIN_DIRECT3D,
             SILHOUETTE_WAVES,
             0x081018,
-            0x202830,
+            0x182028,
         ),
-        lo(220, 200, 0, 0, 0, DIR_UP, 15, 15),
+        lo(200, 180, 200, 0x30, 0, DIR_UP, 15, 15),
     ],
-    // L2: PLANE/WATER - churning ocean surface
+    // L2: PLANE/WATER - churning ocean surface (more blue)
     [
         hi_meta(
             OP_PLANE,
@@ -41,14 +43,17 @@ pub(super) const PRESET_STORMY_SHORES: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             PLANE_WATER,
-            0x204060,
-            0x102030,
+            0x305070,
+            0x183050,
         ),
-        lo(150, 128, 0, 0, 0, DIR_UP, 15, 15),
+        lo(160, 128, 80, 0, 0, DIR_UP, 15, 15),
     ],
-    // L3: (unused) - avoid large swirl artifacts
-    NOP_LAYER,
-    // L4: VEIL/RAIN_WALL - driving rain (tangent-local)
+    // L3: FLOW - sea foam and spray (white-ish, visible)
+    [
+        hi(OP_FLOW, REGION_FLOOR | REGION_WALLS, BLEND_ADD, 0, 0x90a8c0, 0x405060),
+        lo(80, 120, 60, 0x21, 0, DIR_FORWARD, 10, 0),
+    ],
+    // L4: VEIL/RAIN_WALL - driving rain (tangent-local, visible)
     [
         hi_meta(
             OP_VEIL,
@@ -56,12 +61,12 @@ pub(super) const PRESET_STORMY_SHORES: [[u64; 2]; 8] = [
             BLEND_SCREEN,
             DOMAIN_TANGENT_LOCAL,
             VEIL_RAIN_WALL,
-            0xa0b8d0,
-            0x000000,
+            0xb0c8e0,
+            0x506070,
         ),
-        lo(200, 240, 70, 140, 80, DIR_FORWARD, 14, 8),
+        lo(220, 255, 50, 160, 80, DIR_FORWARD, 15, 10),
     ],
-    // L5: TRACE/LIGHTNING - very bright + thick (must be obvious)
+    // L5: TRACE/LIGHTNING - bright lightning bolt (contained to sky)
     [
         hi_meta(
             OP_TRACE,
@@ -72,9 +77,9 @@ pub(super) const PRESET_STORMY_SHORES: [[u64; 2]; 8] = [
             0xffffff,
             0x80c0ff,
         ),
-        lo(255, 255, 200, 255, 0x2E, DIR_FORWARD, 15, 12),
+        lo(220, 200, 180, 200, 0x2E, DIR_FORWARD, 15, 12),
     ],
-    // L6: ATMOSPHERE/FULL - heavy coastal storm fog (keep horizon_y centered)
+    // L6: ATMOSPHERE/FULL - coastal storm fog (moderate, preserve detail)
     [
         hi_meta(
             OP_ATMOSPHERE,
@@ -82,15 +87,16 @@ pub(super) const PRESET_STORMY_SHORES: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             ATMO_FULL,
-            0x283038,
-            0x101820,
+            0x384858,
+            0x202838,
         ),
-        lo(60, 90, 128, 0, 0, DIR_UP, 12, 0),
+        lo(50, 100, 128, 0, 0, DIR_UP, 10, 0),
     ],
-    // L7: LOBE - lighthouse beam (make it cut across the shot)
+    // L7: LOBE - lighthouse beam (focused, not overpowering)
     [
         hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0xffffd0, 0x000000),
-        lo(200, 255, 60, 1, 0, DIR_RIGHT, 12, 0),
+        // Moderate intensity (180), tight beam (240 param_a), sharp (30 param_b)
+        lo(180, 240, 30, 1, 0, DIR_SUNSET, 12, 0),
     ],
 ];
 
@@ -199,21 +205,23 @@ pub(super) const PRESET_POLAR_AURORA: [[u64; 2]; 8] = [
 // -----------------------------------------------------------------------------
 // Preset 23: "Sacred Geometry" - Abstract mathematical temple
 // -----------------------------------------------------------------------------
-// L0: RAMP (deep indigo sky, gold floor, purple walls)
-// L1: SPLIT/PRISM (prismatic wall divisions - bound)
-// L2: CELL/GRID (geometric floor tiles, AXIS_POLAR - bound)
-// L3: GRID (geometric frame lines)
-// L4: TRACE/FILAMENTS (radial energy, AXIS_POLAR)
-// L5: APERTURE/CIRCLE (central opening)
-// L6: LOBE (divine central light, dir=DOWN)
-// L7: SCATTER/DUST (golden sacred particles)
+// Goal: Purple/gold temple with visible geometric patterns and divine light.
+//
+// L0: RAMP - deep indigo/purple base (brighter for readability)
+// L1: SPLIT/PRISM - prismatic wall divisions
+// L2: CELL/GRID - geometric floor tiles
+// L3: GRID - gold sacred frame lines (HERO - geometric pattern)
+// L4: TRACE/FILAMENTS - radial gold energy lines
+// L5: APERTURE/CIRCLE - central sacred opening
+// L6: LOBE - HERO: divine central light beam (bright gold)
+// L7: SCATTER/DUST - golden sacred particles
 pub(super) const PRESET_SACRED_GEOMETRY: [[u64; 2]; 8] = [
-    // L0: RAMP - deep indigo sky, dark bronze floor, dark purple walls
+    // L0: RAMP - deep indigo sky, bronze floor, purple walls (BRIGHTER)
     [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x060310, 0x1c1008),
-        lo(200, 0x14, 0x08, 0x20, THRESH_SEMI, DIR_UP, 15, 15),
+        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x100820, 0x281810),
+        lo(200, 0x20, 0x14, 0x30, THRESH_SEMI, DIR_UP, 15, 15),
     ],
-    // L1: SPLIT/PRISM - prismatic wall divisions (bound, LERP, dark purple)
+    // L1: SPLIT/PRISM - prismatic wall divisions (more visible purple)
     [
         hi_meta(
             OP_SPLIT,
@@ -221,12 +229,12 @@ pub(super) const PRESET_SACRED_GEOMETRY: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             SPLIT_PRISM,
-            0x100820,
-            0x180c28,
+            0x180c30,
+            0x281440,
         ),
-        lo(200, 200, 0, 0, 0, DIR_UP, 12, 12),
+        lo(180, 200, 0, 0, 0, DIR_UP, 12, 12),
     ],
-    // L2: CELL/GRID - geometric floor tiles (bound, LERP, very dark, low alpha)
+    // L2: CELL/GRID - geometric floor tiles (more visible, warmer)
     [
         hi_meta(
             OP_CELL,
@@ -234,30 +242,30 @@ pub(super) const PRESET_SACRED_GEOMETRY: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_AXIS_POLAR,
             CELL_GRID,
-            0x180c04,
-            0x100804,
+            0x301808,
+            0x201008,
         ),
-        lo(200, 80, 200, 50, 0, DIR_UP, 10, 10),
+        lo(180, 80, 200, 60, 0, DIR_UP, 12, 10),
     ],
-    // L3: GRID - geometric sacred frame lines (gold, feature ADD, reduced)
+    // L3: GRID - HERO: gold sacred frame lines (brighter, more visible)
     [
-        hi(OP_GRID, REGION_WALLS, BLEND_ADD, 0, 0x603010, 0x000000),
-        lo(150, 64, 20, 0, 0, DIR_UP, 10, 0),
+        hi(OP_GRID, REGION_WALLS, BLEND_ADD, 0, 0xc08030, 0x604010),
+        lo(200, 60, 30, 0, 0, DIR_UP, 15, 8),
     ],
-    // L4: TRACE/FILAMENTS - radial energy lines (warm gold)
+    // L4: TRACE/FILAMENTS - radial energy lines (bright gold)
     [
         hi_meta(
             OP_TRACE,
-            REGION_WALLS,
+            REGION_WALLS | REGION_FLOOR,
             BLEND_ADD,
             DOMAIN_AXIS_POLAR,
             TRACE_FILAMENTS,
-            0xff9040,
-            0x000000,
+            0xffa040,
+            0x804020,
         ),
-        lo(80, 128, 0, 0, 0, DIR_UP, 12, 0),
+        lo(140, 140, 60, 120, 0, DIR_UP, 15, 8),
     ],
-    // L5: APERTURE/CIRCLE - central sacred opening (darkens edges)
+    // L5: APERTURE/CIRCLE - central sacred opening (visible vignette)
     [
         hi_meta(
             OP_APERTURE,
@@ -265,17 +273,17 @@ pub(super) const PRESET_SACRED_GEOMETRY: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             APERTURE_CIRCLE,
-            0x040208,
-            0x201020,
+            0x080410,
+            0x301830,
         ),
-        lo(120, 128, 0, 0, 0, DIR_UP, 15, 15),
+        lo(140, 128, 0, 0, 0, DIR_UP, 15, 15),
     ],
-    // L6: LOBE - divine central light beam (warm gold, sine pulse)
+    // L6: LOBE - HERO: divine central light beam (bright gold, strong)
     [
-        hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0xffd080, 0x000000),
-        lo(80, 128, 0, 1, 2, DIR_DOWN, 15, 0),
+        hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0xffd080, 0x804020),
+        lo(180, 200, 80, 1, 2, DIR_DOWN, 15, 8),
     ],
-    // L7: SCATTER/DUST - golden sacred particles (subtle)
+    // L7: SCATTER/DUST - golden sacred particles (more visible)
     [
         hi_meta(
             OP_SCATTER,
@@ -283,10 +291,10 @@ pub(super) const PRESET_SACRED_GEOMETRY: [[u64; 2]; 8] = [
             BLEND_ADD,
             DOMAIN_DIRECT3D,
             SCATTER_DUST,
-            0xffc040,
-            0x000000,
+            0xffc060,
+            0xffa040,
         ),
-        lo(60, 100, 40, 0x20, 0, DIR_UP, 12, 0),
+        lo(40, 60, 30, 0x30, 0, DIR_UP, 12, 0),
     ],
 ];
 

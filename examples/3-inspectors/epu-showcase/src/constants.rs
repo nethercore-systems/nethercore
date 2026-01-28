@@ -8,6 +8,10 @@
 //! - domain_id = (meta5 >> 3) & 0b11 (0..3)
 //! - variant_id = meta5 & 0b111 (0..7)
 
+// Allow unused constants - this is a library of all available EPU constants
+// for preset authors to use; not all will be used in every preset.
+#![allow(dead_code)]
+
 // =============================================================================
 // Helper Functions for 128-bit format
 // =============================================================================

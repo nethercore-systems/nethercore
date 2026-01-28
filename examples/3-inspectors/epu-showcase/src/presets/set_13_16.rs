@@ -201,21 +201,23 @@ pub(super) const PRESET_ASTRAL_VOID: [[u64; 2]; 8] = [
 // -----------------------------------------------------------------------------
 // Preset 15: "Toxic Wasteland" - Post-apocalyptic industrial
 // -----------------------------------------------------------------------------
-// L0: RAMP (sky=#304010, floor=#202008, walls=#283018)
-// L1: SILHOUETTE/INDUSTRIAL (dark #181808 / #283018, factory smokestacks)
-// L2: PATCHES/ISLANDS (green #40a000 / #204000, radioactive puddles)
-// L3: PLANE/TILES (brown #483820 / #302810, cracked industrial floor)
-// L4: CELL/HEX (yellow-green #a0a000, hazmat pattern)
-// L5: VEIL/PILLARS (green #408020, toxic fume columns, AXIS_CYL)
-// L6: SCATTER/DUST (yellow-green #a0c040, toxic particles)
-// L7: ATMOSPHERE/ALIEN (green #203008, poisonous air)
+// Goal: Clearly "toxic/radioactive" with visible green glow as hero element.
+//
+// L0: RAMP - murky olive/brown base (brighter for readability)
+// L1: SILHOUETTE/INDUSTRIAL - factory smokestacks
+// L2: PLANE/TILES - cracked industrial floor
+// L3: CELL/HEX - hazmat hex pattern on walls
+// L4: FLOW - toxic puddle glow on floor (HERO - radioactive pools)
+// L5: VEIL/PILLARS - toxic fume columns
+// L6: LOBE - radioactive floor glow (green, upward)
+// L7: ATMOSPHERE/ALIEN - poisonous green haze
 pub(super) const PRESET_TOXIC_WASTELAND: [[u64; 2]; 8] = [
-    // L0: RAMP - dark murky olive sky, brown floor, corroded green-gray walls
+    // L0: RAMP - murky olive sky, brown floor, corroded walls (BRIGHTER base)
     [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x060604, 0x0c0804),
-        lo(200, 0x10, 0x12, 0x08, THRESH_BALANCED, DIR_UP, 15, 15),
+        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x181808, 0x201810),
+        lo(200, 0x28, 0x30, 0x18, THRESH_BALANCED, DIR_UP, 15, 15),
     ],
-    // L1: SILHOUETTE/INDUSTRIAL - factory smokestacks (very dark, subtle)
+    // L1: SILHOUETTE/INDUSTRIAL - factory smokestacks (more visible)
     [
         hi_meta(
             OP_SILHOUETTE,
@@ -223,12 +225,12 @@ pub(super) const PRESET_TOXIC_WASTELAND: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             SILHOUETTE_INDUSTRIAL,
-            0x020100,
-            0x040302,
+            0x080400,
+            0x181008,
         ),
-        lo(200, 128, 0, 0, 0, DIR_UP, 4, 4),
+        lo(180, 160, 200, 0x30, 0, DIR_UP, 12, 10),
     ],
-    // L2: PLANE/TILES - cracked industrial floor (dark brown)
+    // L2: PLANE/TILES - cracked industrial floor (more visible brown)
     [
         hi_meta(
             OP_PLANE,
@@ -236,12 +238,12 @@ pub(super) const PRESET_TOXIC_WASTELAND: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             PLANE_TILES,
+            0x302010,
             0x201408,
-            0x140c04,
         ),
-        lo(140, 128, 0, 0, 0, DIR_UP, 15, 15),
+        lo(160, 128, 0, 0, 0, DIR_UP, 15, 15),
     ],
-    // L3: CELL/HEX - hazmat hex outlines on walls (dark green, subtle)
+    // L3: CELL/HEX - hazmat hex outlines on walls (visible green)
     [
         hi_meta(
             OP_CELL,
@@ -249,54 +251,46 @@ pub(super) const PRESET_TOXIC_WASTELAND: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             CELL_HEX,
-            0x060a02,
-            0x040602,
+            0x182008,
+            0x101808,
         ),
-        lo(160, 128, 200, 40, 0, DIR_UP, 2, 2),
+        lo(180, 100, 200, 50, 0, DIR_UP, 10, 8),
     ],
-    // L4: VEIL/PILLARS - toxic fume columns (subtle green glow)
+    // L4: FLOW - HERO: toxic radioactive puddle glow on floor (bright green)
+    [
+        hi(OP_FLOW, REGION_FLOOR, BLEND_ADD, 0, 0x40ff20, 0x208010),
+        lo(100, 80, 60, 0x22, 0, DIR_UP, 15, 0),
+    ],
+    // L5: VEIL/PILLARS - toxic fume columns (visible green glow)
     [
         hi_meta(
             OP_VEIL,
-            REGION_WALLS,
+            REGION_WALLS | REGION_SKY,
             BLEND_ADD,
             DOMAIN_AXIS_CYL,
             VEIL_PILLARS,
-            0x102008,
-            0x000000,
-        ),
-        lo(15, 128, 140, 0, 0, DIR_UP, 10, 0),
-    ],
-    // L5: SCATTER/DUST - toxic particles (yellow-green, sparse)
-    [
-        hi_meta(
-            OP_SCATTER,
-            REGION_ALL,
-            BLEND_ADD,
-            DOMAIN_DIRECT3D,
-            SCATTER_DUST,
             0x306010,
             0x000000,
         ),
-        lo(15, 30, 60, 0x18, 0, DIR_UP, 10, 0),
+        lo(60, 80, 100, 0, 0, DIR_UP, 12, 0),
     ],
-    // L6: LOBE - radioactive floor glow (green, upward)
+    // L6: LOBE - radioactive floor glow (green, upward, stronger)
     [
-        hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0x103000, 0x000000),
-        lo(20, 128, 0, 0, 0, DIR_UP, 10, 0),
+        hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0x308010, 0x000000),
+        lo(80, 180, 60, 1, 0, DIR_UP, 12, 0),
     ],
-    // L7: ATMOSPHERE/ALIEN - thin poisonous haze
+    // L7: ATMOSPHERE/ALIEN - green poisonous haze (more visible)
     [
         hi_meta(
             OP_ATMOSPHERE,
             REGION_ALL,
-            BLEND_ADD,
+            BLEND_LERP,
             DOMAIN_DIRECT3D,
             ATMO_ALIEN,
-            0x060804,
-            0x000000,
+            0x182008,
+            0x080804,
         ),
-        lo(10, 80, 0, 0, 0, DIR_UP, 6, 0),
+        lo(40, 100, 128, 0, 0, DIR_UP, 10, 0),
     ],
 ];
 

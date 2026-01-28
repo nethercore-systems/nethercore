@@ -97,20 +97,20 @@ pub(super) const PRESET_NEON_ARCADE: [[u64; 2]; 8] = [
 // Preset 10: "Storm Front" — Dramatic thunderstorm
 // -----------------------------------------------------------------------------
 // L0: RAMP (sky=#202830, floor=#181820, walls=#303840)
-// L1: SILHOUETTE/MOUNTAINS (dark #181820 / #282830, distant mountains)
-// L2: FLOW (dark gray #404858, churning storm clouds)
-// L3: TRACE/LIGHTNING (white #ffffff, sky, AXIS_POLAR)
-// L4: VEIL/RAIN_WALL (blue-gray #607080, AXIS_CYL)
-// L5: SCATTER/RAIN (rain blue #8090a0, AXIS_CYL, dir=DOWN)
-// L6: PLANE/PAVEMENT (wet gray #282830 / #202028)
-// L7: ATMOSPHERE/FULL (storm gray #303038)
+// L1: SILHOUETTE/WAVES (dark #181820 / #282830, distant storm clouds)
+// L2: PATCHES/MEMBRANE (storm cloud masses)
+// L3: TRACE/LIGHTNING (white #ffffff, sky - HERO ELEMENT)
+// L4: VEIL/RAIN_WALL (blue-gray rain streaks)
+// L5: LOBE (lightning flash fill)
+// L6: PLANE/PAVEMENT (wet gray ground)
+// L7: ATMOSPHERE/FULL (storm gray)
 pub(super) const PRESET_STORM_FRONT: [[u64; 2]; 8] = [
-    // L0: RAMP - dark gray sky, wet ground, slate walls
+    // L0: RAMP - dark stormy gray with visible differentiation
     [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x0c1018, 0x181820),
-        lo(230, 0x30, 0x38, 0x40, THRESH_OPEN, DIR_UP, 15, 15),
+        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x182028, 0x283038),
+        lo(220, 0x38, 0x40, 0x48, THRESH_OPEN, DIR_UP, 15, 15),
     ],
-    // L1: SILHOUETTE/WAVES - rolling storm cloud banks (smooth, dark)
+    // L1: SILHOUETTE/WAVES - rolling storm cloud banks (darker for contrast)
     [
         hi_meta(
             OP_SILHOUETTE,
@@ -118,12 +118,12 @@ pub(super) const PRESET_STORM_FRONT: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             SILHOUETTE_WAVES,
-            0x181820,
+            0x101418,
             0x282830,
         ),
-        lo(160, 128, 0, 0, 0, DIR_UP, 15, 15),
+        lo(180, 140, 180, 0x30, 0, DIR_UP, 15, 15),
     ],
-    // L2: PATCHES/MEMBRANE - storm cloud masses (soft, not polygonal)
+    // L2: PATCHES/MEMBRANE - storm cloud masses (more visible)
     [
         hi_meta(
             OP_PATCHES,
@@ -131,12 +131,12 @@ pub(super) const PRESET_STORM_FRONT: [[u64; 2]; 8] = [
             BLEND_SCREEN,
             DOMAIN_DIRECT3D,
             PATCHES_MEMBRANE,
-            0x101820,
-            0x2a323c,
+            0x202838,
+            0x384858,
         ),
-        lo(90, 160, 80, 0, 0, DIR_UP, 12, 12),
+        lo(120, 140, 100, 0, 0, DIR_UP, 12, 12),
     ],
-    // L3: TRACE/LIGHTNING - tangent-local so it shows in the screenshot view
+    // L3: TRACE/LIGHTNING - bright lightning bolt (contained to sky region)
     [
         hi_meta(
             OP_TRACE,
@@ -147,9 +147,10 @@ pub(super) const PRESET_STORM_FRONT: [[u64; 2]; 8] = [
             0xffffff,
             0x80c0ff,
         ),
-        lo(255, 220, 160, 240, 0x2E, DIR_FORWARD, 15, 12),
+        // High intensity but contained
+        lo(220, 200, 160, 200, 0x2E, DIR_FORWARD, 15, 12),
     ],
-    // L4: VEIL/RAIN_WALL - rain streaks (tangent-local, phase-animated)
+    // L4: VEIL/RAIN_WALL - rain streaks (tangent-local, visible)
     [
         hi_meta(
             OP_VEIL,
@@ -157,18 +158,17 @@ pub(super) const PRESET_STORM_FRONT: [[u64; 2]; 8] = [
             BLEND_SCREEN,
             DOMAIN_TANGENT_LOCAL,
             VEIL_RAIN_WALL,
-            0x90a8c0,
-            0x000000,
+            0xa0b8d0,
+            0x506070,
         ),
-        // intensity, ribbon_count, thickness, curvature, phase, direction, alpha_a, alpha_b
-        lo(180, 220, 80, 128, 64, DIR_FORWARD, 12, 6),
+        lo(200, 240, 60, 140, 64, DIR_FORWARD, 14, 8),
     ],
-    // L5: LOBE - brief lightning flash fill (helps the scene read)
+    // L5: LOBE - subtle lightning flash fill (add to sky only, not full wash)
     [
-        hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0xc0d0ff, 0x000000),
-        lo(60, 240, 120, 1, 0, DIR_FORWARD, 12, 0),
+        hi(OP_LOBE, REGION_SKY, BLEND_ADD, 0, 0xa0b0c0, 0x000000),
+        lo(40, 200, 100, 1, 0, DIR_FORWARD, 10, 0),
     ],
-    // L6: PLANE/PAVEMENT - rain-slicked wet ground
+    // L6: PLANE/PAVEMENT - rain-slicked wet ground (more visible)
     [
         hi_meta(
             OP_PLANE,
@@ -176,12 +176,12 @@ pub(super) const PRESET_STORM_FRONT: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             PLANE_PAVEMENT,
-            0x384048,
-            0x303840,
+            0x404850,
+            0x383840,
         ),
-        lo(140, 128, 0, 0, 0, DIR_UP, 15, 15),
+        lo(160, 128, 0, 0, 0, DIR_UP, 15, 15),
     ],
-    // L7: ATMOSPHERE/FULL - keep horizon_y centered (avoid flat gray wash)
+    // L7: ATMOSPHERE/FULL - thinner fog (preserve lightning visibility)
     [
         hi_meta(
             OP_ATMOSPHERE,
@@ -189,10 +189,10 @@ pub(super) const PRESET_STORM_FRONT: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             ATMO_FULL,
-            0x202830,
-            0x0c1018,
+            0x283038,
+            0x101820,
         ),
-        lo(60, 80, 128, 0, 0, DIR_SUN, 10, 0),
+        lo(40, 90, 128, 0, 0, DIR_UP, 10, 0),
     ],
 ];
 
