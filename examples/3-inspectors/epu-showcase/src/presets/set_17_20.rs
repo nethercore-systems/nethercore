@@ -1,4 +1,4 @@
-﻿//! Preset set 17-20
+//! Preset set 17-20
 
 #[allow(unused_imports)]
 use crate::constants::*;
@@ -147,7 +147,14 @@ pub(super) const PRESET_DIGITAL_MATRIX: [[u64; 2]; 8] = [
     ],
     // L3: FLOW - secondary rain layer (sky emphasis)
     [
-        hi(OP_FLOW, REGION_SKY | REGION_WALLS, BLEND_ADD, 0, 0x00aa40, 0x004010),
+        hi(
+            OP_FLOW,
+            REGION_SKY | REGION_WALLS,
+            BLEND_ADD,
+            0,
+            0x00aa40,
+            0x004010,
+        ),
         lo(80, 180, 50, 0x21, 0, DIR_DOWN, 10, 0),
     ],
     // L4: TRACE/CRACKS - code circuit patterns (vertical emphasis)
@@ -317,8 +324,9 @@ pub(super) const PRESET_CYBER_SHRINE: [[u64; 2]; 8] = [
 pub(super) const PRESET_STEAMPUNK_AIRSHIP: [[u64; 2]; 8] = [
     // L0: RAMP - amber sunset sky, burnished brass floor, copper walls
     [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0xffa040, 0x503018),
-        lo(190, 0x70, 0x48, 0x28, THRESH_SEMI, DIR_UP, 15, 15),
+        // Base stays warm, but not a flat orange wash; sky gets its drama from L7.
+        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x6b8fb8, 0x4a2a14),
+        lo(205, 0x8a, 0x6a, 0x34, THRESH_INTERIOR, DIR_UP, 15, 15),
     ],
     // L1: SECTOR/BOX - cabin enclosure (creates interior structure)
     [
@@ -327,11 +335,12 @@ pub(super) const PRESET_STEAMPUNK_AIRSHIP: [[u64; 2]; 8] = [
             REGION_ALL,
             BLEND_LERP,
             DOMAIN_DIRECT3D,
-            SECTOR_BOX,
-            0x604028,
-            0x402818,
+            SECTOR_TUNNEL,
+            0x2e5570,
+            0x5a3d1c,
         ),
-        lo(180, 128, 0, 0, 0, DIR_UP, 15, 15),
+        // Broad azimuthal opening so the deck reads as "inside looking out".
+        lo(200, 190, 170, 0, 0, DIR_UP, 15, 15),
     ],
     // L2: APERTURE/MULTI - porthole windows
     [
@@ -341,68 +350,71 @@ pub(super) const PRESET_STEAMPUNK_AIRSHIP: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             APERTURE_MULTI,
-            0x305070,
-            0x8a5a1a,
+            0x8bb8d8,
+            0xb58a3e,
         ),
-        // softness=60, visible frame
-        lo(160, 60, 40, 180, 4, DIR_BACK, 15, 15),
+        // half_w=110, half_h=80, frame=90, cells=5
+        lo(135, 110, 80, 90, 5, DIR_BACK, 0, 0),
     ],
     // L3: GRID - brass girder framework (key structural element, stronger)
     [
-        hi(OP_GRID, REGION_WALLS | REGION_SKY, BLEND_ADD, 0, 0xd0a050, 0x000000),
-        // Higher intensity (160), wider bars (60)
-        lo(160, 60, 30, 0, 0, DIR_UP, 15, 0),
+        // Static ribs: high-contrast brass with a physical (non-glowy) blend.
+        hi(OP_GRID, REGION_WALLS, BLEND_OVERLAY, 0, 0xd2b46a, 0x000000),
+        // scale~16 ribs around azimuth, thickness~0.03
+        lo(140, 64, 75, 0x00, 0, 0, 12, 0),
     ],
-    // L4: VEIL/PILLARS - steam columns (replaced hex - was too dominant)
+    // L4: CELL/BRICK - riveted panel seams + deck plates
     [
         hi_meta(
-            OP_VEIL,
-            REGION_WALLS,
-            BLEND_ADD,
-            DOMAIN_AXIS_CYL,
-            VEIL_PILLARS,
-            0xfff0d0,
-            0x000000,
-        ),
-        lo(40, 60, 80, 0, 0, DIR_UP, 8, 0),
-    ],
-    // L5: CELESTIAL/SUN - setting sun visible through porthole
-    [
-        hi_meta(
-            OP_CELESTIAL,
-            REGION_SKY,
-            BLEND_ADD,
-            DOMAIN_DIRECT3D,
-            CELESTIAL_SUN,
-            0xffc060,
-            0x000000,
-        ),
-        lo(140, 200, 0, 0, 0, DIR_SUNSET, 15, 0),
-    ],
-    // L6: PLANE/GRATING - brass deck plating (floor)
-    [
-        hi_meta(
-            OP_PLANE,
-            REGION_FLOOR,
+            OP_CELL,
+            REGION_WALLS | REGION_FLOOR,
             BLEND_LERP,
             DOMAIN_DIRECT3D,
-            PLANE_GRATING,
-            0x6a4a24,
-            0x3a2810,
+            CELL_BRICK,
+            0x1b2a2a,
+            0x7b5a26,
         ),
-        lo(160, 90, 80, 60, 0, DIR_UP, 15, 12),
+        // density, fill, gap_width, seed; gap alpha + outline alpha create the "rivets".
+        lo(90, 70, 235, 45, 19, DIR_UP, 8, 9),
+    ],
+    // L5: FLOW - steam/fog drift (animated)
+    [
+        hi(
+            OP_FLOW,
+            REGION_WALLS | REGION_SKY,
+            BLEND_SCREEN,
+            0,
+            0xfff0d6,
+            0xb6cbe0,
+        ),
+        // scale, turbulence, octaves=3 (0x30), phase=0 (animated via ANIM_SPEEDS)
+        lo(70, 170, 110, 0x30, 0, DIR_UP, 8, 0),
+    ],
+    // L6: LOBE - rotating beacon / specular glint (animated)
+    [
+        hi(
+            OP_LOBE,
+            REGION_WALLS | REGION_FLOOR,
+            BLEND_SCREEN,
+            0,
+            0xffd18a,
+            0x79a6d0,
+        ),
+        // sharp lobe, triangle waveform; phase=0 (animated via ANIM_SPEEDS)
+        lo(80, 220, 90, 2, 0, DIR_SUNSET, 10, 0),
     ],
     // L7: ATMOSPHERE/MIE - warm amber haze (subtle)
     [
         hi_meta(
             OP_ATMOSPHERE,
             REGION_ALL,
-            BLEND_LERP,
+            BLEND_ADD,
             DOMAIN_DIRECT3D,
-            ATMO_MIE,
-            0x503020,
-            0x000000,
+            ATMO_FULL,
+            0x3d5f88,
+            0xf0a050,
         ),
-        lo(50, 100, 0, 0, 0, DIR_UP, 12, 0),
+        // Rayleigh + Mie for a story-rich sunset gradient + halo.
+        lo(50, 140, 120, 110, 190, DIR_SUNSET, 8, 0),
     ],
 ];

@@ -14,8 +14,10 @@ use anyhow::{Context, Result};
 use nethercore_core::Console;
 use nethercore_core::app::player::sanitize_game_id;
 use nethercore_core::app::{LoadedRom, RomLoader, StandaloneConfig, run_standalone};
-use nethercore_shared::{MAX_ROM_BYTES, MAX_WASM_BYTES, ZX_ROM_FORMAT, is_safe_game_id, read_file_with_limit};
 use nethercore_shared::local::LocalGameManifest;
+use nethercore_shared::{
+    MAX_ROM_BYTES, MAX_WASM_BYTES, ZX_ROM_FORMAT, is_safe_game_id, read_file_with_limit,
+};
 use zx_common::{ZXDataPack, ZXRom};
 
 use crate::console::NethercoreZX;

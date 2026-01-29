@@ -1,0 +1,34 @@
+console = "zx"
+seed = 0
+players = 1
+
+# Focus capture template: 3 screenshots of one preset.
+#
+# How to use:
+# - Copy this file and add/remove A presses to reach the preset you want.
+# - Each A press is a press+release pair.
+# - Then it captures 3 screenshots spaced 20 frames apart.
+
+# Example target: Preset 1 (index 0) - no presses needed.
+
+# To reach preset N (0-based), add N press pairs below.
+
+# [[frames]]
+# f = 10
+# p1 = "a"
+#
+# [[frames]]
+# f = 11
+# p1 = ""
+
+[[frames]]
+f = 30
+screenshot = true
+
+[[frames]]
+f = 50
+screenshot = true
+
+[[frames]]
+f = 70
+screenshot = true

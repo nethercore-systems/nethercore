@@ -23,10 +23,10 @@ mod pregenerated;
 mod templates;
 
 pub use error::ShaderGenError;
-#[allow(unused_imports)] // Re-exported for debugging/tests; may be unused within this module.
-pub use formats::{mode_name, valid_formats_for_mode};
 #[cfg(test)]
 pub use formats::shader_count_for_mode;
+#[allow(unused_imports)] // Re-exported for debugging/tests; may be unused within this module.
+pub use formats::{mode_name, valid_formats_for_mode};
 #[allow(unused_imports)] // Re-exported for debugging/tests; may be unused within this module.
 pub use pregenerated::{
     ENVIRONMENT_SHADER, PREGENERATED_SHADERS, QUAD_SHADER, get_pregenerated_shader,

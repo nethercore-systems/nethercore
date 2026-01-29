@@ -173,7 +173,9 @@ impl ZXGraphics {
                     mvp_index: *mvp_index,
                     viewport: *viewport,
                     pass_id: *pass_id,
-                    sort_key: super::command_buffer::CommandSortKey::environment(*pass_id, *viewport),
+                    sort_key: super::command_buffer::CommandSortKey::environment(
+                        *pass_id, *viewport,
+                    ),
                 });
         }
 

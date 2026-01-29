@@ -63,7 +63,12 @@ where
                 // Standard local session (no rollback)
                 let started = Instant::now();
                 runner
-                    .load_game(rom.console, &rom.code, self.config.num_players, &rom.game_id)
+                    .load_game(
+                        rom.console,
+                        &rom.code,
+                        self.config.num_players,
+                        &rom.game_id,
+                    )
                     .context("Failed to load game")?;
                 tracing::info!("Game load (WASM compile/init) took {:?}", started.elapsed());
             }
@@ -195,7 +200,13 @@ where
 
                 let started = Instant::now();
                 runner
-                    .load_game_with_session(rom.console, &rom.code, session, save_config, &rom.game_id)
+                    .load_game_with_session(
+                        rom.console,
+                        &rom.code,
+                        session,
+                        save_config,
+                        &rom.game_id,
+                    )
                     .context("Failed to load game with NCHS session")?;
                 tracing::info!("Game load (WASM compile/init) took {:?}", started.elapsed());
 
@@ -230,9 +241,7 @@ where
                                         compiled.screenshot_frames.len()
                                     );
                                     self.replay_executor =
-                                        Some(crate::replay::ScriptExecutor::new(
-                                            compiled,
-                                        ));
+                                        Some(crate::replay::ScriptExecutor::new(compiled));
                                 }
                                 Err(e) => {
                                     tracing::error!("Failed to compile replay script: {}", e)

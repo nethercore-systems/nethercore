@@ -8,9 +8,9 @@ use zx_common::formats::{
 };
 
 use crate::ffi::ZXGameContext;
-use crate::state::KeyframeSource;
 #[cfg(test)]
 use crate::state::BoneMatrix3x4;
+use crate::state::KeyframeSource;
 
 /// Read a decoded keyframe into WASM memory
 ///

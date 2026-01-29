@@ -1,0 +1,13 @@
+console = "zx"
+seed = 0
+players = 1
+
+# Minimal test: capture two consecutive frames of preset 1.
+
+[[frames]]
+f = 9
+screenshot = true
+
+[[frames]]
+f = 10
+screenshot = true

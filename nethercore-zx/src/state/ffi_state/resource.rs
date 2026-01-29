@@ -1,6 +1,6 @@
 //! Resource management and frame cleanup methods for ZXFFIState
 
-use super::{ZXFFIState, DEFAULT_Z_INDEX};
+use super::{DEFAULT_Z_INDEX, ZXFFIState};
 use crate::state::QuadBatch;
 use glam::{Mat4, Vec3};
 

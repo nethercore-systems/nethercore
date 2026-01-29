@@ -26,6 +26,10 @@ where
     pub(super) fn render_impl(&mut self) {
         let mut restart_requested = false;
 
+        // If a screenshot/GIF frame is pending, ensure the render target is freshly rendered
+        // on this redraw, even if the sim loop didn't request a new render.
+        let needs_capture = self.capture.needs_capture();
+
         // Get clear color before borrowing runner mutably
         let clear_color = self.get_clear_color();
 
@@ -53,8 +57,8 @@ where
                 },
             );
 
-            // Render game if we have new content
-            if self.last_sim_rendered {
+            // Render game if we have new content, or if we need a fresh frame for capture.
+            if self.last_sim_rendered || needs_capture {
                 let (graphics, session_opt) = runner.graphics_and_session_mut();
 
                 if let Some(session) = session_opt
@@ -499,7 +503,7 @@ where
             surface_texture.present();
 
             // Process screen capture
-            if self.capture.needs_capture() {
+            if needs_capture {
                 let (width, height) = runner.graphics().render_target_dimensions();
                 let pixels = read_render_target_pixels(
                     runner.graphics().device(),

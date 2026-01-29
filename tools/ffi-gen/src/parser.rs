@@ -52,10 +52,7 @@ fn parse_ffi_directory(dir: &Path) -> Result<FfiModel> {
     for entry in entries {
         let file_path = entry.path();
         let file_name = entry.file_name().to_string_lossy().to_string();
-        let category_name = file_name
-            .strip_suffix(".rs")
-            .unwrap()
-            .to_string();
+        let category_name = file_name.strip_suffix(".rs").unwrap().to_string();
 
         // Prettify category name: "system" -> "System Functions", etc.
         let pretty_category = prettify_category(&category_name);
@@ -71,7 +68,8 @@ fn parse_ffi_directory(dir: &Path) -> Result<FfiModel> {
         for item in &file.items {
             match item {
                 Item::ForeignMod(foreign_mod) => {
-                    let (fns, _cats) = parse_foreign_mod_with_category(foreign_mod, &pretty_category)?;
+                    let (fns, _cats) =
+                        parse_foreign_mod_with_category(foreign_mod, &pretty_category)?;
                     if !fns.is_empty() {
                         file_has_functions = true;
                     }

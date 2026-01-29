@@ -3,9 +3,9 @@
 use wasmtime::Caller;
 
 use crate::console::{ConsoleInput, ConsoleRollbackState};
-use crate::save_store::{map_session_slot_to_controller_slot, PERSISTENT_SLOTS};
+use crate::save_store::{PERSISTENT_SLOTS, map_session_slot_to_controller_slot};
 use crate::wasm::{
-    read_bytes_from_memory, write_bytes_to_memory, WasmGameContext, MAX_SAVE_SIZE, MAX_SAVE_SLOTS,
+    MAX_SAVE_SIZE, MAX_SAVE_SLOTS, WasmGameContext, read_bytes_from_memory, write_bytes_to_memory,
 };
 
 pub(super) fn persist_controller_mapped_slot_from_state<

@@ -319,15 +319,13 @@ where
                             "Host mode: session created, local_players = {:?}",
                             session.local_players()
                         );
-                        if let Err(e) =
-                            runner.load_game_with_session(
-                                rom.console.clone(),
-                                &rom.code,
-                                session,
-                                None,
-                                &rom.game_id,
-                            )
-                        {
+                        if let Err(e) = runner.load_game_with_session(
+                            rom.console.clone(),
+                            &rom.code,
+                            session,
+                            None,
+                            &rom.game_id,
+                        ) {
                             tracing::error!("Failed to load game with P2P session: {}", e);
                             self.error_state = Some(super::super::GameError {
                                 summary: "Connection Error".to_string(),

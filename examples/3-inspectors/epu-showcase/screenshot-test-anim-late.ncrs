@@ -1,0 +1,13 @@
+console = "zx"
+seed = 0
+players = 1
+
+# Minimal test: capture the same preset after many frames.
+
+[[frames]]
+f = 100
+screenshot = true
+
+[[frames]]
+f = 120
+screenshot = true

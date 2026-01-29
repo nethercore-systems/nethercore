@@ -1,0 +1,19 @@
+console = "zx"
+seed = 0
+players = 1
+
+[[frames]]
+f = 9
+screenshot = true
+
+[[frames]]
+f = 10
+p1 = "a"
+
+[[frames]]
+f = 11
+p1 = ""
+
+[[frames]]
+f = 12
+screenshot = true

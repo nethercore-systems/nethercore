@@ -192,11 +192,7 @@ impl<C: Console> ConsoleRunner<C> {
             let store = match SaveStore::load_or_new(save_path.clone()) {
                 Ok(store) => store,
                 Err(e) => {
-                    tracing::warn!(
-                        "Failed to load save store ({}): {}",
-                        save_path.display(),
-                        e
-                    );
+                    tracing::warn!("Failed to load save store ({}): {}", save_path.display(), e);
                     SaveStore::new(save_path)
                 }
             };
@@ -307,11 +303,7 @@ impl<C: Console> ConsoleRunner<C> {
             let store = match SaveStore::load_or_new(save_path.clone()) {
                 Ok(store) => store,
                 Err(e) => {
-                    tracing::warn!(
-                        "Failed to load save store ({}): {}",
-                        save_path.display(),
-                        e
-                    );
+                    tracing::warn!("Failed to load save store ({}): {}", save_path.display(), e);
                     SaveStore::new(save_path)
                 }
             };

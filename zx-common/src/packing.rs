@@ -470,7 +470,8 @@ pub fn pack_vertex_data_into(data: &[f32], format: u8, out: &mut Vec<u8>) {
 
         // Color: f32x3 -> unorm8x4
         if has_color {
-            let color = pack_color_rgba_unorm8(data[offset], data[offset + 1], data[offset + 2], 1.0);
+            let color =
+                pack_color_rgba_unorm8(data[offset], data[offset + 1], data[offset + 2], 1.0);
             out.extend_from_slice(cast_slice(&color));
             offset += 3;
         }

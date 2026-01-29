@@ -160,10 +160,7 @@ fn cleanup_stale_examples(games_dir: &Path, examples: &[walkdir::DirEntry]) -> R
     let entries = match fs::read_dir(games_dir) {
         Ok(e) => e,
         Err(e) => {
-            println!(
-                "Warning: failed to read games directory for cleanup: {}",
-                e
-            );
+            println!("Warning: failed to read games directory for cleanup: {}", e);
             return Ok(());
         }
     };

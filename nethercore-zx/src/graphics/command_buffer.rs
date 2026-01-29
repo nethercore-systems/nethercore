@@ -7,9 +7,9 @@
 use super::Viewport;
 use super::render_state::{CullMode, TextureHandle};
 use super::vertex::{VERTEX_FORMAT_COUNT, vertex_stride, vertex_stride_packed};
-use zx_common::pack_vertex_data_into;
 use std::sync::OnceLock;
 use std::time::Instant;
+use zx_common::pack_vertex_data_into;
 
 /// Z-index value for commands that don't participate in 2D ordering
 ///
@@ -421,13 +421,7 @@ impl VirtualRenderPass {
                 cull_mode,
                 viewport,
                 pass_id,
-                sort_key: CommandSortKey::mesh(
-                    pass_id,
-                    viewport,
-                    mesh_format,
-                    cull_mode,
-                    textures,
-                ),
+                sort_key: CommandSortKey::mesh(pass_id, viewport, mesh_format, cull_mode, textures),
             });
         } else {
             self.commands.push(VRPCommand::Mesh {
@@ -439,13 +433,7 @@ impl VirtualRenderPass {
                 cull_mode,
                 viewport,
                 pass_id,
-                sort_key: CommandSortKey::mesh(
-                    pass_id,
-                    viewport,
-                    mesh_format,
-                    cull_mode,
-                    textures,
-                ),
+                sort_key: CommandSortKey::mesh(pass_id, viewport, mesh_format, cull_mode, textures),
             });
         }
     }

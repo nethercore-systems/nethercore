@@ -647,7 +647,8 @@ impl ZXPerf {
             imm_bytes_pre={imm_pre} imm_bytes_packed={imm_packed} imm_index_bytes={imm_index} unique_tex_sets={unique_tex} pipe_switches={pipe_sw} pass_segments={pass_seg} \
             imm_by_format=\"{imm_by_format}\"",
             frames_per_s = self.frames,
-            cmds_total = self.cmd_mesh + self.cmd_indexed_mesh + self.cmd_quad + self.cmd_environment,
+            cmds_total =
+                self.cmd_mesh + self.cmd_indexed_mesh + self.cmd_quad + self.cmd_environment,
             cmd_mesh = self.cmd_mesh,
             cmd_imesh = self.cmd_indexed_mesh,
             cmd_quad = self.cmd_quad,

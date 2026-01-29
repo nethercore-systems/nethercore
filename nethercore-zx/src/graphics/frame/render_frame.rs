@@ -6,12 +6,12 @@
 //! - Managing render passes and GPU state
 //! - Executing draw commands with state tracking
 
+use super::super::TextureHandleTable;
 use super::super::ZXGraphics;
 use super::super::command_buffer::{BufferSource, VRPCommand};
 use super::super::pipeline::PipelineKey;
 use super::super::render_state::{CullMode, PassConfig, RenderState, TextureHandle};
 use super::super::vertex::{VERTEX_FORMAT_COUNT, vertex_stride};
-use super::super::TextureHandleTable;
 use super::bind_group_cache::BindGroupKey;
 use std::time::Instant;
 
@@ -41,17 +41,13 @@ impl ZXGraphics {
                 let packed_bytes = self.command_buffer.vertex_data(format).len() as u64;
                 let index_bytes = (self.command_buffer.index_count(format) as u64) * 2;
 
-                self.perf.immediate_vertex_prepack_bytes[format_idx] = self
-                    .perf
-                    .immediate_vertex_prepack_bytes[format_idx]
-                    .wrapping_add(prepack_bytes);
-                self.perf.immediate_vertex_packed_bytes[format_idx] = self
-                    .perf
-                    .immediate_vertex_packed_bytes[format_idx]
-                    .wrapping_add(packed_bytes);
-                self.perf.immediate_index_bytes[format_idx] = self.perf.immediate_index_bytes
-                    [format_idx]
-                    .wrapping_add(index_bytes);
+                self.perf.immediate_vertex_prepack_bytes[format_idx] =
+                    self.perf.immediate_vertex_prepack_bytes[format_idx]
+                        .wrapping_add(prepack_bytes);
+                self.perf.immediate_vertex_packed_bytes[format_idx] =
+                    self.perf.immediate_vertex_packed_bytes[format_idx].wrapping_add(packed_bytes);
+                self.perf.immediate_index_bytes[format_idx] =
+                    self.perf.immediate_index_bytes[format_idx].wrapping_add(index_bytes);
             }
 
             // Command counts + unique texture-slot combinations (FFI handles for meshes, TextureHandle IDs for quads).
@@ -172,7 +168,10 @@ impl ZXGraphics {
             .commands_mut()
             .sort_unstable_by_key(VRPCommand::sort_key);
         if let Some(t0) = sort_t0 {
-            self.perf.sort_ns = self.perf.sort_ns.wrapping_add(t0.elapsed().as_nanos() as u64);
+            self.perf.sort_ns = self
+                .perf
+                .sort_ns
+                .wrapping_add(t0.elapsed().as_nanos() as u64);
         }
 
         // =================================================================
@@ -244,12 +243,13 @@ impl ZXGraphics {
             self.mvp_indices_scratch.clear();
             self.mvp_indices_scratch.reserve(state_count);
             for idx in &z_state.mvp_shading_states {
-                self.mvp_indices_scratch.push(super::super::MvpShadingIndices {
-                    model_idx: idx.model_idx,
-                    view_idx: idx.view_idx + view_offset,
-                    proj_idx: idx.proj_idx + proj_offset,
-                    shading_idx: idx.shading_idx,
-                });
+                self.mvp_indices_scratch
+                    .push(super::super::MvpShadingIndices {
+                        model_idx: idx.model_idx,
+                        view_idx: idx.view_idx + view_offset,
+                        proj_idx: idx.proj_idx + proj_offset,
+                        shading_idx: idx.shading_idx,
+                    });
             }
 
             let data = bytemuck::cast_slice(self.mvp_indices_scratch.as_slice());
@@ -270,11 +270,8 @@ impl ZXGraphics {
             let bone_bytes: &[u8] = bytemuck::cast_slice(&z_state.bone_matrices[..bone_count]);
             // Write after static sections (inverse_bind + keyframes)
             let byte_offset = (self.animation_static_end * 48) as u64;
-            self.queue.write_buffer(
-                &self.unified_animation_buffer,
-                byte_offset,
-                bone_bytes,
-            );
+            self.queue
+                .write_buffer(&self.unified_animation_buffer, byte_offset, bone_bytes);
             if let Some(t0) = t0 {
                 self.perf.upload_bones_ns = self
                     .perf
@@ -526,9 +523,8 @@ impl ZXGraphics {
         };
 
         // Helper closure to resolve FFI texture handles to TextureHandle
-        let resolve_textures = |textures: &[u32; 4]| -> [TextureHandle; 4] {
-            texture_table.resolve4(textures)
-        };
+        let resolve_textures =
+            |textures: &[u32; 4]| -> [TextureHandle; 4] { texture_table.resolve4(textures) };
 
         // Process commands in segments, restarting render pass when depth_clear is needed
         // Commands are sorted by pass_id, so all commands from the same pass are contiguous
@@ -874,8 +870,7 @@ impl ZXGraphics {
                     render_pass.set_pipeline(&pipeline_entry.pipeline);
                     bound_pipeline = Some(pipeline_key);
                     if perf_enabled {
-                        self.perf.pipeline_switches =
-                            self.perf.pipeline_switches.wrapping_add(1);
+                        self.perf.pipeline_switches = self.perf.pipeline_switches.wrapping_add(1);
                     }
                 }
 
@@ -999,7 +994,10 @@ impl ZXGraphics {
         }
         // Outer while loop ends
         if let Some(t0) = encode_t0 {
-            self.perf.encode_ns = self.perf.encode_ns.wrapping_add(t0.elapsed().as_nanos() as u64);
+            self.perf.encode_ns = self
+                .perf
+                .encode_ns
+                .wrapping_add(t0.elapsed().as_nanos() as u64);
         }
 
         // Move texture cache back into self (preserving allocations for next frame)

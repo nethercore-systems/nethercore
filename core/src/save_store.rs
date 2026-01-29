@@ -194,7 +194,7 @@ impl SaveStore {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidInput,
                     "save store path has no file name",
-                ))
+                ));
             }
         };
 

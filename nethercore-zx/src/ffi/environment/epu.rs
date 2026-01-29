@@ -11,9 +11,13 @@
 use tracing::warn;
 use wasmtime::Caller;
 
+use std::sync::atomic::{AtomicU32, Ordering};
+
 use crate::ffi::ZXGameContext;
 use crate::ffi::helpers::get_memory;
 use crate::graphics::epu::{EpuConfig, MAX_ENV_STATES};
+
+static EPU_SET_DEBUG_COUNT: AtomicU32 = AtomicU32::new(0);
 
 fn read_epu_config(
     caller: &Caller<'_, ZXGameContext>,
@@ -77,6 +81,37 @@ pub(crate) fn epu_set(mut caller: Caller<'_, ZXGameContext>, config_ptr: u32) {
         .environment_index
         .min(MAX_ENV_STATES.saturating_sub(1));
     let layers = config.layers;
+
+    if std::env::var("NETHERCORE_EPU_DEBUG_SET").as_deref() == Ok("1") {
+        let n = EPU_SET_DEBUG_COUNT.fetch_add(1, Ordering::Relaxed);
+        if n < 32 {
+            let d0 = ((layers[0][1] >> 24) & 0xFF) as u8;
+            let d3 = ((layers[3][1] >> 24) & 0xFF) as u8;
+            let d4 = ((layers[4][1] >> 24) & 0xFF) as u8;
+            let d6 = ((layers[6][1] >> 24) & 0xFF) as u8;
+
+            let op0 = ((layers[0][0] >> 59) & 0x1F) as u8;
+            let op3 = ((layers[3][0] >> 59) & 0x1F) as u8;
+            let op4 = ((layers[4][0] >> 59) & 0x1F) as u8;
+            let op6 = ((layers[6][0] >> 59) & 0x1F) as u8;
+
+            tracing::info!(
+                "epu_set debug: call={}, env_id={}, (op,d)[0]=({},{}), [3]=({},{}), [4]=({},{}), [6]=({},{}), state_hash=0x{:016x}",
+                n,
+                env_id,
+                op0,
+                d0,
+                op3,
+                d3,
+                op4,
+                d4,
+                op6,
+                d6,
+                config.state_hash()
+            );
+        }
+    }
+
     if let Some(prev) = state.epu_frame_configs.insert(env_id, config)
         && prev.layers != layers
     {

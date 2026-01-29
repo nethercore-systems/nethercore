@@ -1,0 +1,508 @@
+console = "zx"
+seed = 0
+players = 1
+
+# Screenshot all 24 presets, 3 frames each.
+#
+# Useful for validating animation (phase-driven layers) and checking env-map seams
+# on the reflective sphere.
+#
+# Notes:
+# - Inputs are treated as held; we press and then explicitly release.
+# - Each preset gets 3 captures spaced 20 frames apart.
+
+# Preset 1 (index 0) - starts here
+[[frames]]
+f = 9
+screenshot = true
+
+[[frames]]
+f = 29
+screenshot = true
+
+[[frames]]
+f = 49
+screenshot = true
+
+[[frames]]
+f = 55
+p1 = "a"
+
+[[frames]]
+f = 56
+p1 = ""
+
+# Preset 2
+[[frames]]
+f = 79
+screenshot = true
+
+[[frames]]
+f = 99
+screenshot = true
+
+[[frames]]
+f = 119
+screenshot = true
+
+[[frames]]
+f = 125
+p1 = "a"
+
+[[frames]]
+f = 126
+p1 = ""
+
+# Preset 3
+[[frames]]
+f = 149
+screenshot = true
+
+[[frames]]
+f = 169
+screenshot = true
+
+[[frames]]
+f = 189
+screenshot = true
+
+[[frames]]
+f = 195
+p1 = "a"
+
+[[frames]]
+f = 196
+p1 = ""
+
+# Preset 4
+[[frames]]
+f = 219
+screenshot = true
+
+[[frames]]
+f = 239
+screenshot = true
+
+[[frames]]
+f = 259
+screenshot = true
+
+[[frames]]
+f = 265
+p1 = "a"
+
+[[frames]]
+f = 266
+p1 = ""
+
+# Preset 5
+[[frames]]
+f = 289
+screenshot = true
+
+[[frames]]
+f = 309
+screenshot = true
+
+[[frames]]
+f = 329
+screenshot = true
+
+[[frames]]
+f = 335
+p1 = "a"
+
+[[frames]]
+f = 336
+p1 = ""
+
+# Preset 6
+[[frames]]
+f = 359
+screenshot = true
+
+[[frames]]
+f = 379
+screenshot = true
+
+[[frames]]
+f = 399
+screenshot = true
+
+[[frames]]
+f = 405
+p1 = "a"
+
+[[frames]]
+f = 406
+p1 = ""
+
+# Preset 7
+[[frames]]
+f = 429
+screenshot = true
+
+[[frames]]
+f = 449
+screenshot = true
+
+[[frames]]
+f = 469
+screenshot = true
+
+[[frames]]
+f = 475
+p1 = "a"
+
+[[frames]]
+f = 476
+p1 = ""
+
+# Preset 8
+[[frames]]
+f = 499
+screenshot = true
+
+[[frames]]
+f = 519
+screenshot = true
+
+[[frames]]
+f = 539
+screenshot = true
+
+[[frames]]
+f = 545
+p1 = "a"
+
+[[frames]]
+f = 546
+p1 = ""
+
+# Preset 9
+[[frames]]
+f = 569
+screenshot = true
+
+[[frames]]
+f = 589
+screenshot = true
+
+[[frames]]
+f = 609
+screenshot = true
+
+[[frames]]
+f = 615
+p1 = "a"
+
+[[frames]]
+f = 616
+p1 = ""
+
+# Preset 10
+[[frames]]
+f = 639
+screenshot = true
+
+[[frames]]
+f = 659
+screenshot = true
+
+[[frames]]
+f = 679
+screenshot = true
+
+[[frames]]
+f = 685
+p1 = "a"
+
+[[frames]]
+f = 686
+p1 = ""
+
+# Preset 11
+[[frames]]
+f = 709
+screenshot = true
+
+[[frames]]
+f = 729
+screenshot = true
+
+[[frames]]
+f = 749
+screenshot = true
+
+[[frames]]
+f = 755
+p1 = "a"
+
+[[frames]]
+f = 756
+p1 = ""
+
+# Preset 12
+[[frames]]
+f = 779
+screenshot = true
+
+[[frames]]
+f = 799
+screenshot = true
+
+[[frames]]
+f = 819
+screenshot = true
+
+[[frames]]
+f = 825
+p1 = "a"
+
+[[frames]]
+f = 826
+p1 = ""
+
+# Preset 13
+[[frames]]
+f = 849
+screenshot = true
+
+[[frames]]
+f = 869
+screenshot = true
+
+[[frames]]
+f = 889
+screenshot = true
+
+[[frames]]
+f = 895
+p1 = "a"
+
+[[frames]]
+f = 896
+p1 = ""
+
+# Preset 14
+[[frames]]
+f = 919
+screenshot = true
+
+[[frames]]
+f = 939
+screenshot = true
+
+[[frames]]
+f = 959
+screenshot = true
+
+[[frames]]
+f = 965
+p1 = "a"
+
+[[frames]]
+f = 966
+p1 = ""
+
+# Preset 15
+[[frames]]
+f = 989
+screenshot = true
+
+[[frames]]
+f = 1009
+screenshot = true
+
+[[frames]]
+f = 1029
+screenshot = true
+
+[[frames]]
+f = 1035
+p1 = "a"
+
+[[frames]]
+f = 1036
+p1 = ""
+
+# Preset 16
+[[frames]]
+f = 1059
+screenshot = true
+
+[[frames]]
+f = 1079
+screenshot = true
+
+[[frames]]
+f = 1099
+screenshot = true
+
+[[frames]]
+f = 1105
+p1 = "a"
+
+[[frames]]
+f = 1106
+p1 = ""
+
+# Preset 17
+[[frames]]
+f = 1129
+screenshot = true
+
+[[frames]]
+f = 1149
+screenshot = true
+
+[[frames]]
+f = 1169
+screenshot = true
+
+[[frames]]
+f = 1175
+p1 = "a"
+
+[[frames]]
+f = 1176
+p1 = ""
+
+# Preset 18
+[[frames]]
+f = 1199
+screenshot = true
+
+[[frames]]
+f = 1219
+screenshot = true
+
+[[frames]]
+f = 1239
+screenshot = true
+
+[[frames]]
+f = 1245
+p1 = "a"
+
+[[frames]]
+f = 1246
+p1 = ""
+
+# Preset 19
+[[frames]]
+f = 1269
+screenshot = true
+
+[[frames]]
+f = 1289
+screenshot = true
+
+[[frames]]
+f = 1309
+screenshot = true
+
+[[frames]]
+f = 1315
+p1 = "a"
+
+[[frames]]
+f = 1316
+p1 = ""
+
+# Preset 20
+[[frames]]
+f = 1339
+screenshot = true
+
+[[frames]]
+f = 1359
+screenshot = true
+
+[[frames]]
+f = 1379
+screenshot = true
+
+[[frames]]
+f = 1385
+p1 = "a"
+
+[[frames]]
+f = 1386
+p1 = ""
+
+# Preset 21
+[[frames]]
+f = 1409
+screenshot = true
+
+[[frames]]
+f = 1429
+screenshot = true
+
+[[frames]]
+f = 1449
+screenshot = true
+
+[[frames]]
+f = 1455
+p1 = "a"
+
+[[frames]]
+f = 1456
+p1 = ""
+
+# Preset 22
+[[frames]]
+f = 1479
+screenshot = true
+
+[[frames]]
+f = 1499
+screenshot = true
+
+[[frames]]
+f = 1519
+screenshot = true
+
+[[frames]]
+f = 1525
+p1 = "a"
+
+[[frames]]
+f = 1526
+p1 = ""
+
+# Preset 23
+[[frames]]
+f = 1549
+screenshot = true
+
+[[frames]]
+f = 1569
+screenshot = true
+
+[[frames]]
+f = 1589
+screenshot = true
+
+[[frames]]
+f = 1595
+p1 = "a"
+
+[[frames]]
+f = 1596
+p1 = ""
+
+# Preset 24
+[[frames]]
+f = 1619
+screenshot = true
+
+[[frames]]
+f = 1639
+screenshot = true
+
+[[frames]]
+f = 1659
+screenshot = true

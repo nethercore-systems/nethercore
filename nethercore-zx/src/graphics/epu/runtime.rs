@@ -24,14 +24,18 @@
 //! epu_runtime.build_env(&device, &queue, &mut encoder, &config);
 //! ```
 
-use super::EpuConfig;
 use super::cache::EpuCache;
 use super::pipelines;
 use super::settings::{
-    EPU_INITIAL_LAYERS, EPU_IRRAD_TARGET_SIZE, EpuRuntimeSettings, MAX_ACTIVE_ENVS, MAX_ENV_STATES,
-    calc_mip_sizes, choose_irrad_mip_level,
+    calc_mip_sizes, choose_irrad_mip_level, EpuRuntimeSettings, EPU_INITIAL_LAYERS,
+    EPU_IRRAD_TARGET_SIZE, MAX_ACTIVE_ENVS, MAX_ENV_STATES,
 };
 use super::types::{FrameUniforms, GpuEnvironmentState, IrradUniforms};
+use super::EpuConfig;
+
+use std::sync::atomic::{AtomicU32, Ordering};
+
+static EPU_BUILD_DEBUG_COUNT: AtomicU32 = AtomicU32::new(0);
 
 /// EPU GPU runtime for environment map generation.
 ///
@@ -510,6 +514,31 @@ impl EpuRuntime {
                 .copied()
                 .collect()
         };
+
+        if std::env::var("NETHERCORE_EPU_DEBUG_BUILD").as_deref() == Ok("1") {
+            let n = EPU_BUILD_DEBUG_COUNT.fetch_add(1, Ordering::Relaxed);
+            if n < 64 {
+                let (env0_id, env0_hash, env0_d0, env0_w0) = dirty_configs
+                    .get(0)
+                    .map(|(id, cfg)| {
+                        let d0 = ((cfg.layers[0][1] >> 24) & 0xFF) as u8;
+                        let gpu0 = GpuEnvironmentState::from(*cfg);
+                        (*id, cfg.state_hash(), d0, gpu0.layers[0][0])
+                    })
+                    .unwrap_or((0, 0, 0, 0));
+
+                tracing::info!(
+                    "epu_build debug: call={}, input_configs={}, dirty_configs={}, first_dirty=(env_id={}, d0={}, w0=0x{:08x}, hash=0x{:016x})",
+                    n,
+                    configs.len(),
+                    dirty_configs.len(),
+                    env0_id,
+                    env0_d0,
+                    env0_w0,
+                    env0_hash
+                );
+            }
+        }
 
         // Always upload frame uniforms for rendering
         let frame_uniforms = FrameUniforms {

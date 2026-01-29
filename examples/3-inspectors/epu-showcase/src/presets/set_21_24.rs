@@ -1,4 +1,4 @@
-﻿//! Preset set 21-24
+//! Preset set 21-24
 
 #[allow(unused_imports)]
 use crate::constants::*;
@@ -52,7 +52,14 @@ pub(super) const PRESET_STORMY_SHORES: [[u64; 2]; 8] = [
     ],
     // L3: FLOW - sea foam and spray (white-ish, visible)
     [
-        hi(OP_FLOW, REGION_FLOOR | REGION_WALLS, BLEND_ADD, 0, 0x90a8c0, 0x405060),
+        hi(
+            OP_FLOW,
+            REGION_FLOOR | REGION_WALLS,
+            BLEND_ADD,
+            0,
+            0x90a8c0,
+            0x405060,
+        ),
         lo(80, 120, 60, 0x21, 0, DIR_FORWARD, 10, 0),
     ],
     // L4: VEIL/RAIN_WALL - driving rain (DIRECT3D for even coverage, DIR_DOWN)
