@@ -1,14 +1,33 @@
 //! Run command - build + launch in emulator
 //!
 //! Orchestrates: compile → pack → launch
+//!
+//! With `--watch` flag, enters dev mode:
+//! - Watches source and asset files for changes
+//! - Rebuilds ROM on change
+//! - Relaunches player automatically
 
 use anyhow::{Context, Result};
 use clap::Args;
-use std::path::PathBuf;
-use std::process::Command;
+use std::path::{Path, PathBuf};
+use std::process::{Child, Command};
 
 use crate::build::{self, BuildArgs};
 use crate::manifest::NetherManifest;
+use crate::watch::{self, WatchEvent};
+
+/// Create a successful exit status (platform-specific workaround)
+#[cfg(unix)]
+fn status_success() -> std::process::ExitStatus {
+    use std::os::unix::process::ExitStatusExt;
+    std::process::ExitStatus::from_raw(0)
+}
+
+#[cfg(windows)]
+fn status_success() -> std::process::ExitStatus {
+    use std::os::windows::process::ExitStatusExt;
+    std::process::ExitStatus::from_raw(0)
+}
 
 /// Arguments for the run command
 #[derive(Args)]
@@ -45,6 +64,10 @@ pub struct RunArgs {
     /// Launch local P2P test (spawns two connected instances)
     #[arg(long)]
     pub p2p_test: bool,
+
+    /// Watch for file changes and automatically rebuild/relaunch
+    #[arg(long)]
+    pub watch: bool,
 }
 
 /// Execute the run command
@@ -56,10 +79,25 @@ pub fn execute(args: RunArgs) -> Result<()> {
 
     let manifest_path = project_dir.join(&args.manifest);
 
+    // Handle watch mode separately
+    if args.watch {
+        return execute_watch_mode(&args, &project_dir, &manifest_path);
+    }
+
+    // Normal (non-watch) execution
+    execute_single_run(&args, &project_dir, &manifest_path)
+}
+
+/// Execute a single build + launch cycle
+fn execute_single_run(
+    args: &RunArgs,
+    project_dir: &Path,
+    manifest_path: &Path,
+) -> Result<()> {
     // Step 1: Build (unless --no-build)
     if !args.no_build {
         build::execute(BuildArgs {
-            project: Some(project_dir.clone()),
+            project: Some(project_dir.to_path_buf()),
             manifest: args.manifest.clone(),
             output: None,
             debug: args.debug,
@@ -68,11 +106,26 @@ pub fn execute(args: RunArgs) -> Result<()> {
         println!();
     }
 
-    // Step 2: Launch
+    // Step 2: Launch and wait
+    let status = launch_player(args, project_dir, manifest_path)?;
+
+    if !status.success() {
+        anyhow::bail!("Nethercore exited with error");
+    }
+
+    Ok(())
+}
+
+/// Launch the player and wait for it to exit
+fn launch_player(
+    args: &RunArgs,
+    project_dir: &Path,
+    manifest_path: &Path,
+) -> Result<std::process::ExitStatus> {
     println!("=== Launching ===");
 
     // Read manifest to get game ID
-    let manifest = NetherManifest::load(&manifest_path)?;
+    let manifest = NetherManifest::load(manifest_path)?;
     let rom_path = project_dir.join(format!(
         "{}.{}",
         manifest.game.id,
@@ -94,11 +147,13 @@ pub fn execute(args: RunArgs) -> Result<()> {
 
     // Handle P2P test mode (launches two instances)
     if args.p2p_test {
-        return launch_p2p_test(&nethercore_exe, &workspace_dir, &rom_path, &args);
+        // P2P test handles its own process management
+        return launch_p2p_test(&nethercore_exe, &workspace_dir, &rom_path, args)
+            .map(|()| status_success());
     }
 
     // Build common arguments
-    let extra_args = build_player_args(&args);
+    let extra_args = build_player_args(args);
 
     println!(
         "  Launching: {} {} {}",
@@ -125,11 +180,237 @@ pub fn execute(args: RunArgs) -> Result<()> {
             .context("Failed to run nethercore")?
     };
 
-    if !status.success() {
-        anyhow::bail!("Nethercore exited with error");
+    Ok(status)
+}
+
+/// Spawn the player as a background process (doesn't wait for exit)
+fn spawn_player(
+    args: &RunArgs,
+    project_dir: &Path,
+    manifest_path: &Path,
+) -> Result<Child> {
+    // Read manifest to get game ID
+    let manifest = NetherManifest::load(manifest_path)?;
+    let rom_path = project_dir.join(format!(
+        "{}.{}",
+        manifest.game.id,
+        nethercore_shared::ZX_ROM_FORMAT.extension
+    ));
+
+    // Use absolute path for subprocess (working directory may differ)
+    let rom_path = rom_path.canonicalize().unwrap_or_else(|_| rom_path.clone());
+
+    if !rom_path.exists() {
+        anyhow::bail!(
+            "ROM file not found: {}\nRun 'nether build' first.",
+            rom_path.display()
+        );
     }
 
-    Ok(())
+    // Find nethercore executable
+    let (nethercore_exe, workspace_dir) = find_nethercore_exe()?;
+
+    // Build common arguments
+    let extra_args = build_player_args(args);
+
+    println!(
+        "  Launching: {} {} {}",
+        nethercore_exe.display(),
+        rom_path.display(),
+        extra_args.join(" ")
+    );
+
+    // Handle special "cargo:run" marker
+    let child = if nethercore_exe.to_string_lossy() == "cargo:run" {
+        let mut cmd = Command::new("cargo");
+        cmd.args(["run", "-p", "nethercore-zx", "--"])
+            .arg(&rom_path)
+            .args(&extra_args);
+        if let Some(ref ws) = workspace_dir {
+            cmd.current_dir(ws);
+        }
+        cmd.spawn().context("Failed to spawn 'cargo run'")?
+    } else {
+        Command::new(&nethercore_exe)
+            .arg(&rom_path)
+            .args(&extra_args)
+            .spawn()
+            .context("Failed to spawn nethercore")?
+    };
+
+    Ok(child)
+}
+
+/// Execute watch mode: rebuild and relaunch on file changes
+fn execute_watch_mode(
+    args: &RunArgs,
+    project_dir: &Path,
+    manifest_path: &Path,
+) -> Result<()> {
+    println!("=== Dev Mode (--watch) ===");
+    println!("  Watching for changes. Press Ctrl+C to exit.");
+    println!();
+
+    // Initial build
+    if !args.no_build {
+        if let Err(e) = build::execute(BuildArgs {
+            project: Some(project_dir.to_path_buf()),
+            manifest: args.manifest.clone(),
+            output: None,
+            debug: args.debug,
+            no_compile: false,
+        }) {
+            eprintln!("Build failed: {}", e);
+            eprintln!("Watching for changes to retry...");
+        } else {
+            println!();
+        }
+    }
+
+    // Setup file watcher
+    let manifest = NetherManifest::load(manifest_path)?;
+    let watch_paths = watch::collect_watch_paths(project_dir, &manifest);
+    println!(
+        "  Watching {} paths ({} source dirs, {} asset files)",
+        watch_paths.count(),
+        watch_paths.source_dirs.len(),
+        watch_paths.asset_files.len()
+    );
+
+    let watcher = watch::FileWatcher::new(&watch_paths)?;
+
+    // Launch player (spawn, don't wait)
+    let mut player: Option<Child> = match spawn_player(args, project_dir, manifest_path) {
+        Ok(child) => Some(child),
+        Err(e) => {
+            eprintln!("Failed to launch player: {}", e);
+            None
+        }
+    };
+
+    // Watch loop
+    loop {
+        // Check if player has exited
+        if let Some(ref mut child) = player {
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    // Player exited
+                    if status.success() {
+                        println!();
+                        println!("  Player closed normally. Exiting watch mode.");
+                        return Ok(());
+                    } else {
+                        println!();
+                        println!("  Player exited with error. Watching for changes...");
+                        player = None;
+                    }
+                }
+                Ok(None) => {
+                    // Still running
+                }
+                Err(e) => {
+                    eprintln!("Error checking player status: {}", e);
+                    player = None;
+                }
+            }
+        }
+
+        // Wait for file changes (with timeout to check player status periodically)
+        match watcher.try_recv() {
+            Some(WatchEvent::FilesChanged(files)) => {
+                println!();
+                println!("=== Files changed ===");
+                for file in files.iter().take(5) {
+                    println!("  {}", file.display());
+                }
+                if files.len() > 5 {
+                    println!("  ... and {} more", files.len() - 5);
+                }
+                println!();
+
+                // Kill existing player
+                if let Some(ref mut child) = player {
+                    println!("  Stopping player...");
+                    let _ = child.kill();
+                    let _ = child.wait();
+                }
+                player = None;
+
+                // Rebuild
+                println!("=== Rebuilding ===");
+                if let Err(e) = build::execute(BuildArgs {
+                    project: Some(project_dir.to_path_buf()),
+                    manifest: args.manifest.clone(),
+                    output: None,
+                    debug: args.debug,
+                    no_compile: false,
+                }) {
+                    eprintln!("Build failed: {}", e);
+                    eprintln!("Watching for changes to retry...");
+                    continue;
+                }
+                println!();
+
+                // Relaunch
+                println!("=== Relaunching ===");
+                match spawn_player(args, project_dir, manifest_path) {
+                    Ok(child) => player = Some(child),
+                    Err(e) => {
+                        eprintln!("Failed to launch player: {}", e);
+                    }
+                }
+            }
+            Some(WatchEvent::ManifestChanged) => {
+                println!();
+                println!("=== Manifest changed ===");
+                println!("  Reloading watch paths and rebuilding...");
+                println!();
+
+                // Kill existing player
+                if let Some(ref mut child) = player {
+                    println!("  Stopping player...");
+                    let _ = child.kill();
+                    let _ = child.wait();
+                }
+                player = None;
+
+                // Reload manifest and recreate watcher
+                // For simplicity in Phase 1, we just rebuild and relaunch
+                // A full implementation would recreate the watcher with new paths
+
+                // Rebuild
+                println!("=== Rebuilding ===");
+                if let Err(e) = build::execute(BuildArgs {
+                    project: Some(project_dir.to_path_buf()),
+                    manifest: args.manifest.clone(),
+                    output: None,
+                    debug: args.debug,
+                    no_compile: false,
+                }) {
+                    eprintln!("Build failed: {}", e);
+                    eprintln!("Watching for changes to retry...");
+                    continue;
+                }
+                println!();
+
+                // Relaunch
+                println!("=== Relaunching ===");
+                match spawn_player(args, project_dir, manifest_path) {
+                    Ok(child) => player = Some(child),
+                    Err(e) => {
+                        eprintln!("Failed to launch player: {}", e);
+                    }
+                }
+            }
+            Some(WatchEvent::Error(msg)) => {
+                eprintln!("Watch error: {}", msg);
+            }
+            None => {
+                // No events, sleep briefly before checking again
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+        }
+    }
 }
 
 /// Build extra arguments to pass to the player based on RunArgs

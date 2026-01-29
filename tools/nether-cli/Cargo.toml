@@ -57,5 +57,9 @@ chrono = { workspace = true }
 # Executable finding
 which = { workspace = true }
 
+# File watching (dev mode)
+notify = { workspace = true }
+notify-debouncer-mini = { workspace = true }
+
 [dev-dependencies]
 tempfile = { workspace = true }

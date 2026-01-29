@@ -108,6 +108,8 @@ rayon = "1"
 # File system utilities
 walkdir = "2"
 which = "8"
+notify = "8"
+notify-debouncer-mini = "0.6"
 
 # Cryptography
 sha2 = "0.10"  # Stable version, compatible with hmac 0.12

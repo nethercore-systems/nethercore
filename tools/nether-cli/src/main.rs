@@ -55,6 +55,7 @@ mod pack;
 mod preview;
 mod replay;
 mod run;
+mod watch;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};

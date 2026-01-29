@@ -1,7 +1,7 @@
 # Dev Mode: Hot Reload & Hot Relaunch
 
 **Date:** 2026-01-30
-**Status:** Design
+**Status:** Phase 1 Complete (Hot Relaunch)
 
 ## Summary
 
@@ -245,14 +245,21 @@ New crates for player:
 
 ## Implementation Plan
 
-### Phase 1: Hot Relaunch Only (MVP)
+### Phase 1: Hot Relaunch Only (MVP) ✅ COMPLETE
 
-1. Add `--watch` flag to `nether run`
-2. Implement file watching with `notify` crate
-3. On any change: rebuild ROM, kill player, relaunch
-4. No IPC, no diffing - always full relaunch
+1. ✅ Add `--watch` flag to `nether run`
+2. ✅ Implement file watching with `notify` crate
+3. ✅ On any change: rebuild ROM, kill player, relaunch
+4. ✅ No IPC, no diffing - always full relaunch
 
 This gives immediate value with minimal complexity.
+
+**Implementation Notes:**
+- `tools/nether-cli/src/watch.rs` - File watcher module
+- `tools/nether-cli/src/run.rs` - Watch loop integration
+- Watches source files (.rs, .zig, .c, .cpp, .h, .toml) and asset files from manifest
+- Excludes build directories (target/, zig-out/, .git/, etc.)
+- 100ms debounce to batch rapid saves
 
 ### Phase 2: ROM Diffing + Asset Hot Reload
 
