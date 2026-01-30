@@ -15,8 +15,7 @@
 fn eval_ramp(
     dir: vec3f,
     instr: vec4u,
-    bounds_dir: vec3f,
-) -> LayerSample {
+) -> BoundsResult {
     // Packing:
     // - color_a: sky/ceiling
     // - color_b: floor/ground
@@ -48,8 +47,11 @@ fn eval_ramp(
         ceil_y = t;
     }
 
-    // Compute region weights from bounds_dir and thresholds
-    let y = dot(dir, bounds_dir);
+    // Decode the up vector from the instruction
+    let up = decode_dir16(instr_dir16(instr));
+
+    // Compute region weights from up vector and thresholds
+    let y = dot(dir, up);
     let w_sky = smoothstep(ceil_y - soft, ceil_y + soft, y);
     let w_floor = smoothstep(floor_y + soft, floor_y - soft, y);
     let w_wall = 1.0 - w_sky - w_floor;
@@ -57,5 +59,6 @@ fn eval_ramp(
     let rgb = sky * w_sky + wall * w_wall + floor * w_floor;
 
     // RAMP is a base layer: treat as fully weighted (w=1).
-    return LayerSample(rgb, 1.0);
+    let regions = RegionWeights(w_sky, w_wall, w_floor);
+    return BoundsResult(LayerSample(rgb, 1.0), regions);
 }

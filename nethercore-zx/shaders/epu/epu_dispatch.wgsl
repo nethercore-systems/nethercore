@@ -13,17 +13,7 @@ fn evaluate_bounds_layer(
 ) -> BoundsResult {
     switch opcode {
         case OP_RAMP: {
-            let sample = eval_ramp(dir, instr, bounds_dir);
-            // Temporary: compute regions from bounds_dir with default thresholds
-            // Task 3 will make RAMP compute regions internally
-            let y = dot(dir, bounds_dir);
-            let regions = RegionWeights(
-                smoothstep(0.4, 0.6, y),      // sky
-                0.0,                           // wall (placeholder)
-                smoothstep(-0.4, -0.6, y)     // floor
-            );
-            let wall = max(0.0, 1.0 - regions.sky - regions.floor);
-            return BoundsResult(sample, RegionWeights(regions.sky, wall, regions.floor));
+            return eval_ramp(dir, instr);
         }
         case OP_SECTOR: {
             return eval_sector(dir, instr, base_regions);
