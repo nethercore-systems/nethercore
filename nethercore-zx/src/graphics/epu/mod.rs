@@ -21,8 +21,8 @@
 //!
 //! ```ignore
 //! let mut e = epu_begin();
-//! e.ramp_enclosure(RampParams { ... });
-//! e.sector_enclosure(SectorParams { ... });
+//! e.ramp_bounds(RampParams { ... });
+//! e.sector_bounds(SectorParams { ... });
 //! e.decal(DecalParams { ..Default::default() });
 //! e.lobe_radiance(LobeRadianceParams { ... });
 //! let config = epu_finish(e);
@@ -57,7 +57,7 @@ use glam::Vec3;
 ///
 /// Opcode ranges:
 /// - `0x00`: NOP (universal)
-/// - `0x01..=0x07`: Enclosure ops
+/// - `0x01..=0x07`: Bounds ops
 /// - `0x08..=0x1F`: Radiance ops
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -65,19 +65,19 @@ pub enum EpuOpcode {
     /// Disable layer
     #[default]
     Nop = 0x0,
-    /// Enclosure gradient (sky/walls/floor)
+    /// Bounds gradient (sky/walls/floor)
     Ramp = 0x1,
-    /// Angular wedge enclosure modifier
+    /// Angular wedge bounds modifier
     Sector = 0x2,
-    /// Skyline/horizon cutout enclosure modifier
+    /// Skyline/horizon cutout bounds modifier
     Silhouette = 0x3,
-    /// Planar cut enclosure source
+    /// Planar cut bounds source
     Split = 0x4,
-    /// Voronoi/mosaic cell enclosure source
+    /// Voronoi/mosaic cell bounds source
     Cell = 0x5,
-    /// Noise patch enclosure source
+    /// Noise patch bounds source
     Patches = 0x6,
-    /// Shaped opening/viewport enclosure modifier
+    /// Shaped opening/viewport bounds modifier
     Aperture = 0x7,
     /// Sharp SDF shape (disk/ring/rect/line)
     Decal = 0x8,
@@ -374,7 +374,7 @@ impl EpuLayer {
 /// 8 layers packed into 128 bytes (each layer is 2 x u64 = 16 bytes).
 ///
 /// Recommended slot usage:
-/// - Slots 0-3: Enclosure (RAMP + optional enclosure ops)
+/// - Slots 0-3: Bounds (RAMP + optional bounds ops)
 /// - Slots 4-7: Radiance (DECAL/GRID/SCATTER/FLOW + radiance ops)
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
@@ -475,7 +475,7 @@ pub fn epu_finish(builder: EpuBuilder) -> EpuConfig {
 /// Builder for constructing EPU configurations with semantic methods.
 ///
 /// Automatically manages layer slot allocation:
-/// - Enclosure (RAMP + enclosure ops) goes to slots 0-3
+/// - Bounds (RAMP + bounds ops) goes to slots 0-3
 /// - Radiance (feature ops) goes to slots 4-7
 pub struct EpuBuilder {
     cfg: EpuConfig,
@@ -525,13 +525,13 @@ impl EpuBuilder {
     }
 
     // =========================================================================
-    // Enclosure (Bounds) Helpers
+    // Bounds Helpers
     // =========================================================================
 
-    /// Set the enclosure gradient (RAMP) - always goes to slot 0.
+    /// Set the bounds gradient (RAMP) - always goes to slot 0.
     ///
-    /// This establishes the base colors and enclosure weights used by all other layers.
-    pub fn ramp_enclosure(&mut self, p: RampParams) {
+    /// This establishes the base colors and region weights used by all other layers.
+    pub fn ramp_bounds(&mut self, p: RampParams) {
         let layer = EpuLayer {
             opcode: EpuOpcode::Ramp,
             region_mask: REGION_ALL,
@@ -553,8 +553,8 @@ impl EpuBuilder {
         self.next_bounds = self.next_bounds.max(1);
     }
 
-    /// Apply a SECTOR enclosure modifier.
-    pub fn sector_enclosure(&mut self, p: SectorParams) {
+    /// Apply a SECTOR bounds modifier.
+    pub fn sector_bounds(&mut self, p: SectorParams) {
         self.push_bounds(EpuLayer {
             opcode: EpuOpcode::Sector,
             region_mask: REGION_ALL,
@@ -573,8 +573,8 @@ impl EpuBuilder {
         });
     }
 
-    /// Apply a SILHOUETTE enclosure modifier.
-    pub fn silhouette_enclosure(&mut self, p: SilhouetteParams) {
+    /// Apply a SILHOUETTE bounds modifier.
+    pub fn silhouette_bounds(&mut self, p: SilhouetteParams) {
         let param_c = ((p.octaves_q & 0x0F) << 4) | (p.drift_amount_q & 0x0F);
         self.push_bounds(EpuLayer {
             opcode: EpuOpcode::Silhouette,
@@ -594,8 +594,8 @@ impl EpuBuilder {
         });
     }
 
-    /// Apply a SPLIT enclosure source.
-    pub fn split_enclosure(&mut self, p: SplitParams) {
+    /// Apply a SPLIT bounds source.
+    pub fn split_bounds(&mut self, p: SplitParams) {
         self.push_bounds(EpuLayer {
             opcode: EpuOpcode::Split,
             region_mask: REGION_ALL,
@@ -614,8 +614,8 @@ impl EpuBuilder {
         });
     }
 
-    /// Apply a CELL enclosure source.
-    pub fn cell_enclosure(&mut self, p: CellParams) {
+    /// Apply a CELL bounds source.
+    pub fn cell_bounds(&mut self, p: CellParams) {
         self.push_bounds(EpuLayer {
             opcode: EpuOpcode::Cell,
             region_mask: REGION_ALL,
@@ -634,8 +634,8 @@ impl EpuBuilder {
         });
     }
 
-    /// Apply a PATCHES enclosure source.
-    pub fn patches_enclosure(&mut self, p: PatchesParams) {
+    /// Apply a PATCHES bounds source.
+    pub fn patches_bounds(&mut self, p: PatchesParams) {
         self.push_bounds(EpuLayer {
             opcode: EpuOpcode::Patches,
             region_mask: REGION_ALL,
@@ -654,8 +654,8 @@ impl EpuBuilder {
         });
     }
 
-    /// Apply an APERTURE enclosure modifier.
-    pub fn aperture_enclosure(&mut self, p: ApertureParams) {
+    /// Apply an APERTURE bounds modifier.
+    pub fn aperture_bounds(&mut self, p: ApertureParams) {
         self.push_bounds(EpuLayer {
             opcode: EpuOpcode::Aperture,
             region_mask: REGION_ALL,
@@ -827,10 +827,10 @@ impl EpuBuilder {
 // Parameter Structs (RGB colors)
 // =============================================================================
 
-/// Parameters for RAMP enclosure.
+/// Parameters for RAMP bounds.
 #[derive(Clone, Copy, Debug)]
 pub struct RampParams {
-    /// Up vector defining the enclosure orientation
+    /// Up vector defining the bounds orientation
     pub up: Vec3,
     /// RGB color for wall/horizon
     pub wall_color: [u8; 3],
@@ -860,7 +860,7 @@ impl Default for RampParams {
     }
 }
 
-/// Parameters for SECTOR enclosure.
+/// Parameters for SECTOR bounds.
 #[derive(Clone, Copy, Debug)]
 pub struct SectorParams {
     pub up: Vec3,
@@ -886,7 +886,7 @@ impl Default for SectorParams {
     }
 }
 
-/// Parameters for SILHOUETTE enclosure.
+/// Parameters for SILHOUETTE bounds.
 #[derive(Clone, Copy, Debug)]
 pub struct SilhouetteParams {
     pub up: Vec3,
@@ -920,7 +920,7 @@ impl Default for SilhouetteParams {
     }
 }
 
-/// Parameters for SPLIT enclosure.
+/// Parameters for SPLIT bounds.
 #[derive(Clone, Copy, Debug)]
 pub struct SplitParams {
     pub axis: Vec3,
@@ -948,7 +948,7 @@ impl Default for SplitParams {
     }
 }
 
-/// Parameters for CELL enclosure.
+/// Parameters for CELL bounds.
 #[derive(Clone, Copy, Debug)]
 pub struct CellParams {
     pub axis: Vec3,
@@ -982,7 +982,7 @@ impl Default for CellParams {
     }
 }
 
-/// Parameters for PATCHES enclosure.
+/// Parameters for PATCHES bounds.
 #[derive(Clone, Copy, Debug)]
 pub struct PatchesParams {
     pub axis: Vec3,
@@ -1016,7 +1016,7 @@ impl Default for PatchesParams {
     }
 }
 
-/// Parameters for APERTURE enclosure.
+/// Parameters for APERTURE bounds.
 #[derive(Clone, Copy, Debug)]
 pub struct ApertureParams {
     pub dir: Vec3,

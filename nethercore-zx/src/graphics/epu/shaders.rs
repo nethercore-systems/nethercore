@@ -11,7 +11,7 @@ pub(super) const EPU_COMMON: &str = include_str!(concat!(
     "/shaders/epu/epu_common.wgsl"
 ));
 
-/// EPU bounds opcodes (modular files: RAMP + enclosure ops).
+/// EPU bounds opcodes (modular files: RAMP + bounds ops).
 pub(super) const EPU_BOUNDS: &str = concat!(
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),

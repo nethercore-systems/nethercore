@@ -318,9 +318,9 @@ fn test_builder_default_is_all_nop() {
 }
 
 #[test]
-fn test_builder_ramp_enclosure() {
+fn test_builder_ramp_bounds() {
     let mut builder = epu_begin();
-    builder.ramp_enclosure(RampParams {
+    builder.ramp_bounds(RampParams {
         up: Vec3::Y,
         wall_color: [200, 180, 150],
         sky_color: [100, 150, 220],
@@ -362,10 +362,10 @@ fn test_builder_ramp_enclosure() {
 }
 
 #[test]
-fn test_builder_sector_enclosure() {
+fn test_builder_sector_bounds() {
     let mut builder = epu_begin();
-    builder.ramp_enclosure(RampParams::default());
-    builder.sector_enclosure(SectorParams {
+    builder.ramp_bounds(RampParams::default());
+    builder.sector_bounds(SectorParams {
         up: Vec3::Y,
         sky_color: [255, 200, 100],
         wall_color: [10, 20, 30],
@@ -630,11 +630,11 @@ fn test_builder_flow() {
 fn test_builder_slot_allocation() {
     let mut builder = epu_begin();
 
-    // Add enclosure (bounds) layers (slots 0-3)
-    builder.ramp_enclosure(RampParams::default());
-    builder.sector_enclosure(SectorParams::default());
-    builder.split_enclosure(SplitParams::default());
-    builder.cell_enclosure(CellParams::default());
+    // Add bounds layers (slots 0-3)
+    builder.ramp_bounds(RampParams::default());
+    builder.sector_bounds(SectorParams::default());
+    builder.split_bounds(SplitParams::default());
+    builder.cell_bounds(CellParams::default());
 
     // Add feature layers (slots 4-7)
     builder.decal(DecalParams::default());
@@ -665,23 +665,23 @@ fn test_builder_bounds_overflow_ignored() {
     let mut builder = epu_begin();
 
     // Add 5 bounds layers (only 4 slots available)
-    builder.sector_enclosure(SectorParams {
+    builder.sector_bounds(SectorParams {
         sky_color: [255, 0, 0],
         ..SectorParams::default()
     });
-    builder.sector_enclosure(SectorParams {
+    builder.sector_bounds(SectorParams {
         sky_color: [0, 255, 0],
         ..SectorParams::default()
     });
-    builder.sector_enclosure(SectorParams {
+    builder.sector_bounds(SectorParams {
         sky_color: [0, 0, 255],
         ..SectorParams::default()
     });
-    builder.sector_enclosure(SectorParams {
+    builder.sector_bounds(SectorParams {
         sky_color: [255, 255, 0],
         ..SectorParams::default()
     });
-    builder.sector_enclosure(SectorParams {
+    builder.sector_bounds(SectorParams {
         sky_color: [255, 0, 255],
         ..SectorParams::default()
     }); // This should be ignored
@@ -746,7 +746,7 @@ fn test_void_with_stars() {
     let mut e = epu_begin();
 
     // Fully closed "void": make everything black, minimal softness.
-    e.ramp_enclosure(RampParams {
+    e.ramp_bounds(RampParams {
         up: Vec3::Y,
         wall_color: [0, 0, 0],
         sky_color: [0, 0, 0],
@@ -790,8 +790,8 @@ fn test_sunny_meadow() {
 
     let mut e = epu_begin();
 
-    // Open-ish sky enclosure.
-    e.ramp_enclosure(RampParams {
+    // Open-ish sky bounds.
+    e.ramp_bounds(RampParams {
         up: Vec3::Y,
         wall_color: [200, 180, 150],
         sky_color: [100, 150, 220],

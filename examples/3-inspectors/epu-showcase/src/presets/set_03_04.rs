@@ -112,12 +112,12 @@ pub(super) const PRESET_OCEAN_DEPTHS: [[u64; 2]; 8] = [
 // -----------------------------------------------------------------------------
 // Preset 4: "Void Station" - Derelict space station
 // -----------------------------------------------------------------------------
-// Goal: clear interior enclosure with a single viewport to deep space.
+// Goal: clear interior bounds with a single viewport to deep space.
 // Visual: a cold, metallic room with a single rounded viewport cut into the far
 // wall. Outside the window is starfield plus a bold eclipse disk; inside, a pale
 // light spill washes the floor and panels, keeping the sphere reflection readable.
 //
-// L0: SECTOR/BOX           ALL        LERP  hard room enclosure
+// L0: SECTOR/BOX           ALL        LERP  hard room bounds
 // L1: GRID                 WALLS|FLOOR ADD  subtle panel lines (animated)
 // L2: PLANE/GRATING        FLOOR      LERP  deck grating
 // L3: APERTURE/RND_RECT    ALL        LERP  viewport frame + region tag
@@ -126,7 +126,7 @@ pub(super) const PRESET_OCEAN_DEPTHS: [[u64; 2]; 8] = [
 // L6: DECAL/RECT           WALLS|FLOOR ADD  viewport light card spill
 // L7: LOBE                 WALLS|FLOOR ADD  cool spill from viewport (animated)
 pub(super) const PRESET_VOID_STATION: [[u64; 2]; 8] = [
-    // L0: SECTOR/BOX - room enclosure colors
+    // L0: SECTOR/BOX - room bounds colors
     [
         hi_meta(
             OP_SECTOR,

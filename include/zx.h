@@ -455,7 +455,7 @@ NCZX_IMPORT uint32_t load_zskeleton(const uint8_t* data_ptr, uint32_t data_len);
 /**  */
 /** # Configuration Layout */
 /** Each environment is exactly 8 x 128-bit instructions (each stored as [hi, lo]): */
-/** - Slots 0-3: Enclosure/bounds layers (`0x01..0x07`) */
+/** - Slots 0-3: Bounds layers (`0x01..0x07`) */
 /** - Slots 4-7: Radiance/feature layers (`0x08..0x1F`) */
 /**  */
 /** # Instruction Bit Layout (per 128-bit = 2 x u64) */
@@ -481,13 +481,13 @@ NCZX_IMPORT uint32_t load_zskeleton(const uint8_t* data_ptr, uint32_t data_len);
 /**  */
 /** # Opcodes (common) */
 /** - 0x00: NOP (disable layer) */
-/** - 0x01: RAMP (enclosure gradient) */
-/** - 0x02: SECTOR (enclosure modifier) */
-/** - 0x03: SILHOUETTE (enclosure modifier) */
-/** - 0x04: SPLIT (enclosure source) */
-/** - 0x05: CELL (enclosure source) */
-/** - 0x06: PATCHES (enclosure source) */
-/** - 0x07: APERTURE (enclosure modifier) */
+/** - 0x01: RAMP (bounds gradient) */
+/** - 0x02: SECTOR (bounds modifier) */
+/** - 0x03: SILHOUETTE (bounds modifier) */
+/** - 0x04: SPLIT (bounds source) */
+/** - 0x05: CELL (bounds source) */
+/** - 0x06: PATCHES (bounds source) */
+/** - 0x07: APERTURE (bounds modifier) */
 /** - 0x08: DECAL (sharp SDF shape) */
 /** - 0x09: GRID (repeating lines/panels) */
 /** - 0x0A: SCATTER (point field) */

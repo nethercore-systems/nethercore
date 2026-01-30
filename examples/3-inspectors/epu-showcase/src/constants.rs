@@ -115,19 +115,19 @@ pub const fn lo(
 // =============================================================================
 
 pub const OP_RAMP: u64 = 0x01;
-// 0x02: SECTOR (enclosure)
-// 0x03: SILHOUETTE (enclosure)
-// 0x04: SPLIT (enclosure)
-// 0x05: CELL (enclosure)
-// 0x06: PATCHES (enclosure)
-// 0x07: APERTURE (enclosure)
+// 0x02: SECTOR (bounds)
+// 0x03: SILHOUETTE (bounds)
+// 0x04: SPLIT (bounds)
+// 0x05: CELL (bounds)
+// 0x06: PATCHES (bounds)
+// 0x07: APERTURE (bounds)
 pub const OP_DECAL: u64 = 0x08;
 pub const OP_GRID: u64 = 0x09;
 pub const OP_SCATTER: u64 = 0x0A;
 pub const OP_FLOW: u64 = 0x0B;
 
 // =============================================================================
-// Enclosure Opcodes (0x02-0x07)
+// Bounds Opcodes (0x02-0x07)
 // =============================================================================
 
 /// SECTOR - Azimuthal opening sector / interior cues
@@ -138,7 +138,7 @@ pub const OP_SECTOR: u64 = 0x02;
 /// Variants: 0=MOUNTAINS, 1=CITY, 2=FOREST, 3=DUNES, 4=WAVES, 5=RUINS, 6=INDUSTRIAL, 7=SPIRES
 pub const OP_SILHOUETTE: u64 = 0x03;
 
-/// SPLIT - Planar cut enclosure
+/// SPLIT - Planar cut bounds
 /// Variants: 0=HALF, 1=WEDGE, 2=CORNER, 3=BANDS, 4=CROSS, 5=PRISM
 pub const OP_SPLIT: u64 = 0x04;
 

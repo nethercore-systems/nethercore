@@ -7,7 +7,7 @@ use crate::constants::*;
 // Preset 1: "Neon Metropolis" - Rain-soaked cyberpunk alley
 // -----------------------------------------------------------------------------
 // Goal: unmistakably "city alley" (wet pavement, signage, rain), with a clean
-// enclosure read on the reflection sphere (big shapes first; low noise).
+// bounds read on the reflection sphere (big shapes first; low noise).
 // Visual: a narrow alley at night where the floor reads as wet asphalt with a
 // bright neon sign reflected in it. Walls carry vertical neon accents and sparse
 // window lights, while rain streaks slide through the scene to sell motion.

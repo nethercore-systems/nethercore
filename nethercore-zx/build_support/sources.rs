@@ -18,7 +18,7 @@ pub(crate) const COMMON: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/shaders/epu/epu_common.wgsl"
     )),
-    // Bounds opcodes (enclosure layers)
+    // Bounds opcodes (bounds layers)
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/shaders/epu/bounds/00_ramp.wgsl"

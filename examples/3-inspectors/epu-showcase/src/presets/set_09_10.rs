@@ -99,7 +99,7 @@ pub(super) const PRESET_SKY_RUINS: [[u64; 2]; 8] = [
 // -----------------------------------------------------------------------------
 // Preset 10: "Combat Lab" - Sterile training facility
 // -----------------------------------------------------------------------------
-// Goal: harsh fluorescent enclosure + grid floor + holographic UI cards.
+// Goal: harsh fluorescent bounds + grid floor + holographic UI cards.
 // Animation: scanning grid + pulsing HUD + shimmering hologram.
 // Visual: a sterile high-tech training facility with harsh fluorescent lighting,
 // glassy walls, and a grid-lined floor. Holographic panels and a rectangular
@@ -107,7 +107,7 @@ pub(super) const PRESET_SKY_RUINS: [[u64; 2]; 8] = [
 //
 // Cadence: BOUNDS (SECTOR) -> BOUNDS (APERTURE) -> FEATURES (floor) -> FEATURES (HUD) -> FEATURES (motion)
 //
-// L0: SECTOR/BOX           ALL         LERP   sterile room enclosure
+// L0: SECTOR/BOX           ALL         LERP   sterile room bounds
 // L1: APERTURE/BARS        ALL         LERP   overhead fluorescent banks
 // L2: PLANE/TILES          FLOOR       LERP   grid-lined floor
 // L3: GRID                 FLOOR       ADD    scanlines (animated)
@@ -116,7 +116,7 @@ pub(super) const PRESET_SKY_RUINS: [[u64; 2]; 8] = [
 // L6: LOBE                 ALL         ADD    fluorescent key (animated)
 // L7: FLOW (noise)         ALL         ADD    subtle data shimmer (animated)
 pub(super) const PRESET_COMBAT_LAB: [[u64; 2]; 8] = [
-    // L0: SECTOR/BOX - sterile enclosure
+    // L0: SECTOR/BOX - sterile bounds
     [
         hi_meta(
             OP_SECTOR,
