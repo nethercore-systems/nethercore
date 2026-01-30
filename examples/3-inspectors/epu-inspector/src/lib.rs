@@ -361,7 +361,28 @@ pub extern "C" fn init() {
 }
 
 #[no_mangle]
-pub extern "C" fn update() {}
+pub extern "C" fn update() {
+    unsafe {
+        // Check if layer index changed
+        if LAYER_INDEX != PREV_LAYER_INDEX {
+            // Save current editor state to previous layer
+            let prev_idx = (PREV_LAYER_INDEX - 1) as usize;
+            let (hi, lo) = pack_layer();
+            LAYERS[prev_idx] = [hi, lo];
+
+            // Load new layer into editor
+            let new_idx = (LAYER_INDEX - 1) as usize;
+            unpack_layer(LAYERS[new_idx][0], LAYERS[new_idx][1]);
+
+            PREV_LAYER_INDEX = LAYER_INDEX;
+        } else {
+            // Layer index unchanged - pack editor state back to current layer
+            let idx = (LAYER_INDEX - 1) as usize;
+            let (hi, lo) = pack_layer();
+            LAYERS[idx] = [hi, lo];
+        }
+    }
+}
 
 #[no_mangle]
 pub extern "C" fn render() {
