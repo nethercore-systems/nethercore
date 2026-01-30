@@ -1,12 +1,24 @@
 //! EPU Inspector - Live EPU Editor Playground
 //!
-//! Debug-panel-driven editor for tweaking EPU layer values in real-time.
-//! Press F4 to open the debug panel. Edit values and see immediate results.
+//! A debug-panel-driven editor for tweaking EPU layer values in real-time.
 //!
-//! Features:
-//! - Layer-by-layer editing (8 layers)
-//! - Isolation mode to view single layers
-//! - Export to hex for preset authoring
+//! ## Usage
+//!
+//! 1. Run the game: `cargo run -- examples/3-inspectors/epu-inspector`
+//! 2. Press F4 to open the Debug Panel
+//! 3. Adjust layer_index (1-8) to select which layer to edit
+//! 4. Modify any field - changes apply immediately
+//! 5. Toggle "isolate" to view only the selected layer
+//! 6. Click "export hex" to print all layers to console
+//!
+//! ## Features
+//!
+//! - **Layer editing**: All 8 EPU layers accessible via layer selector
+//! - **Live preview**: Changes reflect immediately in the viewport
+//! - **Isolation mode**: View single layer contribution
+//! - **Direction helpers**: Azimuth/elevation instead of raw octahedral encoding
+//! - **Param hints**: Dynamic hints showing what each param does per opcode
+//! - **Export**: Copy hex values for use in preset files
 
 #![no_std]
 #![no_main]
