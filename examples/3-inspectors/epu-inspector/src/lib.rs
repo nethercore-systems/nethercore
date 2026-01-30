@@ -446,6 +446,11 @@ unsafe fn draw_ui() {
     if SHOW_HINTS != 0 {
         draw_hints();
     }
+
+    // Control hints at bottom
+    set_color(0x666666FF);
+    let hint = b"F4: Debug Panel | Edit values to see live changes";
+    draw_text(hint.as_ptr(), hint.len() as u32, 10.0, 200.0, 12.0);
 }
 
 // ============================================================================
