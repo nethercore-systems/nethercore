@@ -14,23 +14,28 @@ SECTOR → ignores ceil_y/floor_y/soft, computes own regions
 SILHOUETTE → ignores ceil_y/floor_y/soft, computes own regions
 ```
 This creates confusion and wasted layers (RAMP → SECTOR when SECTOR doesn't use RAMP's thresholds).
-### The Real Issue: Floor Is Only Defined by RAMP
-Each bounds layer outputs `RegionWeights { sky, wall, floor }`, but **floor is always pass-through except for RAMP**:
+### The Real Issue: Floor Is Usually Inherited
+Each bounds layer outputs `RegionWeights { sky, wall, floor }`, but today most bounds behave like **2-way splitters**:
+- They preserve the incoming `base_regions.floor`
+- They only divide the remaining weight (`1.0 - base_regions.floor`) into sky vs wall
+
+RAMP is the only bounds that defines a full 3-way split from its own thresholds (and SPLIT does so for specific variants).
 | Bounds | Sky | Wall | Floor |
 |--------|-----|------|-------|
 | RAMP | ✅ Y threshold | ✅ Y threshold | ✅ Y threshold |
 | SECTOR | ✅ azimuth geometry | ✅ azimuth geometry | ⚠️ pass-through |
 | SILHOUETTE | ✅ horizon geometry | ✅ horizon geometry | ⚠️ pass-through |
-| SPLIT | ✅ plane geometry | ✅ plane geometry | ✅ CORNER variant only |
+| SPLIT | ✅ plane geometry | ✅ plane geometry | ✅ CORNER + PRISM variants |
 | CELL | ✅ cell geometry | ✅ cell geometry | ⚠️ pass-through |
 | PATCHES | ✅ noise geometry | ✅ noise geometry | ⚠️ pass-through |
 | APERTURE | ✅ SDF geometry | ✅ SDF geometry | ⚠️ pass-through |
-**Pattern discovered**: All non-RAMP bounds compute `(geo_sky * rem, geo_wall * rem, floor)` where `rem = 1.0 - floor_w`. They divide the "remaining" space (after floor) into sky/wall.
+
+**Pattern discovered**: Most non-RAMP bounds compute `(geo_sky * rem, geo_wall * rem, floor)` where `rem = 1.0 - floor_w`. They divide the "remaining" space (after floor) into sky/wall.
 This means:
-1. **RAMP is the only floor source** - it bootstraps the floor region
-2. Other bounds **subdivide the non-floor space** - they assume floor already exists
-3. **You can't have floor without RAMP** (or default enclosure gives floor=0)
-This is why "RAMP → SECTOR is a waste" - SECTOR doesn't use RAMP's sky/wall, but it DOES depend on RAMP's floor!
+1. Most bounds **subdivide the non-floor space** - they assume a floor weight already exists.
+2. RAMP (and SPLIT CORNER/PRISM) are the only bounds that can create a floor region from their own geometry/parameters in the current model.
+3. Even without an explicit RAMP layer, the shader currently seeds a *default* enclosure (fixed `ceil_y/floor_y/soft`) and computes default regions from it. So you still get a non-zero floor, but it is **hard-coded** rather than authored.
+This is why "RAMP → SECTOR is a waste" feels real: SECTOR doesn't use RAMP's sky/wall thresholds, but it *does* depend on having a preexisting floor weight (typically authored by RAMP; otherwise the hard-coded default).
 ---
 ## The Vision: Freestyle Environments
 ### Core Principle
@@ -66,11 +71,30 @@ Semantics vary per bounds type, but the pattern is consistent.
 ### Q2: Stacking behavior
 **Decision**: Default is **REPLACE** (each bounds defines fresh 3 regions).
 **Optional COMPOSITE mode** using repurposed bits:
-- Bounds region bits (122..120) are currently ignored (hardcoded REGION_ALL)
-- These 3 bits can be repurposed for bounds-specific flags:
-  - Bit 122: `COMPOSITE_FLAG` (0 = replace, 1 = composite with previous)
-  - Bits 121..120: Reserved or composite mode selector
-This allows stacking like SILHOUETTE → APERTURE where APERTURE carves into SILHOUETTE's regions.
+
+The same 3-bit field (bits 122..120) is interpreted differently depending on opcode class:
+
+- **Feature opcodes (0x08+)**: this remains a *region mask* (SKY/WALL/FLOOR) and gates feature contribution.
+- **Bounds opcodes (0x01..0x07)**: reinterpret those 3 bits as a *bounds composition mask* using the **same SKY/WALL/FLOOR bit meanings**:
+  - `0b111` (ALL) = **REPLACE** (default)
+  - `0b000` (NONE) = **NO-OP** (do not update regions or inherited bounds direction)
+  - anything else = **COMPOSITE (apply-mask)**
+
+Bit meanings (same as feature region masks): SKY=`0b100`, WALL=`0b010`, FLOOR=`0b001`.
+
+Composite apply-mask semantics:
+
+- Evaluate the bounds layer to produce `new_regions`.
+- Compute `m = region_weight(new_regions, mask)` (sum of the selected regions).
+- Blend the region state: `out = mix(base_regions, new_regions, m)`.
+
+This is easy to author and reason about:
+- `0b110` (SKY|WALL) composites "foreground" (everything except the new bounds' floor/outside).
+- `0b100` (SKY) composites only inside the new bounds' opening.
+- `0b010` (WALL) composites only on the new bounds' edge band.
+- `0b001` (FLOOR) composites only on the new bounds' outside/background region.
+
+This allows stacking like SILHOUETTE → APERTURE where APERTURE only affects the silhouette inside its opening/frame, while leaving the rest of the silhouette intact.
 ### Q3: Direction handling (RESOLVED)
 **Decision**: Each bounds has its own direction semantics. Features inherit direction from most recent bounds for directional effects (e.g., FLOW rain from APERTURE's hole direction).
 ### Q4: Default without RAMP (RESOLVED)
@@ -122,7 +146,7 @@ Feature layer → inherits direction + regions from most recent bounds
 1. **Remove `EnclosureConfig` struct** (or simplify to just `direction`)
 2. **Update all bounds layers** to output full 3 regions from their geometry
 3. **Update `enclosure_from_layer`** → rename to `direction_from_layer` (just extracts direction)
-4. **Repurpose region bits (122..120)** on bounds for COMPOSITE flag
+4. **Repurpose region bits (122..120)** on bounds for a bounds composition mask (REPLACE / COMPOSITE apply-mask / NO-OP)
 ---
 ## Per-Bounds Implementation Changes
 ### RAMP (0x01) - Already correct
@@ -137,7 +161,7 @@ Feature layer → inherits direction + regions from most recent bounds
 - Change: Compute floor from geometry (below horizon - margin = floor)
 - Regions: above horizon (sky) / horizon band (wall) / below horizon (floor)
 ### SPLIT (0x04) - Partially correct
-- Some variants already define 3 regions (CORNER)
+- Some variants already define 3 regions (CORNER, PRISM)
 - Ensure all variants output meaningful 3 regions
 - Regions: side A (sky) / split edge (wall) / side B (floor)
 ### CELL (0x05) - Needs 3rd region
@@ -155,13 +179,16 @@ Feature layer → inherits direction + regions from most recent bounds
 ---
 ## Composite Mode (Optional Stacking)
 **Default**: Each bounds replaces previous regions entirely.
-**Composite flag** (bit 122 of instruction):
-- 0 = Replace mode (default) - bounds outputs fresh 3 regions
-- 1 = Composite mode - bounds modifies previous regions
-Example composite: SILHOUETTE → APERTURE (composite)
-- SILHOUETTE: sky (above) / wall (hills) / floor (below)
-- APERTURE: carves hole into SILHOUETTE's sky region
-- Result: hole reveals through to whatever is "behind" the sky
+
+**Bounds composition mask** (bits 122..120 of instruction, for bounds opcodes only):
+- `0b111` (ALL) = Replace
+- `0b000` (NONE) = No-op
+- otherwise = Composite apply-mask (SKY/WALL/FLOOR)
+
+Example composite: SILHOUETTE → APERTURE
+- SILHOUETTE runs in replace mode (`0b111`) and establishes sky/wall/floor from its horizon geometry.
+- APERTURE runs in composite mode with mask `0b110` (SKY|WALL), so it only applies inside its opening+frame and leaves the outside/background untouched.
+- Result: the aperture "carves" into the silhouette where it matters, without overwriting the rest of the world.
 ---
 ## Benefits of This Architecture
 1. **No RAMP dependency** - Any bounds can be layer 0
@@ -175,4 +202,4 @@ Example composite: SILHOUETTE → APERTURE (composite)
 - SECTOR/SILHOUETTE/SPLIT all extract `up` and inherit heights, but don't use heights
 - APERTURE explicitly returns `prev_enc` unchanged (direction means something different)
 - The inheritance chain is mostly dead code except for RAMP
-- Region bits (122..120) on bounds are unused - repurpose for COMPOSITE flag
+- Region bits (122..120) on bounds are unused - repurpose for a bounds composition mask (keep features using them as a region mask)

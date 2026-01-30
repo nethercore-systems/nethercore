@@ -12,9 +12,9 @@
 
 ## Validation Snapshot (Current Behavior)
 
-- RAMP is the only bounds opcode that defines floor; other bounds preserve `base_regions.floor` and only split sky vs wall (see `nethercore-zx/shaders/epu/bounds/01_sector.wgsl`, `02_silhouette.wgsl`, `04_cell.wgsl`, `05_patches.wgsl`, `06_aperture.wgsl`).
+- Most bounds opcodes preserve `base_regions.floor` and only split sky vs wall; exceptions: RAMP defines all 3 regions from thresholds, and SPLIT defines floor for CORNER/PRISM variants (see `nethercore-zx/shaders/epu/bounds/00_ramp.wgsl`, `nethercore-zx/shaders/epu/bounds/03_split.wgsl`, plus `01_sector.wgsl`, `02_silhouette.wgsl`, `04_cell.wgsl`, `05_patches.wgsl`, `06_aperture.wgsl`).
 - `enclosure_from_layer` keeps `ceil_y/floor_y/soft` for non-RAMP bounds and returns `prev_enc` for APERTURE (see `nethercore-zx/shaders/epu/epu_common.wgsl`).
-- Bounds ignore the region mask bits; only feature opcodes apply `instr_region` (see `nethercore-zx/shaders/epu/epu_dispatch.wgsl`).
+- Bounds currently ignore the 3-bit region field; only feature opcodes apply `instr_region` (see `nethercore-zx/shaders/epu/epu_dispatch.wgsl`). This plan repurposes that field for bounds composition (replace / composite apply-mask / no-op).
 - Default regions are seeded from a synthetic RAMP in `epu_compute_env.wgsl` and `common/20_environment/90_sampling.wgsl`.
 
 ---
@@ -437,14 +437,67 @@ git commit -m "feat(epu): make APERTURE define full regions"
 
 ---
 
-## Decision Gate: Composite Mode (Optional)
+## Composite Mode (Bounds-Only Composition Mask)
 
-If we still want bounds to "carve into" prior regions:
+If we want bounds to "carve into" prior bounds output, reuse the existing 3-bit field (bits 122..120) *for bounds opcodes only* as a **composition mask**.
 
-1. Decide how to encode the composite flag for bounds (see Open Questions).
-2. Add `bounds_flags = instr_region(instr)` and a helper in `epu_common.wgsl` to interpret flags.
-3. For composite bounds, blend `regions` with `base_regions` (for example, `regions = normalize(regions * base_regions)` for intersection or a carve that preserves `base_regions` outside the bounds geometry).
-4. Update Rust packing helpers to set the new bounds flags when desired.
+Interpretation depends on opcode class:
+
+- **Feature opcodes (0x08+)**: `instr_region(instr)` is a *region mask* (SKY/WALL/FLOOR) and gates feature contribution.
+- **Bounds opcodes (0x01..0x07)**: reinterpret `instr_region(instr)` as a *bounds composition mask* using the same SKY/WALL/FLOOR bit meanings:
+  - `0b111` (ALL) = **REPLACE** (default)
+  - `0b000` (NONE) = **NO-OP** (do not update regions or bounds direction; return zero-weight sample)
+  - anything else = **COMPOSITE (apply-mask)**
+
+Suggested composite semantics (stable, keeps weights normalized, and is easy to author):
+
+```wgsl
+let comp_mask = instr_region(instr) & 0x7u;
+
+// Bit meanings (same as feature region masks): SKY=0b100, WALL=0b010, FLOOR=0b001.
+
+// Assumes we've already evaluated the bounds geometry to produce:
+// - `sample`: the bounds layer's visual sample
+// - `new_regions`: the bounds layer's region output before compositing
+// and we also have:
+// - `base_regions`: the incoming region state
+// - `bounds_dir`: the current inherited bounds direction
+
+// 0b111: REPLACE
+if comp_mask == REGION_ALL {
+    regions = new_regions;
+    // bounds_dir updates normally
+}
+// 0b000: NO-OP
+else if comp_mask == REGION_NONE {
+    regions = base_regions;
+    // do not update bounds_dir
+    sample.w = 0.0;
+}
+// otherwise: COMPOSITE (apply-mask)
+else {
+    let m = region_weight(new_regions, comp_mask); // sum of selected new regions, in [0,1]
+    regions = RegionWeights(
+        mix(base_regions.sky, new_regions.sky, m),
+        mix(base_regions.wall, new_regions.wall, m),
+        mix(base_regions.floor, new_regions.floor, m),
+    );
+
+    // Recommended: gate the bounds' visual contribution to the same apply-mask.
+    // (Prevents "carve regions but tint the whole sphere" surprises.)
+    sample.w *= m;
+}
+```
+
+Authoring examples:
+
+- `0b110` (SKY|WALL): composite only where the new bounds is not floor/outside.
+- `0b100` (SKY): composite only inside the new bounds opening.
+- `0b010` (WALL): composite only on the new bounds edge band.
+
+Implementation notes:
+- Keep this parsing on the bounds path only; features continue to use region masks.
+- Update Rust bounds builder helpers to author `region_mask = REGION_ALL (0b111)` for bounds by default (replace). To request composite, set the desired apply-mask (`0b000` is a safe no-op).
 
 ---
 
@@ -557,6 +610,5 @@ git commit -m "chore(epu-showcase): retune presets for new bounds regions"
 
 ## Open Questions
 
-1. Composite mode encoding: Should we implement composite now, and if so which flag encoding should bounds use without breaking existing presets that set `REGION_ALL`?
-2. Default regions before first bounds: Keep the current synthetic RAMP fallback or default to all-sky?
-3. API naming: Should we rename Rust API methods (`*_enclosure`) or keep names and only update docs?
+1. Default regions before first bounds: Keep the current synthetic RAMP fallback or default to all-sky?
+2. API naming: Should we rename Rust API methods (`*_enclosure`) or keep names and only update docs?
