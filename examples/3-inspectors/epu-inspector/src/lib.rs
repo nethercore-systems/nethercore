@@ -252,6 +252,93 @@ unsafe fn pack_layer() -> (u64, u64) {
     (hi, lo)
 }
 
+// ============================================================================
+// Debug Panel Registration
+// ============================================================================
+
+unsafe fn register_debug_panel() {
+    // Control group
+    debug_group_begin(b"control".as_ptr(), 7);
+    debug_register_u8_range(b"layer (1-8)".as_ptr(), 11, &LAYER_INDEX, 1, 8);
+    debug_register_bool(b"isolate".as_ptr(), 7, &ISOLATE_LAYER);
+    debug_register_bool(b"hints".as_ptr(), 5, &SHOW_HINTS);
+    debug_group_end();
+
+    // Hi word group
+    debug_group_begin(b"hi word".as_ptr(), 7);
+    debug_register_u8_range(b"opcode".as_ptr(), 6, &EDITOR.opcode, 0, 31);
+    debug_register_bool(b"region_sky".as_ptr(), 10, &EDITOR.region_sky);
+    debug_register_bool(b"region_walls".as_ptr(), 12, &EDITOR.region_walls);
+    debug_register_bool(b"region_floor".as_ptr(), 12, &EDITOR.region_floor);
+    debug_register_u8_range(b"blend".as_ptr(), 5, &EDITOR.blend, 0, 7);
+    debug_register_u8_range(b"domain_id".as_ptr(), 9, &EDITOR.domain_id, 0, 3);
+    debug_register_u8_range(b"variant_id".as_ptr(), 10, &EDITOR.variant_id, 0, 7);
+    debug_register_color(b"color_a".as_ptr(), 7, &EDITOR.color_a as *const u32 as *const u8);
+    debug_register_color(b"color_b".as_ptr(), 7, &EDITOR.color_b as *const u32 as *const u8);
+    debug_group_end();
+
+    // Lo word group
+    debug_group_begin(b"lo word".as_ptr(), 7);
+    debug_register_u8(b"intensity".as_ptr(), 9, &EDITOR.intensity);
+    debug_register_u8(b"param_a".as_ptr(), 7, &EDITOR.param_a);
+    debug_register_u8(b"param_b".as_ptr(), 7, &EDITOR.param_b);
+    debug_register_u8(b"param_c".as_ptr(), 7, &EDITOR.param_c);
+    debug_register_u8(b"param_d".as_ptr(), 7, &EDITOR.param_d);
+    debug_register_f32_range(b"azimuth".as_ptr(), 7, &EDITOR.azimuth as *const f32 as *const u8, 0.0, 360.0);
+    debug_register_f32_range(b"elevation".as_ptr(), 9, &EDITOR.elevation as *const f32 as *const u8, -90.0, 90.0);
+    debug_register_u8_range(b"alpha_a".as_ptr(), 7, &EDITOR.alpha_a, 0, 15);
+    debug_register_u8_range(b"alpha_b".as_ptr(), 7, &EDITOR.alpha_b, 0, 15);
+    debug_group_end();
+
+    // Export action
+    debug_group_begin(b"export".as_ptr(), 6);
+    debug_register_action(b"export hex".as_ptr(), 10, b"do_export".as_ptr(), 9);
+    debug_group_end();
+}
+
+// ============================================================================
+// Export Action
+// ============================================================================
+
+#[no_mangle]
+pub extern "C" fn do_export() {
+    unsafe {
+        // Log each layer as hex
+        for i in 0..8 {
+            let hi = LAYERS[i][0];
+            let lo = LAYERS[i][1];
+            log_layer_hex(i, hi, lo);
+        }
+    }
+}
+
+unsafe fn log_layer_hex(_index: usize, hi: u64, lo: u64) {
+    // Format: "[0x{hi:016X}, 0x{lo:016X}],"
+    // We need to build this string manually in no_std
+    let mut buf = [0u8; 48];
+    buf[0] = b'[';
+    buf[1] = b'0';
+    buf[2] = b'x';
+    write_hex_u64(&mut buf[3..19], hi);
+    buf[19] = b',';
+    buf[20] = b' ';
+    buf[21] = b'0';
+    buf[22] = b'x';
+    write_hex_u64(&mut buf[23..39], lo);
+    buf[39] = b']';
+    buf[40] = b',';
+
+    log(buf.as_ptr(), 41);
+}
+
+fn write_hex_u64(buf: &mut [u8], val: u64) {
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    for i in 0..16 {
+        let nibble = ((val >> (60 - i * 4)) & 0xF) as usize;
+        buf[i] = HEX[nibble];
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn init() {
     unsafe {
@@ -267,6 +354,9 @@ pub extern "C" fn init() {
 
         // Unpack layer 0 into editor state
         unpack_layer(LAYERS[0][0], LAYERS[0][1]);
+
+        // Register debug panel
+        register_debug_panel();
     }
 }
 
