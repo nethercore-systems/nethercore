@@ -222,48 +222,39 @@ fn eval_patches(
     // sharpness=0 -> bw=0.5 (soft), sharpness=0.5 -> bw=0.25 (medium-soft)
     let bw = (1.0 - sharpness * 2.0) * 0.5;
 
-    // Compute weight: smoothstep from threshold-bw to threshold+bw
     // noise_val is in [-1, 1], remap to [0, 1] for threshold comparison
     let noise_01 = noise_val * 0.5 + 0.5;
-    var w = smoothstep(threshold - bw, threshold + bw, noise_01);
 
-    // For MEMBRANE variant: invert (swap sky/wall interpretation)
+    // Compute signed distance: negative between patches (sky), positive inside patches (floor)
+    var d = noise_01 - threshold;
+
+    // For MEMBRANE variant: flip inside/outside
     if variant == 3u {
-        w = 1.0 - w;
+        d = -d;
     }
 
-    // PATCHES generates a sky/wall pattern; preserve incoming floor weight.
-    // (RAMP/SPLIT/etc. define floor; PATCHES refines sky vs wall within non-floor.)
-    let floor_w = base_regions.floor;
-    let rem = 1.0 - floor_w;
-
-    // Geometric (region) weights: must sum to 1 within sky+wall.
-    let geo_sky = 1.0 - w;
-    let geo_wall = w;
+    // Compute regions from signed distance
+    let output_regions = regions_from_signed_distance(d, bw);
 
     // Radiance weights (can be alpha-scaled for blending)
-    let w_sky = geo_sky * sky_alpha;
-    let w_wall = geo_wall * wall_alpha;
+    let w_sky = output_regions.sky * sky_alpha;
+    let w_wall = output_regions.wall * wall_alpha;
+    let floor_alpha = wall_alpha * 0.5;
+    let w_floor = output_regions.floor * floor_alpha;
 
     // Get colors
     let sky_color = instr_color_a(instr);
     let wall_color = instr_color_b(instr);
+    let floor_color = wall_color * 0.5;
 
     // Blend colors based on weights
-    let total_w = w_sky + w_wall;
+    let total_w = w_sky + w_wall + w_floor;
     var rgb: vec3f;
     if total_w > 0.001 {
-        rgb = (sky_color * w_sky + wall_color * w_wall) / total_w;
+        rgb = (sky_color * w_sky + wall_color * w_wall + floor_color * w_floor) / total_w;
     } else {
         rgb = sky_color;
     }
-
-    // Output regions (sum to 1.0): floor preserved, sky/wall come from patch pattern.
-    let output_regions = RegionWeights(
-        geo_sky * rem,
-        geo_wall * rem,
-        floor_w
-    );
 
     // PATCHES is an enclosure source: return radiance sample + output regions
     return BoundsResult(LayerSample(rgb, epu_saturate(total_w)), output_regions);
