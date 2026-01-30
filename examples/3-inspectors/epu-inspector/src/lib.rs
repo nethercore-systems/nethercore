@@ -442,12 +442,80 @@ unsafe fn draw_ui() {
         draw_text(iso.as_ptr(), iso.len() as u32, 100.0, 35.0, 16.0);
     }
 
-    // Hints (placeholder - will be implemented in Task 7)
+    // Hints
     if SHOW_HINTS != 0 {
         draw_hints();
     }
 }
 
+// ============================================================================
+// Opcode Hint Data
+// ============================================================================
+
+/// Get parameter hints for a given opcode
+fn get_opcode_hints(opcode: u8) -> (&'static [u8], &'static [u8], &'static [u8], &'static [u8], &'static [u8]) {
+    // Returns: (name, param_a hint, param_b hint, param_c hint, param_d hint)
+    match opcode {
+        0x00 => (b"NOP", b"-", b"-", b"-", b"-"),
+        0x01 => (b"RAMP", b"ceil_weight", b"floor_weight", b"-", b"thresholds"),
+        0x02 => (b"SECTOR", b"opening", b"height", b"falloff", b"phase"),
+        0x03 => (b"SILHOUETTE", b"height", b"jitter", b"density", b"phase"),
+        0x04 => (b"SPLIT", b"position", b"angle", b"feather", b"-"),
+        0x05 => (b"CELL", b"scale", b"jitter", b"edge", b"phase"),
+        0x06 => (b"PATCHES", b"scale", b"threshold", b"edge", b"phase"),
+        0x07 => (b"APERTURE", b"size", b"aspect", b"feather", b"phase"),
+        0x08 => (b"DECAL", b"shape", b"size", b"feather", b"phase"),
+        0x09 => (b"GRID", b"spacing", b"thickness", b"offset", b"phase"),
+        0x0A => (b"SCATTER", b"count", b"size", b"twinkle", b"phase"),
+        0x0B => (b"FLOW", b"scale", b"speed", b"octaves", b"phase"),
+        0x0C => (b"TRACE", b"density", b"branch", b"glow", b"phase"),
+        0x0D => (b"VEIL", b"density", b"height", b"sway", b"phase"),
+        0x0E => (b"ATMOSPHERE", b"density", b"falloff", b"scatter", b"-"),
+        0x0F => (b"PLANE", b"scale", b"detail", b"roughness", b"phase"),
+        0x10 => (b"CELESTIAL", b"size", b"glow", b"detail", b"phase"),
+        0x11 => (b"PORTAL", b"size", b"spin", b"distort", b"phase"),
+        0x12 => (b"LOBE", b"spread", b"falloff", b"-", b"phase"),
+        0x13 => (b"BAND", b"width", b"falloff", b"-", b"phase"),
+        _ => (b"UNKNOWN", b"-", b"-", b"-", b"-"),
+    }
+}
+
+fn copy_slice(dst: &mut [u8], src: &[u8]) -> usize {
+    let len = dst.len().min(src.len());
+    dst[..len].copy_from_slice(&src[..len]);
+    len
+}
+
 unsafe fn draw_hints() {
-    // Placeholder - will be implemented in Task 7
+    let (name, hint_a, hint_b, hint_c, hint_d) = get_opcode_hints(EDITOR.opcode);
+
+    let y_base = 60.0;
+    let line_height = 14.0;
+    set_color(0x88FF88FF);
+
+    // Opcode name
+    draw_text(name.as_ptr(), name.len() as u32, 10.0, y_base, 14.0);
+
+    set_color(0x888888FF);
+
+    // param_a
+    let mut buf = [0u8; 32];
+    buf[0..3].copy_from_slice(b"a: ");
+    let len_a = 3 + copy_slice(&mut buf[3..], hint_a);
+    draw_text(buf.as_ptr(), len_a as u32, 10.0, y_base + line_height, 12.0);
+
+    // param_b
+    buf[0..3].copy_from_slice(b"b: ");
+    let len_b = 3 + copy_slice(&mut buf[3..], hint_b);
+    draw_text(buf.as_ptr(), len_b as u32, 10.0, y_base + line_height * 2.0, 12.0);
+
+    // param_c
+    buf[0..3].copy_from_slice(b"c: ");
+    let len_c = 3 + copy_slice(&mut buf[3..], hint_c);
+    draw_text(buf.as_ptr(), len_c as u32, 10.0, y_base + line_height * 3.0, 12.0);
+
+    // param_d
+    buf[0..3].copy_from_slice(b"d: ");
+    let len_d = 3 + copy_slice(&mut buf[3..], hint_d);
+    draw_text(buf.as_ptr(), len_d as u32, 10.0, y_base + line_height * 4.0, 12.0);
 }
