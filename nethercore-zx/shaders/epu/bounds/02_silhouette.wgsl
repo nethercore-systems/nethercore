@@ -138,7 +138,6 @@ fn silhouette_height(u: f32, variant: u32, octaves: u32, seed: f32) -> f32 {
 fn eval_silhouette(
     dir: vec3f,
     instr: vec4u,
-    enc: EnclosureConfig,
     base_regions: RegionWeights,
 ) -> BoundsResult {
     // Decode up axis from direction field

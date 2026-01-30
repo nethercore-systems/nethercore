@@ -25,11 +25,10 @@ struct FrameUniforms {
 @group(0) @binding(3) var epu_out_sharp: texture_storage_2d_array<rgba16float, write>;
 
 fn evaluate_env_radiance(dir: vec3f, st: PackedEnvironmentState) -> vec3f {
-    // Start with default enclosure (will be set by first bounds layer)
-    var enc = EnclosureConfig(vec3f(0.0, 1.0, 0.0), 0.5, -0.5, 0.1);
-    // Default regions should be direction-dependent, so presets can start with any bounds
-    // opcode (SECTOR / SPLIT / SILHOUETTE / APERTURE) without requiring a leading RAMP.
-    var regions = compute_region_weights(dir, enc);
+    // Start with default bounds direction (will be updated by bounds layers)
+    var bounds_dir = vec3f(0.0, 1.0, 0.0);
+    // Default regions: all-sky (bounds layers will compute their own regions)
+    var regions = RegionWeights(1.0, 0.0, 0.0);
 
     var radiance = vec3f(0.0);
 
@@ -43,14 +42,14 @@ fn evaluate_env_radiance(dir: vec3f, st: PackedEnvironmentState) -> vec3f {
         let blend = instr_blend(instr);
 
         if is_bounds {
-            // Bounds opcode: update enclosure, get sample + output regions
-            enc = enclosure_from_layer(instr, opcode, enc);
-            let bounds_result = evaluate_bounds_layer(dir, instr, opcode, enc, regions);
+            // Bounds opcode: update bounds_dir, get sample + output regions
+            bounds_dir = bounds_dir_from_layer(instr, opcode, bounds_dir);
+            let bounds_result = evaluate_bounds_layer(dir, instr, opcode, bounds_dir, regions);
             regions = bounds_result.regions;  // Use output regions for subsequent features
             radiance = apply_blend(radiance, bounds_result.sample, blend);
         } else {
             // Feature opcode: just get sample using current regions
-            let sample = evaluate_layer(dir, instr, enc, regions);
+            let sample = evaluate_layer(dir, instr, bounds_dir, regions);
             radiance = apply_blend(radiance, sample, blend);
         }
     }

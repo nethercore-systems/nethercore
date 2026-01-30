@@ -129,7 +129,7 @@ fn eval_atmosphere_alien(
 fn eval_atmosphere(
     dir: vec3f,
     instr: vec4u,
-    enc: EnclosureConfig,
+    bounds_dir: vec3f,
     region_w: f32
 ) -> LayerSample {
     if region_w < 0.001 { return LayerSample(vec3f(0.0), 0.0); }
@@ -149,8 +149,8 @@ fn eval_atmosphere(
     // param_b: Horizon Y threshold (0..255 -> -1.0..1.0)
     let horizon_y = mix(-1.0, 1.0, u8_to_01(instr_b(instr)));
 
-    // Get up vector from enclosure state
-    let up = enc.up;
+    // Get up vector from bounds direction
+    let up = bounds_dir;
 
     // Compute altitude: y = dot(dir, up)
     let y = dot(dir, up);

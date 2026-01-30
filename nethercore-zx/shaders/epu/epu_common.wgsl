@@ -275,7 +275,7 @@ fn instr_alpha_b_f32(instr: vec4u) -> f32 {
 }
 
 // ============================================================================
-// REGION WEIGHTS AND ENCLOSURE
+// REGION WEIGHTS AND BOUNDS DIRECTION
 // ============================================================================
 
 struct RegionWeights {
@@ -284,74 +284,15 @@ struct RegionWeights {
     floor: f32,
 }
 
-struct EnclosureConfig {
-    up: vec3f,
-    ceil_y: f32,
-    floor_y: f32,
-    soft: f32,
-}
-
-fn enclosure_from_ramp(instr: vec4u) -> EnclosureConfig {
-    let up = decode_dir16(instr_dir16(instr));
-
-    // Heights are packed in param_d (param_a/b/c are floor RGB)
-    let pd = instr_d(instr);
-    let ceil_q = (pd >> 4u) & 0xFu;
-    let floor_q = pd & 0xFu;
-
-    // Soften to a small minimum to avoid hard banding.
-    let soft = mix(0.01, 0.5, u8_to_01(instr_intensity(instr)));
-
-    var ceil_y = nibble_to_signed_1(ceil_q);
-    var floor_y = nibble_to_signed_1(floor_q);
-    if floor_y > ceil_y {
-        // Ensure a valid ordering; swap if authored incorrectly.
-        let t = floor_y;
-        floor_y = ceil_y;
-        ceil_y = t;
-    }
-
-    return EnclosureConfig(up, ceil_y, floor_y, soft);
-}
-
-// Extract enclosure config from any bounds layer
-// This allows bounds layers to redefine the enclosure for subsequent features
-fn enclosure_from_layer(instr: vec4u, opcode: u32, prev_enc: EnclosureConfig) -> EnclosureConfig {
+// Extract bounds direction from a layer's instruction.
+// Bounds layers that define a direction will update bounds_dir for subsequent features.
+fn bounds_dir_from_layer(instr: vec4u, opcode: u32, prev_dir: vec3f) -> vec3f {
     switch opcode {
-        case OP_RAMP: {
-            return enclosure_from_ramp(instr);
+        case OP_RAMP, OP_SECTOR, OP_SILHOUETTE, OP_SPLIT, OP_CELL, OP_PATCHES, OP_APERTURE: {
+            return decode_dir16(instr_dir16(instr));
         }
-        case OP_SPLIT: {
-            // SPLIT uses its direction as the up axis, inherits heights from previous
-            let up = decode_dir16(instr_dir16(instr));
-            return EnclosureConfig(up, prev_enc.ceil_y, prev_enc.floor_y, prev_enc.soft);
-        }
-        case OP_SECTOR, OP_SILHOUETTE: {
-            // These modifiers use the direction as the enclosure up axis.
-            let up = decode_dir16(instr_dir16(instr));
-            return EnclosureConfig(up, prev_enc.ceil_y, prev_enc.floor_y, prev_enc.soft);
-        }
-        case OP_APERTURE: {
-            // APERTURE's direction is the aperture center direction (see `06_aperture.wgsl`),
-            // not the enclosure up axis. If we treat it as `up`, subsequent feature layers will
-            // classify regions against the wrong axis (causing hard half-screen splits).
-            return prev_enc;
-        }
-        default: {
-            // Other bounds keep the previous enclosure
-            return prev_enc;
-        }
+        default: { return prev_dir; }
     }
-}
-
-fn compute_region_weights(dir: vec3f, enc: EnclosureConfig) -> RegionWeights {
-    let y = dot(dir, enc.up);
-
-    let w_sky = smoothstep(enc.ceil_y - enc.soft, enc.ceil_y + enc.soft, y);
-    let w_floor = smoothstep(enc.floor_y + enc.soft, enc.floor_y - enc.soft, y);
-    let w_wall = 1.0 - w_sky - w_floor;
-
-    return RegionWeights(w_sky, w_wall, w_floor);
 }
 
 // Compute region weight from bitfield mask

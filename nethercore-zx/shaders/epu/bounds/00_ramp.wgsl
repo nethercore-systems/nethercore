@@ -15,7 +15,7 @@
 fn eval_ramp(
     dir: vec3f,
     instr: vec4u,
-    enc: EnclosureConfig,
+    bounds_dir: vec3f,
 ) -> LayerSample {
     // Packing:
     // - color_a: sky/ceiling
@@ -31,8 +31,30 @@ fn eval_ramp(
         u8_to_01(instr_c(instr))
     );
 
-    let weights = compute_region_weights(dir, enc);
-    let rgb = sky * weights.sky + wall * weights.wall + floor * weights.floor;
+    // Heights are packed in param_d
+    let pd = instr_d(instr);
+    let ceil_q = (pd >> 4u) & 0xFu;
+    let floor_q = pd & 0xFu;
+
+    // Soften to a small minimum to avoid hard banding.
+    let soft = mix(0.01, 0.5, u8_to_01(instr_intensity(instr)));
+
+    var ceil_y = nibble_to_signed_1(ceil_q);
+    var floor_y = nibble_to_signed_1(floor_q);
+    if floor_y > ceil_y {
+        // Ensure a valid ordering; swap if authored incorrectly.
+        let t = floor_y;
+        floor_y = ceil_y;
+        ceil_y = t;
+    }
+
+    // Compute region weights from bounds_dir and thresholds
+    let y = dot(dir, bounds_dir);
+    let w_sky = smoothstep(ceil_y - soft, ceil_y + soft, y);
+    let w_floor = smoothstep(floor_y + soft, floor_y - soft, y);
+    let w_wall = 1.0 - w_sky - w_floor;
+
+    let rgb = sky * w_sky + wall * w_wall + floor * w_floor;
 
     // RAMP is a base layer: treat as fully weighted (w=1).
     return LayerSample(rgb, 1.0);

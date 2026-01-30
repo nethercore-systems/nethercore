@@ -19,7 +19,6 @@
 fn eval_sector(
     dir: vec3f,
     instr: vec4u,
-    enc: EnclosureConfig,
     base_regions: RegionWeights,
 ) -> BoundsResult {
     // Decode up axis from direction field

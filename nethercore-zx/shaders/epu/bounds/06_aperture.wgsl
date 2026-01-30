@@ -151,7 +151,6 @@ fn aperture_sdf_irregular(uv: vec2f, half_w: f32, half_h: f32, amplitude: f32) -
 fn eval_aperture(
     dir: vec3f,
     instr: vec4u,
-    enc: EnclosureConfig,
     base_regions: RegionWeights,
 ) -> BoundsResult {
     // Decode aperture center direction

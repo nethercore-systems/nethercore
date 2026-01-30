@@ -8,20 +8,28 @@ fn evaluate_bounds_layer(
     dir: vec3f,
     instr: vec4u,
     opcode: u32,
-    enc: EnclosureConfig,
+    bounds_dir: vec3f,
     base_regions: RegionWeights
 ) -> BoundsResult {
     switch opcode {
         case OP_RAMP: {
-            let sample = eval_ramp(dir, instr, enc);
-            let regions = compute_region_weights(dir, enc);
-            return BoundsResult(sample, regions);
+            let sample = eval_ramp(dir, instr, bounds_dir);
+            // Temporary: compute regions from bounds_dir with default thresholds
+            // Task 3 will make RAMP compute regions internally
+            let y = dot(dir, bounds_dir);
+            let regions = RegionWeights(
+                smoothstep(0.4, 0.6, y),      // sky
+                0.0,                           // wall (placeholder)
+                smoothstep(-0.4, -0.6, y)     // floor
+            );
+            let wall = max(0.0, 1.0 - regions.sky - regions.floor);
+            return BoundsResult(sample, RegionWeights(regions.sky, wall, regions.floor));
         }
         case OP_SECTOR: {
-            return eval_sector(dir, instr, enc, base_regions);
+            return eval_sector(dir, instr, base_regions);
         }
         case OP_SILHOUETTE: {
-            return eval_silhouette(dir, instr, enc, base_regions);
+            return eval_silhouette(dir, instr, base_regions);
         }
         case OP_SPLIT: {
             return eval_split(dir, instr, base_regions);
@@ -33,7 +41,7 @@ fn evaluate_bounds_layer(
             return eval_patches(dir, instr, base_regions);
         }
         case OP_APERTURE: {
-            return eval_aperture(dir, instr, enc, base_regions);
+            return eval_aperture(dir, instr, base_regions);
         }
         default: {
             return BoundsResult(LayerSample(vec3f(0.0), 0.0), base_regions);
@@ -44,7 +52,7 @@ fn evaluate_bounds_layer(
 fn evaluate_layer(
     dir: vec3f,
     instr: vec4u,
-    enc: EnclosureConfig,
+    bounds_dir: vec3f,
     regions: RegionWeights
 ) -> LayerSample {
     let opcode = instr_opcode(instr);
@@ -66,7 +74,7 @@ fn evaluate_layer(
         case OP_TRACE: { return eval_trace(dir, instr, region_w); }
         case OP_VEIL: { return eval_veil(dir, instr, region_w); }
         case OP_ATMOSPHERE: {
-            return eval_atmosphere(dir, instr, enc, region_w);
+            return eval_atmosphere(dir, instr, bounds_dir, region_w);
         }
         case OP_PLANE: {
             return eval_plane(dir, instr, region_w);
