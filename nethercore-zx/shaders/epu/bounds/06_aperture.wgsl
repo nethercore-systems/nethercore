@@ -169,12 +169,18 @@ fn eval_aperture(
     // Use baseline region weights passed in
     let baseline = base_regions;
 
-    // Check if direction is behind the aperture
-    let d = dot(dir, center_dir);
-    if d <= 0.0 {
-        // Behind aperture: use baseline regions unchanged
-        return BoundsResult(LayerSample(vec3f(0.0), 0.0), base_regions);
+    // Avoid a hard hemisphere cutoff at dot(dir, center_dir) == 0.
+    // Fade the aperture influence out near the horizon, and keep it strictly
+    // zero on the back hemisphere to prevent great-circle seams.
+    let d_raw = dot(dir, center_dir);
+    let horizon_fade = 0.06;
+    let front_w = smoothstep(0.0, horizon_fade, d_raw);
+    if front_w <= 0.0 {
+        return BoundsResult(LayerSample(vec3f(0.0), 0.0), baseline);
     }
+
+    // Clamp for projection stability (prevents division blow-ups near the horizon).
+    let d_proj = max(d_raw, horizon_fade);
 
     // Build view-centered tangent chart projection
     // Project direction onto the tangent plane at center_dir
@@ -182,7 +188,7 @@ fn eval_aperture(
     let up = select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(center_dir.y) > 0.9);
     let right = normalize(cross(up, center_dir));
     let tangent_up = normalize(cross(center_dir, right));
-    let proj = (dir - center_dir * d) / d;
+    let proj = (dir - center_dir * d_raw) / d_proj;
     let uv = vec2f(dot(proj, right), dot(proj, tangent_up));
 
     // Evaluate SDF based on variant
@@ -234,32 +240,42 @@ fn eval_aperture(
 
     // Compute zone weights using frame_thickness and softness
     // opening_w: 1 inside aperture opening, 0 outside
-    let opening_w = smoothstep(softness, -softness, sdf);
+    let opening_w0 = smoothstep(softness, -softness, sdf);
 
     // frame_w: 1 in the frame band between opening edge and frame outer edge
     let frame_inner = smoothstep(-softness, softness, sdf);
     let frame_outer = smoothstep(softness, -softness, sdf - frame_thickness);
-    let frame_w = frame_inner * frame_outer;
+    let frame_w0 = frame_inner * frame_outer;
 
-    // outside_w: 1 beyond the frame
-    let outside_w = smoothstep(-softness, softness, sdf - frame_thickness);
+    // Keep zone weights normalized.
+    let outside_w0 = clamp(1.0 - opening_w0 - frame_w0, 0.0, 1.0);
 
-    // Blend weights according to spec:
-    // w_sky = opening_w (sky is the opening)
-    // w_wall = frame_w + outside_w * (baseline_wall + baseline_sky)
-    // w_floor = outside_w * baseline_floor
-    let w_sky = opening_w;
-    let w_wall = frame_w + outside_w * (baseline.wall + baseline.sky);
-    let w_floor = outside_w * baseline.floor;
+    // Region outputs (bounds): inside the opening becomes SKY; the frame becomes WALLS.
+    // Outside the aperture keeps the baseline region weights.
+    let w_sky_front = baseline.sky * outside_w0 + opening_w0;
+    let w_wall_front = baseline.wall * outside_w0 + frame_w0;
+    let w_floor_front = baseline.floor * outside_w0;
+
+    let w_sky = mix(baseline.sky, w_sky_front, front_w);
+    let w_wall = mix(baseline.wall, w_wall_front, front_w);
+    let w_floor = mix(baseline.floor, w_floor_front, front_w);
 
     // Get colors
     let opening_color = instr_color_a(instr);  // Sky through opening
     let frame_color = instr_color_b(instr);    // Frame/wall color
 
-    // Blend colors based on zone weights
-    let rgb = opening_color * w_sky + frame_color * w_wall + frame_color * 0.5 * w_floor;
+    // IMPORTANT: Do not tint the full sphere outside the aperture.
+    // Only draw the opening/frame itself; outside stays whatever prior bounds already produced.
+    let zone_w = opening_w0 + frame_w0;
+    let zone_rgb = select(
+        vec3f(0.0),
+        (opening_color * opening_w0 + frame_color * frame_w0) / zone_w,
+        zone_w > 1e-5
+    );
+    let rgb = zone_rgb;
+    let a = epu_saturate(zone_w * front_w);
 
     // Output modified regions
     let output_regions = RegionWeights(w_sky, w_wall, w_floor);
-    return BoundsResult(LayerSample(rgb, 1.0), output_regions);
+    return BoundsResult(LayerSample(rgb, a), output_regions);
 }

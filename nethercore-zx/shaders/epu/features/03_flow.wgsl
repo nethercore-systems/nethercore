@@ -164,7 +164,12 @@ fn eval_flow(
             color_mix = h0;
         }
         case 2u: { // CAUSTIC
-            let q = p * 2.0;
+            // Build a basis around flow_dir so caustics don't lock to world axes.
+            // This avoids mirrored vertical banding on the reflection sphere.
+            let up = select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(flow_dir.y) > 0.9);
+            let t_axis = normalize(cross(up, flow_dir));
+            let b_axis = normalize(cross(flow_dir, t_axis));
+            let q = vec3f(dot(p, t_axis), dot(p, b_axis), dot(p, flow_dir)) * 2.0;
             let p1 = sin(q.x * 1.7 + t) * cos(q.z * 1.9 + t * 0.7);
             let p2 = sin(q.x * 2.3 - t * 0.8) * cos(q.y * 2.0 + t * 0.5);
             pat = (p1 + p2) * 0.25 + 0.5;

@@ -209,8 +209,9 @@ fn eval_scatter(
             // Tangent plane: project onto plane perpendicular to axis
             let proj = dir_s - axis * dot(dir_s, axis);
             sample_coords = proj * density + vec3f(seed);
-            // Fade near axis direction
-            domain_w = smoothstep(0.95, 0.8, abs(dot(dir_s, axis)));
+            // Localize to a patch around axis direction.
+            // Near the axis: dot ~= 1 -> domain_w ~= 1. Far from it: domain_w -> 0.
+            domain_w = smoothstep(0.8, 0.95, dot(dir_s, axis));
         }
         default: {
             // DIRECT3D: direction sphere (default behavior)

@@ -214,7 +214,8 @@ fn cell_radial(uv: vec2f, density: f32, axis: vec3f, dir: vec3f) -> vec3f {
 fn eval_cell(
     dir: vec3f,
     instr: vec4u,
-) -> LayerSample {
+    base_regions: RegionWeights,
+) -> BoundsResult {
     // Decode axis from direction field
     let axis = decode_dir16(instr_dir16(instr));
 
@@ -256,18 +257,31 @@ fn eval_cell(
     // Compute smooth AA at gap boundary (guard: no gap when gap_width near zero)
     let gap_aa = select(smoothstep(gap_width, gap_width * 0.5, d_edge), 0.0, gap_width < 0.001);
 
-    // Compute region weights
-    // w_sky = gap regions or non-solid cells
-    // w_wall = solid cells not in gap
+    // Cell generates a sky/wall pattern; preserve incoming floor weight.
+    // (RAMP/SPLIT/etc. define floor; CELL refines sky vs wall within non-floor.)
+    let floor_w = base_regions.floor;
+    let rem = 1.0 - floor_w;
+
+    // Geometric (region) weights: must sum to 1 within sky+wall.
+    var geo_sky: f32;
+    var geo_wall: f32;
+
+    // Radiance weights (can be alpha-scaled for blending)
     var w_sky: f32;
     var w_wall: f32;
 
     if is_solid {
         // Solid cell: sky in gap, wall elsewhere
+        geo_sky = gap_aa;
+        geo_wall = 1.0 - gap_aa;
+
         w_sky = gap_aa * gap_alpha;
-        w_wall = (1.0 - gap_aa);
+        w_wall = 1.0 - gap_aa;
     } else {
         // Non-solid cell: all sky
+        geo_sky = 1.0;
+        geo_wall = 0.0;
+
         w_sky = 1.0;
         w_wall = 0.0;
     }
@@ -291,6 +305,13 @@ fn eval_cell(
     // Total weight
     let w = w_sky + w_wall;
 
-    // CELL is an enclosure source: return blended result
-    return LayerSample(rgb, epu_saturate(w));
+    // Output regions (sum to 1.0): floor preserved, sky/wall come from cell pattern.
+    let output_regions = RegionWeights(
+        geo_sky * rem,
+        geo_wall * rem,
+        floor_w
+    );
+
+    // CELL is an enclosure source: return radiance sample + output regions.
+    return BoundsResult(LayerSample(rgb, epu_saturate(w)), output_regions);
 }

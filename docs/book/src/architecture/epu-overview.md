@@ -68,11 +68,10 @@ Each environment is exactly **8 x 128-bit instructions**:
 
 | Slot | Kind | Recommended Use |
 |------|------|-----------------|
-| 0 | Enclosure | `RAMP` enclosure + base colors |
-| 1 | Enclosure | `SECTOR` |
-| 2 | Enclosure | `SILHOUETTE` |
-| 3 | Enclosure | `SPLIT` / `CELL` / `PATCHES` / `APERTURE` |
+| 0-3 | Enclosure (bounds) | Any enclosure opcode (`0x01..0x07`). Any bounds opcode can be first; each bounds layer outputs `RegionWeights` consumed by later feature/radiance layers. |
 | 4-7 | Radiance | `DECAL` / `GRID` / `SCATTER` / `FLOW` + radiance ops (`0x0C..0x13`) |
+
+Implementation note: in the shaders, bounds opcodes return `(sample, regions)`. Dispatch updates `regions` after every bounds layer, and feature layers apply region masking using the current regions.
 
 ### Instruction Bit Layout (128-bit)
 
@@ -122,8 +121,8 @@ bits 3..0:     alpha_b    (4)  - color_b alpha (0-15)
 | `0x0F` | `PLANE` | Radiance | Ground/surface textures |
 | `0x10` | `CELESTIAL` | Radiance | Moon/sun/planet bodies |
 | `0x11` | `PORTAL` | Radiance | Portal/vortex effects |
-| `0x12` | `LOBE_RADIANCE` | Radiance | Region-masked directional glow |
-| `0x13` | `BAND_RADIANCE` | Radiance | Region-masked horizon band |
+| `0x12` | `LOBE` | Radiance | Region-masked directional glow |
+| `0x13` | `BAND` | Radiance | Region-masked horizon band |
 
 ### Blend Modes (8 modes)
 

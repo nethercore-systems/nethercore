@@ -27,7 +27,9 @@ struct FrameUniforms {
 fn evaluate_env_radiance(dir: vec3f, st: PackedEnvironmentState) -> vec3f {
     // Start with default enclosure (will be set by first bounds layer)
     var enc = EnclosureConfig(vec3f(0.0, 1.0, 0.0), 0.5, -0.5, 0.1);
-    var regions = RegionWeights(0.33, 0.34, 0.33);
+    // Default regions should be direction-dependent, so presets can start with any bounds
+    // opcode (SECTOR / SPLIT / SILHOUETTE / APERTURE) without requiring a leading RAMP.
+    var regions = compute_region_weights(dir, enc);
 
     var radiance = vec3f(0.0);
 

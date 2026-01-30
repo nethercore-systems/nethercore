@@ -125,10 +125,7 @@ Each environment is exactly **8 × 128-bit instructions** (128 bytes total). In 
 
 | Slot | Kind | Recommended Use |
 |------|------|------------------|
-| 0 | Enclosure | `RAMP` (base enclosure + region weights) |
-| 1 | Enclosure | `SECTOR` |
-| 2 | Enclosure | `SILHOUETTE` |
-| 3 | Enclosure | `SPLIT` / `CELL` / `PATCHES` / `APERTURE` |
+| 0–3 | Enclosure (bounds) | Any enclosure opcode (`0x01..0x07`). Common convention: start with `RAMP` to explicitly set `up/ceil/floor/softness`, then add `SECTOR`/`SILHOUETTE`/etc., but it is not required. |
 | 4–7 | Radiance | `DECAL` / `GRID` / `SCATTER` / `FLOW` + radiance ops (`0x0C..0x13`) |
 
 ---
@@ -193,8 +190,8 @@ This is the opcode number. Some opcodes use `meta5` for domain/variant selection
 | `0x0F` | `PLANE` | Radiance |
 | `0x10` | `CELESTIAL` | Radiance |
 | `0x11` | `PORTAL` | Radiance |
-| `0x12` | `LOBE_RADIANCE` | Radiance (region-masked) |
-| `0x13` | `BAND_RADIANCE` | Radiance (region-masked) |
+| `0x12` | `LOBE` | Radiance (region-masked) |
+| `0x13` | `BAND` | Radiance (region-masked) |
 
 For full per-opcode packing/algorithm details, see:
 - `nethercore-design/specs/epu-feature-catalog.md`
@@ -216,6 +213,10 @@ Regions are combinable using bitwise OR:
 | 5 | `0b101` | `SKY_FLOOR` | Sky + floor |
 | 3 | `0b011` | `WALLS_FLOOR` | Walls + floor |
 | 0 | `0b000` | `NONE` | Layer disabled |
+
+The region mask is consumed by feature/radiance opcodes: their contribution is multiplied by `region_weight(current_regions, mask)`.
+
+`current_regions` comes from the most recent enclosure (bounds) opcode; every bounds opcode outputs updated `RegionWeights` for subsequent layers. (Bounds opcodes do not use the region mask.)
 
 ---
 

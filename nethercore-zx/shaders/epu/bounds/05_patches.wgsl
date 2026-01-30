@@ -142,7 +142,8 @@ fn patches_axis_polar_uv(dir: vec3f, axis: vec3f) -> vec2f {
 fn eval_patches(
     dir: vec3f,
     instr: vec4u,
-) -> LayerSample {
+    base_regions: RegionWeights,
+) -> BoundsResult {
     // Decode axis from direction field
     let axis = decode_dir16(instr_dir16(instr));
 
@@ -160,14 +161,8 @@ fn eval_patches(
     var p: vec3f;
     switch domain_id {
         case 0u: {
-            // DIRECT3D: triplanar blending to avoid octahedral seams
-            let w = abs(dir);
-            let w3 = w * w * w;
-            let wn = w3 / (w3.x + w3.y + w3.z);
-            let px = vec3f(dir.y, dir.z, 0.0) * scale;
-            let py = vec3f(dir.x, dir.z, 0.0) * scale;
-            let pz = vec3f(dir.x, dir.y, 0.0) * scale;
-            p = px * wn.x + py * wn.y + pz * wn.z;
+            // DIRECT3D: use direction as a seam-free 3D coordinate.
+            p = dir * scale;
         }
         case 1u: {
             // AXIS_CYL: cylindrical UV mapping around axis
@@ -237,9 +232,18 @@ fn eval_patches(
         w = 1.0 - w;
     }
 
-    // Compute region weights: w_sky = 1 - w, w_wall = w, w_floor = 0
-    let w_sky = (1.0 - w) * sky_alpha;
-    let w_wall = w * wall_alpha;
+    // PATCHES generates a sky/wall pattern; preserve incoming floor weight.
+    // (RAMP/SPLIT/etc. define floor; PATCHES refines sky vs wall within non-floor.)
+    let floor_w = base_regions.floor;
+    let rem = 1.0 - floor_w;
+
+    // Geometric (region) weights: must sum to 1 within sky+wall.
+    let geo_sky = 1.0 - w;
+    let geo_wall = w;
+
+    // Radiance weights (can be alpha-scaled for blending)
+    let w_sky = geo_sky * sky_alpha;
+    let w_wall = geo_wall * wall_alpha;
 
     // Get colors
     let sky_color = instr_color_a(instr);
@@ -254,6 +258,13 @@ fn eval_patches(
         rgb = sky_color;
     }
 
-    // PATCHES is an enclosure source: return blended result
-    return LayerSample(rgb, epu_saturate(total_w));
+    // Output regions (sum to 1.0): floor preserved, sky/wall come from patch pattern.
+    let output_regions = RegionWeights(
+        geo_sky * rem,
+        geo_wall * rem,
+        floor_w
+    );
+
+    // PATCHES is an enclosure source: return radiance sample + output regions
+    return BoundsResult(LayerSample(rgb, epu_saturate(total_w)), output_regions);
 }

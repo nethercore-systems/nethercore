@@ -27,12 +27,10 @@ fn evaluate_bounds_layer(
             return eval_split(dir, instr, base_regions);
         }
         case OP_CELL: {
-            // CELL doesn't modify regions
-            return BoundsResult(eval_cell(dir, instr), base_regions);
+            return eval_cell(dir, instr, base_regions);
         }
         case OP_PATCHES: {
-            // PATCHES doesn't modify regions
-            return BoundsResult(eval_patches(dir, instr), base_regions);
+            return eval_patches(dir, instr, base_regions);
         }
         case OP_APERTURE: {
             return eval_aperture(dir, instr, enc, base_regions);

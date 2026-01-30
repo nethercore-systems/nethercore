@@ -326,10 +326,16 @@ fn enclosure_from_layer(instr: vec4u, opcode: u32, prev_enc: EnclosureConfig) ->
             let up = decode_dir16(instr_dir16(instr));
             return EnclosureConfig(up, prev_enc.ceil_y, prev_enc.floor_y, prev_enc.soft);
         }
-        case OP_SECTOR, OP_SILHOUETTE, OP_APERTURE: {
-            // These modifiers use the direction as up axis
+        case OP_SECTOR, OP_SILHOUETTE: {
+            // These modifiers use the direction as the enclosure up axis.
             let up = decode_dir16(instr_dir16(instr));
             return EnclosureConfig(up, prev_enc.ceil_y, prev_enc.floor_y, prev_enc.soft);
+        }
+        case OP_APERTURE: {
+            // APERTURE's direction is the aperture center direction (see `06_aperture.wgsl`),
+            // not the enclosure up axis. If we treat it as `up`, subsequent feature layers will
+            // classify regions against the wrong axis (causing hard half-screen splits).
+            return prev_enc;
         }
         default: {
             // Other bounds keep the previous enclosure

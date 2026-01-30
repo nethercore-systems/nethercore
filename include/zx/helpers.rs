@@ -1,6 +1,9 @@
 //! Helper Functions
 
-use super::{draw_text, log, rom_data_len, rom_font, rom_keyframes, rom_mesh, rom_skeleton, rom_sound, rom_texture, rom_tracker};
+use super::{
+    draw_text, log, rom_data_len, rom_font, rom_keyframes, rom_mesh, rom_skeleton, rom_sound,
+    rom_texture, rom_tracker,
+};
 
 /// Helper to log a string slice.
 ///

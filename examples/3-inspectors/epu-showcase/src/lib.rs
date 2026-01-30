@@ -65,7 +65,8 @@ static mut TORUS_MESH: u32 = 0;
 static mut CUBE_MESH: u32 = 0;
 static mut SHAPE_INDEX: i32 = 0;
 static mut MATERIAL_METALLIC_U8: i32 = 255; // ~1 * 255
-static mut MATERIAL_ROUGHNESS_U8: i32 = 128; // ~0.50 * 255
+static mut MATERIAL_ROUGHNESS_U8: i32 = 96; // ~0.38 * 255
+static mut SHOW_UI: bool = true;
 
 const SHAPE_COUNT: i32 = 3;
 const SHAPE_NAMES: [&str; 3] = ["Sphere", "Cube", "Torus"];
@@ -80,7 +81,8 @@ pub extern "C" fn init() {
         set_clear_color(0x000000FF);
 
         // Generate meshes for the scene
-        SPHERE_MESH = sphere(1.0, 32, 24);
+        // Slightly larger so reflections are readable in screenshots.
+        SPHERE_MESH = sphere(1.3, 32, 24);
         CUBE_MESH = cube(1.2, 1.2, 1.2);
         TORUS_MESH = torus(1.0, 0.4, 32, 16);
 
@@ -163,6 +165,11 @@ pub extern "C" fn update() {
             SHAPE_INDEX = (SHAPE_INDEX + 1) % SHAPE_COUNT;
         }
 
+        // Toggle UI overlay (useful for clean screenshot captures)
+        if button_pressed(0, button::Y) != 0 {
+            SHOW_UI = !SHOW_UI;
+        }
+
         // Camera control via left stick
         let stick_x = left_stick_x(0);
         let stick_y = left_stick_y(0);
@@ -208,7 +215,7 @@ pub extern "C" fn render() {
 
         // Draw a shape to show lighting from the environment
         push_identity();
-        set_color(0x888899FF);
+        set_color(0xAAAAAAFF);
         material_metallic((MATERIAL_METALLIC_U8 as f32) / 255.0);
         material_roughness((MATERIAL_ROUGHNESS_U8 as f32) / 255.0);
 
@@ -223,7 +230,9 @@ pub extern "C" fn render() {
         draw_epu();
 
         // Draw UI overlay
-        draw_ui();
+        if SHOW_UI {
+            draw_ui();
+        }
     }
 }
 
@@ -299,7 +308,7 @@ unsafe fn draw_ui() {
     );
 
     // Instructions
-    let hint1 = b"A/B: Cycle presets | X: Cycle shapes";
+    let hint1 = b"A/B: Cycle presets | X: Cycle shapes | Y: Toggle UI";
     set_color(0x888888FF);
     draw_text(hint1.as_ptr(), hint1.len() as u32, 10.0, 94.0, 14.0);
 

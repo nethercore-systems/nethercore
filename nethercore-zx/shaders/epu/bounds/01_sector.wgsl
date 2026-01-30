@@ -48,8 +48,9 @@ fn eval_sector(
 
     // Compute opening weight with smoothstep falloff
     // smoothstep(width, 0, dist) = 1 at center, 0 at edge
+    // Guard against undefined smoothstep(edge0==edge1) when width is authored as 0.
     let half_width = width * 0.5;
-    let open_base = smoothstep(half_width, 0.0, dist) * intensity;
+    let open_base = select(smoothstep(half_width, 0.0, dist) * intensity, 0.0, half_width < 1e-6);
 
     // Use baseline region weights passed in
     let baseline = base_regions;

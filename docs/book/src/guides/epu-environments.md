@@ -96,7 +96,7 @@ The EPU uses a 128-byte instruction-based configuration:
 
 | Opcode | Name | Best For | Notes |
 |--------|------|----------|-------|
-| 0x01 | RAMP | Base enclosure | Slot 0 recommended |
+| 0x01 | RAMP | Base enclosure | Often used first to explicitly set `up/ceil/floor/softness`, but any bounds opcode can be layer 0. |
 | 0x02 | SECTOR | Opening wedge / interior cues | Enclosure modifier |
 | 0x03 | SILHOUETTE | Skyline / horizon cutout | Enclosure modifier |
 | 0x04 | SPLIT | Geometric divisions | Enclosure |
@@ -104,8 +104,8 @@ The EPU uses a 128-byte instruction-based configuration:
 | 0x09 | GRID | Panels, architectural lines | Radiance |
 | 0x0A | SCATTER | Stars, dust, particles | Radiance |
 | 0x0B | FLOW | Clouds, rain, caustics | Radiance |
-| 0x12 | LOBE_RADIANCE | Sun glow, lamps, neon spill | Radiance |
-| 0x13 | BAND_RADIANCE | Horizon bands / rings | Radiance |
+| 0x12 | LOBE | Sun glow, lamps, neon spill | Radiance |
+| 0x13 | BAND | Horizon bands / rings | Radiance |
 
 ---
 
@@ -119,9 +119,16 @@ The EPU uses a 128-byte instruction-based configuration:
 
 | Slot | Kind | Recommended Use |
 |------|------|------------------|
-| 0 | Enclosure | `RAMP` (base enclosure + region weights) |
-| 1-3 | Enclosure | `SECTOR` / `SILHOUETTE` / `SPLIT` / `CELL` / `PATCHES` / `APERTURE` |
+| 0-3 | Enclosure (bounds) | Any enclosure opcode (`0x01..0x07`). Common convention is `RAMP` first, not a requirement. |
 | 4-7 | Radiance | `DECAL` / `GRID` / `SCATTER` / `FLOW` + radiance ops (`0x0C..0x13`) |
+
+### Bounds/Feature Cadence (Don\'t Waste Slots)
+
+Bounds opcodes don\'t just draw color; they also rewrite the **region weights** (`SKY/WALLS/FLOOR`) that later feature opcodes use for masking.
+
+- Avoid stacking multiple "plain bounds" layers back-to-back (e.g. `RAMP -> SILHOUETTE`) unless you immediately exploit the new regions with feature layers.
+- Prefer a cadence like: `BOUNDS (define/reshape regions) -> FEATURES (use regions) -> BOUNDS (carve/retag: APERTURE/SPLIT) -> FEATURES (decorate + animate)`.
+- If you insert a bounds opcode later in the 8-layer program, it only affects features **after** it (it cannot retroactively re-mask earlier features).
 
 ### meta5 Behavior
 

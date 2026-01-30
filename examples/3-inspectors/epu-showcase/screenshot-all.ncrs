@@ -2,6 +2,11 @@ console = "zx"
 seed = 0
 players = 1
 
+# Toggle UI off for clean screenshots
+[[frames]]
+f = 1
+p1 = "y"
+
 # Preset 1 (index 0) — starts here
 [[frames]]
 f = 9
@@ -86,130 +91,4 @@ p1 = "a"
 
 [[frames]]
 f = 108
-screenshot = true
-
-# Advance to preset 11
-[[frames]]
-f = 109
-p1 = "a"
-
-[[frames]]
-f = 119
-screenshot = true
-
-# Advance to preset 12
-[[frames]]
-f = 120
-p1 = "a"
-
-[[frames]]
-f = 130
-screenshot = true
-
-# Advance to preset 13
-[[frames]]
-f = 131
-p1 = "a"
-
-[[frames]]
-f = 141
-screenshot = true
-
-# Advance to preset 14
-[[frames]]
-f = 142
-p1 = "a"
-
-[[frames]]
-f = 152
-screenshot = true
-
-# Advance to preset 15
-[[frames]]
-f = 153
-p1 = "a"
-
-[[frames]]
-f = 163
-screenshot = true
-
-# Advance to preset 16
-[[frames]]
-f = 164
-p1 = "a"
-
-[[frames]]
-f = 174
-screenshot = true
-
-# Advance to preset 17
-[[frames]]
-f = 175
-p1 = "a"
-
-[[frames]]
-f = 185
-screenshot = true
-
-# Advance to preset 18
-[[frames]]
-f = 186
-p1 = "a"
-
-[[frames]]
-f = 196
-screenshot = true
-
-# Advance to preset 19
-[[frames]]
-f = 197
-p1 = "a"
-
-[[frames]]
-f = 207
-screenshot = true
-
-# Advance to preset 20
-[[frames]]
-f = 208
-p1 = "a"
-
-[[frames]]
-f = 218
-screenshot = true
-
-# Advance to preset 21
-[[frames]]
-f = 219
-p1 = "a"
-
-[[frames]]
-f = 229
-screenshot = true
-
-# Advance to preset 22
-[[frames]]
-f = 230
-p1 = "a"
-
-[[frames]]
-f = 240
-screenshot = true
-
-# Advance to preset 23
-[[frames]]
-f = 241
-p1 = "a"
-
-[[frames]]
-f = 251
-screenshot = true
-
-# Advance to preset 24
-[[frames]]
-f = 252
-p1 = "a"
-
-[[frames]]
-f = 262
 screenshot = true
