@@ -183,24 +183,25 @@ fn eval_silhouette(
     // Convert v01 to y-threshold space
     let y_equiv = v01 * 2.0 - 1.0;
 
-    // Silhouette mask: 1.0 where below silhouette line (sky becomes wall)
-    let wall_from_sky = smoothstep(h + softness, h - softness, y_equiv);
+    // Compute signed distance from horizon
+    let d = h - y_equiv;  // negative above horizon (sky), positive below (floor)
 
-    // Apply strength
-    let effect = wall_from_sky * strength;
+    // Compute full regions from signed distance
+    let regions_full = regions_from_signed_distance(d, softness);
 
-    // Modify regions: silhouette converts sky->wall below the horizon line
-    let sky_to_wall = effect * base_regions.sky;
-    let modified_regions = RegionWeights(
-        base_regions.sky - sky_to_wall,
-        base_regions.wall + sky_to_wall,
-        base_regions.floor
+    // Strength blends from all-sky (strength=0) to full silhouette (strength=1)
+    let regions = RegionWeights(
+        mix(1.0, regions_full.sky, strength),
+        mix(0.0, regions_full.wall, strength),
+        mix(0.0, regions_full.floor, strength)
     );
 
-    // Get colors and render
+    // Get colors and render all 3 regions
     let silhouette_color = instr_color_a(instr);
     let background_color = instr_color_b(instr);
-    let rgb = mix(background_color, silhouette_color, effect);
+    let floor_color = silhouette_color * 0.5;  // Darken silhouette color for floor
 
-    return BoundsResult(LayerSample(rgb, 1.0), modified_regions);
+    let rgb = background_color * regions.sky + silhouette_color * regions.wall + floor_color * regions.floor;
+
+    return BoundsResult(LayerSample(rgb, 1.0), regions);
 }
