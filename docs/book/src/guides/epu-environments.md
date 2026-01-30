@@ -83,10 +83,10 @@ The EPU uses a 128-byte instruction-based configuration:
 
 | Slot | Kind | Recommended Use |
 |------|------|------------------|
-| 0–3 | Enclosure | `RAMP` + optional enclosure ops (`0x02..0x07`) |
+| 0–3 | Bounds | `RAMP` + optional bounds ops (`0x02..0x07`) |
 | 4–7 | Radiance | `DECAL`/`GRID`/`SCATTER`/`FLOW` + radiance ops (`0x0C..0x13`) |
 
-**Enclosure** defines the low-frequency envelope and region weights (sky/walls/floor).
+**Bounds** defines the low-frequency envelope and region weights (sky/walls/floor).
 
 **Radiance** adds higher-frequency motifs (decals, grids, stars, clouds, etc.).
 
@@ -96,10 +96,10 @@ The EPU uses a 128-byte instruction-based configuration:
 
 | Opcode | Name | Best For | Notes |
 |--------|------|----------|-------|
-| 0x01 | RAMP | Base enclosure | Often used first to explicitly set `up/ceil/floor/softness`, but any bounds opcode can be layer 0. |
-| 0x02 | SECTOR | Opening wedge / interior cues | Enclosure modifier |
-| 0x03 | SILHOUETTE | Skyline / horizon cutout | Enclosure modifier |
-| 0x04 | SPLIT | Geometric divisions | Enclosure |
+| 0x01 | RAMP | Base bounds | Often used first to explicitly set `up/ceil/floor/softness`, but any bounds opcode can be layer 0. |
+| 0x02 | SECTOR | Opening wedge / interior cues | Bounds modifier |
+| 0x03 | SILHOUETTE | Skyline / horizon cutout | Bounds modifier |
+| 0x04 | SPLIT | Geometric divisions | Bounds |
 | 0x08 | DECAL | Sun disks, signage, portals | Radiance |
 | 0x09 | GRID | Panels, architectural lines | Radiance |
 | 0x0A | SCATTER | Stars, dust, particles | Radiance |
@@ -119,7 +119,7 @@ The EPU uses a 128-byte instruction-based configuration:
 
 | Slot | Kind | Recommended Use |
 |------|------|------------------|
-| 0-3 | Enclosure (bounds) | Any enclosure opcode (`0x01..0x07`). Common convention is `RAMP` first, not a requirement. |
+| 0-3 | Bounds | Any bounds opcode (`0x01..0x07`). Common convention is `RAMP` first, not a requirement. |
 | 4-7 | Radiance | `DECAL` / `GRID` / `SCATTER` / `FLOW` + radiance ops (`0x0C..0x13`) |
 
 ### Bounds/Feature Cadence (Don\'t Waste Slots)

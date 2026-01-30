@@ -25,7 +25,7 @@ The system is designed around these hard constraints:
 | Constraint | Value |
 |------------|-------|
 | Config size | 128 bytes per environment state |
-| Layer count | 8 instructions (4 Enclosure + 4 Radiance) |
+| Layer count | 8 instructions (4 Bounds + 4 Radiance) |
 | Instruction size | 128 bits (two u64 values) |
 | Cubemaps | None (fully procedural octahedral maps) |
 | Mipmaps | Yes (compute-generated downsample pyramid) |
@@ -68,7 +68,7 @@ Each environment is exactly **8 x 128-bit instructions**:
 
 | Slot | Kind | Recommended Use |
 |------|------|-----------------|
-| 0-3 | Enclosure (bounds) | Any enclosure opcode (`0x01..0x07`). Any bounds opcode can be first; each bounds layer outputs `RegionWeights` consumed by later feature/radiance layers. |
+| 0-3 | Bounds | Any bounds opcode (`0x01..0x07`). Any bounds opcode can be first; each bounds layer outputs `RegionWeights` consumed by later feature/radiance layers. |
 | 4-7 | Radiance | `DECAL` / `GRID` / `SCATTER` / `FLOW` + radiance ops (`0x0C..0x13`) |
 
 Implementation note: in the shaders, bounds opcodes return `(sample, regions)`. Dispatch updates `regions` after every bounds layer, and feature layers apply region masking using the current regions.
@@ -104,13 +104,13 @@ bits 3..0:     alpha_b    (4)  - color_b alpha (0-15)
 | Opcode | Name | Kind | Purpose |
 |--------|------|------|---------|
 | `0x00` | `NOP` | Any | Disable layer |
-| `0x01` | `RAMP` | Enclosure | Enclosure gradient (sky/walls/floor) |
-| `0x02` | `SECTOR` | Enclosure | Azimuthal opening wedge modifier |
-| `0x03` | `SILHOUETTE` | Enclosure | Skyline/horizon cutout modifier |
-| `0x04` | `SPLIT` | Enclosure | Geometric divisions |
-| `0x05` | `CELL` | Enclosure | Voronoi/mosaic cells |
-| `0x06` | `PATCHES` | Enclosure | Noise patches |
-| `0x07` | `APERTURE` | Enclosure | Shaped opening/viewport |
+| `0x01` | `RAMP` | Bounds | Bounds gradient (sky/walls/floor) |
+| `0x02` | `SECTOR` | Bounds | Azimuthal opening wedge modifier |
+| `0x03` | `SILHOUETTE` | Bounds | Skyline/horizon cutout modifier |
+| `0x04` | `SPLIT` | Bounds | Geometric divisions |
+| `0x05` | `CELL` | Bounds | Voronoi/mosaic cells |
+| `0x06` | `PATCHES` | Bounds | Noise patches |
+| `0x07` | `APERTURE` | Bounds | Shaped opening/viewport |
 | `0x08` | `DECAL` | Radiance | Sharp SDF shape (disk/ring/rect/line) |
 | `0x09` | `GRID` | Radiance | Repeating lines/panels |
 | `0x0A` | `SCATTER` | Radiance | Point field (stars/dust/bubbles) |

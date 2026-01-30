@@ -125,7 +125,7 @@ Each environment is exactly **8 × 128-bit instructions** (128 bytes total). In 
 
 | Slot | Kind | Recommended Use |
 |------|------|------------------|
-| 0–3 | Enclosure (bounds) | Any enclosure opcode (`0x01..0x07`). Common convention: start with `RAMP` to explicitly set `up/ceil/floor/softness`, then add `SECTOR`/`SILHOUETTE`/etc., but it is not required. |
+| 0–3 | Bounds | Any bounds opcode (`0x01..0x07`). Common convention: start with `RAMP` to explicitly set `up/ceil/floor/softness`, then add `SECTOR`/`SILHOUETTE`/etc., but it is not required. |
 | 4–7 | Radiance | `DECAL` / `GRID` / `SCATTER` / `FLOW` + radiance ops (`0x0C..0x13`) |
 
 ---
@@ -173,13 +173,13 @@ This is the opcode number. Some opcodes use `meta5` for domain/variant selection
 | Code | Name | Notes |
 |---|---|---|
 | `0x00` | `NOP` | Disable layer |
-| `0x01` | `RAMP` | Enclosure gradient |
-| `0x02` | `SECTOR` | Enclosure modifier |
-| `0x03` | `SILHOUETTE` | Enclosure modifier |
-| `0x04` | `SPLIT` | Enclosure |
-| `0x05` | `CELL` | Enclosure |
-| `0x06` | `PATCHES` | Enclosure |
-| `0x07` | `APERTURE` | Enclosure |
+| `0x01` | `RAMP` | Bounds gradient |
+| `0x02` | `SECTOR` | Bounds modifier |
+| `0x03` | `SILHOUETTE` | Bounds modifier |
+| `0x04` | `SPLIT` | Bounds |
+| `0x05` | `CELL` | Bounds |
+| `0x06` | `PATCHES` | Bounds |
+| `0x07` | `APERTURE` | Bounds |
 | `0x08` | `DECAL` | Radiance |
 | `0x09` | `GRID` | Radiance |
 | `0x0A` | `SCATTER` | Radiance |
@@ -216,7 +216,7 @@ Regions are combinable using bitwise OR:
 
 The region mask is consumed by feature/radiance opcodes: their contribution is multiplied by `region_weight(current_regions, mask)`.
 
-`current_regions` comes from the most recent enclosure (bounds) opcode; every bounds opcode outputs updated `RegionWeights` for subsequent layers. (Bounds opcodes do not use the region mask.)
+`current_regions` comes from the most recent bounds opcode; every bounds opcode outputs updated `RegionWeights` for subsequent layers. (Bounds opcodes do not use the region mask.)
 
 ---
 
