@@ -1,5 +1,5 @@
 // ============================================================================
-// SECTOR - Angular Wedge Enclosure Modifier (0x02)
+// SECTOR - Angular Wedge Enclosure (0x02)
 // 128-bit packed fields:
 //   color_a: Sky/opening color (RGB24)
 //   color_b: Wall color (RGB24)
@@ -11,15 +11,16 @@
 //   direction: Up axis (oct-u16), should match RAMP.up
 //   variant_id: 0 BOX, 1 TUNNEL, 2 CAVE (from meta5)
 //
-// SECTOR creates an azimuthal opening in the enclosure, promoting wall regions
-// to sky within the opening sector. This signals "not a perfect sphere" for
-// interiors, tunnels, and cave mouths.
+// SECTOR defines a 3-band sky/wall/floor split based on wedge geometry:
+//   - Sky (opening): inside the wedge
+//   - Wall (edge): the wedge boundary band
+//   - Floor (outside): outside the wedge
 // ============================================================================
 
 fn eval_sector(
     dir: vec3f,
     instr: vec4u,
-    base_regions: RegionWeights,
+    base_regions: RegionWeights,  // Kept for interface compatibility, but unused
 ) -> BoundsResult {
     // Decode up axis from direction field
     let up = decode_dir16(instr_dir16(instr));
@@ -45,51 +46,65 @@ fn eval_sector(
     let d0 = abs(u01 - center_u01);
     let dist = min(d0, 1.0 - d0);
 
-    // Compute opening weight with smoothstep falloff
-    // smoothstep(width, 0, dist) = 1 at center, 0 at edge
-    // Guard against undefined smoothstep(edge0==edge1) when width is authored as 0.
+    // Half-width of the opening wedge
     let half_width = width * 0.5;
-    let open_base = select(smoothstep(half_width, 0.0, dist) * intensity, 0.0, half_width < 1e-6);
 
-    // Use baseline region weights passed in
-    let baseline = base_regions;
+    // Compute signed distance: negative inside wedge, positive outside
+    let d = dist - half_width;
 
-    // Apply variant shaping
+    // Band width for smooth transitions
+    let bw = max(0.01, half_width * 0.25);
+
+    // Compute base regions from signed distance (independent of base_regions)
+    let regions_open = regions_from_signed_distance(d, bw);
+
+    // Blend "no opening" -> "full opening" using intensity.
+    // When intensity=0: all floor (closed)
+    // When intensity=1: regions_open (full opening)
+    let regions_closed = RegionWeights(0.0, 0.0, 1.0);
+    let regions = RegionWeights(
+        mix(regions_closed.sky, regions_open.sky, intensity),
+        mix(regions_closed.wall, regions_open.wall, intensity),
+        mix(regions_closed.floor, regions_open.floor, intensity)
+    );
+
+    // Apply variant shaping to the region weights
     let variant = instr_variant_id(instr);
-    var open = open_base;
+    var output_regions = regions;
 
     switch variant {
         case 0u: {
-            // BOX: uniform opening (no vertical modulation)
+            // BOX: uniform opening (no modification needed)
         }
         case 1u: {
-            // TUNNEL: boost opening in wall region
-            open = open_base * (1.0 + baseline.wall * 0.5);
+            // TUNNEL: enhanced opening in wall-like areas (horizontal directions)
+            let y = abs(dot(dir, up));
+            let horiz_bias = 1.0 - y; // More horizontal = more opening
+            let boost = horiz_bias * 0.5;
+            output_regions = RegionWeights(
+                min(1.0, regions.sky * (1.0 + boost)),
+                max(0.0, regions.wall - regions.sky * boost),
+                regions.floor
+            );
         }
         case 2u: {
             // CAVE: opening biased downward
             let y = dot(dir, up);
             let down_bias = smoothstep(0.5, -0.5, y);
-            open = open_base * down_bias;
+            output_regions = RegionWeights(
+                regions.sky * down_bias,
+                regions.wall * down_bias,
+                regions.floor + (regions.sky + regions.wall) * (1.0 - down_bias)
+            );
         }
         default: {}
     }
 
-    // Clamp open to [0,1] to prevent negative wall weight (TUNNEL can exceed 1.0)
-    open = min(open, 1.0);
-
-    // Compute modified region weights (wall -> sky in opening)
-    let opening_mask = open * baseline.wall;
-    let modified_regions = RegionWeights(
-        baseline.sky + opening_mask,
-        baseline.wall - opening_mask,
-        baseline.floor
-    );
-
-    // Get colors and render
+    // Get colors and render with 3-band split
     let sky_color = instr_color_a(instr);
     let wall_color = instr_color_b(instr);
-    let rgb = sky_color * modified_regions.sky + wall_color * modified_regions.wall + wall_color * 0.5 * modified_regions.floor;
+    let floor_color = wall_color * 0.5;
+    let rgb = sky_color * output_regions.sky + wall_color * output_regions.wall + floor_color * output_regions.floor;
 
-    return BoundsResult(LayerSample(rgb, 1.0), modified_regions);
+    return BoundsResult(LayerSample(rgb, 1.0), output_regions);
 }
