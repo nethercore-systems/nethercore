@@ -95,6 +95,9 @@ static mut SHOW_HINTS: u8 = 1;       // bool
 /// Track previous layer index for change detection
 static mut PREV_LAYER_INDEX: u8 = 1;
 
+/// Mesh handle for reference object
+static mut SPHERE_MESH: u32 = 0;
+
 // ============================================================================
 // Pack/Unpack Helpers
 // ============================================================================
@@ -355,6 +358,9 @@ pub extern "C" fn init() {
         // Unpack layer 0 into editor state
         unpack_layer(LAYERS[0][0], LAYERS[0][1]);
 
+        // Create reference mesh
+        SPHERE_MESH = sphere(1.5, 32, 16);
+
         // Register debug panel
         register_debug_panel();
     }
@@ -387,7 +393,61 @@ pub extern "C" fn update() {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
+        // Set camera
         camera_set(0.0, 0.0, 5.0, 0.0, 0.0, 0.0);
+        camera_fov(60.0);
+
+        // Build EPU config for rendering
+        if ISOLATE_LAYER != 0 {
+            // Isolation mode: only show selected layer
+            let mut isolated: [[u64; 2]; 8] = [[0; 2]; 8];
+            let idx = (LAYER_INDEX - 1) as usize;
+            isolated[idx] = LAYERS[idx];
+            epu_set(isolated.as_ptr() as *const u64);
+        } else {
+            // Full composition
+            epu_set(LAYERS.as_ptr() as *const u64);
+        }
+
+        // Draw reference mesh
+        push_identity();
+        set_color(0xFFFFFFFF);
+        draw_mesh(SPHERE_MESH);
+
+        // Draw environment
         draw_epu();
+
+        // Draw UI overlay
+        draw_ui();
     }
+}
+
+unsafe fn draw_ui() {
+    // Title
+    let title = b"EPU Inspector";
+    set_color(0xFFFFFFFF);
+    draw_text(title.as_ptr(), title.len() as u32, 10.0, 10.0, 20.0);
+
+    // Layer indicator
+    let mut layer_text = [0u8; 16];
+    layer_text[0..7].copy_from_slice(b"Layer: ");
+    layer_text[7] = b'0' + LAYER_INDEX;
+    set_color(0xCCCCCCFF);
+    draw_text(layer_text.as_ptr(), 8, 10.0, 35.0, 16.0);
+
+    // Isolation indicator
+    if ISOLATE_LAYER != 0 {
+        let iso = b"[ISOLATED]";
+        set_color(0xFFFF00FF);
+        draw_text(iso.as_ptr(), iso.len() as u32, 100.0, 35.0, 16.0);
+    }
+
+    // Hints (placeholder - will be implemented in Task 7)
+    if SHOW_HINTS != 0 {
+        draw_hints();
+    }
+}
+
+unsafe fn draw_hints() {
+    // Placeholder - will be implemented in Task 7
 }
