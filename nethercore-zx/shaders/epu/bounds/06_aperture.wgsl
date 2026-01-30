@@ -165,17 +165,16 @@ fn eval_aperture(
     let param_d_raw = instr_d(instr);
     let variant = instr_variant_id(instr);
 
-    // Use baseline region weights passed in
-    let baseline = base_regions;
-
     // Avoid a hard hemisphere cutoff at dot(dir, center_dir) == 0.
     // Fade the aperture influence out near the horizon, and keep it strictly
     // zero on the back hemisphere to prevent great-circle seams.
     let d_raw = dot(dir, center_dir);
     let horizon_fade = 0.06;
     let front_w = smoothstep(0.0, horizon_fade, d_raw);
+
+    // On back hemisphere, return all-sky (aperture only affects front)
     if front_w <= 0.0 {
-        return BoundsResult(LayerSample(vec3f(0.0), 0.0), baseline);
+        return BoundsResult(LayerSample(vec3f(0.0), 0.0), RegionWeights(1.0, 0.0, 0.0));
     }
 
     // Clamp for projection stability (prevents division blow-ups near the horizon).
@@ -249,32 +248,34 @@ fn eval_aperture(
     // Keep zone weights normalized.
     let outside_w0 = clamp(1.0 - opening_w0 - frame_w0, 0.0, 1.0);
 
-    // Region outputs (bounds): inside the opening becomes SKY; the frame becomes WALLS.
-    // Outside the aperture keeps the baseline region weights.
-    let w_sky_front = baseline.sky * outside_w0 + opening_w0;
-    let w_wall_front = baseline.wall * outside_w0 + frame_w0;
-    let w_floor_front = baseline.floor * outside_w0;
+    // Compute regions directly from SDF geometry:
+    // - opening_w0: inside the aperture hole (sky)
+    // - frame_w0: the frame band (wall)
+    // - outside_w0: outside the aperture (floor)
+    let regions_front = RegionWeights(opening_w0, frame_w0, outside_w0);
 
-    let w_sky = mix(baseline.sky, w_sky_front, front_w);
-    let w_wall = mix(baseline.wall, w_wall_front, front_w);
-    let w_floor = mix(baseline.floor, w_floor_front, front_w);
+    // On back hemisphere (front_w < 1), fade to all-sky
+    let regions = RegionWeights(
+        mix(1.0, regions_front.sky, front_w),
+        mix(0.0, regions_front.wall, front_w),
+        mix(0.0, regions_front.floor, front_w)
+    );
 
     // Get colors
     let opening_color = instr_color_a(instr);  // Sky through opening
     let frame_color = instr_color_b(instr);    // Frame/wall color
+    let floor_color = frame_color * 0.5;       // Darken frame color for outside
 
-    // IMPORTANT: Do not tint the full sphere outside the aperture.
-    // Only draw the opening/frame itself; outside stays whatever prior bounds already produced.
-    let zone_w = opening_w0 + frame_w0;
+    // Blend all three zones
+    let zone_w = opening_w0 + frame_w0 + outside_w0;  // Should be ~1.0
     let zone_rgb = select(
         vec3f(0.0),
-        (opening_color * opening_w0 + frame_color * frame_w0) / zone_w,
+        (opening_color * opening_w0 + frame_color * frame_w0 + floor_color * outside_w0) / zone_w,
         zone_w > 1e-5
     );
     let rgb = zone_rgb;
     let a = epu_saturate(zone_w * front_w);
 
-    // Output modified regions
-    let output_regions = RegionWeights(w_sky, w_wall, w_floor);
-    return BoundsResult(LayerSample(rgb, a), output_regions);
+    // Output regions computed from SDF geometry
+    return BoundsResult(LayerSample(rgb, a), regions);
 }
