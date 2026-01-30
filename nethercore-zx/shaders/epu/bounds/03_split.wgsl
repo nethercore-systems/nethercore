@@ -31,30 +31,22 @@ fn split_rotate_around_axis(v: vec3f, axis: vec3f, angle: f32) -> vec3f {
 }
 
 // HALF variant (0): Single plane dividing space in two
-fn split_half(dir: vec3f, n0: vec3f, bw: f32) -> vec2f {
-    let signed_dist = dot(dir, n0);
-    let w_sky = smoothstep(-bw, bw, signed_dist);
-    let w_wall = 1.0 - w_sky;
-    return vec2f(w_sky, w_wall);
+fn split_half(dir: vec3f, n0: vec3f, bw: f32) -> RegionWeights {
+    let d = -dot(dir, n0);  // Negative on positive side of plane (sky)
+    return regions_from_signed_distance(d, bw);
 }
 
 // WEDGE variant (1): Two planes at configurable angle creating a wedge
-fn split_wedge(dir: vec3f, n0: vec3f, basis: mat3x3f, wedge_angle: f32, bw: f32) -> vec2f {
-    // n1 is n0 rotated by wedge_angle around the b axis
+fn split_wedge(dir: vec3f, n0: vec3f, basis: mat3x3f, wedge_angle: f32, bw: f32) -> RegionWeights {
     let b_axis = basis[1];
     let n1 = split_rotate_around_axis(n0, b_axis, wedge_angle);
 
-    // Inside wedge: positive side of n0 AND negative side of n1
     let d0 = dot(dir, n0);
-    let d1 = dot(dir, n1);
+    let d1 = -dot(dir, n1);  // Negative for inside
 
-    let in_n0 = smoothstep(-bw, bw, d0);
-    let in_n1 = smoothstep(bw, -bw, d1);  // Inverted for negative side
-    let in_wedge = in_n0 * in_n1;
-
-    let w_sky = in_wedge;
-    let w_wall = 1.0 - in_wedge;
-    return vec2f(w_sky, w_wall);
+    // Signed distance: negative inside wedge, positive outside
+    let inside = min(d0, d1);
+    return regions_from_signed_distance(-inside, bw);
 }
 
 // CORNER variant (2): Three orthogonal planes creating an octant region
@@ -83,38 +75,23 @@ fn split_corner(dir: vec3f, n0: vec3f, basis: mat3x3f, bw: f32) -> vec3f {
 }
 
 // BANDS variant (3): Repeating parallel planes creating stripes
-fn split_bands(dir: vec3f, n0: vec3f, band_count: f32, band_offset: f32, bw: f32) -> vec2f {
-    // Project direction onto normal and map to [0, 1]
+fn split_bands(dir: vec3f, n0: vec3f, band_count: f32, band_offset: f32, bw: f32) -> RegionWeights {
     let u = dot(dir, n0) * 0.5 + 0.5 + band_offset;
-
-    // Create repeating stripe pattern
     let stripe = fract(u * band_count);
-
-    // Smooth transition at 0.5 boundary
-    let w_sky = smoothstep(0.5 - bw * band_count, 0.5 + bw * band_count, stripe);
-    let w_wall = 1.0 - w_sky;
-    return vec2f(w_sky, w_wall);
+    // Distance from center of stripe (0.5)
+    let d = stripe - 0.5;  // Ranges -0.5 to 0.5
+    return regions_from_signed_distance(d, bw * band_count);
 }
 
 // CROSS variant (4): Two perpendicular planes creating quadrants
-fn split_cross(dir: vec3f, n0: vec3f, basis: mat3x3f, bw: f32) -> vec2f {
+fn split_cross(dir: vec3f, n0: vec3f, basis: mat3x3f, bw: f32) -> RegionWeights {
     let t_axis = basis[0];
-
     let q0 = dot(dir, n0);
     let q1 = dot(dir, t_axis);
 
-    // Diagonal quadrants: same sign on both axes
-    // Use smooth interpolation near axes for AA
-    let s0 = smoothstep(-bw, bw, q0);
-    let s1 = smoothstep(-bw, bw, q1);
-
-    // same_sign = (q0 > 0 && q1 > 0) || (q0 < 0 && q1 < 0)
-    // Using smoothstep: s0*s1 + (1-s0)*(1-s1) = 2*s0*s1 - s0 - s1 + 1
-    let same_sign = s0 * s1 + (1.0 - s0) * (1.0 - s1);
-
-    let w_sky = same_sign;
-    let w_wall = 1.0 - same_sign;
-    return vec2f(w_sky, w_wall);
+    // Product is positive when same sign (diagonal quadrants)
+    let d = -q0 * q1;  // Negative for "same sign" quadrants (sky)
+    return regions_from_signed_distance(d, bw);
 }
 
 // PRISM variant (5): Three planes at 120 degrees creating triangular prism regions
@@ -202,17 +179,17 @@ fn eval_split(
     switch variant {
         case 0u: {
             // HALF: Single plane dividing space in two
-            let weights = split_half(dir, n0, bw);
-            w_sky = weights.x;
-            w_wall = weights.y;
-            w_floor = 0.0;
+            let regions = split_half(dir, n0, bw);
+            w_sky = regions.sky;
+            w_wall = regions.wall;
+            w_floor = regions.floor;
         }
         case 1u: {
             // WEDGE: Two planes creating a wedge/slice
-            let weights = split_wedge(dir, n0, basis, wedge_angle, bw);
-            w_sky = weights.x;
-            w_wall = weights.y;
-            w_floor = 0.0;
+            let regions = split_wedge(dir, n0, basis, wedge_angle, bw);
+            w_sky = regions.sky;
+            w_wall = regions.wall;
+            w_floor = regions.floor;
         }
         case 2u: {
             // CORNER: Three planes creating octant regions
@@ -223,17 +200,17 @@ fn eval_split(
         }
         case 3u: {
             // BANDS: Repeating parallel planes creating stripes
-            let weights = split_bands(dir, n0, band_count, band_offset, bw);
-            w_sky = weights.x;
-            w_wall = weights.y;
-            w_floor = 0.0;
+            let regions = split_bands(dir, n0, band_count, band_offset, bw);
+            w_sky = regions.sky;
+            w_wall = regions.wall;
+            w_floor = regions.floor;
         }
         case 4u: {
             // CROSS: Two perpendicular planes creating quadrants
-            let weights = split_cross(dir, n0, basis, bw);
-            w_sky = weights.x;
-            w_wall = weights.y;
-            w_floor = 0.0;
+            let regions = split_cross(dir, n0, basis, bw);
+            w_sky = regions.sky;
+            w_wall = regions.wall;
+            w_floor = regions.floor;
         }
         case 5u: {
             // PRISM: Three planes at 120 degrees creating triangular prism
@@ -244,10 +221,10 @@ fn eval_split(
         }
         default: {
             // Reserved variants (6..7) default to HALF behavior
-            let weights = split_half(dir, n0, bw);
-            w_sky = weights.x;
-            w_wall = weights.y;
-            w_floor = 0.0;
+            let regions = split_half(dir, n0, bw);
+            w_sky = regions.sky;
+            w_wall = regions.wall;
+            w_floor = regions.floor;
         }
     }
 
