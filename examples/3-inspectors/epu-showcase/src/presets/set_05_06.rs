@@ -6,6 +6,9 @@ use crate::constants::*;
 // -----------------------------------------------------------------------------
 // Preset 5: "Desert Mirage" - Vast dunes under blazing sun
 // -----------------------------------------------------------------------------
+// Visual: a bleached, high-noon desert where the horizon shimmers and the air
+// visibly wavers. The scene should feel open and glaring, with a strong heat-band
+// pulse and a faint mirage pool/tear rippling on the sand.
 pub(super) const PRESET_DESERT_MIRAGE: [[u64; 2]; 8] = [
     // L0: RAMP - bleached sky / sand floor
     [
@@ -94,6 +97,9 @@ pub(super) const PRESET_DESERT_MIRAGE: [[u64; 2]; 8] = [
 // -----------------------------------------------------------------------------
 // Design: tree trunks + canopy gap + sun shafts. Avoid "camo" by keeping the
 // moving dapple mostly on the ground and keeping leaf breakup as a BOUNDS layer.
+// Visual: standing inside a forest where tall trunks read as silhouettes and a
+// single canopy gap acts like a high sun portal. Shafts of light cut through mist
+// and drifting firefly motes, while dappled shadow motion plays mainly on the floor.
 //
 // Cadence: BOUNDS (RAMP) -> BOUNDS (APERTURE) -> FEATURES (trunks/ground) -> FEATURES (light)
 //

@@ -8,6 +8,9 @@ use crate::constants::*;
 // -----------------------------------------------------------------------------
 // Goal: unmistakably "city alley" (wet pavement, signage, rain), with a clean
 // enclosure read on the reflection sphere (big shapes first; low noise).
+// Visual: a narrow alley at night where the floor reads as wet asphalt with a
+// bright neon sign reflected in it. Walls carry vertical neon accents and sparse
+// window lights, while rain streaks slide through the scene to sell motion.
 //
 // L0: RAMP                 ALL        LERP   base palette + region thresholds
 // L1: VEIL/LASER_BARS       WALLS      ADD    vertical neon signage (animated drift)
@@ -110,6 +113,9 @@ pub(super) const PRESET_NEON_METROPOLIS: [[u64; 2]; 8] = [
 // -----------------------------------------------------------------------------
 // Intent: outdoor calm with obvious motion (petals + sun shimmer). Avoid stacking
 // multiple bounds; use a blossom canopy bound and then exploit it.
+// Visual: a weathered wooden temple complex nestled among ancient cherry trees in
+// perpetual bloom. Soft pink petals drift through shafts of golden afternoon
+// light, settling on moss-covered stone and rain-darkened timber.
 //
 // Cadence: BOUNDS (RAMP) -> BOUNDS (PATCHES) -> FEATURES (ground) -> FEATURES (light) -> FEATURES (petals)
 //

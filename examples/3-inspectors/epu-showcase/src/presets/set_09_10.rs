@@ -8,6 +8,10 @@ use crate::constants::*;
 // -----------------------------------------------------------------------------
 // Goal: outdoor "edge of the world" platforming vibe with dramatic clouds.
 // Motion: cloud drift + sun band pulse + subtle scanning floor grid.
+// Visual: crumbling stone platforms and shattered colonnades suspended among
+// clouds, with warm sunlight breaking through dramatic cloud banks. The floor
+// reads as weathered marble, the skyline reads as ruins silhouettes, and the sky
+// layers drift to make the whole scene feel alive and windy.
 //
 // L0: RAMP                 ALL        LERP   bright sky / cool shadows
 // L1: SILHOUETTE/RUINS      SKY        LERP   broken colonnades
@@ -97,6 +101,9 @@ pub(super) const PRESET_SKY_RUINS: [[u64; 2]; 8] = [
 // -----------------------------------------------------------------------------
 // Goal: harsh fluorescent enclosure + grid floor + holographic UI cards.
 // Animation: scanning grid + pulsing HUD + shimmering hologram.
+// Visual: a sterile high-tech training facility with harsh fluorescent lighting,
+// glassy walls, and a grid-lined floor. Holographic panels and a rectangular
+// hologram volume flicker with combat data while the room stays clean and clinical.
 //
 // Cadence: BOUNDS (SECTOR) -> BOUNDS (APERTURE) -> FEATURES (floor) -> FEATURES (HUD) -> FEATURES (motion)
 //

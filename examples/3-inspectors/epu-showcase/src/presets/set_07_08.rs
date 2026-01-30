@@ -6,6 +6,9 @@ use crate::constants::*;
 // -----------------------------------------------------------------------------
 // Preset 7: "Astral Void" - Cosmic void
 // -----------------------------------------------------------------------------
+// Visual: an abstract, demoscene void - near-black with prismatic drift and a
+// tasteful starfield. The sphere should read as a dark orb with a subtle rim/key,
+// while slow color motion suggests nebula gas without turning into noisy speckle.
 pub(super) const PRESET_ASTRAL_VOID: [[u64; 2]; 8] = [
     // L0: RAMP - near-black void with cold indigo walls
     [
@@ -93,6 +96,9 @@ pub(super) const PRESET_ASTRAL_VOID: [[u64; 2]; 8] = [
 // -----------------------------------------------------------------------------
 // Preset 8: "Hell Core" — Infernal chamber
 // -----------------------------------------------------------------------------
+// Visual: an oppressive cavern lit from below by a single hellgate fissure.
+// The floor has thin lava cracks and a bright rift/pool that sells motion; embers
+// and smoke haze sit above it, but the big value shapes stay readable on the sphere.
 pub(super) const PRESET_VOLCANIC_CORE: [[u64; 2]; 8] = [
     // L0: RAMP - base infernal gradient (keep value hierarchy)
     [

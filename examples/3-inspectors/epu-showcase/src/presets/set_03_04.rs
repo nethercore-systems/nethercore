@@ -6,6 +6,9 @@ use crate::constants::*;
 // -----------------------------------------------------------------------------
 // Preset 3: "Ocean Depths" - Deep sea trench
 // -----------------------------------------------------------------------------
+// Visual: a deep-water column with a darker seabed and a bright, soft surface
+// above. Caustics dance on the "roof" (the underside of the surface), faint rays
+// streak downward, and a bioluminescent eddy glows overhead to anchor the motion.
 // L0: RAMP                 ALL            LERP   base water column
 // L1: PLANE/STONE          FLOOR          LERP   basalt seabed
 // L2: FLOW (caustic)       SKY            SCREEN caustics on the "roof" (animated)
@@ -110,6 +113,9 @@ pub(super) const PRESET_OCEAN_DEPTHS: [[u64; 2]; 8] = [
 // Preset 4: "Void Station" - Derelict space station
 // -----------------------------------------------------------------------------
 // Goal: clear interior enclosure with a single viewport to deep space.
+// Visual: a cold, metallic room with a single rounded viewport cut into the far
+// wall. Outside the window is starfield plus a bold eclipse disk; inside, a pale
+// light spill washes the floor and panels, keeping the sphere reflection readable.
 //
 // L0: SECTOR/BOX           ALL        LERP  hard room enclosure
 // L1: GRID                 WALLS|FLOOR ADD  subtle panel lines (animated)
