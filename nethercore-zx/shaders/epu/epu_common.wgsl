@@ -311,6 +311,16 @@ fn region_weight(weights: RegionWeights, mask: u32) -> f32 {
     return w;
 }
 
+// Convert signed distance to region weights.
+// d: signed distance (negative = inside/sky, positive = outside/floor)
+// bw: band width for smooth transitions
+fn regions_from_signed_distance(d: f32, bw: f32) -> RegionWeights {
+    let w_sky = smoothstep(0.0, bw, -d);
+    let w_floor = smoothstep(0.0, bw, d);
+    let w_wall = max(0.0, 1.0 - w_sky - w_floor);
+    return RegionWeights(w_sky, w_wall, w_floor);
+}
+
 // ============================================================================
 // LAYER SAMPLE AND BLEND
 // ============================================================================
