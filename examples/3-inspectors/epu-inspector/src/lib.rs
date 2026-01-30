@@ -107,8 +107,23 @@ static mut SHOW_HINTS: u8 = 1;       // bool
 /// Track previous layer index for change detection
 static mut PREV_LAYER_INDEX: u8 = 1;
 
-/// Mesh handle for reference object
+/// Mesh handles for reference objects
 static mut SPHERE_MESH: u32 = 0;
+static mut CUBE_MESH: u32 = 0;
+static mut TORUS_MESH: u32 = 0;
+
+/// Shape selection
+static mut SHAPE_INDEX: u8 = 0;  // 0=Sphere, 1=Cube, 2=Torus
+const SHAPE_COUNT: u8 = 3;
+const SHAPE_NAMES: [&[u8]; 3] = [b"Sphere", b"Cube", b"Torus"];
+
+/// Camera orbit state
+static mut CAM_ANGLE: f32 = 0.0;
+static mut CAM_ELEVATION: f32 = 15.0;
+
+/// Material properties
+static mut MATERIAL_METALLIC: f32 = 1.0;
+static mut MATERIAL_ROUGHNESS: f32 = 0.38;
 
 // ============================================================================
 // Pack/Unpack Helpers
@@ -309,6 +324,23 @@ unsafe fn register_debug_panel() {
     debug_group_begin(b"export".as_ptr(), 6);
     debug_register_action(b"export hex".as_ptr(), 10, b"do_export".as_ptr(), 9);
     debug_group_end();
+
+    // Shape selection
+    debug_group_begin(b"shape".as_ptr(), 5);
+    debug_register_u8_range(b"index (0-2)".as_ptr(), 11, &SHAPE_INDEX, 0, 2);
+    debug_group_end();
+
+    // Camera controls
+    debug_group_begin(b"camera".as_ptr(), 6);
+    debug_register_f32(b"angle".as_ptr(), 5, &CAM_ANGLE as *const f32 as *const u8);
+    debug_register_f32_range(b"elevation".as_ptr(), 9, &CAM_ELEVATION as *const f32 as *const u8, -60.0, 60.0);
+    debug_group_end();
+
+    // Material properties
+    debug_group_begin(b"material".as_ptr(), 8);
+    debug_register_f32_range(b"metallic".as_ptr(), 8, &MATERIAL_METALLIC as *const f32 as *const u8, 0.0, 1.0);
+    debug_register_f32_range(b"roughness".as_ptr(), 9, &MATERIAL_ROUGHNESS as *const f32 as *const u8, 0.0, 1.0);
+    debug_group_end();
 }
 
 // ============================================================================
@@ -370,8 +402,10 @@ pub extern "C" fn init() {
         // Unpack layer 0 into editor state
         unpack_layer(LAYERS[0][0], LAYERS[0][1]);
 
-        // Create reference mesh
-        SPHERE_MESH = sphere(1.5, 32, 16);
+        // Create reference meshes
+        SPHERE_MESH = sphere(1.3, 32, 24);
+        CUBE_MESH = cube(1.2, 1.2, 1.2);
+        TORUS_MESH = torus(1.0, 0.4, 32, 16);
 
         // Register debug panel
         register_debug_panel();
@@ -399,14 +433,39 @@ pub extern "C" fn update() {
             let (hi, lo) = pack_layer();
             LAYERS[idx] = [hi, lo];
         }
+
+        // Cycle shapes with X button
+        if button_pressed(0, button::X) != 0 {
+            SHAPE_INDEX = (SHAPE_INDEX + 1) % SHAPE_COUNT;
+        }
+
+        // Camera orbit control via left stick
+        let stick_x = left_stick_x(0);
+        let stick_y = left_stick_y(0);
+
+        if stick_x.abs() > 0.1 {
+            CAM_ANGLE += stick_x * 2.0;
+        }
+        if stick_y.abs() > 0.1 {
+            CAM_ELEVATION -= stick_y * 2.0;
+            CAM_ELEVATION = CAM_ELEVATION.clamp(-60.0, 60.0);
+        }
     }
 }
 
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
-        // Set camera
-        camera_set(0.0, 0.0, 5.0, 0.0, 0.0, 0.0);
+        // Calculate orbit camera position
+        let angle_rad = CAM_ANGLE * 0.0174533;
+        let elev_rad = CAM_ELEVATION * 0.0174533;
+        let dist = 5.0;
+
+        let cam_x = dist * libm::cosf(elev_rad) * libm::sinf(angle_rad);
+        let cam_y = dist * libm::sinf(elev_rad) + 1.0;
+        let cam_z = dist * libm::cosf(elev_rad) * libm::cosf(angle_rad);
+
+        camera_set(cam_x, cam_y, cam_z, 0.0, 0.0, 0.0);
         camera_fov(60.0);
 
         // Build EPU config for rendering
@@ -421,10 +480,18 @@ pub extern "C" fn render() {
             epu_set(LAYERS.as_ptr() as *const u64);
         }
 
-        // Draw reference mesh
+        // Draw reference mesh with material properties
         push_identity();
-        set_color(0xFFFFFFFF);
-        draw_mesh(SPHERE_MESH);
+        set_color(0xAAAAAAFF);
+        material_metallic(MATERIAL_METALLIC);
+        material_roughness(MATERIAL_ROUGHNESS);
+
+        let mesh = match SHAPE_INDEX {
+            0 => SPHERE_MESH,
+            1 => CUBE_MESH,
+            _ => TORUS_MESH,
+        };
+        draw_mesh(mesh);
 
         // Draw environment
         draw_epu();
@@ -454,6 +521,14 @@ unsafe fn draw_ui() {
         draw_text(iso.as_ptr(), iso.len() as u32, 100.0, 35.0, 16.0);
     }
 
+    // Shape indicator
+    let shape_name = SHAPE_NAMES[SHAPE_INDEX as usize];
+    let mut shape_text = [0u8; 24];
+    shape_text[0..7].copy_from_slice(b"Shape: ");
+    let slen = copy_slice(&mut shape_text[7..], shape_name);
+    set_color(0xAAAAAAFF);
+    draw_text(shape_text.as_ptr(), (7 + slen) as u32, 200.0, 35.0, 16.0);
+
     // Hints
     if SHOW_HINTS != 0 {
         draw_hints();
@@ -461,8 +536,10 @@ unsafe fn draw_ui() {
 
     // Control hints at bottom
     set_color(0x666666FF);
-    let hint = b"F4: Debug Panel | Edit values to see live changes";
-    draw_text(hint.as_ptr(), hint.len() as u32, 10.0, 200.0, 12.0);
+    let hint1 = b"F4: Debug Panel | X: Cycle shapes | Left stick: Orbit";
+    draw_text(hint1.as_ptr(), hint1.len() as u32, 10.0, 200.0, 12.0);
+    let hint2 = b"Edit layer values to see live changes";
+    draw_text(hint2.as_ptr(), hint2.len() as u32, 10.0, 214.0, 12.0);
 }
 
 // ============================================================================
