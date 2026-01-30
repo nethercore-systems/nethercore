@@ -251,66 +251,57 @@ fn eval_cell(
     let cell_value = cell_hash2(cell_id, seed);
     let is_solid = cell_value < fill_ratio;
 
-    // Determine if we're in a gap (near edge)
-    let in_gap = d_edge < gap_width;
-
-    // Compute smooth AA at gap boundary (guard: no gap when gap_width near zero)
-    let gap_aa = select(smoothstep(gap_width, gap_width * 0.5, d_edge), 0.0, gap_width < 0.001);
-
-    // Cell generates a sky/wall pattern; preserve incoming floor weight.
-    // (RAMP/SPLIT/etc. define floor; CELL refines sky vs wall within non-floor.)
-    let floor_w = base_regions.floor;
-    let rem = 1.0 - floor_w;
-
-    // Geometric (region) weights: must sum to 1 within sky+wall.
-    var geo_sky: f32;
-    var geo_wall: f32;
+    // Compute regions from cell geometry
+    // CELL defines its own 3 regions:
+    //   - Sky: gaps/openings between cells (non-solid cells or gap areas)
+    //   - Wall: cell boundaries/outlines
+    //   - Floor: cell interiors (solid cells)
+    var output_regions: RegionWeights;
 
     // Radiance weights (can be alpha-scaled for blending)
     var w_sky: f32;
     var w_wall: f32;
+    var w_floor: f32;
 
-    if is_solid {
-        // Solid cell: sky in gap, wall elsewhere
-        geo_sky = gap_aa;
-        geo_wall = 1.0 - gap_aa;
-
-        w_sky = gap_aa * gap_alpha;
-        w_wall = 1.0 - gap_aa;
-    } else {
-        // Non-solid cell: all sky
-        geo_sky = 1.0;
-        geo_wall = 0.0;
-
+    if !is_solid {
+        // Non-solid cell: all sky (opening)
+        output_regions = RegionWeights(1.0, 0.0, 0.0);
         w_sky = 1.0;
         w_wall = 0.0;
+        w_floor = 0.0;
+    } else {
+        // Solid cell: compute regions from edge distance
+        // d_edge is distance to cell edge (positive = inside cell)
+        // d: negative in gap (sky), positive in cell interior (floor)
+        let d = d_edge - gap_width;
+        let bw = max(0.005, gap_width * 0.5);
+        output_regions = regions_from_signed_distance(d, bw);
+
+        // Radiance weights with alpha scaling for sky (gap)
+        w_sky = output_regions.sky * gap_alpha;
+        w_wall = output_regions.wall;
+        w_floor = output_regions.floor;
     }
 
-    // Add outline effect at gap boundary
+    // Add outline effect at gap boundary (only for solid cells)
     let outline_dist = abs(d_edge - gap_width);
     let outline_width = gap_width * 0.3;
-    let outline = smoothstep(outline_width, 0.0, outline_dist) * outline_alpha * outline_brightness;
+    let outline = smoothstep(outline_width, 0.0, outline_dist) * outline_alpha * outline_brightness * select(0.0, 1.0, is_solid);
 
     // Get colors
     let sky_color = instr_color_a(instr);
     let wall_color = instr_color_b(instr);
+    let floor_color = wall_color * 0.5;
 
     // Blend colors based on weights
-    let base_rgb = sky_color * w_sky + wall_color * w_wall;
+    let base_rgb = sky_color * w_sky + wall_color * w_wall + floor_color * w_floor;
 
     // Outline tinted by the brighter of the two cell colors (not hardcoded white)
     let outline_color = max(sky_color, wall_color);
     let rgb = base_rgb + outline_color * outline;
 
     // Total weight
-    let w = w_sky + w_wall;
-
-    // Output regions (sum to 1.0): floor preserved, sky/wall come from cell pattern.
-    let output_regions = RegionWeights(
-        geo_sky * rem,
-        geo_wall * rem,
-        floor_w
-    );
+    let w = w_sky + w_wall + w_floor;
 
     // CELL is an enclosure source: return radiance sample + output regions.
     return BoundsResult(LayerSample(rgb, epu_saturate(w)), output_regions);
