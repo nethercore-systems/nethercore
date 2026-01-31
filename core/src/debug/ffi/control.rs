@@ -68,32 +68,32 @@ where
 /// Query if the game is currently paused (debug mode)
 ///
 /// Returns 1 if paused, 0 if running normally.
-/// Note: This reads from frame controller state, which is stored separately.
-/// For now, always returns 0 (not paused) - actual implementation requires
-/// integration with the frame controller.
-fn debug_is_paused<I, S, R>(_caller: Caller<'_, WasmGameContext<I, S, R>>) -> i32
+/// Reads from frame controller state synced before each frame.
+/// Only active in local/offline mode; returns 0 during netplay.
+fn debug_is_paused<I, S, R>(caller: Caller<'_, WasmGameContext<I, S, R>>) -> i32
 where
     I: ConsoleInput,
     S: Send + Default + 'static,
     R: ConsoleRollbackState,
 {
-    // TODO: Read from frame controller state once integrated
-    0
+    if caller.data().game.debug_paused {
+        1
+    } else {
+        0
+    }
 }
 
 /// Get the current time scale (1.0 = normal, 0.5 = half speed, etc.)
 ///
-/// Note: This reads from frame controller state, which is stored separately.
-/// For now, always returns 1.0 - actual implementation requires
-/// integration with the frame controller.
-fn debug_get_time_scale<I, S, R>(_caller: Caller<'_, WasmGameContext<I, S, R>>) -> f32
+/// Reads from frame controller state synced before each frame.
+/// Only active in local/offline mode; returns 1.0 during netplay.
+fn debug_get_time_scale<I, S, R>(caller: Caller<'_, WasmGameContext<I, S, R>>) -> f32
 where
     I: ConsoleInput,
     S: Send + Default + 'static,
     R: ConsoleRollbackState,
 {
-    // TODO: Read from frame controller state once integrated
-    1.0
+    caller.data().game.debug_time_scale
 }
 
 /// Trigger a test error for testing error recovery

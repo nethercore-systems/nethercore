@@ -130,6 +130,11 @@ pub struct GameState<I: ConsoleInput> {
 
     /// Quit requested by game
     pub quit_requested: bool,
+
+    /// Debug frame control state (synced from host before each frame)
+    /// Only active in local/offline mode; disabled during netplay.
+    pub debug_paused: bool,
+    pub debug_time_scale: f32,
 }
 
 /// Context for WASM game execution
@@ -247,6 +252,8 @@ impl<I: ConsoleInput> GameState<I> {
             input_curr: [I::default(); MAX_PLAYERS],
             save_data: Default::default(),
             quit_requested: false,
+            debug_paused: false,
+            debug_time_scale: 1.0,
         }
     }
 

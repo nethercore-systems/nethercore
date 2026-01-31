@@ -153,6 +153,14 @@ where
         let should_run = self.frame_controller.should_run_tick();
         let time_scale = self.frame_controller.time_scale();
 
+        // Sync frame control state to WASM context for FFI access
+        // Only enabled for local games (FrameController auto-disables for netplay)
+        if let Some(game) = session.runtime.game_mut() {
+            let state = game.state_mut();
+            state.debug_paused = self.frame_controller.is_paused();
+            state.debug_time_scale = self.frame_controller.time_scale();
+        }
+
         let tick_start = Instant::now();
         let (ticks, _alpha) = if should_run {
             session

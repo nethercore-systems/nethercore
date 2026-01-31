@@ -330,9 +330,10 @@ pub extern "C" fn render() {
         // Camera looks at the sphere at origin
         camera_set(cam_x, cam_y, cam_z, 0.0, 0.0, 0.0);
 
-        // Draw the sphere (no rotation for now - add your own matrix math!)
+        // Draw the sphere with rotation
         push_identity();
-        // TODO: Build rotation matrices for ROTATION_X and ROTATION_Y and call transform_set()
+        push_rotate_y(ROTATION_Y);
+        push_rotate_x(ROTATION_X);
 
         set_color(0xFFFFFFFF);
         draw_mesh(SPHERE_MESH);
