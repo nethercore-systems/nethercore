@@ -6,22 +6,23 @@ use crate::constants::*;
 // -----------------------------------------------------------------------------
 // Preset 3: "Ocean Depths" - Deep sea trench
 // -----------------------------------------------------------------------------
-// Visual: a deep-water column with a darker seabed and a bright, soft surface
-// above. Caustics dance on the "roof" (the underside of the surface), faint rays
-// streak downward, and a bioluminescent eddy glows overhead to anchor the motion.
-// L0: RAMP                 ALL            LERP   base water column
+// Visual: BOUNDLESS deep water column - RAMP creates infinite depth gradient.
+// Dark overall with bright surface glow above fading to abyssal black below.
+// Feature layers add caustic light patterns, god-rays, and bioluminescence.
+// L0: RAMP                 ALL            LERP   deep water column gradient (dark base)
 // L1: PLANE/STONE          FLOOR          LERP   basalt seabed
-// L2: FLOW (caustic)       SKY            SCREEN caustics on the "roof" (animated)
-// L3: VEIL/PILLARS         SKY            SCREEN god-rays from the surface
-// L4: LOBE                 ALL            ADD    soft top light (helps reflections)
-// L5: SCATTER/DUST         ALL            ADD    marine snow
-// L6: ATMOSPHERE/ABSORB    ALL            MULT   deep-water absorption
-// L7: PORTAL/VORTEX        SKY            ADD    biolum surface eddy (animated)
+// L2: FLOW (caustic)       SKY            ADD    caustics dancing on surface (animated)
+// L3: VEIL/PILLARS         ALL            ADD    god-rays streaking down
+// L4: LOBE                 SKY            ADD    bright surface glow above
+// L5: PORTAL/VORTEX        SKY            ADD    biolum surface eddy (animated)
+// L6: SCATTER/DUST         ALL            ADD    marine snow particles
+// L7: SCATTER/BUBBLES      ALL            ADD    rising bubbles
 pub(super) const PRESET_OCEAN_DEPTHS: [[u64; 2]; 8] = [
-    // L0: RAMP - base water column
+    // L0: RAMP - deep water column gradient (boundless depth)
     [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x55f6ff, 0x001018),
-        lo(165, 0x00, 0x10, 0x18, THRESH_SEMI, DIR_UP, 15, 15),
+        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x0a3040, 0x010408),
+        // Dark teal surface fading to near-black abyss
+        lo(255, 0x08, 0x18, 0x28, THRESH_VAST, DIR_UP, 15, 15),
     ],
     // L1: PLANE/STONE - dark basalt seabed
     [
@@ -31,70 +32,37 @@ pub(super) const PRESET_OCEAN_DEPTHS: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             PLANE_STONE,
-            0x0b2430,
+            0x081820,
             0x020608,
         ),
-        lo(205, 140, 90, 150, 20, DIR_UP, 15, 12),
+        lo(200, 120, 70, 150, 15, DIR_UP, 15, 14),
     ],
-    // L2: FLOW - caustics on the roof/surface (animated)
+    // L2: FLOW - caustic shimmer at surface (SLOW animation)
     [
-        hi_meta(
-            OP_FLOW,
-            REGION_SKY,
-            BLEND_SCREEN,
-            DOMAIN_DIRECT3D,
-            0,
-            0x9ffcff,
-            0x001018,
-        ),
-        lo(95, 120, 170, 0x22, 0, DIR_RIGHT, 11, 0),
+        hi(OP_FLOW, REGION_SKY, BLEND_ADD, 0, 0x40a0b0, 0x183848),
+        // SLOW animation (alpha_b=1)
+        lo(100, 80, 140, 0x1c, 15, DIR_DOWN, 9, 1),
     ],
-    // L3: VEIL/PILLARS - soft god-rays from the surface
+    // L3: VEIL/PILLARS - god-rays (SLOW)
     [
         hi_meta(
             OP_VEIL,
-            REGION_SKY,
-            BLEND_SCREEN,
-            DOMAIN_DIRECT3D,
-            VEIL_PILLARS,
-            0xcafcff,
-            0x001018,
-        ),
-        lo(95, 42, 70, 110, 0, DIR_UP, 10, 6),
-    ],
-    // L4: LOBE - soft top light to give the sphere a readable spec/rim
-    [
-        hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0x7cf6ff, 0x001018),
-        lo(90, 150, 110, 0, 0, DIR_UP, 12, 0),
-    ],
-    // L5: SCATTER/DUST - sparse marine snow points
-    [
-        hi_meta(
-            OP_SCATTER,
             REGION_ALL,
             BLEND_ADD,
-            DOMAIN_DIRECT3D,
-            SCATTER_BUBBLES,
-            0xcafcff,
-            0x001018,
+            DOMAIN_AXIS_CYL,
+            VEIL_PILLARS,
+            0x206060, // muted cyan rays
+            0x081420,
         ),
-        // Lower density + slightly larger points to avoid a "dot grid" read.
-        lo(14, 22, 16, 0x20, 33, 0, 6, 0),
+        // SLOW animation (alpha_b=1)
+        lo(80, 45, 80, 55, 5, DIR_DOWN, 8, 1),
     ],
-    // L6: ATMOSPHERE/ABSORPTION - deep-water light falloff
+    // L4: LOBE - surface glow from above
     [
-        hi_meta(
-            OP_ATMOSPHERE,
-            REGION_ALL,
-            BLEND_MULTIPLY,
-            DOMAIN_DIRECT3D,
-            ATMO_ABSORPTION,
-            0x002030,
-            0x000000,
-        ),
-        lo(115, 155, 110, 0, 0, DIR_UP, 12, 0),
+        hi(OP_LOBE, REGION_SKY, BLEND_ADD, 0, 0x308090, 0x102030),
+        lo(120, 160, 80, 0, 0, DIR_UP, 10, 0),
     ],
-    // L7: PORTAL/VORTEX - faint biolum surface eddy (animated)
+    // L5: PORTAL/VORTEX - bioluminescent glow (SLOW)
     [
         hi_meta(
             OP_PORTAL,
@@ -102,10 +70,39 @@ pub(super) const PRESET_OCEAN_DEPTHS: [[u64; 2]; 8] = [
             BLEND_ADD,
             DOMAIN_TANGENT_LOCAL,
             PORTAL_VORTEX,
-            0x001018,
-            0x20ffd8,
+            0x20a080, // cyan-green biolum
+            0x103030,
         ),
-        lo(200, 140, 170, 170, 0, DIR_UP, 14, 10),
+        // SLOW animation (alpha_b=1)
+        lo(100, 120, 130, 140, 8, DIR_UP, 9, 1),
+    ],
+    // L6: SCATTER/DUST - marine snow (SLOW drift)
+    [
+        hi_meta(
+            OP_SCATTER,
+            REGION_ALL,
+            BLEND_ADD,
+            DOMAIN_DIRECT3D,
+            SCATTER_DUST,
+            0x508090,
+            0x203040,
+        ),
+        // SLOW animation (alpha_b=1)
+        lo(40, 20, 15, 0x14, 25, DIR_DOWN, 6, 1),
+    ],
+    // L7: SCATTER/BUBBLES - rising bubbles (SLOW)
+    [
+        hi_meta(
+            OP_SCATTER,
+            REGION_ALL,
+            BLEND_ADD,
+            DOMAIN_DIRECT3D,
+            SCATTER_BUBBLES,
+            0x406070,
+            0x102030,
+        ),
+        // SLOW animation (alpha_b=1)
+        lo(30, 15, 10, 0x10, 20, DIR_UP, 5, 1),
     ],
 ];
 
@@ -139,18 +136,18 @@ pub(super) const PRESET_VOID_STATION: [[u64; 2]; 8] = [
         ),
         lo(230, 145, 0, 0, 0, DIR_UP, 15, 15),
     ],
-    // L1: GRID - subtle panel lines (animated)
+    // L1: GRID - panel lines (slightly more visible)
     [
         hi(
             OP_GRID,
             REGION_WALLS | REGION_FLOOR,
             BLEND_ADD,
             0,
-            0x2e3948,
+            0x3a4858, // brighter panel lines
             0x000000,
         ),
         // scale, thickness, pattern=GRID, slow scroll; phase animates via ANIM_SPEEDS
-        lo(18, 120, 14, 0x12, 0, 0, 8, 0),
+        lo(22, 110, 16, 0x14, 0, 0, 10, 0),
     ],
     // L2: PLANE/GRATING - deck plating
     [
@@ -187,10 +184,11 @@ pub(super) const PRESET_VOID_STATION: [[u64; 2]; 8] = [
             BLEND_ADD,
             DOMAIN_DIRECT3D,
             SCATTER_STARS,
-            0xf8fbff,
-            0x6aa6ff,
+            0xffffff, // bright white stars
+            0x88b8ff, // blue-tinted secondary stars
         ),
-        lo(60, 18, 10, 0x40, 7, 0, 10, 0),
+        // Higher intensity, good density for starfield
+        lo(90, 24, 14, 0x50, 10, 0, 12, 6),
     ],
     // L5: CELESTIAL/ECLIPSE - hero celestial body in the viewport
     [
@@ -200,11 +198,11 @@ pub(super) const PRESET_VOID_STATION: [[u64; 2]; 8] = [
             BLEND_ADD,
             DOMAIN_DIRECT3D,
             CELESTIAL_ECLIPSE,
-            0xb0d8ff,
-            0x02030a,
+            0xd0f0ff, // brighter corona/halo
+            0x010206, // very dark body (eclipsed)
         ),
-        // size, offset, halo
-        lo(175, 70, 150, 0, 0, DIR_BACK, 15, 10),
+        // Larger size, stronger halo for dramatic eclipse
+        lo(220, 85, 180, 0, 0, DIR_BACK, 15, 13),
     ],
     // L6: DECAL/RECT - viewport light card spill (helps reflection readability)
     [
@@ -213,10 +211,10 @@ pub(super) const PRESET_VOID_STATION: [[u64; 2]; 8] = [
             REGION_WALLS | REGION_FLOOR,
             BLEND_ADD,
             0,
-            0x86c0ff,
-            0x0a1220,
+            0x90c8ff, // slightly brighter spill
+            0x0c1828,
         ),
-        lo(150, 0x24, 160, 200, 0x10, DIR_BACK, 14, 10),
+        lo(160, 0x28, 165, 210, 0x12, DIR_BACK, 14, 10),
     ],
     // L7: LOBE - cold spill from the viewport onto the room (animated)
     [

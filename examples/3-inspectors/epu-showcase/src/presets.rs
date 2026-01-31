@@ -39,16 +39,16 @@ pub static PRESETS: [Preset; PRESET_COUNT] = [
 /// For SCATTER, patching param_d changes the seed — produces shimmer/respawn, not smooth motion.
 pub static ANIM_SPEEDS: [[u8; 8]; PRESET_COUNT] = [
     //                                   L0 L1 L2 L3 L4 L5 L6 L7
-    [0, 0, 0, 1, 2, 0, 3, 0], // 0: Neon Metropolis
-    [0, 0, 0, 2, 1, 0, 0, 0], // 1: Sakura Shrine
-    [0, 0, 2, 0, 1, 0, 0, 1], // 2: Ocean Depths
-    [0, 1, 0, 0, 0, 0, 0, 2], // 3: Void Station
-    [0, 0, 3, 2, 1, 2, 0, 0], // 4: Desert Mirage
-    [0, 0, 0, 0, 2, 0, 1, 0], // 5: Enchanted Grove
-    [0, 0, 0, 2, 0, 1, 0, 0], // 6: Astral Void
-    [0, 0, 1, 0, 2, 3, 0, 0], // 7: Hell Core
-    [0, 0, 0, 1, 2, 0, 1, 1], // 8: Sky Ruins
-    [0, 0, 0, 2, 2, 2, 1, 1], // 9: Combat Lab
+    [0, 0, 0, 1, 2, 0, 1, 1], // 0: Neon Metropolis (rain streaks slow)
+    [0, 0, 1, 1, 1, 0, 0, 0], // 1: Sakura Shrine (gentle)
+    [0, 0, 1, 1, 0, 1, 0, 0], // 2: Ocean Depths (very slow - underwater)
+    [0, 1, 0, 0, 0, 0, 0, 1], // 3: Void Station
+    [0, 0, 1, 1, 1, 1, 0, 0], // 4: Desert Mirage (slow heat shimmer)
+    [0, 0, 1, 1, 1, 0, 0, 1], // 5: Enchanted Grove (slow light shafts)
+    [0, 0, 1, 0, 0, 1, 1, 0], // 6: Astral Void (very subtle)
+    [0, 0, 0, 0, 0, 0, 0, 0], // 7: Hell Core (STATIC - no seizures!)
+    [0, 0, 0, 1, 1, 1, 1, 1], // 8: Sky Ruins
+    [0, 0, 1, 1, 1, 1, 1, 1], // 9: Combat Lab
 ];
 
 /// Preset names for display

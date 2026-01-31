@@ -6,16 +6,34 @@ use crate::constants::*;
 // -----------------------------------------------------------------------------
 // Preset 5: "Desert Mirage" - Vast dunes under blazing sun
 // -----------------------------------------------------------------------------
-// Visual: a bleached, high-noon desert where the horizon shimmers and the air
-// visibly wavers. The scene should feel open and glaring, with a strong heat-band
-// pulse and a faint mirage pool/tear rippling on the sand.
+// Visual: BOUNDLESS vast desert with dramatic horizon, rolling dune silhouettes,
+// intense heat shimmer, mirage pool illusion, and blinding sun glare.
+//
+// Cadence: BOUNDS (RAMP) -> FEATURES (silhouette/sand) -> FEATURES (heat/mirage/glare)
+//
+// L0: RAMP                 ALL           LERP   boundless desert sky-to-sand gradient
+// L1: SILHOUETTE/DUNES     SKY           LERP   prominent dune horizon silhouettes
+// L2: PLANE/SAND           FLOOR         LERP   textured sand with ripples
+// L3: BAND                 ALL           ADD    bright horizon heat shimmer band
+// L4: FLOW                 ALL           SCREEN visible heat distortion waves
+// L5: PORTAL/RIFT          FLOOR         SCREEN mirage pool (false water reflection)
+// L6: LOBE                 ALL           ADD    BLINDING sun glare (maximum)
+// L7: SCATTER/DUST         ALL           ADD    blowing sand particles
 pub(super) const PRESET_DESERT_MIRAGE: [[u64; 2]; 8] = [
-    // L0: RAMP - bleached sky / sand floor
+    // L0: SILHOUETTE/DUNES - ONLY bounds layer, defines the horizon dunes
     [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0xf0e8d0, 0xd4b896),
-        lo(165, 0xc8, 0xa8, 0x78, THRESH_VAST, DIR_UP, 15, 15),
+        hi_meta(
+            OP_SILHOUETTE,
+            REGION_SKY,
+            BLEND_LERP,
+            DOMAIN_DIRECT3D,
+            SILHOUETTE_DUNES,
+            0x402810, // DARK brown dune silhouettes
+            0x906840, // warm tan sky (NOT bright)
+        ),
+        lo(255, 200, 120, 180, 0, DIR_UP, 15, 15),
     ],
-    // L1: PLANE/SAND - grain + ripples
+    // L1: PLANE/SAND - textured sand floor with warm colors
     [
         hi_meta(
             OP_PLANE,
@@ -23,127 +41,98 @@ pub(super) const PRESET_DESERT_MIRAGE: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             PLANE_SAND,
-            0xd8c090,
-            0xb08952,
+            0x806030, // warm golden sand (darker)
+            0x402010, // deep brown shadows
         ),
-        lo(195, 120, 20, 165, 28, DIR_UP, 15, 15),
+        lo(255, 120, 70, 160, 25, DIR_SUN, 15, 14),
     ],
-    // L2: FLOW/NOISE - heat shimmer (animated)
+    // L2: BAND - heat shimmer at horizon (subtle, SCREEN not ADD)
     [
-        hi_meta(
-            OP_FLOW,
-            REGION_ALL,
-            BLEND_SCREEN,
-            DOMAIN_DIRECT3D,
-            0,
-            0xf8f0e0,
-            0xd4b896,
-        ),
-        lo(125, 165, 70, 0x30, 0, DIR_RIGHT, 8, 0),
+        hi(OP_BAND, REGION_WALLS, BLEND_SCREEN, 0, 0x806040, 0x503020),
+        lo(50, 70, 120, 140, 0, DIR_FORWARD, 7, 2),
     ],
-    // L3: BAND - horizon heat shimmer (animated, make it obvious)
+    // L3: FLOW - heat distortion (slow animation)
     [
-        hi(OP_BAND, REGION_ALL, BLEND_ADD, 0, 0xe8c090, 0xd0a070),
-        lo(160, 70, 120, 210, 0, DIR_SUNSET, 12, 0),
+        hi(OP_FLOW, REGION_WALLS, BLEND_SCREEN, 0, 0x705030, 0x403020),
+        lo(40, 180, 100, 0x50, 0, DIR_UP, 6, 2),
     ],
-    // L4: LOBE - harsh sun glare (animated)
-    [
-        hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0xffffd8, 0xffc26b),
-        lo(160, 240, 80, 1, 0, DIR_SUN, 12, 0),
-    ],
-    // L5: PORTAL/RIFT - mirage pool (animated)
+    // L4: PORTAL/RIFT - mirage pool on floor (subtle)
     [
         hi_meta(
             OP_PORTAL,
             REGION_FLOOR,
-            BLEND_ADD,
+            BLEND_SCREEN,
             DOMAIN_TANGENT_LOCAL,
             PORTAL_RIFT,
-            0xb08952,
-            0x86c0ff,
+            0x507090, // sky-blue mirage (muted)
+            0x304060,
         ),
-        lo(210, 140, 170, 175, 0, DIR_UP, 14, 12),
+        lo(80, 180, 60, 200, 0, DIR_FORWARD, 8, 3),
     ],
-    // L6: ATMOSPHERE/MIE - desert haze
+    // L5: LOBE - sun glare (SCREEN not ADD, moderate)
+    [
+        hi(OP_LOBE, REGION_ALL, BLEND_SCREEN, 0, 0xa08040, 0x604020),
+        lo(100, 180, 120, 1, 0, DIR_SUN, 10, 4),
+    ],
+    // L6: SCATTER/DUST - blowing sand (SCREEN not ADD)
+    [
+        hi_meta(
+            OP_SCATTER,
+            REGION_ALL,
+            BLEND_SCREEN,
+            DOMAIN_DIRECT3D,
+            SCATTER_DUST,
+            0x806030, // warm sand particles (darker)
+            0x503020,
+        ),
+        lo(40, 20, 40, 0x18, 40, DIR_RIGHT, 7, 2),
+    ],
+    // L7: ATMOSPHERE/ABSORPTION - warm haze for depth
     [
         hi_meta(
             OP_ATMOSPHERE,
             REGION_ALL,
-            BLEND_LERP,
+            BLEND_MULTIPLY,
             DOMAIN_DIRECT3D,
-            ATMO_MIE,
-            0xe8d8c0,
-            0xd4b896,
+            ATMO_ABSORPTION,
+            0x907050, // warm haze (darker)
+            0x604030,
         ),
-        lo(34, 110, 110, 90, 160, DIR_SUN, 10, 0),
-    ],
-    // L7: SCATTER/DUST - blowing sand
-    [
-        hi_meta(
-            OP_SCATTER,
-            REGION_FLOOR,
-            BLEND_ADD,
-            DOMAIN_DIRECT3D,
-            SCATTER_DUST,
-            0xc8b080,
-            0xb08952,
-        ),
-        lo(18, 18, 55, 0x10, 27, DIR_RIGHT, 6, 0),
+        lo(50, 100, 80, 0, 0, DIR_UP, 8, 0),
     ],
 ];
 
 // -----------------------------------------------------------------------------
 // Preset 6: "Enchanted Grove" - Fairy tale forest
 // -----------------------------------------------------------------------------
-// Design: tree trunks + canopy gap + sun shafts. Avoid "camo" by keeping the
-// moving dapple mostly on the ground and keeping leaf breakup as a BOUNDS layer.
-// Visual: standing inside a forest where tall trunks read as silhouettes and a
-// single canopy gap acts like a high sun portal. Shafts of light cut through mist
-// and drifting firefly motes, while dappled shadow motion plays mainly on the floor.
+// Design: Magical forest with SILHOUETTE/FOREST for tree shapes, warm green
+// and golden tones (not harsh black/green). Dappled sunlight, fireflies.
 //
-// Cadence: BOUNDS (RAMP) -> BOUNDS (APERTURE) -> FEATURES (trunks/ground) -> FEATURES (light)
+// Cadence: BOUNDS (silhouette/forest) -> FEATURES (floor/light/fireflies)
 //
-// L0: RAMP                 ALL           LERP   deep greens + warm skylight
-// L1: APERTURE/IRREGULAR    ALL           LERP   canopy gap (hero light source)
-// L2: VEIL/PILLARS          WALLS         LERP   tree trunks
-// L3: PLANE/GRASS           FLOOR         LERP   mossy ground
-// L4: FLOW (noise)          FLOOR         MULT   moving dapple shadow (animated)
-// L5: VEIL/SHARDS           SKY|WALLS     SCREEN sun shafts
-// L6: LOBE                  ALL           ADD    warm sun key (animated)
-// L7: SCATTER/DUST          ALL           ADD    firefly motes
+// L0: SILHOUETTE/FOREST    SKY        LERP   tree canopy silhouettes
+// L1: PLANE/GRASS          FLOOR      LERP   mossy forest floor
+// L2: FLOW                 FLOOR      SCREEN dappled light motion
+// L3: VEIL/SHARDS          SKY|WALLS  ADD    golden sun shafts
+// L4: LOBE                 ALL        ADD    warm golden sun glow
+// L5: BAND                 SKY        ADD    canopy glow
+// L6: SCATTER/EMBERS       ALL        ADD    firefly motes
+// L7: ATMOSPHERE           ALL        MULT   soft forest haze
 pub(super) const PRESET_ENCHANTED_GROVE: [[u64; 2]; 8] = [
-    // L0: RAMP - deep greens + warm skylight
-    [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0xfff0c8, 0x0b1206),
-        lo(170, 0x1f, 0x32, 0x18, THRESH_SEMI, DIR_UP, 15, 15),
-    ],
-    // L1: APERTURE/IRREGULAR - canopy gap (hero light source)
+    // L0: SILHOUETTE/FOREST - tree canopy silhouettes (warmer, not black)
     [
         hi_meta(
-            OP_APERTURE,
-            REGION_ALL,
+            OP_SILHOUETTE,
+            REGION_SKY,
             BLEND_LERP,
             DOMAIN_DIRECT3D,
-            APERTURE_IRREGULAR,
-            0xfff0c8,
-            0x061005,
+            SILHOUETTE_FOREST,
+            0x283018, // Dark olive-green (warm, not black)
+            0x809050, // Warm yellow-green canopy light
         ),
-        lo(90, 86, 66, 18, 210, DIR_UP, 0, 0),
+        lo(255, 160, 200, 0x80, 0, DIR_UP, 15, 15),
     ],
-    // L2: VEIL/PILLARS - tree trunks
-    [
-        hi_meta(
-            OP_VEIL,
-            REGION_WALLS,
-            BLEND_LERP,
-            DOMAIN_AXIS_CYL,
-            VEIL_PILLARS,
-            0x0b0a06,
-            0x1a2a10,
-        ),
-        lo(210, 110, 60, 45, 0, DIR_UP, 15, 0),
-    ],
-    // L3: PLANE/GRASS - mossy forest floor
+    // L1: PLANE/GRASS - warm mossy forest floor
     [
         hi_meta(
             OP_PLANE,
@@ -151,53 +140,67 @@ pub(super) const PRESET_ENCHANTED_GROVE: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             PLANE_GRASS,
-            0x2a3a18,
-            0x0d1208,
+            0x405828, // Warm moss green
+            0x202818, // Warm shadow (not black)
         ),
-        lo(190, 130, 25, 180, 0, DIR_UP, 15, 0),
+        lo(200, 85, 45, 130, 0, DIR_UP, 15, 13),
     ],
-    // L4: FLOW/NOISE - moving dapple shadow on the ground (animated)
-    [
-        hi_meta(
-            OP_FLOW,
-            REGION_FLOOR,
-            BLEND_MULTIPLY,
-            DOMAIN_DIRECT3D,
-            0,
-            0x102008,
-            0x2a3a18,
-        ),
-        lo(95, 210, 60, 0x30, 0, DIR_RIGHT, 10, 0),
-    ],
-    // L5: VEIL/SHARDS - sun shafts (tangent-local)
+    // L2: VEIL/PILLARS - light shafts through tree canopy (key visual)
     [
         hi_meta(
             OP_VEIL,
             REGION_SKY | REGION_WALLS,
-            BLEND_SCREEN,
-            DOMAIN_TANGENT_LOCAL,
-            VEIL_SHARDS,
-            0xfff0c8,
-            0x061005,
+            BLEND_ADD,
+            DOMAIN_AXIS_CYL,
+            VEIL_PILLARS,
+            0xa08030, // Golden light pillars
+            0x503010, // Amber base
         ),
-        lo(38, 70, 10, 55, 0, DIR_SUN, 6, 2),
+        // Slow animation (alpha_b=2)
+        lo(90, 40, 50, 45, 0, DIR_SUN, 10, 2),
     ],
-    // L6: LOBE - HERO: warm sunbeam (animated)
+    // L3: FLOW - dappled golden light on floor
     [
-        hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0xffe1ad, 0x2b1c08),
-        lo(180, 170, 150, 1, 0, DIR_SUN, 12, 0),
+        hi(OP_FLOW, REGION_FLOOR, BLEND_SCREEN, 0, 0x605020, 0x403010),
+        // Slow animation (alpha_b=2)
+        lo(60, 100, 70, 0x28, 0, DIR_RIGHT, 7, 2),
     ],
-    // L7: SCATTER/DUST - firefly motes
+    // L4: LOBE - warm golden sun glow
+    [
+        hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0x907020, 0x402808),
+        lo(100, 120, 70, 1, 0, DIR_SUN, 10, 3),
+    ],
+    // L5: BAND - warm canopy glow at horizon
+    [
+        hi(OP_BAND, REGION_SKY, BLEND_ADD, 0, 0x506028, 0x283010),
+        lo(40, 100, 80, 120, 0, DIR_UP, 6, 2),
+    ],
+    // L6: SCATTER/EMBERS - sparse golden fireflies
     [
         hi_meta(
             OP_SCATTER,
             REGION_ALL,
             BLEND_ADD,
-            DOMAIN_TANGENT_LOCAL,
-            SCATTER_DUST,
-            0xd6ff86,
-            0x3cff9a,
+            DOMAIN_DIRECT3D,
+            SCATTER_EMBERS,
+            0xffc040, // Golden-yellow fireflies
+            0x80a020, // Yellow-green glow
         ),
-        lo(18, 26, 12, 0x30, 19, DIR_SUN, 7, 0),
+        // Sparse, slow (alpha_b=1)
+        lo(50, 6, 30, 0x14, 12, DIR_UP, 9, 1),
+    ],
+    // L7: VEIL/SHARDS - additional light shards for depth
+    [
+        hi_meta(
+            OP_VEIL,
+            REGION_SKY,
+            BLEND_SCREEN,
+            DOMAIN_AXIS_CYL,
+            VEIL_SHARDS,
+            0x807030, // Warm golden shards
+            0x403818,
+        ),
+        // Slow animation (alpha_b=2)
+        lo(60, 25, 30, 40, 0, DIR_SUN, 7, 2),
     ],
 ];
