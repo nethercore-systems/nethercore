@@ -190,8 +190,8 @@ This is the opcode number. Some opcodes use `meta5` for domain/variant selection
 | `0x0F` | `PLANE` | Radiance |
 | `0x10` | `CELESTIAL` | Radiance |
 | `0x11` | `PORTAL` | Radiance |
-| `0x12` | `LOBE` | Radiance (region-masked) |
-| `0x13` | `BAND` | Radiance (region-masked) |
+| `0x12` | `LOBE` | Radiance |
+| `0x13` | `BAND` | Radiance |
 
 For full per-opcode packing/algorithm details, see:
 - `nethercore-design/specs/epu-feature-catalog.md`

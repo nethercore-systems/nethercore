@@ -502,6 +502,11 @@ pub extern "C" fn render() {
 }
 
 unsafe fn draw_ui() {
+    // If hints disabled, hide entire UI overlay
+    if SHOW_HINTS == 0 {
+        return;
+    }
+
     // Title
     let title = b"EPU Inspector";
     set_color(0xFFFFFFFF);
@@ -529,10 +534,8 @@ unsafe fn draw_ui() {
     set_color(0xAAAAAAFF);
     draw_text(shape_text.as_ptr(), (7 + slen) as u32, 200.0, 35.0, 16.0);
 
-    // Hints
-    if SHOW_HINTS != 0 {
-        draw_hints();
-    }
+    // Parameter hints
+    draw_hints();
 
     // Control hints at bottom
     set_color(0x666666FF);
@@ -574,10 +577,77 @@ fn get_opcode_hints(opcode: u8) -> (&'static [u8], &'static [u8], &'static [u8],
     }
 }
 
+/// Get variant name for opcodes that have variants
+fn get_variant_hint(opcode: u8, variant_id: u8) -> &'static [u8] {
+    match opcode {
+        0x07 => match variant_id { // APERTURE
+            0 => b"RECT",
+            1 => b"ARCH",
+            2 => b"BARRED",
+            3 => b"LATTICE",
+            4 => b"RAGGED",
+            _ => b"",
+        },
+        0x0E => match variant_id { // ATMOSPHERE
+            0 => b"ABSORPTION",
+            1 => b"RAYLEIGH",
+            2 => b"MIE",
+            3 => b"FULL",
+            _ => b"",
+        },
+        0x0F => match variant_id { // PLANE
+            0 => b"TILES",
+            1 => b"HEX",
+            2 => b"STONE",
+            3 => b"SAND",
+            4 => b"WATER",
+            5 => b"GRATING",
+            6 => b"GRASS",
+            7 => b"PAVEMENT",
+            _ => b"",
+        },
+        0x10 => match variant_id { // CELESTIAL
+            0 => b"MOON",
+            1 => b"SUN",
+            2 => b"PLANET",
+            3 => b"GAS_GIANT",
+            4 => b"RINGED",
+            5 => b"BINARY",
+            6 => b"ECLIPSE",
+            _ => b"",
+        },
+        0x11 => match variant_id { // PORTAL
+            0 => b"CIRCLE",
+            1 => b"RECT",
+            2 => b"TEAR",
+            3 => b"VORTEX",
+            4 => b"CRACK",
+            5 => b"RIFT",
+            _ => b"",
+        },
+        _ => b"", // No variants for this opcode
+    }
+}
+
 fn copy_slice(dst: &mut [u8], src: &[u8]) -> usize {
     let len = dst.len().min(src.len());
     dst[..len].copy_from_slice(&src[..len]);
     len
+}
+
+/// Get blend mode name
+fn get_blend_name(blend: u8) -> &'static [u8] {
+    match blend {
+        0 => b"ADD",
+        1 => b"MULTIPLY",
+        2 => b"MAX",
+        3 => b"LERP",
+        4 => b"SCREEN",
+        5 => b"HSV_MOD",
+        6 => b"MIN",
+        7 => b"OVERLAY",
+        _ => b"?",
+    }
 }
 
 unsafe fn draw_hints() {
@@ -589,6 +659,15 @@ unsafe fn draw_hints() {
 
     // Opcode name
     draw_text(name.as_ptr(), name.len() as u32, 10.0, y_base, 14.0);
+
+    // Blend mode (next to opcode name)
+    let blend_name = get_blend_name(EDITOR.blend);
+    let mut blend_buf = [0u8; 16];
+    blend_buf[0] = b'[';
+    let blen = 1 + copy_slice(&mut blend_buf[1..], blend_name);
+    blend_buf[blen] = b']';
+    set_color(0x88AAFFFF);
+    draw_text(blend_buf.as_ptr(), (blen + 1) as u32, 120.0, y_base, 14.0);
 
     set_color(0x888888FF);
 
@@ -617,4 +696,13 @@ unsafe fn draw_hints() {
     buf[0..3].copy_from_slice(b"d: ");
     let len_d = 3 + copy_slice(&mut buf[3..], hint_d);
     draw_text(buf.as_ptr(), len_d as u32, 10.0, y_base + line_height * 5.0, 12.0);
+
+    // Variant hint (for opcodes that have variants)
+    let variant_hint = get_variant_hint(EDITOR.opcode, EDITOR.variant_id);
+    if !variant_hint.is_empty() {
+        set_color(0xAAAA88FF);
+        buf[0..3].copy_from_slice(b"v: ");
+        let len_v = 3 + copy_slice(&mut buf[3..], variant_hint);
+        draw_text(buf.as_ptr(), len_v as u32, 10.0, y_base + line_height * 6.0, 12.0);
+    }
 }
