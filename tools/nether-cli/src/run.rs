@@ -68,6 +68,10 @@ pub struct RunArgs {
     /// Watch for file changes and automatically rebuild/relaunch
     #[arg(long)]
     pub watch: bool,
+
+    /// Run a replay script (.ncrs) for automated playback and screenshots
+    #[arg(long, value_name = "FILE")]
+    pub replay: Option<PathBuf>,
 }
 
 /// Execute the run command
@@ -429,6 +433,11 @@ fn build_player_args(args: &RunArgs) -> Vec<String> {
     if args.input_delay > 0 {
         extra_args.push("--input-delay".to_string());
         extra_args.push(args.input_delay.to_string());
+    }
+
+    if let Some(ref replay) = args.replay {
+        extra_args.push("--replay".to_string());
+        extra_args.push(replay.display().to_string());
     }
 
     extra_args

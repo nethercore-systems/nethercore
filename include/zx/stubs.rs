@@ -176,6 +176,12 @@ pub unsafe fn rom_data_len(_id_ptr: *const u8, _id_len: u32) -> u32 {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+pub unsafe fn debug_register_u8(_name_ptr: *const u8, _name_len: u32, _ptr: *const u8) {}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub unsafe fn debug_register_u16(_name_ptr: *const u8, _name_len: u32, _ptr: *const u8) {}
+
+#[cfg(not(target_arch = "wasm32"))]
 pub unsafe fn debug_register_f32(_name_ptr: *const u8, _name_len: u32, _ptr: *const u8) {}
 
 #[cfg(not(target_arch = "wasm32"))]
