@@ -8,6 +8,7 @@ description = "IT (Impulse Tracker) module format parser and writer for Netherco
 
 [dependencies]
 hashbrown = { workspace = true }
+thiserror = "1"
 
 [dev-dependencies]
 # None needed - simple tests only

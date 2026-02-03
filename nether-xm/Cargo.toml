@@ -7,7 +7,7 @@ repository.workspace = true
 description = "XM (Extended Module) tracker format parser for Nethercore"
 
 [dependencies]
-# None - pure Rust, no external dependencies
+thiserror = "1"
 
 [dev-dependencies]
 # None needed - simple tests only

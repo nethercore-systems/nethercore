@@ -1,54 +1,50 @@
 //! XM parsing error types
 
-use core::fmt;
+use thiserror::Error;
 
 /// XM parsing error types
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Error)]
 pub enum XmError {
     /// File too small to contain header
+    #[error("File too small to contain XM header")]
     TooSmall,
+
     /// Invalid magic string (not "Extended Module: ")
+    #[error("Invalid XM magic string")]
     InvalidMagic,
+
     /// Unsupported XM version
+    #[error("Unsupported XM version: 0x{0:04X}")]
     UnsupportedVersion(u16),
+
     /// Invalid header size
+    #[error("Invalid XM header size")]
     InvalidHeaderSize,
+
     /// Too many channels (> 32)
+    #[error("Too many channels: {0} (max 32)")]
     TooManyChannels(u8),
+
     /// Pattern count exceeds maximum
+    #[error("Too many patterns: {0} (max 256)")]
     TooManyPatterns(u16),
+
     /// Invalid pattern data
+    #[error("Invalid pattern data at index {0}")]
     InvalidPattern(u16),
+
     /// Instrument parsing error
+    #[error("Invalid instrument at index {0}")]
     InvalidInstrument(u16),
+
     /// Unexpected end of file
+    #[error("Unexpected end of file")]
     UnexpectedEof,
+
     /// IO error during parsing
+    #[error("IO error: {0}")]
     IoError(String),
 }
-
-impl fmt::Display for XmError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            XmError::TooSmall => write!(f, "File too small to contain XM header"),
-            XmError::InvalidMagic => write!(f, "Invalid XM magic string"),
-            XmError::UnsupportedVersion(v) => write!(f, "Unsupported XM version: 0x{:04X}", v),
-            XmError::InvalidHeaderSize => write!(f, "Invalid XM header size"),
-            XmError::TooManyChannels(n) => {
-                write!(f, "Too many channels: {} (max {})", n, crate::MAX_CHANNELS)
-            }
-            XmError::TooManyPatterns(n) => {
-                write!(f, "Too many patterns: {} (max {})", n, crate::MAX_PATTERNS)
-            }
-            XmError::InvalidPattern(n) => write!(f, "Invalid pattern data at index {}", n),
-            XmError::InvalidInstrument(n) => write!(f, "Invalid instrument at index {}", n),
-            XmError::UnexpectedEof => write!(f, "Unexpected end of file"),
-            XmError::IoError(e) => write!(f, "IO error: {}", e),
-        }
-    }
-}
-
-impl std::error::Error for XmError {}
 
 impl From<std::io::Error> for XmError {
     fn from(e: std::io::Error) -> Self {
