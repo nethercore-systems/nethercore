@@ -24,14 +24,14 @@
 //! epu_runtime.build_env(&device, &queue, &mut encoder, &config);
 //! ```
 
+use super::EpuConfig;
 use super::cache::EpuCache;
 use super::pipelines;
 use super::settings::{
-    calc_mip_sizes, choose_irrad_mip_level, EpuRuntimeSettings, EPU_INITIAL_LAYERS,
-    EPU_IRRAD_TARGET_SIZE, MAX_ACTIVE_ENVS, MAX_ENV_STATES,
+    EPU_INITIAL_LAYERS, EPU_IRRAD_TARGET_SIZE, EpuRuntimeSettings, MAX_ACTIVE_ENVS, MAX_ENV_STATES,
+    calc_mip_sizes, choose_irrad_mip_level,
 };
 use super::types::{FrameUniforms, GpuEnvironmentState, IrradUniforms};
-use super::EpuConfig;
 
 use std::sync::atomic::{AtomicU32, Ordering};
 

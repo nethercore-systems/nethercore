@@ -130,13 +130,27 @@ pub struct CaptureConfig {
 // Note: serde's `default` attribute requires functions by name, so each
 // keybinding needs its own function returning String.
 
-fn default_panel_toggle() -> String { "F3".to_string() }
-fn default_pause_toggle() -> String { "F5".to_string() }
-fn default_step_frame() -> String { "F6".to_string() }
-fn default_speed_decrease() -> String { "F7".to_string() }
-fn default_speed_increase() -> String { "F8".to_string() }
-fn default_screenshot_key() -> String { "F9".to_string() }
-fn default_gif_toggle_key() -> String { "F10".to_string() }
+fn default_panel_toggle() -> String {
+    "F3".to_string()
+}
+fn default_pause_toggle() -> String {
+    "F5".to_string()
+}
+fn default_step_frame() -> String {
+    "F6".to_string()
+}
+fn default_speed_decrease() -> String {
+    "F7".to_string()
+}
+fn default_speed_increase() -> String {
+    "F8".to_string()
+}
+fn default_screenshot_key() -> String {
+    "F9".to_string()
+}
+fn default_gif_toggle_key() -> String {
+    "F10".to_string()
+}
 fn default_gif_fps() -> u32 {
     30
 }

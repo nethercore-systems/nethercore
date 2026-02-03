@@ -131,7 +131,9 @@ impl FileWatcher {
         if paths.manifest.exists() {
             watcher
                 .watch(&paths.manifest, RecursiveMode::NonRecursive)
-                .with_context(|| format!("Failed to watch manifest: {}", paths.manifest.display()))?;
+                .with_context(|| {
+                    format!("Failed to watch manifest: {}", paths.manifest.display())
+                })?;
         }
 
         // Watch source directories recursively

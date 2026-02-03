@@ -73,8 +73,13 @@ fn read_string_id(caller: &Caller<'_, ZXGameContext>, id_ptr: u32, id_len: u32) 
 fn rom_texture(mut caller: Caller<'_, ZXGameContext>, id_ptr: u32, id_len: u32) -> Result<u32> {
     check_init_only(&caller, "rom_texture")?;
 
-    let id = read_string_id(&caller, id_ptr, id_len)
-        .ok_or_else(|| anyhow::anyhow!("rom_texture: failed to read asset ID at ptr=0x{:08X}, len={}", id_ptr, id_len))?;
+    let id = read_string_id(&caller, id_ptr, id_len).ok_or_else(|| {
+        anyhow::anyhow!(
+            "rom_texture: failed to read asset ID at ptr=0x{:08X}, len={}",
+            id_ptr,
+            id_len
+        )
+    })?;
 
     // Extract texture data from data pack (read-only access)
     let (width, height, format, data) = {
@@ -123,8 +128,13 @@ fn rom_texture(mut caller: Caller<'_, ZXGameContext>, id_ptr: u32, id_len: u32) 
 fn rom_mesh(mut caller: Caller<'_, ZXGameContext>, id_ptr: u32, id_len: u32) -> Result<u32> {
     check_init_only(&caller, "rom_mesh")?;
 
-    let id = read_string_id(&caller, id_ptr, id_len)
-        .ok_or_else(|| anyhow::anyhow!("rom_mesh: failed to read asset ID at ptr=0x{:08X}, len={}", id_ptr, id_len))?;
+    let id = read_string_id(&caller, id_ptr, id_len).ok_or_else(|| {
+        anyhow::anyhow!(
+            "rom_mesh: failed to read asset ID at ptr=0x{:08X}, len={}",
+            id_ptr,
+            id_len
+        )
+    })?;
 
     // Extract mesh data from data pack (read-only access)
     let (format, vertex_data, index_data) = {
@@ -174,8 +184,13 @@ fn rom_mesh(mut caller: Caller<'_, ZXGameContext>, id_ptr: u32, id_len: u32) -> 
 fn rom_skeleton(mut caller: Caller<'_, ZXGameContext>, id_ptr: u32, id_len: u32) -> Result<u32> {
     check_init_only(&caller, "rom_skeleton")?;
 
-    let id = read_string_id(&caller, id_ptr, id_len)
-        .ok_or_else(|| anyhow::anyhow!("rom_skeleton: failed to read asset ID at ptr=0x{:08X}, len={}", id_ptr, id_len))?;
+    let id = read_string_id(&caller, id_ptr, id_len).ok_or_else(|| {
+        anyhow::anyhow!(
+            "rom_skeleton: failed to read asset ID at ptr=0x{:08X}, len={}",
+            id_ptr,
+            id_len
+        )
+    })?;
 
     // Extract skeleton data from data pack (read-only access)
     let (bone_count, inverse_bind) = {
@@ -231,8 +246,13 @@ fn rom_skeleton(mut caller: Caller<'_, ZXGameContext>, id_ptr: u32, id_len: u32)
 fn rom_font(mut caller: Caller<'_, ZXGameContext>, id_ptr: u32, id_len: u32) -> Result<u32> {
     check_init_only(&caller, "rom_font")?;
 
-    let id = read_string_id(&caller, id_ptr, id_len)
-        .ok_or_else(|| anyhow::anyhow!("rom_font: failed to read asset ID at ptr=0x{:08X}, len={}", id_ptr, id_len))?;
+    let id = read_string_id(&caller, id_ptr, id_len).ok_or_else(|| {
+        anyhow::anyhow!(
+            "rom_font: failed to read asset ID at ptr=0x{:08X}, len={}",
+            id_ptr,
+            id_len
+        )
+    })?;
 
     // Extract font atlas data from data pack (read-only access)
     let (atlas_width, atlas_height, atlas_data) = {
@@ -284,8 +304,13 @@ fn rom_font(mut caller: Caller<'_, ZXGameContext>, id_ptr: u32, id_len: u32) -> 
 fn rom_sound(mut caller: Caller<'_, ZXGameContext>, id_ptr: u32, id_len: u32) -> Result<u32> {
     check_init_only(&caller, "rom_sound")?;
 
-    let id = read_string_id(&caller, id_ptr, id_len)
-        .ok_or_else(|| anyhow::anyhow!("rom_sound: failed to read asset ID at ptr=0x{:08X}, len={}", id_ptr, id_len))?;
+    let id = read_string_id(&caller, id_ptr, id_len).ok_or_else(|| {
+        anyhow::anyhow!(
+            "rom_sound: failed to read asset ID at ptr=0x{:08X}, len={}",
+            id_ptr,
+            id_len
+        )
+    })?;
 
     // Extract sound data from data pack (read-only access)
     let sound_data = {
@@ -337,8 +362,13 @@ fn rom_sound(mut caller: Caller<'_, ZXGameContext>, id_ptr: u32, id_len: u32) ->
 ///
 /// Use this to allocate a buffer before calling `rom_data()`.
 fn rom_data_len(caller: Caller<'_, ZXGameContext>, id_ptr: u32, id_len: u32) -> Result<u32> {
-    let id = read_string_id(&caller, id_ptr, id_len)
-        .ok_or_else(|| anyhow::anyhow!("rom_data_len: failed to read asset ID at ptr=0x{:08X}, len={}", id_ptr, id_len))?;
+    let id = read_string_id(&caller, id_ptr, id_len).ok_or_else(|| {
+        anyhow::anyhow!(
+            "rom_data_len: failed to read asset ID at ptr=0x{:08X}, len={}",
+            id_ptr,
+            id_len
+        )
+    })?;
 
     let state = &caller.data().ffi;
 
@@ -376,8 +406,13 @@ fn rom_data(
     dst_ptr: u32,
     max_len: u32,
 ) -> Result<u32> {
-    let id = read_string_id(&caller, id_ptr, id_len)
-        .ok_or_else(|| anyhow::anyhow!("rom_data: failed to read asset ID at ptr=0x{:08X}, len={}", id_ptr, id_len))?;
+    let id = read_string_id(&caller, id_ptr, id_len).ok_or_else(|| {
+        anyhow::anyhow!(
+            "rom_data: failed to read asset ID at ptr=0x{:08X}, len={}",
+            id_ptr,
+            id_len
+        )
+    })?;
 
     // Get data from data pack (clone the bytes we need)
     let data_bytes = {

@@ -93,11 +93,7 @@ pub fn execute(args: RunArgs) -> Result<()> {
 }
 
 /// Execute a single build + launch cycle
-fn execute_single_run(
-    args: &RunArgs,
-    project_dir: &Path,
-    manifest_path: &Path,
-) -> Result<()> {
+fn execute_single_run(args: &RunArgs, project_dir: &Path, manifest_path: &Path) -> Result<()> {
     // Step 1: Build (unless --no-build)
     if !args.no_build {
         build::execute(BuildArgs {
@@ -188,11 +184,7 @@ fn launch_player(
 }
 
 /// Spawn the player as a background process (doesn't wait for exit)
-fn spawn_player(
-    args: &RunArgs,
-    project_dir: &Path,
-    manifest_path: &Path,
-) -> Result<Child> {
+fn spawn_player(args: &RunArgs, project_dir: &Path, manifest_path: &Path) -> Result<Child> {
     // Read manifest to get game ID
     let manifest = NetherManifest::load(manifest_path)?;
     let rom_path = project_dir.join(format!(
@@ -246,11 +238,7 @@ fn spawn_player(
 }
 
 /// Execute watch mode: rebuild and relaunch on file changes
-fn execute_watch_mode(
-    args: &RunArgs,
-    project_dir: &Path,
-    manifest_path: &Path,
-) -> Result<()> {
+fn execute_watch_mode(args: &RunArgs, project_dir: &Path, manifest_path: &Path) -> Result<()> {
     println!("=== Dev Mode (--watch) ===");
     println!("  Watching for changes. Press Ctrl+C to exit.");
     println!();
