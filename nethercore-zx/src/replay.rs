@@ -5,6 +5,15 @@
 
 use std::borrow::Cow;
 
+/// Maximum value for stick axis conversion (-128 to 127 -> -1.0 to 1.0)
+const STICK_SCALE: f32 = 127.0;
+
+/// Maximum value for trigger conversion (0-255 -> 0.0 to 1.0)
+const TRIGGER_SCALE: f32 = 255.0;
+
+/// Threshold below which analog values are considered zero
+const ANALOG_DEADZONE: f32 = 0.01;
+
 use nethercore_core::replay::{InputLayout, StructuredInput};
 
 use crate::console::{Button, ZInput};
@@ -123,26 +132,26 @@ impl InputLayout for ZxInputLayout {
 
         // Left stick: convert -1.0..1.0 to -128..127
         if let Some([x, _]) = input.lstick {
-            bytes[2] = (x.clamp(-1.0, 1.0) * 127.0) as i8 as u8;
+            bytes[2] = (x.clamp(-1.0, 1.0) * STICK_SCALE) as i8 as u8;
         }
         if let Some([_, y]) = input.lstick {
-            bytes[3] = (y.clamp(-1.0, 1.0) * 127.0) as i8 as u8;
+            bytes[3] = (y.clamp(-1.0, 1.0) * STICK_SCALE) as i8 as u8;
         }
 
         // Right stick: convert -1.0..1.0 to -128..127
         if let Some([x, _]) = input.rstick {
-            bytes[4] = (x.clamp(-1.0, 1.0) * 127.0) as i8 as u8;
+            bytes[4] = (x.clamp(-1.0, 1.0) * STICK_SCALE) as i8 as u8;
         }
         if let Some([_, y]) = input.rstick {
-            bytes[5] = (y.clamp(-1.0, 1.0) * 127.0) as i8 as u8;
+            bytes[5] = (y.clamp(-1.0, 1.0) * STICK_SCALE) as i8 as u8;
         }
 
         // Triggers: convert 0.0..1.0 to 0..255
         if let Some(lt) = input.lt {
-            bytes[6] = (lt.clamp(0.0, 1.0) * 255.0) as u8;
+            bytes[6] = (lt.clamp(0.0, 1.0) * TRIGGER_SCALE) as u8;
         }
         if let Some(rt) = input.rt {
-            bytes[7] = (rt.clamp(0.0, 1.0) * 255.0) as u8;
+            bytes[7] = (rt.clamp(0.0, 1.0) * TRIGGER_SCALE) as u8;
         }
 
         bytes
@@ -200,28 +209,28 @@ impl InputLayout for ZxInputLayout {
 
         // Left stick: convert -128..127 to -1.0..1.0
         if bytes.len() >= 4 {
-            let lx = bytes[2] as i8 as f32 / 127.0;
-            let ly = bytes[3] as i8 as f32 / 127.0;
-            if lx.abs() > 0.01 || ly.abs() > 0.01 {
+            let lx = bytes[2] as i8 as f32 / STICK_SCALE;
+            let ly = bytes[3] as i8 as f32 / STICK_SCALE;
+            if lx.abs() > ANALOG_DEADZONE || ly.abs() > ANALOG_DEADZONE {
                 input.lstick = Some([lx, ly]);
             }
         }
 
         // Right stick: convert -128..127 to -1.0..1.0
         if bytes.len() >= 6 {
-            let rx = bytes[4] as i8 as f32 / 127.0;
-            let ry = bytes[5] as i8 as f32 / 127.0;
-            if rx.abs() > 0.01 || ry.abs() > 0.01 {
+            let rx = bytes[4] as i8 as f32 / STICK_SCALE;
+            let ry = bytes[5] as i8 as f32 / STICK_SCALE;
+            if rx.abs() > ANALOG_DEADZONE || ry.abs() > ANALOG_DEADZONE {
                 input.rstick = Some([rx, ry]);
             }
         }
 
         // Triggers: convert 0..255 to 0.0..1.0
         if bytes.len() >= 7 && bytes[6] > 0 {
-            input.lt = Some(bytes[6] as f32 / 255.0);
+            input.lt = Some(bytes[6] as f32 / TRIGGER_SCALE);
         }
         if bytes.len() >= 8 && bytes[7] > 0 {
-            input.rt = Some(bytes[7] as f32 / 255.0);
+            input.rt = Some(bytes[7] as f32 / TRIGGER_SCALE);
         }
 
         input
