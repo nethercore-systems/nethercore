@@ -34,6 +34,12 @@ fn panic(_info: &PanicInfo) -> ! {
 mod ffi;
 use ffi::*;
 
+// Generated EPU metadata from WGSL files (build.rs)
+#[allow(dead_code)]
+mod epu_meta {
+    include!(concat!(env!("OUT_DIR"), "/epu_meta_gen.rs"));
+}
+
 // ============================================================================
 // Editor State - Unpacked layer values for debug panel editing
 // ============================================================================
