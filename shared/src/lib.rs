@@ -40,15 +40,31 @@ pub mod requests;
 pub mod rom_format;
 pub mod screenshot;
 
-// Re-export all public items for convenience
-pub use api::*;
-pub use auth::*;
-pub use console::*;
-pub use constants::*;
-pub use fs::*;
-pub use ids::*;
-pub use local::*;
-pub use math::*;
-pub use netplay::*;
-pub use requests::*;
-pub use rom_format::*;
+// Re-export public items explicitly for clarity
+pub use api::{Author, Game, GamesResponse, RomUrlResponse, VersionResponse};
+pub use auth::{error_codes, ApiError, AuthResponse, LinkCodeResponse, User};
+pub use console::{
+    get_console_specs, nethercore_chroma_specs, nethercore_zx_specs, ConsoleSpecs, ConsoleType,
+    ParseConsoleTypeError, TickRate, CONSOLES, NETHERCORE_CHROMA_MEMORY_LIMIT,
+    NETHERCORE_CHROMA_RESOLUTION, NETHERCORE_CHROMA_VRAM_LIMIT, NETHERCORE_ZX_RAM_LIMIT,
+    NETHERCORE_ZX_RESOLUTION, NETHERCORE_ZX_ROM_LIMIT, NETHERCORE_ZX_TICK_RATES,
+    NETHERCORE_ZX_VRAM_LIMIT,
+};
+pub use constants::{BEARER_PREFIX, LOCAL_DEV_BASE_URL, LOCAL_FRONTEND_URL, PRODUCTION_URL};
+pub use fs::{read_file_with_limit, MAX_PNG_BYTES, MAX_ROM_BYTES, MAX_WASM_BYTES};
+pub use ids::is_safe_game_id;
+pub use local::LocalGameManifest;
+pub use math::BoneMatrix3x4;
+pub use netplay::{NetplayMetadata, NetplayMismatch};
+pub use requests::{
+    CreateGameRequest, CreateGameResponse, LoginRequest, RegisterRequest, SuccessResponse,
+    UpdateGameRequest, UploadUrls,
+};
+pub use rom_format::{
+    get_console_type_by_extension, get_rom_format_by_console, get_rom_format_by_console_type,
+    get_rom_format_by_extension, RomFormat, ROM_FORMATS, ZX_ROM_FORMAT,
+};
+pub use screenshot::{
+    compute_pixel_hash, sign_screenshot, verify_screenshot, ScreenshotPayload,
+    ScreenshotSignError, SignedScreenshot, SCREENSHOT_SIGNATURE_KEYWORD,
+};
