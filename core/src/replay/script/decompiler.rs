@@ -133,6 +133,8 @@ fn console_name(id: u8) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::borrow::Cow;
+
     use super::*;
     use crate::replay::script::StructuredInput;
     use crate::replay::types::{InputSequence, ReplayFlags, ReplayHeader};
@@ -144,7 +146,7 @@ mod tests {
         fn encode_input(&self, input: &StructuredInput) -> Vec<u8> {
             let mut byte = 0u8;
             for button in &input.buttons {
-                match button.as_str() {
+                match &**button {
                     "up" => byte |= 0x01,
                     "down" => byte |= 0x02,
                     "left" => byte |= 0x04,
@@ -161,22 +163,22 @@ mod tests {
             let byte = bytes.first().copied().unwrap_or(0);
             let mut buttons = Vec::new();
             if byte & 0x01 != 0 {
-                buttons.push("up".to_string());
+                buttons.push(Cow::Borrowed("up"));
             }
             if byte & 0x02 != 0 {
-                buttons.push("down".to_string());
+                buttons.push(Cow::Borrowed("down"));
             }
             if byte & 0x04 != 0 {
-                buttons.push("left".to_string());
+                buttons.push(Cow::Borrowed("left"));
             }
             if byte & 0x08 != 0 {
-                buttons.push("right".to_string());
+                buttons.push(Cow::Borrowed("right"));
             }
             if byte & 0x10 != 0 {
-                buttons.push("a".to_string());
+                buttons.push(Cow::Borrowed("a"));
             }
             if byte & 0x20 != 0 {
-                buttons.push("b".to_string());
+                buttons.push(Cow::Borrowed("b"));
             }
             StructuredInput {
                 buttons,

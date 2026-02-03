@@ -3,6 +3,8 @@
 //! Provides the `ZxInputLayout` implementation of the `InputLayout` trait
 //! for encoding/decoding ZX input in replay scripts.
 
+use std::borrow::Cow;
+
 use nethercore_core::replay::{InputLayout, StructuredInput};
 
 use crate::console::{Button, ZInput};
@@ -153,46 +155,46 @@ impl InputLayout for ZxInputLayout {
             let buttons = u16::from_le_bytes([bytes[0], bytes[1]]);
 
             if buttons & Button::Up.mask() != 0 {
-                input.buttons.push("up".to_string());
+                input.buttons.push(Cow::Borrowed("up"));
             }
             if buttons & Button::Down.mask() != 0 {
-                input.buttons.push("down".to_string());
+                input.buttons.push(Cow::Borrowed("down"));
             }
             if buttons & Button::Left.mask() != 0 {
-                input.buttons.push("left".to_string());
+                input.buttons.push(Cow::Borrowed("left"));
             }
             if buttons & Button::Right.mask() != 0 {
-                input.buttons.push("right".to_string());
+                input.buttons.push(Cow::Borrowed("right"));
             }
             if buttons & Button::A.mask() != 0 {
-                input.buttons.push("a".to_string());
+                input.buttons.push(Cow::Borrowed("a"));
             }
             if buttons & Button::B.mask() != 0 {
-                input.buttons.push("b".to_string());
+                input.buttons.push(Cow::Borrowed("b"));
             }
             if buttons & Button::X.mask() != 0 {
-                input.buttons.push("x".to_string());
+                input.buttons.push(Cow::Borrowed("x"));
             }
             if buttons & Button::Y.mask() != 0 {
-                input.buttons.push("y".to_string());
+                input.buttons.push(Cow::Borrowed("y"));
             }
             if buttons & Button::LeftBumper.mask() != 0 {
-                input.buttons.push("l".to_string());
+                input.buttons.push(Cow::Borrowed("l"));
             }
             if buttons & Button::RightBumper.mask() != 0 {
-                input.buttons.push("r".to_string());
+                input.buttons.push(Cow::Borrowed("r"));
             }
             if buttons & Button::LeftStick.mask() != 0 {
-                input.buttons.push("l3".to_string());
+                input.buttons.push(Cow::Borrowed("l3"));
             }
             if buttons & Button::RightStick.mask() != 0 {
-                input.buttons.push("r3".to_string());
+                input.buttons.push(Cow::Borrowed("r3"));
             }
             if buttons & Button::Start.mask() != 0 {
-                input.buttons.push("start".to_string());
+                input.buttons.push(Cow::Borrowed("start"));
             }
             if buttons & Button::Select.mask() != 0 {
-                input.buttons.push("select".to_string());
+                input.buttons.push(Cow::Borrowed("select"));
             }
         }
 
@@ -251,7 +253,7 @@ mod tests {
 
         // Test single button
         let input = StructuredInput {
-            buttons: vec!["a".to_string()],
+            buttons: vec![Cow::Borrowed("a")],
             ..Default::default()
         };
         let bytes = layout.encode_input(&input);
@@ -259,7 +261,7 @@ mod tests {
 
         // Test multiple buttons
         let input = StructuredInput {
-            buttons: vec!["up".to_string(), "a".to_string()],
+            buttons: vec![Cow::Borrowed("up"), Cow::Borrowed("a")],
             ..Default::default()
         };
         let bytes = layout.encode_input(&input);
@@ -273,13 +275,13 @@ mod tests {
         // A button pressed
         let bytes = [0x10, 0x00, 0, 0, 0, 0, 0, 0];
         let input = layout.decode_input(&bytes);
-        assert_eq!(input.buttons, vec!["a"]);
+        assert_eq!(input.buttons, vec![Cow::Borrowed("a")]);
 
         // Up + Start
         let bytes = [0x01, 0x10, 0, 0, 0, 0, 0, 0];
         let input = layout.decode_input(&bytes);
-        assert!(input.buttons.contains(&"up".to_string()));
-        assert!(input.buttons.contains(&"start".to_string()));
+        assert!(input.buttons.contains(&Cow::Borrowed("up")));
+        assert!(input.buttons.contains(&Cow::Borrowed("start")));
     }
 
     #[test]
@@ -287,7 +289,7 @@ mod tests {
         let layout = ZxInputLayout;
 
         let input = StructuredInput {
-            buttons: vec![],
+            buttons: Vec::new(),
             lstick: Some([0.5, -0.5]),
             rstick: Some([-1.0, 1.0]),
             lt: Some(0.75),

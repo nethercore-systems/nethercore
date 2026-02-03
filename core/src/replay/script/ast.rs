@@ -1,5 +1,7 @@
 //! Replay script AST types.
 
+use std::borrow::Cow;
+
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 
@@ -100,8 +102,11 @@ pub enum InputValue {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct StructuredInput {
     /// Digital buttons: ["a", "b"]
+    ///
+    /// Uses `Cow<'static, str>` to avoid heap allocations when using static
+    /// button names in the hot rollback path (decode_input is called every frame).
     #[serde(default)]
-    pub buttons: Vec<String>,
+    pub buttons: Vec<Cow<'static, str>>,
 
     /// Left stick: [x, y] where -1.0 to 1.0
     #[serde(default)]

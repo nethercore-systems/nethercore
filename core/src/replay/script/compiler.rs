@@ -2,6 +2,8 @@
 //!
 //! Converts parsed TOML scripts into executable form.
 
+use std::borrow::Cow;
+
 use super::ast::{
     ActionParamValue, AssertCondition, AssertValue, CompareOp, InputValue, ReplayScript,
     StructuredInput,
@@ -30,14 +32,14 @@ pub trait InputLayout: Send + Sync {
     /// Encode symbolic buttons to raw bytes
     fn encode_buttons(&self, buttons: &[String]) -> Vec<u8> {
         let structured = StructuredInput {
-            buttons: buttons.to_vec(),
+            buttons: buttons.iter().map(|s| Cow::Owned(s.clone())).collect(),
             ..Default::default()
         };
         self.encode_input(&structured)
     }
 
     /// Decode raw bytes to symbolic button names
-    fn decode_buttons(&self, bytes: &[u8]) -> Vec<String> {
+    fn decode_buttons(&self, bytes: &[u8]) -> Vec<Cow<'static, str>> {
         self.decode_input(bytes).buttons
     }
 }
@@ -264,7 +266,7 @@ mod tests {
         fn encode_input(&self, input: &StructuredInput) -> Vec<u8> {
             let mut byte = 0u8;
             for button in &input.buttons {
-                match button.as_str() {
+                match &**button {
                     "up" => byte |= 0x01,
                     "down" => byte |= 0x02,
                     "left" => byte |= 0x04,
@@ -281,22 +283,22 @@ mod tests {
             let byte = bytes.first().copied().unwrap_or(0);
             let mut buttons = Vec::new();
             if byte & 0x01 != 0 {
-                buttons.push("up".to_string());
+                buttons.push(Cow::Borrowed("up"));
             }
             if byte & 0x02 != 0 {
-                buttons.push("down".to_string());
+                buttons.push(Cow::Borrowed("down"));
             }
             if byte & 0x04 != 0 {
-                buttons.push("left".to_string());
+                buttons.push(Cow::Borrowed("left"));
             }
             if byte & 0x08 != 0 {
-                buttons.push("right".to_string());
+                buttons.push(Cow::Borrowed("right"));
             }
             if byte & 0x10 != 0 {
-                buttons.push("a".to_string());
+                buttons.push(Cow::Borrowed("a"));
             }
             if byte & 0x20 != 0 {
-                buttons.push("b".to_string());
+                buttons.push(Cow::Borrowed("b"));
             }
             StructuredInput {
                 buttons,

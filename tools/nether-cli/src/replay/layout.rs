@@ -1,5 +1,7 @@
 //! Shared input layouts for replay tooling.
 
+use std::borrow::Cow;
+
 use nethercore_core::replay::{InputLayout, StructuredInput};
 
 /// Default input layout for ZX.
@@ -73,40 +75,40 @@ impl InputLayout for ZxInputLayout {
             let buttons = u16::from_le_bytes([bytes[0], bytes[1]]);
 
             if buttons & 0x0001 != 0 {
-                input.buttons.push("up".to_string());
+                input.buttons.push(Cow::Borrowed("up"));
             }
             if buttons & 0x0002 != 0 {
-                input.buttons.push("down".to_string());
+                input.buttons.push(Cow::Borrowed("down"));
             }
             if buttons & 0x0004 != 0 {
-                input.buttons.push("left".to_string());
+                input.buttons.push(Cow::Borrowed("left"));
             }
             if buttons & 0x0008 != 0 {
-                input.buttons.push("right".to_string());
+                input.buttons.push(Cow::Borrowed("right"));
             }
             if buttons & 0x0010 != 0 {
-                input.buttons.push("a".to_string());
+                input.buttons.push(Cow::Borrowed("a"));
             }
             if buttons & 0x0020 != 0 {
-                input.buttons.push("b".to_string());
+                input.buttons.push(Cow::Borrowed("b"));
             }
             if buttons & 0x0040 != 0 {
-                input.buttons.push("x".to_string());
+                input.buttons.push(Cow::Borrowed("x"));
             }
             if buttons & 0x0080 != 0 {
-                input.buttons.push("y".to_string());
+                input.buttons.push(Cow::Borrowed("y"));
             }
             if buttons & 0x0100 != 0 {
-                input.buttons.push("l".to_string());
+                input.buttons.push(Cow::Borrowed("l"));
             }
             if buttons & 0x0200 != 0 {
-                input.buttons.push("r".to_string());
+                input.buttons.push(Cow::Borrowed("r"));
             }
             if buttons & 0x0400 != 0 {
-                input.buttons.push("start".to_string());
+                input.buttons.push(Cow::Borrowed("start"));
             }
             if buttons & 0x0800 != 0 {
-                input.buttons.push("select".to_string());
+                input.buttons.push(Cow::Borrowed("select"));
             }
         }
 

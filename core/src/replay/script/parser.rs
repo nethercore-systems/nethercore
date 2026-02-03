@@ -2,8 +2,10 @@
 //!
 //! Parses .ncrs script files into a structured representation.
 
-use super::ast::{AssertCondition, AssertValue, CompareOp, InputValue, ReplayScript};
+use std::borrow::Cow;
 use std::path::Path;
+
+use super::ast::{AssertCondition, AssertValue, CompareOp, InputValue, ReplayScript};
 
 impl ReplayScript {
     /// Parse a TOML replay script from a string
@@ -78,6 +80,9 @@ impl AssertCondition {
 
 impl InputValue {
     /// Parse symbolic input like "right+a" into button list
+    ///
+    /// Note: This returns `Cow::Owned` strings since the input is parsed at runtime.
+    /// For hot-path decoding, prefer using `Cow::Borrowed` with static strings.
     pub fn parse_symbolic(s: &str) -> Vec<String> {
         if s == "idle" || s.is_empty() {
             return Vec::new();
@@ -89,9 +94,12 @@ impl InputValue {
     }
 
     /// Get buttons from any input type
-    pub fn buttons(&self) -> Vec<String> {
+    pub fn buttons(&self) -> Vec<Cow<'static, str>> {
         match self {
-            InputValue::Symbolic(s) => Self::parse_symbolic(s),
+            InputValue::Symbolic(s) => Self::parse_symbolic(s)
+                .into_iter()
+                .map(Cow::Owned)
+                .collect(),
             InputValue::Structured(s) => s.buttons.clone(),
             InputValue::HexBytes(_) => Vec::new(),
         }
@@ -281,7 +289,7 @@ rt = 0.8
         assert_eq!(script.frames.len(), 2);
 
         if let Some(InputValue::Structured(s)) = &script.frames[0].p1 {
-            assert_eq!(s.buttons, vec!["a".to_string()]);
+            assert_eq!(s.buttons, vec![Cow::<str>::Owned("a".to_string())]);
             assert_eq!(s.lstick, Some([1.0, 0.0]));
         } else {
             panic!("Expected structured input");
