@@ -96,11 +96,41 @@ impl EditorState {
 }
 
 // ============================================================================
+// Macro State Model
+// ============================================================================
+
+/// Macro state stores field values in "human units" (degrees, percentages, etc.)
+/// Up to 8 parameters per opcode: intensity, param_a..d, direction (az/el), alpha_a, alpha_b
+#[derive(Clone, Copy)]
+struct MacroState {
+    values: [f32; 8], // Field values in human units
+}
+
+impl MacroState {
+    const fn default() -> Self {
+        Self { values: [0.0; 8] }
+    }
+}
+
+/// Edit mode determines which representation drives changes
+#[derive(Clone, Copy, PartialEq)]
+enum EditMode {
+    Macro, // Macro values drive raw fields
+    Raw,   // Raw fields are edited directly
+}
+
+// ============================================================================
 // Global State
 // ============================================================================
 
 /// The 8-layer EPU configuration (16 u64 values = 128 bytes)
 static mut LAYERS: [[u64; 2]; 8] = [[0; 2]; 8];
+
+/// Macro state per layer and opcode: MACROS[layer][opcode]
+static mut MACROS: [[MacroState; 32]; 8] = [[MacroState::default(); 32]; 8];
+
+/// Current edit mode
+static mut EDIT_MODE: EditMode = EditMode::Macro;
 
 /// Current editor state (unpacked from selected layer)
 static mut EDITOR: EditorState = EditorState::default();
@@ -112,6 +142,9 @@ static mut SHOW_HINTS: u8 = 1;       // bool
 
 /// Track previous layer index for change detection
 static mut PREV_LAYER_INDEX: u8 = 1;
+
+/// Track previous opcode for macro state switching
+static mut PREV_OPCODE: u8 = 1;
 
 /// Mesh handles for reference objects
 static mut SPHERE_MESH: u32 = 0;
@@ -208,6 +241,179 @@ fn angles_to_octahedral(azimuth: f32, elevation: f32) -> u16 {
 
     // Pack: lo byte = u, hi byte = v
     (u_byte as u16) | ((v_byte as u16) << 8)
+}
+
+// ============================================================================
+// Macro <-> Raw Mapping Functions
+// ============================================================================
+
+/// Convert f32 [0.0, 1.0] to u8 [0, 255]
+#[inline]
+fn f32_to_u8_01(v: f32) -> u8 {
+    (v.clamp(0.0, 1.0) * 255.0) as u8
+}
+
+/// Convert u8 [0, 255] to f32 [0.0, 1.0]
+#[inline]
+fn u8_01_to_f32(v: u8) -> f32 {
+    v as f32 / 255.0
+}
+
+/// Convert f32 [min, max] to u8 [0, 255] via linear interpolation
+#[inline]
+fn f32_to_u8_lerp(v: f32, min: f32, max: f32) -> u8 {
+    if max <= min {
+        return 0;
+    }
+    let t = (v - min) / (max - min);
+    (t.clamp(0.0, 1.0) * 255.0) as u8
+}
+
+/// Convert u8 [0, 255] to f32 [min, max] via linear interpolation
+#[inline]
+fn u8_lerp_to_f32(v: u8, min: f32, max: f32) -> f32 {
+    let t = v as f32 / 255.0;
+    min + t * (max - min)
+}
+
+/// Convert f32 [0.0, 1.0] to u4 [0, 15]
+#[inline]
+fn f32_to_u4_01(v: f32) -> u8 {
+    (v.clamp(0.0, 1.0) * 15.0) as u8
+}
+
+/// Convert u4 [0, 15] to f32 [0.0, 1.0]
+#[inline]
+fn u4_01_to_f32(v: u8) -> f32 {
+    (v & 0xF) as f32 / 15.0
+}
+
+/// Field index constants for MacroState.values array
+mod field_idx {
+    pub const INTENSITY: usize = 0;
+    pub const PARAM_A: usize = 1;
+    pub const PARAM_B: usize = 2;
+    pub const PARAM_C: usize = 3;
+    pub const PARAM_D: usize = 4;
+    pub const AZIMUTH: usize = 5;   // Direction azimuth (degrees)
+    pub const ELEVATION: usize = 6; // Direction elevation (degrees)
+    pub const ALPHA_A: usize = 7;   // Note: alpha_b not in spec, reuse slot if needed
+}
+
+/// Convert macro state to raw editor fields for a given opcode
+/// Uses FIELD_SPECS to determine the mapping for each field
+unsafe fn macro_to_raw(opcode: u8, macro_state: &MacroState) {
+    use epu_meta::{MapKind, FIELD_SPECS};
+
+    let specs = if (opcode as usize) < FIELD_SPECS.len() {
+        FIELD_SPECS[opcode as usize]
+    } else {
+        return;
+    };
+
+    for spec in specs {
+        let value = match spec.name {
+            "intensity" => macro_state.values[field_idx::INTENSITY],
+            "param_a" => macro_state.values[field_idx::PARAM_A],
+            "param_b" => macro_state.values[field_idx::PARAM_B],
+            "param_c" => macro_state.values[field_idx::PARAM_C],
+            "param_d" => macro_state.values[field_idx::PARAM_D],
+            "direction" => {
+                // Direction is special: set azimuth/elevation directly
+                EDITOR.azimuth = macro_state.values[field_idx::AZIMUTH];
+                EDITOR.elevation = macro_state.values[field_idx::ELEVATION];
+                continue;
+            }
+            "alpha_a" => macro_state.values[field_idx::ALPHA_A],
+            "alpha_b" => {
+                // alpha_b doesn't fit in our 8-slot array, use direct mapping
+                continue;
+            }
+            _ => continue,
+        };
+
+        // Apply the mapping based on MapKind
+        let raw = match spec.map {
+            MapKind::U8_01 => f32_to_u8_01(value),
+            MapKind::U8Lerp => f32_to_u8_lerp(value, spec.min, spec.max),
+            MapKind::U4_01 => f32_to_u4_01(value),
+            MapKind::Dir16Oct => {
+                // Should not happen for non-direction fields
+                continue;
+            }
+        };
+
+        // Write to the appropriate EDITOR field
+        match spec.name {
+            "intensity" => EDITOR.intensity = raw,
+            "param_a" => EDITOR.param_a = raw,
+            "param_b" => EDITOR.param_b = raw,
+            "param_c" => EDITOR.param_c = raw,
+            "param_d" => EDITOR.param_d = raw,
+            "alpha_a" => EDITOR.alpha_a = raw & 0xF,
+            _ => {}
+        }
+    }
+}
+
+/// Convert raw editor fields to macro state for a given opcode
+/// Uses FIELD_SPECS to determine the mapping for each field
+unsafe fn raw_to_macro(opcode: u8) -> MacroState {
+    use epu_meta::{MapKind, FIELD_SPECS};
+
+    let mut state = MacroState::default();
+
+    let specs = if (opcode as usize) < FIELD_SPECS.len() {
+        FIELD_SPECS[opcode as usize]
+    } else {
+        return state;
+    };
+
+    for spec in specs {
+        let raw = match spec.name {
+            "intensity" => EDITOR.intensity,
+            "param_a" => EDITOR.param_a,
+            "param_b" => EDITOR.param_b,
+            "param_c" => EDITOR.param_c,
+            "param_d" => EDITOR.param_d,
+            "direction" => {
+                // Direction is special: read azimuth/elevation directly
+                state.values[field_idx::AZIMUTH] = EDITOR.azimuth;
+                state.values[field_idx::ELEVATION] = EDITOR.elevation;
+                continue;
+            }
+            "alpha_a" => EDITOR.alpha_a,
+            "alpha_b" => {
+                // alpha_b doesn't fit in our 8-slot array
+                continue;
+            }
+            _ => continue,
+        };
+
+        // Apply the inverse mapping based on MapKind
+        let value = match spec.map {
+            MapKind::U8_01 => u8_01_to_f32(raw),
+            MapKind::U8Lerp => u8_lerp_to_f32(raw, spec.min, spec.max),
+            MapKind::U4_01 => u4_01_to_f32(raw),
+            MapKind::Dir16Oct => {
+                // Should not happen for non-direction fields
+                continue;
+            }
+        };
+
+        // Write to the appropriate macro state slot
+        match spec.name {
+            "intensity" => state.values[field_idx::INTENSITY] = value,
+            "param_a" => state.values[field_idx::PARAM_A] = value,
+            "param_b" => state.values[field_idx::PARAM_B] = value,
+            "param_c" => state.values[field_idx::PARAM_C] = value,
+            "param_d" => state.values[field_idx::PARAM_D] = value,
+            "alpha_a" => state.values[field_idx::ALPHA_A] = value,
+            _ => {}
+        }
+    }
+
+    state
 }
 
 /// Unpack a layer's [hi, lo] into the EDITOR state
@@ -408,6 +614,11 @@ pub extern "C" fn init() {
         // Unpack layer 0 into editor state
         unpack_layer(LAYERS[0][0], LAYERS[0][1]);
 
+        // Initialize macro state from the unpacked raw values
+        PREV_OPCODE = EDITOR.opcode;
+        let layer_idx = (LAYER_INDEX - 1) as usize;
+        MACROS[layer_idx][EDITOR.opcode as usize] = raw_to_macro(EDITOR.opcode);
+
         // Create reference meshes
         SPHERE_MESH = sphere(1.3, 32, 24);
         CUBE_MESH = cube(1.2, 1.2, 1.2);
@@ -421,24 +632,47 @@ pub extern "C" fn init() {
 #[no_mangle]
 pub extern "C" fn update() {
     unsafe {
+        let layer_idx = (LAYER_INDEX - 1) as usize;
+
         // Check if layer index changed
         if LAYER_INDEX != PREV_LAYER_INDEX {
+            // Save current macro state for previous layer/opcode
+            let prev_layer_idx = (PREV_LAYER_INDEX - 1) as usize;
+            MACROS[prev_layer_idx][PREV_OPCODE as usize] = raw_to_macro(PREV_OPCODE);
+
             // Save current editor state to previous layer
-            let prev_idx = (PREV_LAYER_INDEX - 1) as usize;
             let (hi, lo) = pack_layer();
-            LAYERS[prev_idx] = [hi, lo];
+            LAYERS[prev_layer_idx] = [hi, lo];
 
             // Load new layer into editor
-            let new_idx = (LAYER_INDEX - 1) as usize;
-            unpack_layer(LAYERS[new_idx][0], LAYERS[new_idx][1]);
+            unpack_layer(LAYERS[layer_idx][0], LAYERS[layer_idx][1]);
 
+            // Update tracking
             PREV_LAYER_INDEX = LAYER_INDEX;
-        } else {
-            // Layer index unchanged - pack editor state back to current layer
-            let idx = (LAYER_INDEX - 1) as usize;
-            let (hi, lo) = pack_layer();
-            LAYERS[idx] = [hi, lo];
+            PREV_OPCODE = EDITOR.opcode;
+
+            // Sync macro state from raw (in case this layer was edited in Raw mode)
+            MACROS[layer_idx][EDITOR.opcode as usize] = raw_to_macro(EDITOR.opcode);
+        } else if EDITOR.opcode != PREV_OPCODE {
+            // Opcode changed within same layer
+            // Save macro state for the old opcode
+            MACROS[layer_idx][PREV_OPCODE as usize] = raw_to_macro(PREV_OPCODE);
+
+            // Load macro state for the new opcode (if it exists)
+            let new_macro = &MACROS[layer_idx][EDITOR.opcode as usize];
+            macro_to_raw(EDITOR.opcode, new_macro);
+
+            PREV_OPCODE = EDITOR.opcode;
+        } else if EDIT_MODE == EditMode::Macro {
+            // Normal update in Macro mode: apply macro state to raw fields
+            // (In a full implementation, we'd track macro changes separately)
+            // For now, sync raw -> macro to keep them in sync
+            MACROS[layer_idx][EDITOR.opcode as usize] = raw_to_macro(EDITOR.opcode);
         }
+
+        // Always pack editor state back to current layer
+        let (hi, lo) = pack_layer();
+        LAYERS[layer_idx] = [hi, lo];
 
         // Cycle shapes with X button
         if button_pressed(0, button::X) != 0 {
