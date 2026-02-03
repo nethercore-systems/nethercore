@@ -7,7 +7,7 @@ use tracing::{info, warn};
 use wasmtime::Caller;
 
 use crate::ffi::ZXGameContext;
-use crate::ffi::guards::check_init_only;
+use crate::ffi::guards::guard_init_only;
 use crate::graphics::{FORMAT_NORMAL, FORMAT_UV};
 use crate::procedural::{self, MeshDataUV};
 use crate::state::PendingMeshPacked;
@@ -34,10 +34,7 @@ pub fn sphere_uv(
     segments: u32,
     rings: u32,
 ) -> u32 {
-    if let Err(e) = check_init_only(&caller, "sphere_uv") {
-        warn!("{}", e);
-        return 0;
-    }
+    guard_init_only!(caller, "sphere_uv");
 
     // Validate parameters
     if radius <= 0.0 {
@@ -94,10 +91,7 @@ pub fn plane_uv(
     subdivisions_x: u32,
     subdivisions_z: u32,
 ) -> u32 {
-    if let Err(e) = check_init_only(&caller, "plane_uv") {
-        warn!("{}", e);
-        return 0;
-    }
+    guard_init_only!(caller, "plane_uv");
 
     // Validate parameters
     if size_x <= 0.0 || size_z <= 0.0 {
@@ -154,10 +148,7 @@ pub fn cube_uv(
     size_y: f32,
     size_z: f32,
 ) -> u32 {
-    if let Err(e) = check_init_only(&caller, "cube_uv") {
-        warn!("{}", e);
-        return 0;
-    }
+    guard_init_only!(caller, "cube_uv");
 
     // Validate parameters
     if size_x <= 0.0 || size_y <= 0.0 || size_z <= 0.0 {
@@ -223,10 +214,7 @@ pub fn cylinder_uv(
     height: f32,
     segments: u32,
 ) -> u32 {
-    if let Err(e) = check_init_only(&caller, "cylinder_uv") {
-        warn!("{}", e);
-        return 0;
-    }
+    guard_init_only!(caller, "cylinder_uv");
 
     // Validate parameters
     if radius_bottom < 0.0 || radius_top < 0.0 {
@@ -292,10 +280,7 @@ pub fn torus_uv(
     major_segments: u32,
     minor_segments: u32,
 ) -> u32 {
-    if let Err(e) = check_init_only(&caller, "torus_uv") {
-        warn!("{}", e);
-        return 0;
-    }
+    guard_init_only!(caller, "torus_uv");
 
     // Validate parameters
     if major_radius <= 0.0 || minor_radius <= 0.0 {
@@ -364,10 +349,7 @@ pub fn capsule_uv(
     segments: u32,
     rings: u32,
 ) -> u32 {
-    if let Err(e) = check_init_only(&caller, "capsule_uv") {
-        warn!("{}", e);
-        return 0;
-    }
+    guard_init_only!(caller, "capsule_uv");
 
     // Validate parameters
     if radius <= 0.0 {

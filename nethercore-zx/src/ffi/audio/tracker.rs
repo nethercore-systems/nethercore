@@ -12,7 +12,7 @@ use crate::audio::Sound;
 use crate::state::tracker_flags;
 use crate::tracker::is_tracker_handle;
 
-use super::super::{ZXGameContext, get_wasm_memory, guards::check_init_only};
+use super::super::{ZXGameContext, get_wasm_memory, guards::guard_init_only};
 
 /// Register tracker FFI functions
 pub(super) fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
@@ -48,11 +48,7 @@ pub(super) fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
 /// # Returns
 /// Tracker handle for use with tracker_play (0 = error)
 fn rom_tracker(mut caller: Caller<'_, ZXGameContext>, id_ptr: u32, id_len: u32) -> u32 {
-    // Guard: init-only
-    if let Err(e) = check_init_only(&caller, "rom_tracker") {
-        warn!("{}", e);
-        return 0;
-    }
+    guard_init_only!(caller, "rom_tracker");
 
     // Read tracker ID from WASM memory
     let id = {
@@ -195,11 +191,7 @@ fn rom_tracker(mut caller: Caller<'_, ZXGameContext>, id_ptr: u32, id_len: u32) 
 /// # Returns
 /// Tracker handle for use with tracker_play (0 = error)
 fn load_tracker(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len: u32) -> u32 {
-    // Guard: init-only
-    if let Err(e) = check_init_only(&caller, "load_tracker") {
-        warn!("{}", e);
-        return 0;
-    }
+    guard_init_only!(caller, "load_tracker");
 
     // Read XM data from WASM memory
     let xm_data = {

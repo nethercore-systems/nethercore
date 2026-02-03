@@ -7,7 +7,7 @@ use tracing::{info, warn};
 use wasmtime::Caller;
 
 use crate::ffi::ZXGameContext;
-use crate::ffi::guards::check_init_only;
+use crate::ffi::guards::guard_init_only;
 use crate::graphics::{FORMAT_NORMAL, FORMAT_TANGENT, FORMAT_UV};
 use crate::procedural::{self, MeshDataTangent};
 use crate::state::PendingMeshPacked;
@@ -28,10 +28,7 @@ pub fn sphere_tangent(
     segments: u32,
     rings: u32,
 ) -> u32 {
-    if let Err(e) = check_init_only(&caller, "sphere_tangent") {
-        warn!("{}", e);
-        return 0;
-    }
+    guard_init_only!(caller, "sphere_tangent");
 
     if radius <= 0.0 {
         warn!("sphere_tangent: radius must be > 0.0 (got {})", radius);
@@ -79,10 +76,7 @@ pub fn plane_tangent(
     subdivisions_x: u32,
     subdivisions_z: u32,
 ) -> u32 {
-    if let Err(e) = check_init_only(&caller, "plane_tangent") {
-        warn!("{}", e);
-        return 0;
-    }
+    guard_init_only!(caller, "plane_tangent");
 
     if size_x <= 0.0 || size_z <= 0.0 {
         warn!(
@@ -132,10 +126,7 @@ pub fn cube_tangent(
     size_y: f32,
     size_z: f32,
 ) -> u32 {
-    if let Err(e) = check_init_only(&caller, "cube_tangent") {
-        warn!("{}", e);
-        return 0;
-    }
+    guard_init_only!(caller, "cube_tangent");
 
     if size_x <= 0.0 || size_y <= 0.0 || size_z <= 0.0 {
         warn!(
@@ -191,10 +182,7 @@ pub fn torus_tangent(
     major_segments: u32,
     minor_segments: u32,
 ) -> u32 {
-    if let Err(e) = check_init_only(&caller, "torus_tangent") {
-        warn!("{}", e);
-        return 0;
-    }
+    guard_init_only!(caller, "torus_tangent");
 
     if major_radius <= 0.0 || minor_radius <= 0.0 {
         warn!(

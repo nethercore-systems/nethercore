@@ -7,7 +7,7 @@ use tracing::{info, warn};
 use wasmtime::Caller;
 
 use crate::ffi::ZXGameContext;
-use crate::ffi::guards::check_init_only;
+use crate::ffi::guards::guard_init_only;
 use crate::graphics::FORMAT_NORMAL;
 use crate::procedural::{self, MeshData};
 use crate::state::PendingMeshPacked;
@@ -25,10 +25,7 @@ use crate::state::PendingMeshPacked;
 ///
 /// **Init-only**: Must be called during `init()`.
 pub fn cube(mut caller: Caller<'_, ZXGameContext>, size_x: f32, size_y: f32, size_z: f32) -> u32 {
-    if let Err(e) = check_init_only(&caller, "cube") {
-        warn!("{}", e);
-        return 0;
-    }
+    guard_init_only!(caller, "cube");
 
     // Validate parameters
     if size_x <= 0.0 || size_y <= 0.0 || size_z <= 0.0 {
@@ -87,10 +84,7 @@ pub fn sphere(
     segments: u32,
     rings: u32,
 ) -> u32 {
-    if let Err(e) = check_init_only(&caller, "sphere") {
-        warn!("{}", e);
-        return 0;
-    }
+    guard_init_only!(caller, "sphere");
 
     // Validate parameters
     if radius <= 0.0 {
@@ -144,10 +138,7 @@ pub fn cylinder(
     height: f32,
     segments: u32,
 ) -> u32 {
-    if let Err(e) = check_init_only(&caller, "cylinder") {
-        warn!("{}", e);
-        return 0;
-    }
+    guard_init_only!(caller, "cylinder");
 
     // Validate parameters
     if radius_bottom < 0.0 || radius_top < 0.0 {
@@ -209,10 +200,7 @@ pub fn plane(
     subdivisions_x: u32,
     subdivisions_z: u32,
 ) -> u32 {
-    if let Err(e) = check_init_only(&caller, "plane") {
-        warn!("{}", e);
-        return 0;
-    }
+    guard_init_only!(caller, "plane");
 
     // Validate parameters
     if size_x <= 0.0 || size_z <= 0.0 {
@@ -266,10 +254,7 @@ pub fn torus(
     major_segments: u32,
     minor_segments: u32,
 ) -> u32 {
-    if let Err(e) = check_init_only(&caller, "torus") {
-        warn!("{}", e);
-        return 0;
-    }
+    guard_init_only!(caller, "torus");
 
     // Validate parameters
     if major_radius <= 0.0 || minor_radius <= 0.0 {
@@ -333,10 +318,7 @@ pub fn capsule(
     segments: u32,
     rings: u32,
 ) -> u32 {
-    if let Err(e) = check_init_only(&caller, "capsule") {
-        warn!("{}", e);
-        return 0;
-    }
+    guard_init_only!(caller, "capsule");
 
     // Validate parameters
     if radius <= 0.0 {

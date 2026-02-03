@@ -16,7 +16,7 @@ use anyhow::Result;
 use tracing::{info, warn};
 use wasmtime::{Caller, Linker};
 
-use super::{ZXGameContext, get_wasm_memory, guards::check_init_only};
+use super::{ZXGameContext, get_wasm_memory, guards::guard_init_only};
 
 use zx_common::TextureFormat;
 use zx_common::formats::{
@@ -47,11 +47,7 @@ pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
 ///
 /// Returns mesh handle (>0) on success, 0 on failure.
 fn load_zmesh(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len: u32) -> u32 {
-    // Guard: init-only
-    if let Err(e) = check_init_only(&caller, "load_zmesh") {
-        warn!("{}", e);
-        return 0;
-    }
+    guard_init_only!(caller, "load_zmesh");
 
     let data_len = data_len as usize;
 
@@ -181,11 +177,7 @@ fn load_zmesh(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len: u3
 ///
 /// Returns texture handle (>0) on success, 0 on failure.
 fn load_ztex(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len: u32) -> u32 {
-    // Guard: init-only
-    if let Err(e) = check_init_only(&caller, "load_ztex") {
-        warn!("{}", e);
-        return 0;
-    }
+    guard_init_only!(caller, "load_ztex");
 
     let data_len = data_len as usize;
 
@@ -316,11 +308,7 @@ fn load_ztex(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len: u32
 ///
 /// Returns sound handle (>0) on success, 0 on failure.
 fn load_zsound(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len: u32) -> u32 {
-    // Guard: init-only
-    if let Err(e) = check_init_only(&caller, "load_zsound") {
-        warn!("{}", e);
-        return 0;
-    }
+    guard_init_only!(caller, "load_zsound");
 
     let data_len = data_len as usize;
 
@@ -408,11 +396,7 @@ fn load_zsound(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len: u
 /// 0x08: inverse_bind_matrices (bone_count × 48 bytes, 3×4 column-major)
 /// ```
 fn load_zskeleton(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len: u32) -> u32 {
-    // Guard: init-only
-    if let Err(e) = check_init_only(&caller, "load_zskeleton") {
-        warn!("{}", e);
-        return 0;
-    }
+    guard_init_only!(caller, "load_zskeleton");
 
     let data_len = data_len as usize;
 

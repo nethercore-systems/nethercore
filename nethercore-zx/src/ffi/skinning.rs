@@ -9,7 +9,7 @@ use anyhow::Result;
 use tracing::warn;
 use wasmtime::{Caller, Linker};
 
-use super::{ZXGameContext, guards::check_init_only};
+use super::{ZXGameContext, guards::guard_init_only};
 use crate::state::{BoneMatrix3x4, KeyframeSource, MAX_BONES, MAX_SKELETONS, PendingSkeleton};
 
 /// Register GPU skinning FFI functions
@@ -45,11 +45,7 @@ fn load_skeleton(
     inverse_bind_ptr: u32,
     bone_count: u32,
 ) -> u32 {
-    // Guard: init-only
-    if let Err(e) = check_init_only(&caller, "load_skeleton") {
-        warn!("{}", e);
-        return 0;
-    }
+    guard_init_only!(caller, "load_skeleton");
 
     // Validate bone count
     if bone_count == 0 {

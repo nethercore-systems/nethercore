@@ -9,7 +9,7 @@ use wasmtime::{Caller, Linker};
 use crate::audio::Sound;
 use crate::state::MAX_CHANNELS;
 
-use super::super::{ZXGameContext, guards::check_init_only, helpers::read_wasm_i16s};
+use super::super::{ZXGameContext, guards::guard_init_only, helpers::read_wasm_i16s};
 use super::clamp_safe;
 
 /// Register sound FFI functions
@@ -33,11 +33,7 @@ pub(super) fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
 /// # Returns
 /// Sound handle for use with play_sound, channel_play, music_play
 fn load_sound(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, byte_len: u32) -> u32 {
-    // Guard: init-only
-    if let Err(e) = check_init_only(&caller, "load_sound") {
-        warn!("{}", e);
-        return 0;
-    }
+    guard_init_only!(caller, "load_sound");
 
     // Validate byte length is even (each sample is 2 bytes)
     if !byte_len.is_multiple_of(2) {

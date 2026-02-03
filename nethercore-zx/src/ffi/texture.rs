@@ -7,7 +7,7 @@ use tracing::warn;
 use wasmtime::{Caller, Linker};
 
 use super::helpers::{checked_mul, read_wasm_bytes, validate_dimensions_nonzero};
-use super::{ZXGameContext, guards::check_init_only};
+use super::{ZXGameContext, guards::guard_init_only};
 use crate::graphics::MatcapBlendMode;
 use crate::state::PendingTexture;
 use zx_common::TextureFormat;
@@ -38,11 +38,7 @@ fn load_texture(
 ) -> u32 {
     const FN_NAME: &str = "load_texture";
 
-    // Guard: init-only
-    if let Err(e) = check_init_only(&caller, FN_NAME) {
-        warn!("{}", e);
-        return 0;
-    }
+    guard_init_only!(caller, FN_NAME);
 
     // Validate dimensions
     if !validate_dimensions_nonzero(width, height, FN_NAME) {

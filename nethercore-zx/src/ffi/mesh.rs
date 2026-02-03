@@ -10,7 +10,7 @@ use super::helpers::{
     checked_mul, read_wasm_bytes, read_wasm_floats, read_wasm_u16s, validate_count_nonzero,
     validate_vertex_format,
 };
-use super::{ZXGameContext, guards::check_init_only};
+use super::{ZXGameContext, guards::guard_init_only};
 use crate::graphics::{vertex_stride, vertex_stride_packed};
 use crate::state::{PendingMesh, PendingMeshPacked};
 
@@ -51,11 +51,7 @@ fn load_mesh(
 ) -> u32 {
     const FN_NAME: &str = "load_mesh";
 
-    // Guard: init-only
-    if let Err(e) = check_init_only(&caller, FN_NAME) {
-        warn!("{}", e);
-        return 0;
-    }
+    guard_init_only!(caller, FN_NAME);
 
     // Validate format and vertex count
     let Some(format) = validate_vertex_format(format, FN_NAME) else {
@@ -115,11 +111,7 @@ fn load_mesh_indexed(
 ) -> u32 {
     const FN_NAME: &str = "load_mesh_indexed";
 
-    // Guard: init-only
-    if let Err(e) = check_init_only(&caller, FN_NAME) {
-        warn!("{}", e);
-        return 0;
-    }
+    guard_init_only!(caller, FN_NAME);
 
     // Validate format
     let Some(format) = validate_vertex_format(format, FN_NAME) else {
@@ -204,11 +196,7 @@ fn load_mesh_packed(
 ) -> u32 {
     const FN_NAME: &str = "load_mesh_packed";
 
-    // Guard: init-only
-    if let Err(e) = check_init_only(&caller, FN_NAME) {
-        warn!("{}", e);
-        return 0;
-    }
+    guard_init_only!(caller, FN_NAME);
 
     // Validate format (0-15 only, no FORMAT_PACKED)
     let Some(format) = validate_vertex_format(format, FN_NAME) else {
@@ -267,11 +255,7 @@ fn load_mesh_indexed_packed(
 ) -> u32 {
     const FN_NAME: &str = "load_mesh_indexed_packed";
 
-    // Guard: init-only
-    if let Err(e) = check_init_only(&caller, FN_NAME) {
-        warn!("{}", e);
-        return 0;
-    }
+    guard_init_only!(caller, FN_NAME);
 
     // Validate format (0-15 only, no FORMAT_PACKED)
     let Some(format) = validate_vertex_format(format, FN_NAME) else {
