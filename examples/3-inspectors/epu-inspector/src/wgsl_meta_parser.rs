@@ -116,8 +116,11 @@ pub struct OpcodeMeta {
 /// - If any field mapping type is unknown
 /// - If variant count > 8 or domain count > 4
 /// - If opcode number is invalid (> 0x1F)
+/// - If metadata block is unterminated (missing `@epu_meta_end`)
+/// - If nested `@epu_meta_begin` is found
+/// - If `u8_lerp` mapping is used without min/max values
 pub fn parse_wgsl_meta(source: &str, file_path: &str) -> OpcodeMeta {
-    let blocks = extract_meta_blocks(source);
+    let blocks = extract_meta_blocks(source, file_path);
 
     if blocks.is_empty() {
         panic!(
@@ -139,7 +142,11 @@ pub fn parse_wgsl_meta(source: &str, file_path: &str) -> OpcodeMeta {
 }
 
 /// Extract all `@epu_meta_begin`/`@epu_meta_end` blocks from source.
-pub fn extract_meta_blocks(source: &str) -> Vec<String> {
+///
+/// # Panics
+/// - If a nested `@epu_meta_begin` is found (begin inside an existing block)
+/// - If the file ends with an unterminated block (missing `@epu_meta_end`)
+pub fn extract_meta_blocks(source: &str, file_path: &str) -> Vec<String> {
     let mut blocks = Vec::new();
     let mut in_block = false;
     let mut current_block = String::new();
@@ -149,8 +156,10 @@ pub fn extract_meta_blocks(source: &str) -> Vec<String> {
 
         if trimmed == "// @epu_meta_begin" {
             if in_block {
-                // Nested begin without end - treat as error by starting new block
-                current_block.clear();
+                panic!(
+                    "Nested @epu_meta_begin found (already inside a metadata block) in file: {}",
+                    file_path
+                );
             }
             in_block = true;
             current_block.clear();
@@ -178,6 +187,13 @@ pub fn extract_meta_blocks(source: &str) -> Vec<String> {
             current_block.push_str(content);
             current_block.push('\n');
         }
+    }
+
+    if in_block {
+        panic!(
+            "Unterminated @epu_meta_begin block (missing @epu_meta_end) in file: {}",
+            file_path
+        );
     }
 
     blocks
@@ -384,6 +400,14 @@ pub fn parse_field_spec(s: &str, file_path: &str) -> FieldSpec {
             )
         })
     });
+
+    // Validate that u8_lerp mapping has min and max values
+    if map == MapKind::U8Lerp && (min.is_none() || max.is_none()) {
+        panic!(
+            "Field '{}' uses u8_lerp mapping but is missing min/max values in {}",
+            field_name, file_path
+        );
+    }
 
     FieldSpec {
         field_name,

@@ -303,7 +303,7 @@ fn test_parse_string_array_whitespace() {
 
 #[test]
 fn test_extract_meta_blocks_empty() {
-    assert!(extract_meta_blocks("no meta here").is_empty());
+    assert!(extract_meta_blocks("no meta here", "test.wgsl").is_empty());
 }
 
 #[test]
@@ -314,7 +314,7 @@ fn test_extract_meta_blocks_single() {
 // world
 // @epu_meta_end
 "#;
-    let blocks = extract_meta_blocks(source);
+    let blocks = extract_meta_blocks(source, "test.wgsl");
     assert_eq!(blocks.len(), 1);
     assert!(blocks[0].contains("hello"));
     assert!(blocks[0].contains("world"));
@@ -485,6 +485,83 @@ fn test_field_missing_map() {
 // variants = []
 // domains = []
 // field param_a = { label="test" }
+// @epu_meta_end
+"#;
+    parse_wgsl_meta(source, "test.wgsl");
+}
+
+#[test]
+#[should_panic(expected = "uses u8_lerp mapping but is missing min/max values")]
+fn test_u8_lerp_missing_min_max() {
+    let source = r#"
+// @epu_meta_begin
+// opcode = 0x01
+// name = FOO
+// kind = bounds
+// variants = []
+// domains = []
+// field param_a = { label="test", map="u8_lerp" }
+// @epu_meta_end
+"#;
+    parse_wgsl_meta(source, "test.wgsl");
+}
+
+#[test]
+#[should_panic(expected = "uses u8_lerp mapping but is missing min/max values")]
+fn test_u8_lerp_missing_max() {
+    let source = r#"
+// @epu_meta_begin
+// opcode = 0x01
+// name = FOO
+// kind = bounds
+// variants = []
+// domains = []
+// field param_a = { label="test", map="u8_lerp", min=0.0 }
+// @epu_meta_end
+"#;
+    parse_wgsl_meta(source, "test.wgsl");
+}
+
+#[test]
+#[should_panic(expected = "uses u8_lerp mapping but is missing min/max values")]
+fn test_u8_lerp_missing_min() {
+    let source = r#"
+// @epu_meta_begin
+// opcode = 0x01
+// name = FOO
+// kind = bounds
+// variants = []
+// domains = []
+// field param_a = { label="test", map="u8_lerp", max=1.0 }
+// @epu_meta_end
+"#;
+    parse_wgsl_meta(source, "test.wgsl");
+}
+
+#[test]
+#[should_panic(expected = "Unterminated @epu_meta_begin block")]
+fn test_unterminated_meta_block() {
+    let source = r#"
+// @epu_meta_begin
+// opcode = 0x01
+// name = FOO
+// kind = bounds
+// variants = []
+// domains = []
+"#;
+    parse_wgsl_meta(source, "test.wgsl");
+}
+
+#[test]
+#[should_panic(expected = "Nested @epu_meta_begin found")]
+fn test_nested_meta_begin() {
+    let source = r#"
+// @epu_meta_begin
+// opcode = 0x01
+// name = FOO
+// @epu_meta_begin
+// opcode = 0x02
+// name = BAR
 // @epu_meta_end
 "#;
     parse_wgsl_meta(source, "test.wgsl");
