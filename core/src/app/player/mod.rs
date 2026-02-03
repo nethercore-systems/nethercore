@@ -63,7 +63,7 @@ where
     needs_redraw: bool,
     should_exit: bool,
     debug_stats: DebugStats,
-    game_tick_times: Vec<Instant>,
+    game_tick_times: VecDeque<Instant>,
     last_game_tick: Instant,
     egui_ctx: egui::Context,
     egui_state: Option<egui_winit::State>,
@@ -149,7 +149,7 @@ where
                 vram_limit,
                 ..Default::default()
             },
-            game_tick_times: Vec::with_capacity(120),
+            game_tick_times: VecDeque::with_capacity(120),
             last_game_tick: now,
             egui_ctx: egui::Context::default(),
             egui_state: None,

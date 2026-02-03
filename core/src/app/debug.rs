@@ -293,14 +293,14 @@ pub fn render_debug_overlay(
 }
 
 /// Calculate FPS from frame time samples
-pub fn calculate_fps(frame_times: &[std::time::Instant]) -> f32 {
+pub fn calculate_fps(frame_times: &VecDeque<std::time::Instant>) -> f32 {
     if frame_times.len() < 2 {
         return 0.0;
     }
     let elapsed = frame_times
-        .last()
+        .back()
         .unwrap()
-        .duration_since(*frame_times.first().unwrap())
+        .duration_since(*frame_times.front().unwrap())
         .as_secs_f32();
     if elapsed > 0.0 {
         frame_times.len() as f32 / elapsed

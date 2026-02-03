@@ -197,9 +197,9 @@ where
 
             let now = Instant::now();
             for _ in 0..ticks {
-                self.game_tick_times.push(now);
+                self.game_tick_times.push_back(now);
                 if self.game_tick_times.len() > FRAME_TIME_HISTORY_SIZE {
-                    self.game_tick_times.remove(0);
+                    self.game_tick_times.pop_front();
                 }
             }
             self.last_game_tick = now;
