@@ -2,6 +2,8 @@
 
 use std::time::Instant;
 
+use smallvec::SmallVec;
+
 use crate::console::{Audio, AudioGenerator, Console, ConsoleResourceManager};
 
 use super::super::{FRAME_TIME_HISTORY_SIZE, GameError, GameErrorPhase, RuntimeError};
@@ -94,11 +96,12 @@ where
             .ok_or_else(|| RuntimeError("No session".to_string()))?;
 
         // Get local player handles from session (e.g., [0] for host, [1] for joiner)
-        let local_players: Vec<usize> = session
+        // Use SmallVec to avoid heap allocation (max 4 local players)
+        let local_players: SmallVec<[usize; 4]> = session
             .runtime
             .session()
-            .map(|s| s.local_players().to_vec())
-            .unwrap_or_else(|| vec![0]);
+            .map(|s| s.local_players().iter().copied().collect())
+            .unwrap_or_else(|| smallvec::smallvec![0]);
 
         // Log once at startup (not every frame)
         static LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);

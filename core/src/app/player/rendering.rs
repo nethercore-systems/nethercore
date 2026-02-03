@@ -2,6 +2,7 @@
 
 use std::cell::RefCell;
 
+use smallvec::SmallVec;
 use winit::window::Fullscreen;
 
 use crate::capture::{CaptureSupport, read_render_target_pixels};
@@ -106,27 +107,28 @@ where
                     let network_overlay_visible = self.network_overlay_visible;
 
                     // Get network session info for overlay
+                    // Use SmallVec to avoid heap allocations (max 4 players)
                     let (
                         session_type,
                         network_stats,
                         local_players,
                         total_rollbacks,
                         current_frame,
-                    ) = {
+                    ): (_, _, SmallVec<[usize; 4]>, _, _) = {
                         if let Some(game_session) = runner.session() {
                             if let Some(rollback) = game_session.runtime.session() {
                                 (
                                     rollback.session_type(),
                                     rollback.all_player_stats().to_vec(),
-                                    rollback.local_players().to_vec(),
+                                    rollback.local_players().iter().copied().collect(),
                                     rollback.total_rollback_frames(),
                                     rollback.current_frame(),
                                 )
                             } else {
-                                (SessionType::Local, Vec::new(), Vec::new(), 0, 0)
+                                (SessionType::Local, Vec::new(), SmallVec::new(), 0, 0)
                             }
                         } else {
-                            (SessionType::Local, Vec::new(), Vec::new(), 0, 0)
+                            (SessionType::Local, Vec::new(), SmallVec::new(), 0, 0)
                         }
                     };
 
