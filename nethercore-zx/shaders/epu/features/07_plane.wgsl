@@ -1,3 +1,16 @@
+// @epu_meta_begin
+// opcode = 0x0F
+// name = PLANE
+// kind = radiance
+// variants = [TILES, HEX, STONE, SAND, WATER, GRATING, GRASS, PAVEMENT]
+// domains = []
+// field intensity = { label="contrast", map="u8_01" }
+// field param_a = { label="scale", map="u8_lerp", min=0.5, max=16.0, unit="x" }
+// field param_b = { label="gap_width", map="u8_lerp", min=0.0, max=0.2 }
+// field param_c = { label="roughness", map="u8_01" }
+// field param_d = { label="phase", map="u8_01" }
+// @epu_meta_end
+
 // ============================================================================
 // PLANE - Ground Plane Textures
 // Opcode: 0x0F

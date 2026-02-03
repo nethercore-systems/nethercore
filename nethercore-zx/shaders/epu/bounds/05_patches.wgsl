@@ -1,3 +1,16 @@
+// @epu_meta_begin
+// opcode = 0x06
+// name = PATCHES
+// kind = bounds
+// variants = [BLOBS, ISLANDS, DEBRIS, MEMBRANE, STATIC, STREAKS]
+// domains = [DIRECT3D, AXIS_CYL, AXIS_POLAR]
+// field intensity = { label="-", map="u8_01" }
+// field param_a = { label="scale", map="u8_lerp", min=1.0, max=16.0 }
+// field param_b = { label="coverage", map="u8_01" }
+// field param_c = { label="sharpness", map="u8_lerp", min=0.0, max=0.5 }
+// field param_d = { label="seed", map="u8_01" }
+// @epu_meta_end
+
 // ============================================================================
 // PATCHES - Noise-Based Patch Enclosure Source (0x06)
 // Distributes organic patches of wall across a sky background using noise.

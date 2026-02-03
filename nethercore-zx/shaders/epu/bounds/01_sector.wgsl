@@ -1,3 +1,16 @@
+// @epu_meta_begin
+// opcode = 0x02
+// name = SECTOR
+// kind = bounds
+// variants = [BOX, TUNNEL, CAVE]
+// domains = []
+// field intensity = { label="opening", map="u8_01" }
+// field param_a = { label="azimuth", map="u8_01" }
+// field param_b = { label="width", map="u8_01" }
+// field param_c = { label="-", map="u8_01" }
+// field param_d = { label="-", map="u8_01" }
+// @epu_meta_end
+
 // ============================================================================
 // SECTOR - Angular Wedge Enclosure (0x02)
 // 128-bit packed fields:

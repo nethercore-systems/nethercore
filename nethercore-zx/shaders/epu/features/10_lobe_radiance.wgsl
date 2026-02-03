@@ -1,3 +1,16 @@
+// @epu_meta_begin
+// opcode = 0x12
+// name = LOBE
+// kind = radiance
+// variants = []
+// domains = []
+// field intensity = { label="brightness", map="u8_lerp", min=0.0, max=2.0 }
+// field param_a = { label="exponent", map="u8_lerp", min=1.0, max=64.0 }
+// field param_b = { label="falloff", map="u8_lerp", min=0.5, max=4.0 }
+// field param_c = { label="waveform", map="u8_01" }
+// field param_d = { label="phase", map="u8_01" }
+// @epu_meta_end
+
 // ============================================================================
 // LOBE (Radiance) - Region-Masked Directional Glow
 // Opcode: 0x12

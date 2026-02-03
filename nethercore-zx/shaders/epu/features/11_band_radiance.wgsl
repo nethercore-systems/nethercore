@@ -1,3 +1,16 @@
+// @epu_meta_begin
+// opcode = 0x13
+// name = BAND
+// kind = radiance
+// variants = []
+// domains = []
+// field intensity = { label="brightness", map="u8_01" }
+// field param_a = { label="width", map="u8_lerp", min=0.005, max=0.5 }
+// field param_b = { label="y_offset", map="u8_lerp", min=-0.5, max=0.5 }
+// field param_c = { label="softness", map="u8_01" }
+// field param_d = { label="phase", map="u8_01" }
+// @epu_meta_end
+
 // ============================================================================
 // BAND (Radiance) - Region-Masked Horizon Band
 // Opcode: 0x13

@@ -1,3 +1,16 @@
+// @epu_meta_begin
+// opcode = 0x0B
+// name = FLOW
+// kind = radiance
+// variants = []
+// domains = []
+// field intensity = { label="brightness", map="u8_01" }
+// field param_a = { label="scale", map="u8_lerp", min=1.0, max=16.0 }
+// field param_b = { label="turbulence", map="u8_01" }
+// field param_c = { label="oct+pat", map="u8_01" }
+// field param_d = { label="phase", map="u8_01" }
+// @epu_meta_end
+
 // ============================================================================
 // FLOW - Animated Noise / Streaks / Caustics
 // Packed fields:

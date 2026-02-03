@@ -1,3 +1,16 @@
+// @epu_meta_begin
+// opcode = 0x0D
+// name = VEIL
+// kind = radiance
+// variants = [CURTAINS, PILLARS, LASER_BARS, RAIN_WALL, SHARDS]
+// domains = [DIRECT3D, AXIS_CYL, AXIS_POLAR, TANGENT_LOCAL]
+// field intensity = { label="brightness", map="u8_01" }
+// field param_a = { label="count", map="u8_lerp", min=2.0, max=32.0 }
+// field param_b = { label="thickness", map="u8_lerp", min=0.002, max=0.5 }
+// field param_c = { label="sway", map="u8_01" }
+// field param_d = { label="phase", map="u8_01" }
+// @epu_meta_end
+
 // ============================================================================
 // VEIL - Curtain/Ribbon Effects (Curtains, Pillars, Laser Bars, Rain Wall, Shards)
 // Opcode: 0x0D

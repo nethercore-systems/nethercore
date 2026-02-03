@@ -1,3 +1,16 @@
+// @epu_meta_begin
+// opcode = 0x10
+// name = CELESTIAL
+// kind = radiance
+// variants = [MOON, SUN, PLANET, GAS_GIANT, RINGED, BINARY, ECLIPSE]
+// domains = []
+// field intensity = { label="brightness", map="u8_lerp", min=0.0, max=2.0 }
+// field param_a = { label="ang_size", map="u8_lerp", min=0.5, max=45.0, unit="deg" }
+// field param_b = { label="limb_dark", map="u8_lerp", min=0.5, max=4.0 }
+// field param_c = { label="phase_ang", map="u8_lerp", min=0.0, max=360.0, unit="deg" }
+// field param_d = { label="(varies)", map="u8_01" }
+// @epu_meta_end
+
 // ============================================================================
 // CELESTIAL - Moon/Sun/Planet Bodies
 // Opcode: 0x10

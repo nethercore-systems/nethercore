@@ -1,3 +1,16 @@
+// @epu_meta_begin
+// opcode = 0x11
+// name = PORTAL
+// kind = radiance
+// variants = [CIRCLE, RECT, TEAR, VORTEX, CRACK, RIFT]
+// domains = []
+// field intensity = { label="glow", map="u8_lerp", min=0.0, max=2.0 }
+// field param_a = { label="size", map="u8_lerp", min=0.05, max=0.8 }
+// field param_b = { label="glow_width", map="u8_lerp", min=0.01, max=0.3 }
+// field param_c = { label="roughness", map="u8_01" }
+// field param_d = { label="phase", map="u8_01" }
+// @epu_meta_end
+
 // ============================================================================
 // PORTAL - Swirling Vortex/Portal Effect
 // Opcode: 0x11

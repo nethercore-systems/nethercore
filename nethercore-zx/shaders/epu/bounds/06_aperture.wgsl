@@ -1,3 +1,16 @@
+// @epu_meta_begin
+// opcode = 0x07
+// name = APERTURE
+// kind = bounds
+// variants = [CIRCLE, RECT, ROUNDED_RECT, ARCH, BARS, MULTI, IRREGULAR]
+// domains = []
+// field intensity = { label="edge_soft", map="u8_lerp", min=0.005, max=0.1 }
+// field param_a = { label="half_width", map="u8_lerp", min=0.1, max=1.5 }
+// field param_b = { label="half_height", map="u8_lerp", min=0.1, max=1.5 }
+// field param_c = { label="frame", map="u8_lerp", min=0.02, max=0.5 }
+// field param_d = { label="(varies)", map="u8_01" }
+// @epu_meta_end
+
 // ============================================================================
 // APERTURE - Shaped Opening Enclosure Modifier (0x07)
 // Creates a view-centered viewport/frame. The wall region becomes the frame,

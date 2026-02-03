@@ -1,3 +1,16 @@
+// @epu_meta_begin
+// opcode = 0x0C
+// name = TRACE
+// kind = radiance
+// variants = [LIGHTNING, CRACKS, LEAD_LINES, FILAMENTS]
+// domains = [DIRECT3D, AXIS_CYL, AXIS_POLAR, TANGENT_LOCAL]
+// field intensity = { label="brightness", map="u8_01" }
+// field param_a = { label="count", map="u8_lerp", min=1.0, max=16.0 }
+// field param_b = { label="thickness", map="u8_lerp", min=0.005, max=0.1 }
+// field param_c = { label="jitter", map="u8_01" }
+// field param_d = { label="seed+shape", map="u8_01" }
+// @epu_meta_end
+
 // ============================================================================
 // TRACE - Procedural Line/Crack Patterns (Lightning, Cracks, Lead Lines, Filaments)
 // Opcode: 0x0C

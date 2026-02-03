@@ -1,3 +1,16 @@
+// @epu_meta_begin
+// opcode = 0x0E
+// name = ATMOSPHERE
+// kind = radiance
+// variants = [ABSORPTION, RAYLEIGH, MIE, FULL, ALIEN]
+// domains = []
+// field intensity = { label="strength", map="u8_01" }
+// field param_a = { label="falloff", map="u8_lerp", min=0.5, max=8.0 }
+// field param_b = { label="horizon_y", map="u8_lerp", min=-1.0, max=1.0 }
+// field param_c = { label="mie_conc", map="u8_lerp", min=0.0, max=2.0 }
+// field param_d = { label="mie_exp", map="u8_lerp", min=4.0, max=128.0 }
+// @epu_meta_end
+
 // ============================================================================
 // ATMOSPHERE - Advanced Fog with Scattering
 // Opcode: 0x0E

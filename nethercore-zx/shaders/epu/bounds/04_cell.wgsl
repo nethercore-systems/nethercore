@@ -1,3 +1,16 @@
+// @epu_meta_begin
+// opcode = 0x05
+// name = CELL
+// kind = bounds
+// variants = [GRID, HEX, VORONOI, RADIAL, SHATTER, BRICK]
+// domains = []
+// field intensity = { label="outline", map="u8_01" }
+// field param_a = { label="density", map="u8_lerp", min=4.0, max=64.0 }
+// field param_b = { label="fill", map="u8_01" }
+// field param_c = { label="gap_width", map="u8_lerp", min=0.0, max=0.2 }
+// field param_d = { label="seed", map="u8_01" }
+// @epu_meta_end
+
 // ============================================================================
 // CELL - Voronoi Cell Enclosure Source (0x05)
 // Tessellates the sphere into discrete cells for mosaic/crystalline enclosures.

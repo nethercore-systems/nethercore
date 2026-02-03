@@ -1,3 +1,16 @@
+// @epu_meta_begin
+// opcode = 0x09
+// name = GRID
+// kind = radiance
+// variants = []
+// domains = []
+// field intensity = { label="brightness", map="u8_01" }
+// field param_a = { label="scale", map="u8_lerp", min=1.0, max=64.0 }
+// field param_b = { label="thickness", map="u8_lerp", min=0.001, max=0.1 }
+// field param_c = { label="pat+scroll", map="u8_01" }
+// field param_d = { label="phase", map="u8_01" }
+// @epu_meta_end
+
 // ============================================================================
 // GRID - Repeating Lines / Panels
 // Packed fields:

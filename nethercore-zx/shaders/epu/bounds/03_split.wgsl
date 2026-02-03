@@ -1,3 +1,16 @@
+// @epu_meta_begin
+// opcode = 0x04
+// name = SPLIT
+// kind = bounds
+// variants = [HALF, WEDGE, CORNER, BANDS, CROSS, PRISM]
+// domains = []
+// field intensity = { label="-", map="u8_01" }
+// field param_a = { label="blend_width", map="u8_01" }
+// field param_b = { label="angle", map="u8_lerp", min=0.0, max=180.0, unit="deg" }
+// field param_c = { label="sides", map="u8_lerp", min=2.0, max=16.0 }
+// field param_d = { label="offset", map="u8_01" }
+// @epu_meta_end
+
 // ============================================================================
 // SPLIT - Planar Cut Enclosure Source (0x04)
 // Divides the sphere using one or more planar cuts for geometric divisions.

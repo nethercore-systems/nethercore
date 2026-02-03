@@ -1,3 +1,16 @@
+// @epu_meta_begin
+// opcode = 0x08
+// name = DECAL
+// kind = radiance
+// variants = []
+// domains = []
+// field intensity = { label="brightness", map="u8_01" }
+// field param_a = { label="shape+soft", map="u8_01" }
+// field param_b = { label="size", map="u8_lerp", min=0.0, max=0.5, unit="rad" }
+// field param_c = { label="glow_soft", map="u8_lerp", min=0.0, max=0.2 }
+// field param_d = { label="phase", map="u8_01" }
+// @epu_meta_end
+
 // ============================================================================
 // DECAL - Sharp SDF Shape
 // Packed fields:

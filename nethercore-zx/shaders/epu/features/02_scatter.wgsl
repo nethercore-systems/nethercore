@@ -1,3 +1,16 @@
+// @epu_meta_begin
+// opcode = 0x0A
+// name = SCATTER
+// kind = radiance
+// variants = [STARS, DUST, WINDOWS, BUBBLES, EMBERS, RAIN, SNOW]
+// domains = [DIRECT3D, AXIS_CYL, AXIS_POLAR, TANGENT_LOCAL]
+// field intensity = { label="brightness", map="u8_01" }
+// field param_a = { label="density", map="u8_lerp", min=1.0, max=256.0 }
+// field param_b = { label="size", map="u8_lerp", min=0.001, max=0.05, unit="rad" }
+// field param_c = { label="twinkle", map="u8_01" }
+// field param_d = { label="seed", map="u8_01" }
+// @epu_meta_end
+
 // ============================================================================
 // SCATTER - Point Field (Stars / Dust / Windows)
 // Packed fields:

@@ -1,3 +1,16 @@
+// @epu_meta_begin
+// opcode = 0x01
+// name = RAMP
+// kind = bounds
+// variants = []
+// domains = []
+// field intensity = { label="softness", map="u8_lerp", min=0.01, max=0.5 }
+// field param_a = { label="wall_r", map="u8_01" }
+// field param_b = { label="wall_g", map="u8_01" }
+// field param_c = { label="wall_b", map="u8_01" }
+// field param_d = { label="thresholds", map="u8_01" }
+// @epu_meta_end
+
 // ============================================================================
 // RAMP - Enclosure Gradient
 // 128-bit packed fields:

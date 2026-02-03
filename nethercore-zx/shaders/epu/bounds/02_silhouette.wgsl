@@ -1,3 +1,16 @@
+// @epu_meta_begin
+// opcode = 0x03
+// name = SILHOUETTE
+// kind = bounds
+// variants = [MOUNTAINS, CITY, FOREST, DUNES, WAVES, RUINS, INDUSTRIAL, SPIRES]
+// domains = []
+// field intensity = { label="edge_soft", map="u8_lerp", min=0.005, max=0.1 }
+// field param_a = { label="height", map="u8_lerp", min=-0.3, max=0.5 }
+// field param_b = { label="roughness", map="u8_lerp", min=0.1, max=1.0 }
+// field param_c = { label="octaves", map="u8_01" }
+// field param_d = { label="-", map="u8_01" }
+// @epu_meta_end
+
 // ============================================================================
 // SILHOUETTE - Skyline/Horizon Cutout (0x03)
 // Creates environmental silhouettes that reshape the sky/wall boundary.
