@@ -109,28 +109,34 @@ pub struct CaptureConfig {
     pub gif_max_seconds: u32,
 }
 
-fn default_panel_toggle() -> String {
-    "F3".to_string()
-}
-fn default_pause_toggle() -> String {
-    "F5".to_string()
-}
-fn default_step_frame() -> String {
-    "F6".to_string()
-}
-fn default_speed_decrease() -> String {
-    "F7".to_string()
-}
-fn default_speed_increase() -> String {
-    "F8".to_string()
-}
+// =============================================================================
+// Default keybindings
+// =============================================================================
+//
+// | Key | Action              | Config field             |
+// |-----|---------------------|--------------------------|
+// | F2  | Settings panel      | (reserved)               |
+// | F3  | Stats panel toggle  | debug.panel_toggle       |
+// | F4  | Debug inspector     | (reserved)               |
+// | F5  | Pause/resume        | debug.pause_toggle       |
+// | F6  | Step frame          | debug.step_frame         |
+// | F7  | Speed decrease      | debug.speed_decrease     |
+// | F8  | Speed increase      | debug.speed_increase     |
+// | F9  | Screenshot          | capture.screenshot       |
+// | F10 | GIF toggle          | capture.gif_toggle       |
+// | F11 | Fullscreen          | (reserved)               |
+// | Esc | Exit/back           | (reserved)               |
+//
+// Note: serde's `default` attribute requires functions by name, so each
+// keybinding needs its own function returning String.
 
-fn default_screenshot_key() -> String {
-    "F9".to_string()
-}
-fn default_gif_toggle_key() -> String {
-    "F10".to_string()
-}
+fn default_panel_toggle() -> String { "F3".to_string() }
+fn default_pause_toggle() -> String { "F5".to_string() }
+fn default_step_frame() -> String { "F6".to_string() }
+fn default_speed_decrease() -> String { "F7".to_string() }
+fn default_speed_increase() -> String { "F8".to_string() }
+fn default_screenshot_key() -> String { "F9".to_string() }
+fn default_gif_toggle_key() -> String { "F10".to_string() }
 fn default_gif_fps() -> u32 {
     30
 }
