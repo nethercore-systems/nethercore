@@ -3,6 +3,7 @@
 //! `build.rs` stays intentionally small; the implementation lives in this folder.
 
 pub(crate) mod common_extract;
+pub(crate) mod epu_meta;
 pub(crate) mod ffi;
 pub(crate) mod formats;
 pub(crate) mod generated_code;
@@ -42,5 +43,12 @@ pub(crate) fn run() {
     println!(
         "cargo:warning=Generated {} shaders successfully (+ environment + quad)",
         generated.shader_count
+    );
+
+    // Generate EPU metadata tables for the debug panel
+    let epu_opcode_count = epu_meta::generate();
+    println!(
+        "cargo:warning=Generated epu_meta_gen.rs with {} opcodes",
+        epu_opcode_count
     );
 }

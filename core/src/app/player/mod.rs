@@ -33,7 +33,8 @@ use super::{DebugStats, FRAME_TIME_HISTORY_SIZE, GameError};
 
 // Re-export types from submodules
 pub use error_ui::{
-    ErrorAction, WaitingForPeer, parse_key_code, render_error_screen, sanitize_game_id,
+    ErrorAction, JoinConnectionState, JoiningPeer, WaitingForPeer, parse_key_code,
+    render_error_screen, sanitize_game_id,
 };
 pub use types::{LoadedRom, RomLoader, StandaloneConfig, StandaloneGraphicsSupport};
 
@@ -77,10 +78,16 @@ where
     network_overlay_visible: bool,
     /// State for waiting for a peer to connect (Host mode)
     waiting_for_peer: Option<WaitingForPeer>,
+    /// State for connecting to a host (Join mode)
+    joining_peer: Option<JoiningPeer>,
     _vram_limit: usize,
     _loader_marker: std::marker::PhantomData<L>,
     /// Active replay script executor (when --replay is used)
     replay_executor: Option<ScriptExecutor>,
+    /// Console-specific debug panel visibility (F7)
+    ///
+    /// Consoles can use this flag to show their own debug panels (e.g., EPU debug panel for ZX).
+    pub console_debug_panel_visible: bool,
 }
 
 impl<C, L> StandaloneApp<C, L>
@@ -161,9 +168,11 @@ where
             gif_toggle_key,
             network_overlay_visible: false,
             waiting_for_peer: None,
+            joining_peer: None,
             _vram_limit: vram_limit,
             _loader_marker: std::marker::PhantomData,
             replay_executor: None,
+            console_debug_panel_visible: false,
         }
     }
 }

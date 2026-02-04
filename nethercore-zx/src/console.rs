@@ -188,6 +188,8 @@ pub struct NethercoreZX {
     ///
     /// Stored on the host side and applied to `ZXFFIState.init_config` before `init()` runs.
     render_mode: u8,
+    /// EPU debug panel for environment editing
+    epu_debug_panel: crate::debug::epu_panel::EpuDebugPanel,
 }
 
 impl NethercoreZX {
@@ -196,6 +198,7 @@ impl NethercoreZX {
         Self {
             data_pack: None,
             render_mode: 0,
+            epu_debug_panel: crate::debug::epu_panel::EpuDebugPanel::new(),
         }
     }
 
@@ -204,6 +207,7 @@ impl NethercoreZX {
         Self {
             data_pack,
             render_mode: 0,
+            epu_debug_panel: crate::debug::epu_panel::EpuDebugPanel::new(),
         }
     }
 
@@ -215,6 +219,7 @@ impl NethercoreZX {
         Self {
             data_pack,
             render_mode: render_mode.min(3),
+            epu_debug_panel: crate::debug::epu_panel::EpuDebugPanel::new(),
         }
     }
 }
@@ -378,6 +383,23 @@ impl Console for NethercoreZX {
 
     fn clear_frame_state(state: &mut Self::State) {
         state.clear_frame();
+    }
+
+    fn render_debug_ui(&mut self, ctx: &egui::Context, visible: bool) {
+        if visible {
+            self.epu_debug_panel.set_visible(true);
+        }
+        if self.epu_debug_panel.is_visible() {
+            // Note: We don't have access to EpuConfig here since it's in State.
+            // For now, render with empty configs. The panel can still show
+            // the opcode browser and metadata.
+            let empty_configs = hashbrown::HashMap::new();
+            let _changed = self.epu_debug_panel.render(ctx, &empty_configs);
+        }
+    }
+
+    fn has_debug_panel(&self) -> bool {
+        true
     }
 }
 

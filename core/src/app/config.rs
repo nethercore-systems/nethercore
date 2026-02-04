@@ -115,17 +115,19 @@ pub struct CaptureConfig {
 //
 // | Key | Action              | Config field             |
 // |-----|---------------------|--------------------------|
-// | F2  | Settings panel      | (reserved)               |
+// | F2  | Settings panel      | (hardcoded)              |
 // | F3  | Stats panel toggle  | debug.panel_toggle       |
-// | F4  | Debug inspector     | (reserved)               |
+// | F4  | Debug inspector     | (hardcoded)              |
 // | F5  | Pause/resume        | debug.pause_toggle       |
 // | F6  | Step frame          | debug.step_frame         |
 // | F7  | Speed decrease      | debug.speed_decrease     |
 // | F8  | Speed increase      | debug.speed_increase     |
+// | `   | EPU panel (ZX)      | (hardcoded)              |
 // | F9  | Screenshot          | capture.screenshot       |
 // | F10 | GIF toggle          | capture.gif_toggle       |
-// | F11 | Fullscreen          | (reserved)               |
-// | Esc | Exit/back           | (reserved)               |
+// | F11 | Fullscreen          | (hardcoded)              |
+// | F12 | Network overlay     | (hardcoded)              |
+// | Esc | Exit/back           | (hardcoded)              |
 //
 // Note: serde's `default` attribute requires functions by name, so each
 // keybinding needs its own function returning String.

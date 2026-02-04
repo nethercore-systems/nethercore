@@ -49,9 +49,18 @@ fn read_epu_config(
     let layers: [[u64; 2]; 8] = {
         let mut arr = [[0u64; 2]; 8];
         for (i, chunk) in bytes.chunks_exact(16).enumerate() {
-            // Each 128-bit instruction is [hi, lo] in little-endian
-            arr[i][0] = u64::from_le_bytes(chunk[0..8].try_into().unwrap());
-            arr[i][1] = u64::from_le_bytes(chunk[8..16].try_into().unwrap());
+            // Each 128-bit instruction is [hi, lo] in little-endian.
+            // chunks_exact(16) guarantees each chunk is exactly 16 bytes.
+            // Use array indexing to avoid fallible try_into conversion.
+            let lo = [
+                chunk[0], chunk[1], chunk[2], chunk[3], chunk[4], chunk[5], chunk[6], chunk[7],
+            ];
+            let hi = [
+                chunk[8], chunk[9], chunk[10], chunk[11], chunk[12], chunk[13], chunk[14],
+                chunk[15],
+            ];
+            arr[i][0] = u64::from_le_bytes(lo);
+            arr[i][1] = u64::from_le_bytes(hi);
         }
         arr
     };

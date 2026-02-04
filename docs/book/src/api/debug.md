@@ -929,6 +929,436 @@ export fn init() void {
 
 ---
 
+## Debug Actions
+
+Actions create buttons in the debug panel that trigger game functions when clicked. They're useful for testing scenarios, spawning entities, or triggering events during development.
+
+### debug_register_action
+
+Registers a simple action button with no parameters.
+
+**Signature:**
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+fn debug_register_action(
+    name_ptr: *const u8, name_len: u32,
+    func_name_ptr: *const u8, func_name_len: u32
+)
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_IMPORT void debug_register_action(
+    const uint8_t* name_ptr, uint32_t name_len,
+    const uint8_t* func_name_ptr, uint32_t func_name_len
+);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+pub extern fn debug_register_action(
+    name_ptr: [*]const u8, name_len: u32,
+    func_name_ptr: [*]const u8, func_name_len: u32
+) void;
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| name_ptr | `*const u8` | Pointer to button label string |
+| name_len | `u32` | Length of button label |
+| func_name_ptr | `*const u8` | Pointer to exported WASM function name |
+| func_name_len | `u32` | Length of function name |
+
+**Example:**
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+#[no_mangle]
+pub extern "C" fn spawn_enemy() {
+    // Called when button is clicked
+    unsafe {
+        ENEMY_COUNT += 1;
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn reset_game() {
+    // Reset all game state
+    unsafe {
+        PLAYER_X = 0.0;
+        PLAYER_Y = 0.0;
+        ENEMY_COUNT = 0;
+    }
+}
+
+fn init() {
+    unsafe {
+        debug_group_begin(b"Actions".as_ptr(), 7);
+        debug_register_action(
+            b"Spawn Enemy".as_ptr(), 11,
+            b"spawn_enemy".as_ptr(), 11
+        );
+        debug_register_action(
+            b"Reset Game".as_ptr(), 10,
+            b"reset_game".as_ptr(), 10
+        );
+        debug_group_end();
+    }
+}
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_EXPORT void spawn_enemy(void) {
+    /* Called when button is clicked */
+    enemy_count++;
+}
+
+NCZX_EXPORT void reset_game(void) {
+    /* Reset all game state */
+    player_x = 0.0f;
+    player_y = 0.0f;
+    enemy_count = 0;
+}
+
+NCZX_EXPORT void init(void) {
+    debug_group_begin("Actions", 7);
+    debug_register_action("Spawn Enemy", 11, "spawn_enemy", 11);
+    debug_register_action("Reset Game", 10, "reset_game", 10);
+    debug_group_end();
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+export fn spawn_enemy() void {
+    // Called when button is clicked
+    enemy_count += 1;
+}
+
+export fn reset_game() void {
+    // Reset all game state
+    player_x = 0.0;
+    player_y = 0.0;
+    enemy_count = 0;
+}
+
+export fn init() void {
+    debug_group_begin("Actions", 7);
+    debug_register_action("Spawn Enemy", 11, "spawn_enemy", 11);
+    debug_register_action("Reset Game", 10, "reset_game", 10);
+    debug_group_end();
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+---
+
+### debug_action_begin
+
+Begins building an action with parameters. Use with `debug_action_param_*` functions and `debug_action_end()` to create actions with input fields.
+
+**Signature:**
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+fn debug_action_begin(
+    name_ptr: *const u8, name_len: u32,
+    func_name_ptr: *const u8, func_name_len: u32
+)
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_IMPORT void debug_action_begin(
+    const uint8_t* name_ptr, uint32_t name_len,
+    const uint8_t* func_name_ptr, uint32_t func_name_len
+);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+pub extern fn debug_action_begin(
+    name_ptr: [*]const u8, name_len: u32,
+    func_name_ptr: [*]const u8, func_name_len: u32
+) void;
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| name_ptr | `*const u8` | Pointer to button label string |
+| name_len | `u32` | Length of button label |
+| func_name_ptr | `*const u8` | Pointer to exported WASM function name |
+| func_name_len | `u32` | Length of function name |
+
+---
+
+### debug_action_param_i32
+
+Adds an i32 parameter input field to the pending action.
+
+**Signature:**
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+fn debug_action_param_i32(name_ptr: *const u8, name_len: u32, default_value: i32)
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_IMPORT void debug_action_param_i32(
+    const uint8_t* name_ptr, uint32_t name_len,
+    int32_t default_value
+);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+pub extern fn debug_action_param_i32(
+    name_ptr: [*]const u8, name_len: u32,
+    default_value: i32
+) void;
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| name_ptr | `*const u8` | Pointer to parameter label string |
+| name_len | `u32` | Length of parameter label |
+| default_value | `i32` | Default value shown in input field |
+
+---
+
+### debug_action_param_f32
+
+Adds an f32 parameter input field to the pending action.
+
+**Signature:**
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+fn debug_action_param_f32(name_ptr: *const u8, name_len: u32, default_value: f32)
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_IMPORT void debug_action_param_f32(
+    const uint8_t* name_ptr, uint32_t name_len,
+    float default_value
+);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+pub extern fn debug_action_param_f32(
+    name_ptr: [*]const u8, name_len: u32,
+    default_value: f32
+) void;
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| name_ptr | `*const u8` | Pointer to parameter label string |
+| name_len | `u32` | Length of parameter label |
+| default_value | `f32` | Default value shown in input field |
+
+---
+
+### debug_action_end
+
+Completes the action registration started with `debug_action_begin()`.
+
+**Signature:**
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+fn debug_action_end()
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_IMPORT void debug_action_end(void);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+pub extern fn debug_action_end() void;
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+**Complete Action with Parameters Example:**
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+// Function called when action button is clicked
+// Parameters are passed in the order they were registered
+#[no_mangle]
+pub extern "C" fn spawn_enemies_at(count: i32, x: f32, y: f32) {
+    for _ in 0..count {
+        unsafe {
+            // Spawn enemy at specified position
+            spawn_enemy(x, y);
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn teleport_player(x: f32, y: f32) {
+    unsafe {
+        PLAYER_X = x;
+        PLAYER_Y = y;
+    }
+}
+
+fn init() {
+    unsafe {
+        debug_group_begin(b"Actions".as_ptr(), 7);
+
+        // Action with parameters
+        debug_action_begin(
+            b"Spawn Enemies".as_ptr(), 13,
+            b"spawn_enemies_at".as_ptr(), 16
+        );
+        debug_action_param_i32(b"Count".as_ptr(), 5, 3);
+        debug_action_param_f32(b"X".as_ptr(), 1, 100.0);
+        debug_action_param_f32(b"Y".as_ptr(), 1, 100.0);
+        debug_action_end();
+
+        // Another parameterized action
+        debug_action_begin(
+            b"Teleport Player".as_ptr(), 15,
+            b"teleport_player".as_ptr(), 15
+        );
+        debug_action_param_f32(b"X".as_ptr(), 1, 480.0);
+        debug_action_param_f32(b"Y".as_ptr(), 1, 270.0);
+        debug_action_end();
+
+        debug_group_end();
+    }
+}
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+/* Function called when action button is clicked */
+/* Parameters are passed in the order they were registered */
+NCZX_EXPORT void spawn_enemies_at(int32_t count, float x, float y) {
+    for (int i = 0; i < count; i++) {
+        spawn_enemy(x, y);
+    }
+}
+
+NCZX_EXPORT void teleport_player(float x, float y) {
+    player_x = x;
+    player_y = y;
+}
+
+NCZX_EXPORT void init(void) {
+    debug_group_begin("Actions", 7);
+
+    /* Action with parameters */
+    debug_action_begin("Spawn Enemies", 13, "spawn_enemies_at", 16);
+    debug_action_param_i32("Count", 5, 3);
+    debug_action_param_f32("X", 1, 100.0f);
+    debug_action_param_f32("Y", 1, 100.0f);
+    debug_action_end();
+
+    /* Another parameterized action */
+    debug_action_begin("Teleport Player", 15, "teleport_player", 15);
+    debug_action_param_f32("X", 1, 480.0f);
+    debug_action_param_f32("Y", 1, 270.0f);
+    debug_action_end();
+
+    debug_group_end();
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+// Function called when action button is clicked
+// Parameters are passed in the order they were registered
+export fn spawn_enemies_at(count: i32, x: f32, y: f32) void {
+    var i: i32 = 0;
+    while (i < count) : (i += 1) {
+        spawn_enemy(x, y);
+    }
+}
+
+export fn teleport_player(x: f32, y: f32) void {
+    player_x = x;
+    player_y = y;
+}
+
+export fn init() void {
+    debug_group_begin("Actions", 7);
+
+    // Action with parameters
+    debug_action_begin("Spawn Enemies", 13, "spawn_enemies_at", 16);
+    debug_action_param_i32("Count", 5, 3);
+    debug_action_param_f32("X", 1, 100.0);
+    debug_action_param_f32("Y", 1, 100.0);
+    debug_action_end();
+
+    // Another parameterized action
+    debug_action_begin("Teleport Player", 15, "teleport_player", 15);
+    debug_action_param_f32("X", 1, 480.0);
+    debug_action_param_f32("Y", 1, 270.0);
+    debug_action_end();
+
+    debug_group_end();
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+---
+
 ## Frame Control
 
 ### debug_is_paused

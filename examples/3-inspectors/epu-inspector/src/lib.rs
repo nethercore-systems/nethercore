@@ -7,7 +7,7 @@
 //! 1. Run the game: `cargo run -- examples/3-inspectors/epu-inspector`
 //! 2. Press F4 to open the Debug Panel
 //! 3. Adjust layer_index (1-8) to select which layer to edit
-//! 4. Modify any field - changes apply immediately
+//! 4. Modify any field in raw/hi or raw/lo groups - changes apply immediately
 //! 5. Toggle "isolate" to view only the selected layer
 //! 6. Click "export hex" to print all layers to console
 //!
@@ -49,13 +49,13 @@ mod epu_meta {
 struct EditorState {
     // Hi word fields
     opcode: u8,
-    region_sky: u8,      // bool as u8 for FFI
+    region_sky: u8, // bool as u8 for FFI
     region_walls: u8,
     region_floor: u8,
     blend: u8,
     domain_id: u8,
     variant_id: u8,
-    color_a: u32,        // RGBA for color picker
+    color_a: u32, // RGBA for color picker
     color_b: u32,
 
     // Lo word fields
@@ -64,8 +64,8 @@ struct EditorState {
     param_b: u8,
     param_c: u8,
     param_d: u8,
-    azimuth: f32,        // 0-360 degrees
-    elevation: f32,      // -90 to +90 degrees
+    azimuth: f32,   // 0-360 degrees
+    elevation: f32, // -90 to +90 degrees
     alpha_a: u8,
     alpha_b: u8,
 }
@@ -73,11 +73,11 @@ struct EditorState {
 impl EditorState {
     const fn default() -> Self {
         Self {
-            opcode: 1,           // RAMP
+            opcode: 1, // RAMP
             region_sky: 1,
             region_walls: 1,
             region_floor: 1,
-            blend: 0,            // ADD
+            blend: 0, // ADD
             domain_id: 0,
             variant_id: 0,
             color_a: 0x6496DCFF, // Sky blue
@@ -96,51 +96,24 @@ impl EditorState {
 }
 
 // ============================================================================
-// Macro State Model
-// ============================================================================
-
-/// Macro state stores field values in "human units" (degrees, percentages, etc.)
-/// Up to 8 parameters per opcode: intensity, param_a..d, direction (az/el), alpha_a, alpha_b
-#[derive(Clone, Copy)]
-struct MacroState {
-    values: [f32; 8], // Field values in human units
-}
-
-impl MacroState {
-    const fn default() -> Self {
-        Self { values: [0.0; 8] }
-    }
-}
-
-/// Edit mode determines which representation drives changes
-/// 0 = Macro mode (macro values drive raw fields)
-/// 1 = Raw mode (raw fields are edited directly)
-
-// ============================================================================
 // Global State
 // ============================================================================
 
 /// The 8-layer EPU configuration (16 u64 values = 128 bytes)
 static mut LAYERS: [[u64; 2]; 8] = [[0; 2]; 8];
 
-/// Macro state per layer and opcode: MACROS[layer][opcode]
-static mut MACROS: [[MacroState; 32]; 8] = [[MacroState::default(); 32]; 8];
-
-/// Current edit mode (0 = Macro, 1 = Raw)
-static mut EDIT_MODE: u8 = 0;
-
 /// Current editor state (unpacked from selected layer)
 static mut EDITOR: EditorState = EditorState::default();
 
 /// Control state
-static mut LAYER_INDEX: u8 = 1;      // 1-8 (user-facing)
-static mut ISOLATE_LAYER: u8 = 0;    // bool
-static mut SHOW_HINTS: u8 = 1;       // bool
+static mut LAYER_INDEX: u8 = 1; // 1-8 (user-facing)
+static mut ISOLATE_LAYER: u8 = 0; // bool
+static mut SHOW_HINTS: u8 = 1; // bool
 
 /// Track previous layer index for change detection
 static mut PREV_LAYER_INDEX: u8 = 1;
 
-/// Track previous opcode for macro state switching
+/// Track previous opcode for layer change detection
 static mut PREV_OPCODE: u8 = 1;
 
 /// Layer clipboard for copy/paste operations
@@ -158,24 +131,13 @@ static mut BROWSE_COPY_LAYER: u8 = 0;
 static mut BROWSE_PASTE_LAYER: u8 = 0;
 static mut EXPORT_RUST: u8 = 0;
 
-/// Macro fields - generic slots for the current opcode's macro parameters
-/// Each field is an f32 for flexibility (mapped to/from raw u8 values)
-static mut MACRO_FIELD_0: f32 = 0.0;  // intensity
-static mut MACRO_FIELD_1: f32 = 0.0;  // param_a
-static mut MACRO_FIELD_2: f32 = 0.0;  // param_b
-static mut MACRO_FIELD_3: f32 = 0.0;  // param_c
-static mut MACRO_FIELD_4: f32 = 0.0;  // param_d
-static mut MACRO_FIELD_5: f32 = 0.0;  // azimuth (direction)
-static mut MACRO_FIELD_6: f32 = 0.0;  // elevation (direction)
-static mut MACRO_FIELD_7: f32 = 0.0;  // alpha_a
-
 /// Mesh handles for reference objects
 static mut SPHERE_MESH: u32 = 0;
 static mut CUBE_MESH: u32 = 0;
 static mut TORUS_MESH: u32 = 0;
 
 /// Shape selection
-static mut SHAPE_INDEX: u8 = 0;  // 0=Sphere, 1=Cube, 2=Torus
+static mut SHAPE_INDEX: u8 = 0; // 0=Sphere, 1=Cube, 2=Torus
 const SHAPE_COUNT: u8 = 3;
 const SHAPE_NAMES: [&[u8]; 3] = [b"Sphere", b"Cube", b"Torus"];
 
@@ -211,7 +173,10 @@ fn octahedral_to_angles(dir16: u16) -> (f32, f32) {
         // Reflect for lower hemisphere
         let sign_u = if u >= 0.0 { 1.0 } else { -1.0 };
         let sign_v = if v >= 0.0 { 1.0 } else { -1.0 };
-        ((1.0 - libm::fabsf(v)) * sign_u, (1.0 - libm::fabsf(u)) * sign_v)
+        (
+            (1.0 - libm::fabsf(v)) * sign_u,
+            (1.0 - libm::fabsf(u)) * sign_v,
+        )
     };
 
     // Normalize
@@ -223,9 +188,20 @@ fn octahedral_to_angles(dir16: u16) -> (f32, f32) {
     };
 
     // Convert to spherical
-    let elevation = libm::asinf(if nz > 1.0 { 1.0 } else if nz < -1.0 { -1.0 } else { nz }) * 180.0 / PI;
+    let elevation = libm::asinf(if nz > 1.0 {
+        1.0
+    } else if nz < -1.0 {
+        -1.0
+    } else {
+        nz
+    }) * 180.0
+        / PI;
     let azimuth = libm::atan2f(ny, nx) * 180.0 / PI;
-    let azimuth = if azimuth < 0.0 { azimuth + 360.0 } else { azimuth };
+    let azimuth = if azimuth < 0.0 {
+        azimuth + 360.0
+    } else {
+        azimuth
+    };
 
     (azimuth, elevation)
 }
@@ -264,179 +240,6 @@ fn angles_to_octahedral(azimuth: f32, elevation: f32) -> u16 {
 
     // Pack: lo byte = u, hi byte = v
     (u_byte as u16) | ((v_byte as u16) << 8)
-}
-
-// ============================================================================
-// Macro <-> Raw Mapping Functions
-// ============================================================================
-
-/// Convert f32 [0.0, 1.0] to u8 [0, 255]
-#[inline]
-fn f32_to_u8_01(v: f32) -> u8 {
-    (v.clamp(0.0, 1.0) * 255.0) as u8
-}
-
-/// Convert u8 [0, 255] to f32 [0.0, 1.0]
-#[inline]
-fn u8_01_to_f32(v: u8) -> f32 {
-    v as f32 / 255.0
-}
-
-/// Convert f32 [min, max] to u8 [0, 255] via linear interpolation
-#[inline]
-fn f32_to_u8_lerp(v: f32, min: f32, max: f32) -> u8 {
-    if max <= min {
-        return 0;
-    }
-    let t = (v - min) / (max - min);
-    (t.clamp(0.0, 1.0) * 255.0) as u8
-}
-
-/// Convert u8 [0, 255] to f32 [min, max] via linear interpolation
-#[inline]
-fn u8_lerp_to_f32(v: u8, min: f32, max: f32) -> f32 {
-    let t = v as f32 / 255.0;
-    min + t * (max - min)
-}
-
-/// Convert f32 [0.0, 1.0] to u4 [0, 15]
-#[inline]
-fn f32_to_u4_01(v: f32) -> u8 {
-    (v.clamp(0.0, 1.0) * 15.0) as u8
-}
-
-/// Convert u4 [0, 15] to f32 [0.0, 1.0]
-#[inline]
-fn u4_01_to_f32(v: u8) -> f32 {
-    (v & 0xF) as f32 / 15.0
-}
-
-/// Field index constants for MacroState.values array
-mod field_idx {
-    pub const INTENSITY: usize = 0;
-    pub const PARAM_A: usize = 1;
-    pub const PARAM_B: usize = 2;
-    pub const PARAM_C: usize = 3;
-    pub const PARAM_D: usize = 4;
-    pub const AZIMUTH: usize = 5;   // Direction azimuth (degrees)
-    pub const ELEVATION: usize = 6; // Direction elevation (degrees)
-    pub const ALPHA_A: usize = 7;   // Note: alpha_b not in spec, reuse slot if needed
-}
-
-/// Convert macro state to raw editor fields for a given opcode
-/// Uses FIELD_SPECS to determine the mapping for each field
-unsafe fn macro_to_raw(opcode: u8, macro_state: &MacroState) {
-    use epu_meta::{MapKind, FIELD_SPECS};
-
-    let specs = if (opcode as usize) < FIELD_SPECS.len() {
-        FIELD_SPECS[opcode as usize]
-    } else {
-        return;
-    };
-
-    for spec in specs {
-        let value = match spec.name {
-            "intensity" => macro_state.values[field_idx::INTENSITY],
-            "param_a" => macro_state.values[field_idx::PARAM_A],
-            "param_b" => macro_state.values[field_idx::PARAM_B],
-            "param_c" => macro_state.values[field_idx::PARAM_C],
-            "param_d" => macro_state.values[field_idx::PARAM_D],
-            "direction" => {
-                // Direction is special: set azimuth/elevation directly
-                EDITOR.azimuth = macro_state.values[field_idx::AZIMUTH];
-                EDITOR.elevation = macro_state.values[field_idx::ELEVATION];
-                continue;
-            }
-            "alpha_a" => macro_state.values[field_idx::ALPHA_A],
-            "alpha_b" => {
-                // alpha_b doesn't fit in our 8-slot array, use direct mapping
-                continue;
-            }
-            _ => continue,
-        };
-
-        // Apply the mapping based on MapKind
-        let raw = match spec.map {
-            MapKind::U8_01 => f32_to_u8_01(value),
-            MapKind::U8Lerp => f32_to_u8_lerp(value, spec.min, spec.max),
-            MapKind::U4_01 => f32_to_u4_01(value),
-            MapKind::Dir16Oct => {
-                // Should not happen for non-direction fields
-                continue;
-            }
-        };
-
-        // Write to the appropriate EDITOR field
-        match spec.name {
-            "intensity" => EDITOR.intensity = raw,
-            "param_a" => EDITOR.param_a = raw,
-            "param_b" => EDITOR.param_b = raw,
-            "param_c" => EDITOR.param_c = raw,
-            "param_d" => EDITOR.param_d = raw,
-            "alpha_a" => EDITOR.alpha_a = raw & 0xF,
-            _ => {}
-        }
-    }
-}
-
-/// Convert raw editor fields to macro state for a given opcode
-/// Uses FIELD_SPECS to determine the mapping for each field
-unsafe fn raw_to_macro(opcode: u8) -> MacroState {
-    use epu_meta::{MapKind, FIELD_SPECS};
-
-    let mut state = MacroState::default();
-
-    let specs = if (opcode as usize) < FIELD_SPECS.len() {
-        FIELD_SPECS[opcode as usize]
-    } else {
-        return state;
-    };
-
-    for spec in specs {
-        let raw = match spec.name {
-            "intensity" => EDITOR.intensity,
-            "param_a" => EDITOR.param_a,
-            "param_b" => EDITOR.param_b,
-            "param_c" => EDITOR.param_c,
-            "param_d" => EDITOR.param_d,
-            "direction" => {
-                // Direction is special: read azimuth/elevation directly
-                state.values[field_idx::AZIMUTH] = EDITOR.azimuth;
-                state.values[field_idx::ELEVATION] = EDITOR.elevation;
-                continue;
-            }
-            "alpha_a" => EDITOR.alpha_a,
-            "alpha_b" => {
-                // alpha_b doesn't fit in our 8-slot array
-                continue;
-            }
-            _ => continue,
-        };
-
-        // Apply the inverse mapping based on MapKind
-        let value = match spec.map {
-            MapKind::U8_01 => u8_01_to_f32(raw),
-            MapKind::U8Lerp => u8_lerp_to_f32(raw, spec.min, spec.max),
-            MapKind::U4_01 => u4_01_to_f32(raw),
-            MapKind::Dir16Oct => {
-                // Should not happen for non-direction fields
-                continue;
-            }
-        };
-
-        // Write to the appropriate macro state slot
-        match spec.name {
-            "intensity" => state.values[field_idx::INTENSITY] = value,
-            "param_a" => state.values[field_idx::PARAM_A] = value,
-            "param_b" => state.values[field_idx::PARAM_B] = value,
-            "param_c" => state.values[field_idx::PARAM_C] = value,
-            "param_d" => state.values[field_idx::PARAM_D] = value,
-            "alpha_a" => state.values[field_idx::ALPHA_A] = value,
-            _ => {}
-        }
-    }
-
-    state
 }
 
 /// Unpack a layer's [hi, lo] into the EDITOR state
@@ -523,13 +326,12 @@ unsafe fn pack_layer() -> (u64, u64) {
 
 unsafe fn register_debug_panel() {
     // =========================================================================
-    // control/ group - Layer selection and mode controls
+    // control/ group - Layer selection and view controls
     // =========================================================================
     debug_group_begin(b"control".as_ptr(), 7);
     debug_register_u8_range(b"layer (1-8)".as_ptr(), 11, &LAYER_INDEX, 1, 8);
     debug_register_bool(b"isolate".as_ptr(), 7, &ISOLATE_LAYER);
     debug_register_bool(b"hints".as_ptr(), 5, &SHOW_HINTS);
-    debug_register_u8_range(b"edit_mode".as_ptr(), 9, &EDIT_MODE, 0, 1); // 0=Macro, 1=Raw
     debug_group_end();
 
     // =========================================================================
@@ -538,40 +340,42 @@ unsafe fn register_debug_panel() {
     debug_group_begin(b"browse".as_ptr(), 6);
     debug_register_action(b"< opcode".as_ptr(), 8, b"browse_prev_opcode".as_ptr(), 18);
     debug_register_action(b"opcode >".as_ptr(), 8, b"browse_next_opcode".as_ptr(), 18);
-    debug_register_action(b"< variant".as_ptr(), 9, b"browse_prev_variant".as_ptr(), 19);
-    debug_register_action(b"variant >".as_ptr(), 9, b"browse_next_variant".as_ptr(), 19);
+    debug_register_action(
+        b"< variant".as_ptr(),
+        9,
+        b"browse_prev_variant".as_ptr(),
+        19,
+    );
+    debug_register_action(
+        b"variant >".as_ptr(),
+        9,
+        b"browse_next_variant".as_ptr(),
+        19,
+    );
     debug_register_action(b"< domain".as_ptr(), 8, b"browse_prev_domain".as_ptr(), 18);
     debug_register_action(b"domain >".as_ptr(), 8, b"browse_next_domain".as_ptr(), 18);
-    debug_register_action(b"reset layer".as_ptr(), 11, b"browse_reset_layer".as_ptr(), 18);
-    debug_register_action(b"copy layer".as_ptr(), 10, b"browse_copy_layer".as_ptr(), 17);
-    debug_register_action(b"paste layer".as_ptr(), 11, b"browse_paste_layer".as_ptr(), 18);
+    debug_register_action(
+        b"reset layer".as_ptr(),
+        11,
+        b"browse_reset_layer".as_ptr(),
+        18,
+    );
+    debug_register_action(
+        b"copy layer".as_ptr(),
+        10,
+        b"browse_copy_layer".as_ptr(),
+        17,
+    );
+    debug_register_action(
+        b"paste layer".as_ptr(),
+        11,
+        b"browse_paste_layer".as_ptr(),
+        18,
+    );
     debug_group_end();
 
     // =========================================================================
-    // macro/ group - Generic macro fields that change meaning based on opcode
-    // The labels are generic; the UI hints show the actual meaning
-    // =========================================================================
-    debug_group_begin(b"macro".as_ptr(), 5);
-    debug_register_f32_range(b"field_0 (intensity)".as_ptr(), 19,
-        &MACRO_FIELD_0 as *const f32 as *const u8, 0.0, 1.0);
-    debug_register_f32_range(b"field_1 (param_a)".as_ptr(), 17,
-        &MACRO_FIELD_1 as *const f32 as *const u8, 0.0, 1.0);
-    debug_register_f32_range(b"field_2 (param_b)".as_ptr(), 17,
-        &MACRO_FIELD_2 as *const f32 as *const u8, 0.0, 1.0);
-    debug_register_f32_range(b"field_3 (param_c)".as_ptr(), 17,
-        &MACRO_FIELD_3 as *const f32 as *const u8, 0.0, 1.0);
-    debug_register_f32_range(b"field_4 (param_d)".as_ptr(), 17,
-        &MACRO_FIELD_4 as *const f32 as *const u8, 0.0, 1.0);
-    debug_register_f32_range(b"azimuth".as_ptr(), 7,
-        &MACRO_FIELD_5 as *const f32 as *const u8, 0.0, 360.0);
-    debug_register_f32_range(b"elevation".as_ptr(), 9,
-        &MACRO_FIELD_6 as *const f32 as *const u8, -90.0, 90.0);
-    debug_register_f32_range(b"field_7 (alpha)".as_ptr(), 15,
-        &MACRO_FIELD_7 as *const f32 as *const u8, 0.0, 1.0);
-    debug_group_end();
-
-    // =========================================================================
-    // raw/ group - Raw field access (escape hatch for debugging)
+    // raw/hi group - Hi word fields (opcode, region, blend, colors)
     // =========================================================================
     debug_group_begin(b"raw/hi".as_ptr(), 6);
     debug_register_u8_range(b"opcode".as_ptr(), 6, &EDITOR.opcode, 0, 31);
@@ -581,8 +385,16 @@ unsafe fn register_debug_panel() {
     debug_register_u8_range(b"blend".as_ptr(), 5, &EDITOR.blend, 0, 7);
     debug_register_u8_range(b"domain_id".as_ptr(), 9, &EDITOR.domain_id, 0, 3);
     debug_register_u8_range(b"variant_id".as_ptr(), 10, &EDITOR.variant_id, 0, 7);
-    debug_register_color(b"color_a".as_ptr(), 7, &EDITOR.color_a as *const u32 as *const u8);
-    debug_register_color(b"color_b".as_ptr(), 7, &EDITOR.color_b as *const u32 as *const u8);
+    debug_register_color(
+        b"color_a".as_ptr(),
+        7,
+        &EDITOR.color_a as *const u32 as *const u8,
+    );
+    debug_register_color(
+        b"color_b".as_ptr(),
+        7,
+        &EDITOR.color_b as *const u32 as *const u8,
+    );
     debug_group_end();
 
     debug_group_begin(b"raw/lo".as_ptr(), 6);
@@ -591,18 +403,35 @@ unsafe fn register_debug_panel() {
     debug_register_u8(b"param_b".as_ptr(), 7, &EDITOR.param_b);
     debug_register_u8(b"param_c".as_ptr(), 7, &EDITOR.param_c);
     debug_register_u8(b"param_d".as_ptr(), 7, &EDITOR.param_d);
-    debug_register_f32_range(b"azimuth".as_ptr(), 7, &EDITOR.azimuth as *const f32 as *const u8, 0.0, 360.0);
-    debug_register_f32_range(b"elevation".as_ptr(), 9, &EDITOR.elevation as *const f32 as *const u8, -90.0, 90.0);
+    debug_register_f32_range(
+        b"azimuth".as_ptr(),
+        7,
+        &EDITOR.azimuth as *const f32 as *const u8,
+        0.0,
+        360.0,
+    );
+    debug_register_f32_range(
+        b"elevation".as_ptr(),
+        9,
+        &EDITOR.elevation as *const f32 as *const u8,
+        -90.0,
+        90.0,
+    );
     debug_register_u8_range(b"alpha_a".as_ptr(), 7, &EDITOR.alpha_a, 0, 15);
     debug_register_u8_range(b"alpha_b".as_ptr(), 7, &EDITOR.alpha_b, 0, 15);
     debug_group_end();
 
     // =========================================================================
-    // export/ group - Export actions
+    // export/ group - Export actions for copying layer data
     // =========================================================================
     debug_group_begin(b"export".as_ptr(), 6);
     debug_register_action(b"export hex".as_ptr(), 10, b"do_export".as_ptr(), 9);
-    debug_register_action(b"export rust".as_ptr(), 11, b"do_export_rust_action".as_ptr(), 21);
+    debug_register_action(
+        b"export rust".as_ptr(),
+        11,
+        b"do_export_rust_action".as_ptr(),
+        21,
+    );
     debug_group_end();
 
     // =========================================================================
@@ -610,16 +439,38 @@ unsafe fn register_debug_panel() {
     // =========================================================================
     debug_group_begin(b"scene".as_ptr(), 5);
     debug_register_u8_range(b"shape (0-2)".as_ptr(), 11, &SHAPE_INDEX, 0, 2);
-    debug_register_f32(b"cam_angle".as_ptr(), 9, &CAM_ANGLE as *const f32 as *const u8);
-    debug_register_f32_range(b"cam_elev".as_ptr(), 8, &CAM_ELEVATION as *const f32 as *const u8, -60.0, 60.0);
+    debug_register_f32(
+        b"cam_angle".as_ptr(),
+        9,
+        &CAM_ANGLE as *const f32 as *const u8,
+    );
+    debug_register_f32_range(
+        b"cam_elev".as_ptr(),
+        8,
+        &CAM_ELEVATION as *const f32 as *const u8,
+        -60.0,
+        60.0,
+    );
     debug_group_end();
 
     // =========================================================================
     // material/ group - Material properties
     // =========================================================================
     debug_group_begin(b"material".as_ptr(), 8);
-    debug_register_f32_range(b"metallic".as_ptr(), 8, &MATERIAL_METALLIC as *const f32 as *const u8, 0.0, 1.0);
-    debug_register_f32_range(b"roughness".as_ptr(), 9, &MATERIAL_ROUGHNESS as *const f32 as *const u8, 0.0, 1.0);
+    debug_register_f32_range(
+        b"metallic".as_ptr(),
+        8,
+        &MATERIAL_METALLIC as *const f32 as *const u8,
+        0.0,
+        1.0,
+    );
+    debug_register_f32_range(
+        b"roughness".as_ptr(),
+        9,
+        &MATERIAL_ROUGHNESS as *const f32 as *const u8,
+        0.0,
+        1.0,
+    );
     debug_group_end();
 }
 
@@ -672,52 +523,72 @@ fn write_hex_u64(buf: &mut [u8], val: u64) {
 
 #[no_mangle]
 pub extern "C" fn browse_prev_opcode() {
-    unsafe { BROWSE_PREV_OPCODE = 1; }
+    unsafe {
+        BROWSE_PREV_OPCODE = 1;
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn browse_next_opcode() {
-    unsafe { BROWSE_NEXT_OPCODE = 1; }
+    unsafe {
+        BROWSE_NEXT_OPCODE = 1;
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn browse_prev_variant() {
-    unsafe { BROWSE_PREV_VARIANT = 1; }
+    unsafe {
+        BROWSE_PREV_VARIANT = 1;
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn browse_next_variant() {
-    unsafe { BROWSE_NEXT_VARIANT = 1; }
+    unsafe {
+        BROWSE_NEXT_VARIANT = 1;
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn browse_prev_domain() {
-    unsafe { BROWSE_PREV_DOMAIN = 1; }
+    unsafe {
+        BROWSE_PREV_DOMAIN = 1;
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn browse_next_domain() {
-    unsafe { BROWSE_NEXT_DOMAIN = 1; }
+    unsafe {
+        BROWSE_NEXT_DOMAIN = 1;
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn browse_reset_layer() {
-    unsafe { BROWSE_RESET_LAYER = 1; }
+    unsafe {
+        BROWSE_RESET_LAYER = 1;
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn browse_copy_layer() {
-    unsafe { BROWSE_COPY_LAYER = 1; }
+    unsafe {
+        BROWSE_COPY_LAYER = 1;
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn browse_paste_layer() {
-    unsafe { BROWSE_PASTE_LAYER = 1; }
+    unsafe {
+        BROWSE_PASTE_LAYER = 1;
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn do_export_rust_action() {
-    unsafe { EXPORT_RUST = 1; }
+    unsafe {
+        EXPORT_RUST = 1;
+    }
 }
 
 // ============================================================================
@@ -743,33 +614,33 @@ unsafe fn do_export_rust() {
         let mut pos = 0;
 
         // "    ["
-        buf[pos..pos+5].copy_from_slice(b"    [");
+        buf[pos..pos + 5].copy_from_slice(b"    [");
         pos += 5;
 
         // "0x"
-        buf[pos..pos+2].copy_from_slice(b"0x");
+        buf[pos..pos + 2].copy_from_slice(b"0x");
         pos += 2;
 
         // hi hex
-        write_hex_u64(&mut buf[pos..pos+16], hi);
+        write_hex_u64(&mut buf[pos..pos + 16], hi);
         pos += 16;
 
         // ", 0x"
-        buf[pos..pos+4].copy_from_slice(b", 0x");
+        buf[pos..pos + 4].copy_from_slice(b", 0x");
         pos += 4;
 
         // lo hex
-        write_hex_u64(&mut buf[pos..pos+16], lo);
+        write_hex_u64(&mut buf[pos..pos + 16], lo);
         pos += 16;
 
         // "], // "
-        buf[pos..pos+6].copy_from_slice(b"], // ");
+        buf[pos..pos + 6].copy_from_slice(b"], // ");
         pos += 6;
 
         // opcode name
         let name_bytes = name.as_bytes();
         let name_len = name_bytes.len().min(20);
-        buf[pos..pos+name_len].copy_from_slice(&name_bytes[..name_len]);
+        buf[pos..pos + name_len].copy_from_slice(&name_bytes[..name_len]);
         pos += name_len;
 
         log(buf.as_ptr(), pos as u32);
@@ -788,19 +659,12 @@ pub extern "C" fn init() {
         // lo: intensity, params, direction, alphas
         LAYERS[0] = [
             0x0F00_6496_DC28_5028, // RAMP, ALL, ADD, sky-blue / ground-green
-            0xB4B4_A500_8000_FF,   // intensity=180, param_a=180, param_b=165, dir=center, alpha=15/15
+            0xB4B4_A500_8000_FF, // intensity=180, param_a=180, param_b=165, dir=center, alpha=15/15
         ];
 
         // Unpack layer 0 into editor state
         unpack_layer(LAYERS[0][0], LAYERS[0][1]);
-
-        // Initialize macro state from the unpacked raw values
         PREV_OPCODE = EDITOR.opcode;
-        let layer_idx = (LAYER_INDEX - 1) as usize;
-        MACROS[layer_idx][EDITOR.opcode as usize] = raw_to_macro(EDITOR.opcode);
-
-        // Sync macro fields for debug panel display
-        sync_macro_fields_from_state();
 
         // Create reference meshes
         SPHERE_MESH = sphere(1.3, 32, 24);
@@ -822,11 +686,8 @@ pub extern "C" fn update() {
 
         // Check if layer index changed
         if LAYER_INDEX != PREV_LAYER_INDEX {
-            // Save current macro state for previous layer/opcode
-            let prev_layer_idx = (PREV_LAYER_INDEX - 1) as usize;
-            MACROS[prev_layer_idx][PREV_OPCODE as usize] = raw_to_macro(PREV_OPCODE);
-
             // Save current editor state to previous layer
+            let prev_layer_idx = (PREV_LAYER_INDEX - 1) as usize;
             let (hi, lo) = pack_layer();
             LAYERS[prev_layer_idx] = [hi, lo];
 
@@ -836,33 +697,6 @@ pub extern "C" fn update() {
             // Update tracking
             PREV_LAYER_INDEX = LAYER_INDEX;
             PREV_OPCODE = EDITOR.opcode;
-
-            // Sync macro state from raw (in case this layer was edited in Raw mode)
-            MACROS[layer_idx][EDITOR.opcode as usize] = raw_to_macro(EDITOR.opcode);
-
-            // Sync macro fields from the stored macro state
-            sync_macro_fields_from_state();
-        } else if EDITOR.opcode != PREV_OPCODE {
-            // Opcode changed within same layer
-            // Save macro state for the old opcode
-            MACROS[layer_idx][PREV_OPCODE as usize] = raw_to_macro(PREV_OPCODE);
-
-            // Load macro state for the new opcode (if it exists)
-            let new_macro = &MACROS[layer_idx][EDITOR.opcode as usize];
-            macro_to_raw(EDITOR.opcode, new_macro);
-
-            PREV_OPCODE = EDITOR.opcode;
-
-            // Sync macro fields from the stored macro state
-            sync_macro_fields_from_state();
-        } else if EDIT_MODE == 0 {
-            // Macro mode: sync macro fields -> raw fields
-            sync_raw_from_macro_fields();
-            MACROS[layer_idx][EDITOR.opcode as usize] = raw_to_macro(EDITOR.opcode);
-        } else {
-            // Raw mode: sync raw fields -> macro fields (for display)
-            MACROS[layer_idx][EDITOR.opcode as usize] = raw_to_macro(EDITOR.opcode);
-            sync_macro_fields_from_state();
         }
 
         // Always pack editor state back to current layer
@@ -968,9 +802,6 @@ unsafe fn handle_browse_actions() {
     if BROWSE_RESET_LAYER != 0 {
         BROWSE_RESET_LAYER = 0;
         EDITOR = EditorState::default();
-        let layer_idx = (LAYER_INDEX - 1) as usize;
-        MACROS[layer_idx][EDITOR.opcode as usize] = MacroState::default();
-        sync_macro_fields_from_state();
     }
 
     // Copy layer
@@ -986,9 +817,6 @@ unsafe fn handle_browse_actions() {
         BROWSE_PASTE_LAYER = 0;
         if let Some([hi, lo]) = LAYER_CLIPBOARD {
             unpack_layer(hi, lo);
-            let layer_idx = (LAYER_INDEX - 1) as usize;
-            MACROS[layer_idx][EDITOR.opcode as usize] = raw_to_macro(EDITOR.opcode);
-            sync_macro_fields_from_state();
             log_str("Layer pasted from clipboard");
         } else {
             log_str("No layer in clipboard");
@@ -999,72 +827,6 @@ unsafe fn handle_browse_actions() {
     if EXPORT_RUST != 0 {
         EXPORT_RUST = 0;
         do_export_rust();
-    }
-}
-
-/// Sync macro field globals from the current macro state
-unsafe fn sync_macro_fields_from_state() {
-    let layer_idx = (LAYER_INDEX - 1) as usize;
-    let state = &MACROS[layer_idx][EDITOR.opcode as usize];
-
-    MACRO_FIELD_0 = state.values[field_idx::INTENSITY];
-    MACRO_FIELD_1 = state.values[field_idx::PARAM_A];
-    MACRO_FIELD_2 = state.values[field_idx::PARAM_B];
-    MACRO_FIELD_3 = state.values[field_idx::PARAM_C];
-    MACRO_FIELD_4 = state.values[field_idx::PARAM_D];
-    MACRO_FIELD_5 = state.values[field_idx::AZIMUTH];
-    MACRO_FIELD_6 = state.values[field_idx::ELEVATION];
-    MACRO_FIELD_7 = state.values[field_idx::ALPHA_A];
-}
-
-/// Sync raw editor fields from macro field globals
-unsafe fn sync_raw_from_macro_fields() {
-    use epu_meta::{MapKind, FIELD_SPECS};
-
-    let specs = if (EDITOR.opcode as usize) < FIELD_SPECS.len() {
-        FIELD_SPECS[EDITOR.opcode as usize]
-    } else {
-        return;
-    };
-
-    for (i, spec) in specs.iter().enumerate() {
-        let value = match i {
-            0 => MACRO_FIELD_0,
-            1 => MACRO_FIELD_1,
-            2 => MACRO_FIELD_2,
-            3 => MACRO_FIELD_3,
-            4 => MACRO_FIELD_4,
-            5 => MACRO_FIELD_5,
-            6 => MACRO_FIELD_6,
-            7 => MACRO_FIELD_7,
-            _ => continue,
-        };
-
-        // Handle direction specially
-        if spec.name == "direction" {
-            EDITOR.azimuth = MACRO_FIELD_5;
-            EDITOR.elevation = MACRO_FIELD_6;
-            continue;
-        }
-
-        // Apply the mapping based on MapKind
-        let raw = match spec.map {
-            MapKind::U8_01 => f32_to_u8_01(value),
-            MapKind::U8Lerp => f32_to_u8_lerp(value, spec.min, spec.max),
-            MapKind::U4_01 => f32_to_u4_01(value),
-            MapKind::Dir16Oct => continue,
-        };
-
-        // Write to the appropriate EDITOR field
-        match spec.name {
-            "intensity" => EDITOR.intensity = raw,
-            "param_a" => EDITOR.param_a = raw,
-            "param_b" => EDITOR.param_b = raw,
-            "param_c" => EDITOR.param_c = raw,
-            "param_d" => EDITOR.param_d = raw,
-            "alpha_a" => EDITOR.alpha_a = raw & 0xF,
-            _ => {}
-        }
     }
 }
 
@@ -1166,28 +928,163 @@ unsafe fn draw_ui() {
 
 /// Get parameter hints for a given opcode
 /// Returns: (name, intensity hint, param_a hint, param_b hint, param_c hint, param_d hint)
-fn get_opcode_hints(opcode: u8) -> (&'static [u8], &'static [u8], &'static [u8], &'static [u8], &'static [u8], &'static [u8]) {
+fn get_opcode_hints(
+    opcode: u8,
+) -> (
+    &'static [u8],
+    &'static [u8],
+    &'static [u8],
+    &'static [u8],
+    &'static [u8],
+    &'static [u8],
+) {
     match opcode {
         0x00 => (b"NOP", b"-", b"-", b"-", b"-", b"-"),
-        0x01 => (b"RAMP", b"softness", b"wall_r", b"wall_g", b"wall_b", b"thresholds"),
+        0x01 => (
+            b"RAMP",
+            b"softness",
+            b"wall_r",
+            b"wall_g",
+            b"wall_b",
+            b"thresholds",
+        ),
         0x02 => (b"SECTOR", b"opening", b"azimuth", b"width", b"-", b"-"),
-        0x03 => (b"SILHOUETTE", b"edge_soft", b"height", b"roughness", b"octaves", b"-"),
-        0x04 => (b"SPLIT", b"-", b"blend_width", b"angle", b"sides", b"offset"),
-        0x05 => (b"CELL", b"outline", b"density", b"fill", b"gap_width", b"seed"),
-        0x06 => (b"PATCHES", b"-", b"scale", b"coverage", b"sharpness", b"seed"),
-        0x07 => (b"APERTURE", b"edge_soft", b"half_width", b"half_height", b"frame", b"(varies)"),
-        0x08 => (b"DECAL", b"brightness", b"shape+soft", b"size", b"glow_soft", b"phase"),
-        0x09 => (b"GRID", b"brightness", b"scale", b"thickness", b"pat+scroll", b"phase"),
-        0x0A => (b"SCATTER", b"brightness", b"density", b"size", b"twinkle", b"seed"),
-        0x0B => (b"FLOW", b"brightness", b"scale", b"turbulence", b"oct+pat", b"phase"),
-        0x0C => (b"TRACE", b"brightness", b"count", b"thickness", b"jitter", b"seed+shape"),
-        0x0D => (b"VEIL", b"brightness", b"count", b"thickness", b"sway", b"phase"),
-        0x0E => (b"ATMOSPHERE", b"strength", b"falloff", b"horizon_y", b"mie_conc", b"mie_exp"),
-        0x0F => (b"PLANE", b"contrast", b"scale", b"gap_width", b"roughness", b"phase"),
-        0x10 => (b"CELESTIAL", b"brightness", b"ang_size", b"limb_dark", b"phase_ang", b"(varies)"),
-        0x11 => (b"PORTAL", b"glow", b"size", b"glow_width", b"roughness", b"phase"),
-        0x12 => (b"LOBE", b"brightness", b"exponent", b"falloff", b"waveform", b"phase"),
-        0x13 => (b"BAND", b"brightness", b"width", b"y_offset", b"softness", b"phase"),
+        0x03 => (
+            b"SILHOUETTE",
+            b"edge_soft",
+            b"height",
+            b"roughness",
+            b"octaves",
+            b"-",
+        ),
+        0x04 => (
+            b"SPLIT",
+            b"-",
+            b"blend_width",
+            b"angle",
+            b"sides",
+            b"offset",
+        ),
+        0x05 => (
+            b"CELL",
+            b"outline",
+            b"density",
+            b"fill",
+            b"gap_width",
+            b"seed",
+        ),
+        0x06 => (
+            b"PATCHES",
+            b"-",
+            b"scale",
+            b"coverage",
+            b"sharpness",
+            b"seed",
+        ),
+        0x07 => (
+            b"APERTURE",
+            b"edge_soft",
+            b"half_width",
+            b"half_height",
+            b"frame",
+            b"(varies)",
+        ),
+        0x08 => (
+            b"DECAL",
+            b"brightness",
+            b"shape+soft",
+            b"size",
+            b"glow_soft",
+            b"phase",
+        ),
+        0x09 => (
+            b"GRID",
+            b"brightness",
+            b"scale",
+            b"thickness",
+            b"pat+scroll",
+            b"phase",
+        ),
+        0x0A => (
+            b"SCATTER",
+            b"brightness",
+            b"density",
+            b"size",
+            b"twinkle",
+            b"seed",
+        ),
+        0x0B => (
+            b"FLOW",
+            b"brightness",
+            b"scale",
+            b"turbulence",
+            b"oct+pat",
+            b"phase",
+        ),
+        0x0C => (
+            b"TRACE",
+            b"brightness",
+            b"count",
+            b"thickness",
+            b"jitter",
+            b"seed+shape",
+        ),
+        0x0D => (
+            b"VEIL",
+            b"brightness",
+            b"count",
+            b"thickness",
+            b"sway",
+            b"phase",
+        ),
+        0x0E => (
+            b"ATMOSPHERE",
+            b"strength",
+            b"falloff",
+            b"horizon_y",
+            b"mie_conc",
+            b"mie_exp",
+        ),
+        0x0F => (
+            b"PLANE",
+            b"contrast",
+            b"scale",
+            b"gap_width",
+            b"roughness",
+            b"phase",
+        ),
+        0x10 => (
+            b"CELESTIAL",
+            b"brightness",
+            b"ang_size",
+            b"limb_dark",
+            b"phase_ang",
+            b"(varies)",
+        ),
+        0x11 => (
+            b"PORTAL",
+            b"glow",
+            b"size",
+            b"glow_width",
+            b"roughness",
+            b"phase",
+        ),
+        0x12 => (
+            b"LOBE",
+            b"brightness",
+            b"exponent",
+            b"falloff",
+            b"waveform",
+            b"phase",
+        ),
+        0x13 => (
+            b"BAND",
+            b"brightness",
+            b"width",
+            b"y_offset",
+            b"softness",
+            b"phase",
+        ),
         _ => (b"UNKNOWN", b"-", b"-", b"-", b"-", b"-"),
     }
 }
@@ -1195,7 +1092,8 @@ fn get_opcode_hints(opcode: u8) -> (&'static [u8], &'static [u8], &'static [u8],
 /// Get variant name for opcodes that have variants
 fn get_variant_hint(opcode: u8, variant_id: u8) -> &'static [u8] {
     match opcode {
-        0x07 => match variant_id { // APERTURE
+        0x07 => match variant_id {
+            // APERTURE
             0 => b"RECT",
             1 => b"ARCH",
             2 => b"BARRED",
@@ -1203,14 +1101,16 @@ fn get_variant_hint(opcode: u8, variant_id: u8) -> &'static [u8] {
             4 => b"RAGGED",
             _ => b"",
         },
-        0x0E => match variant_id { // ATMOSPHERE
+        0x0E => match variant_id {
+            // ATMOSPHERE
             0 => b"ABSORPTION",
             1 => b"RAYLEIGH",
             2 => b"MIE",
             3 => b"FULL",
             _ => b"",
         },
-        0x0F => match variant_id { // PLANE
+        0x0F => match variant_id {
+            // PLANE
             0 => b"TILES",
             1 => b"HEX",
             2 => b"STONE",
@@ -1221,7 +1121,8 @@ fn get_variant_hint(opcode: u8, variant_id: u8) -> &'static [u8] {
             7 => b"PAVEMENT",
             _ => b"",
         },
-        0x10 => match variant_id { // CELESTIAL
+        0x10 => match variant_id {
+            // CELESTIAL
             0 => b"MOON",
             1 => b"SUN",
             2 => b"PLANET",
@@ -1231,7 +1132,8 @@ fn get_variant_hint(opcode: u8, variant_id: u8) -> &'static [u8] {
             6 => b"ECLIPSE",
             _ => b"",
         },
-        0x11 => match variant_id { // PORTAL
+        0x11 => match variant_id {
+            // PORTAL
             0 => b"CIRCLE",
             1 => b"RECT",
             2 => b"TEAR",
@@ -1295,22 +1197,46 @@ unsafe fn draw_hints() {
     // param_a
     buf[0..3].copy_from_slice(b"a: ");
     let len_a = 3 + copy_slice(&mut buf[3..], hint_a);
-    draw_text(buf.as_ptr(), len_a as u32, 10.0, y_base + line_height * 2.0, 12.0);
+    draw_text(
+        buf.as_ptr(),
+        len_a as u32,
+        10.0,
+        y_base + line_height * 2.0,
+        12.0,
+    );
 
     // param_b
     buf[0..3].copy_from_slice(b"b: ");
     let len_b = 3 + copy_slice(&mut buf[3..], hint_b);
-    draw_text(buf.as_ptr(), len_b as u32, 10.0, y_base + line_height * 3.0, 12.0);
+    draw_text(
+        buf.as_ptr(),
+        len_b as u32,
+        10.0,
+        y_base + line_height * 3.0,
+        12.0,
+    );
 
     // param_c
     buf[0..3].copy_from_slice(b"c: ");
     let len_c = 3 + copy_slice(&mut buf[3..], hint_c);
-    draw_text(buf.as_ptr(), len_c as u32, 10.0, y_base + line_height * 4.0, 12.0);
+    draw_text(
+        buf.as_ptr(),
+        len_c as u32,
+        10.0,
+        y_base + line_height * 4.0,
+        12.0,
+    );
 
     // param_d
     buf[0..3].copy_from_slice(b"d: ");
     let len_d = 3 + copy_slice(&mut buf[3..], hint_d);
-    draw_text(buf.as_ptr(), len_d as u32, 10.0, y_base + line_height * 5.0, 12.0);
+    draw_text(
+        buf.as_ptr(),
+        len_d as u32,
+        10.0,
+        y_base + line_height * 5.0,
+        12.0,
+    );
 
     // Variant hint (for opcodes that have variants)
     let variant_hint = get_variant_hint(EDITOR.opcode, EDITOR.variant_id);
@@ -1318,6 +1244,12 @@ unsafe fn draw_hints() {
         set_color(0xAAAA88FF);
         buf[0..3].copy_from_slice(b"v: ");
         let len_v = 3 + copy_slice(&mut buf[3..], variant_hint);
-        draw_text(buf.as_ptr(), len_v as u32, 10.0, y_base + line_height * 6.0, 12.0);
+        draw_text(
+            buf.as_ptr(),
+            len_v as u32,
+            10.0,
+            y_base + line_height * 6.0,
+            12.0,
+        );
     }
 }

@@ -6,6 +6,7 @@
 pub mod audio;
 pub mod audio_thread;
 pub mod console;
+pub mod debug;
 pub mod ffi;
 mod font;
 pub mod graphics;

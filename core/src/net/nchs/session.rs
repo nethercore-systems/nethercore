@@ -33,6 +33,7 @@ impl NchsSession {
             config.netplay,
             config.player_info.clone(),
             config.network_config.clone(),
+            config.save_config.clone(),
         )?;
 
         Ok(Self {

@@ -4,9 +4,9 @@
 //! rebuilding unchanged static environments, and utilities for collecting and
 //! deduplicating active environment IDs.
 
-use super::EpuConfig;
 use super::settings::MAX_ACTIVE_ENVS;
 use super::settings::MAX_ENV_STATES;
+use super::EpuConfig;
 
 /// Cache entry for dirty-state tracking of environment configurations.
 ///

@@ -114,6 +114,21 @@ impl<C: Console> ConsoleRunner<C> {
         self.session.as_ref()
     }
 
+    /// Get a mutable reference to the console (if a game is loaded).
+    pub fn console_mut(&mut self) -> Option<&mut C> {
+        self.session.as_mut().map(|s| s.runtime.console_mut())
+    }
+
+    /// Split borrow for debug UI rendering.
+    ///
+    /// Returns separate references to graphics and session, allowing
+    /// console debug UI to be rendered while graphics is still accessible.
+    pub fn split_for_debug_ui(
+        &mut self,
+    ) -> (&C::Graphics, &mut Option<GameSession<C>>) {
+        (&self.graphics, &mut self.session)
+    }
+
     /// Load a game from WASM bytes.
     ///
     /// # Arguments

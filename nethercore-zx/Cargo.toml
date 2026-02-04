@@ -83,6 +83,7 @@ gif = "0.13"
 
 [build-dependencies]
 naga = { version = "23", features = ["wgsl-in"] }
+zx-common = { path = "../zx-common", default-features = false }
 
 [dev-dependencies]
 naga = { version = "23", features = ["wgsl-in"] }

@@ -3,7 +3,7 @@
 //! This module contains the uniform buffer structures and GPU-compatible
 //! representations used by the EPU compute shaders.
 
-use super::EpuConfig;
+use super::layer::EpuConfig;
 
 /// Frame uniforms structure matching the WGSL `FrameUniforms` struct.
 #[repr(C)]

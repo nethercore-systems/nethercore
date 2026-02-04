@@ -3,7 +3,7 @@
 use nethercore_shared::console::{ConsoleType, TickRate};
 use nethercore_shared::netplay::NetplayMetadata;
 
-use crate::net::nchs::messages::{NetworkConfig, PlayerInfo};
+use crate::net::nchs::messages::{NetworkConfig, PlayerInfo, SaveConfig, SaveMode};
 
 use super::state::{HostState, HostStateMachine};
 
@@ -26,6 +26,7 @@ fn test_host_create() {
         test_netplay(),
         test_player_info("Host"),
         NetworkConfig::default(),
+        None, // No save config
     )
     .unwrap();
 
@@ -41,6 +42,7 @@ fn test_host_lobby_state() {
         test_netplay(),
         test_player_info("Host"),
         NetworkConfig::default(),
+        None, // No save config
     )
     .unwrap();
 
@@ -58,6 +60,7 @@ fn test_host_all_ready_empty() {
         test_netplay(),
         test_player_info("Host"),
         NetworkConfig::default(),
+        None, // No save config
     )
     .unwrap();
 
@@ -75,6 +78,7 @@ fn test_host_is_full() {
         netplay,
         test_player_info("Host"),
         NetworkConfig::default(),
+        None, // No save config
     )
     .unwrap();
 
@@ -88,6 +92,7 @@ fn test_host_public_addr_not_zero() {
         test_netplay(),
         test_player_info("Host"),
         NetworkConfig::default(),
+        None, // No save config
     )
     .unwrap();
 
@@ -106,6 +111,7 @@ fn test_host_lobby_state_has_real_ip() {
         test_netplay(),
         test_player_info("Host"),
         NetworkConfig::default(),
+        None, // No save config
     )
     .unwrap();
 
@@ -120,4 +126,81 @@ fn test_host_lobby_state_has_real_ip() {
         "Host address in lobby should not be 0.0.0.0, got: {}",
         addr
     );
+}
+
+#[test]
+fn test_host_save_config_synchronized() {
+    // Test synchronized save mode where host's save data is shared with all players
+    let save_data = vec![0x01, 0x02, 0x03, 0x04]; // Mock save data
+    let save_config = SaveConfig {
+        slot_index: 0,
+        mode: SaveMode::Synchronized,
+        synchronized_save: Some(save_data.clone()),
+    };
+
+    let host = HostStateMachine::new(
+        0,
+        test_netplay(),
+        test_player_info("Host"),
+        NetworkConfig::default(),
+        Some(save_config),
+    )
+    .unwrap();
+
+    // Verify save config is stored
+    assert!(host.save_config.is_some());
+    let config = host.save_config.as_ref().unwrap();
+    assert_eq!(config.mode, SaveMode::Synchronized);
+    assert_eq!(config.slot_index, 0);
+    assert_eq!(config.synchronized_save, Some(save_data));
+}
+
+#[test]
+fn test_host_save_config_per_player() {
+    // Test per-player save mode where each player uses their own save
+    let save_config = SaveConfig {
+        slot_index: 1,
+        mode: SaveMode::PerPlayer,
+        synchronized_save: None,
+    };
+
+    let host = HostStateMachine::new(
+        0,
+        test_netplay(),
+        test_player_info("Host"),
+        NetworkConfig::default(),
+        Some(save_config),
+    )
+    .unwrap();
+
+    // Verify save config is stored
+    assert!(host.save_config.is_some());
+    let config = host.save_config.as_ref().unwrap();
+    assert_eq!(config.mode, SaveMode::PerPlayer);
+    assert_eq!(config.slot_index, 1);
+    assert!(config.synchronized_save.is_none());
+}
+
+#[test]
+fn test_host_save_config_new_game() {
+    // Test new game mode where no save data is used
+    let save_config = SaveConfig {
+        slot_index: 0,
+        mode: SaveMode::NewGame,
+        synchronized_save: None,
+    };
+
+    let host = HostStateMachine::new(
+        0,
+        test_netplay(),
+        test_player_info("Host"),
+        NetworkConfig::default(),
+        Some(save_config),
+    )
+    .unwrap();
+
+    // Verify save config is stored
+    assert!(host.save_config.is_some());
+    let config = host.save_config.as_ref().unwrap();
+    assert_eq!(config.mode, SaveMode::NewGame);
 }

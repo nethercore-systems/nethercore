@@ -75,8 +75,19 @@ where
             return;
         }
 
+        // Poll for join connection in Join mode
+        if self.poll_for_join_connection() {
+            return;
+        }
+
         // Still waiting for peer - don't run game simulation
         if self.waiting_for_peer.is_some() {
+            return;
+        }
+
+        // Still joining - don't run game simulation
+        if self.joining_peer.is_some() {
+            self.needs_redraw = true; // Keep redrawing to update UI
             return;
         }
 

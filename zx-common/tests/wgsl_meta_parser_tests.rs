@@ -2,11 +2,7 @@
 //!
 //! These tests run with std available, separate from the no_std game library.
 
-// Include the parser module directly (it uses std)
-#[path = "../src/wgsl_meta_parser.rs"]
-mod wgsl_meta_parser;
-
-use wgsl_meta_parser::*;
+use zx_common::wgsl_meta_parser::*;
 
 const VALID_PLANE_META: &str = r#"
 // Some header comment

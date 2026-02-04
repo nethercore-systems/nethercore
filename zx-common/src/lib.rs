@@ -10,11 +10,13 @@
 //! - [`packing`] - Vertex data packing utilities (f32 → f16/snorm16/unorm8)
 //! - [`formats`] - ZX-specific binary asset and ROM formats
 //! - [`loader`] - ROM loader for Nethercore ZX ROM files
+//! - [`wgsl_meta_parser`] - WGSL metadata parser for EPU opcode files
 
 pub mod formats;
 #[cfg(feature = "loader")]
 pub mod loader;
 pub mod packing;
+pub mod wgsl_meta_parser;
 
 // Re-export the ROM loader
 #[cfg(feature = "loader")]

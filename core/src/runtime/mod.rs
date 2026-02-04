@@ -205,6 +205,11 @@ impl<C: Console> Runtime<C> {
         &self.console
     }
 
+    /// Get mutable reference to the console
+    pub fn console_mut(&mut self) -> &mut C {
+        &mut self.console
+    }
+
     /// Get a reference to the rollback session
     pub fn session(&self) -> Option<&RollbackSession<C::Input, C::State, C::RollbackState>> {
         self.session.as_ref()

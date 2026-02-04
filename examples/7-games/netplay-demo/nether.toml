@@ -1,0 +1,7 @@
+[game]
+id = "netplay-demo"
+title = "Netplay Demo"
+author = "Nethercore Examples"
+version = "0.1.0"
+description = "Arena combat game demonstrating multiplayer with rollback netcode, save sync, and connection handling"
+tags = ["multiplayer", "netplay", "rollback", "demo", "2d"]

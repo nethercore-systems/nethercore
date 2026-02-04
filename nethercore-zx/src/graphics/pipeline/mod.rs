@@ -12,4 +12,5 @@ mod pipeline_key;
 pub use cache::PipelineCache;
 
 // Re-export internal types used by graphics module
+pub(crate) use pipeline_creation::PipelineEntry;
 pub(crate) use pipeline_key::PipelineKey;

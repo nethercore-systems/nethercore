@@ -154,38 +154,19 @@ where
                 // Don't load game yet - will be loaded when peer connects
             }
             ConnectionMode::Join { address } => {
-                // Join mode - connect to host
-                // TODO: Implement proper connection UI
+                // Join mode - connect to host with proper UI feedback
                 let mut socket =
                     LocalSocket::bind("0.0.0.0:0").context("Failed to bind client socket")?;
                 socket
                     .connect(address)
-                    .context("Failed to connect to host")?;
-                tracing::info!("Joining game at {}", address);
+                    .context("Failed to set peer address")?;
+                tracing::info!("Joining game at {}, starting connection flow...", address);
 
-                // For MVP, create P2P session immediately
-                // This will be improved in Phase 0 with proper connection flow
-                let session_config =
-                    SessionConfig::online(2).with_input_delay(self.config.input_delay);
+                // Enter joining state - game will be loaded when connection is established
+                self.joining_peer =
+                    Some(super::error_ui::JoiningPeer::new(socket, address.clone()));
 
-                let players = vec![
-                    (0, PlayerType::Remote(address.clone())),
-                    (1, PlayerType::Local),
-                ];
-                tracing::info!("Join mode: creating session with players {:?}", players);
-
-                let session =
-                    RollbackSession::new_p2p(session_config, socket, players, specs.ram_limit)
-                        .context("Failed to create P2P session")?;
-                tracing::info!(
-                    "Join mode: session created, local_players = {:?}",
-                    session.local_players()
-                );
-                let started = Instant::now();
-                runner
-                    .load_game_with_session(rom.console, &rom.code, session, None, &rom.game_id)
-                    .context("Failed to load game with P2P session")?;
-                tracing::info!("Game load (WASM compile/init) took {:?}", started.elapsed());
+                // Don't load game yet - will be loaded when connection is established
             }
             ConnectionMode::Session { session_file } => {
                 // Session mode - pre-negotiated session from library lobby (NCHS protocol)

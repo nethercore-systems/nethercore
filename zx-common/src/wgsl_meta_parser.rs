@@ -11,10 +11,7 @@
 //!
 //! ```ignore
 //! // In build.rs:
-//! #[path = "src/wgsl_meta_parser.rs"]
-//! mod wgsl_meta_parser;
-//!
-//! use wgsl_meta_parser::parse_wgsl_meta;
+//! use zx_common::wgsl_meta_parser::parse_wgsl_meta;
 //!
 //! let source = std::fs::read_to_string("path/to/opcode.wgsl").unwrap();
 //! let meta = parse_wgsl_meta(&source, "path/to/opcode.wgsl");

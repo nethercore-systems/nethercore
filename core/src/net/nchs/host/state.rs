@@ -7,7 +7,9 @@ use std::time::{Duration, Instant};
 use nethercore_shared::netplay::NetplayMetadata;
 
 use crate::net::nchs::NchsError;
-use crate::net::nchs::messages::{LobbyState, NetworkConfig, PlayerInfo, PlayerSlot, SessionStart};
+use crate::net::nchs::messages::{
+    LobbyState, NetworkConfig, PlayerInfo, PlayerSlot, SaveConfig, SessionStart,
+};
 use crate::net::nchs::socket::NchsSocket;
 
 /// Host state machine states
@@ -80,6 +82,8 @@ pub struct HostStateMachine {
     pub(super) next_handle: u8,
     /// Network configuration
     pub(super) network_config: NetworkConfig,
+    /// Save state synchronization configuration
+    pub(super) save_config: Option<SaveConfig>,
     /// Random seed for session (generated on start)
     pub(super) random_seed: Option<u64>,
     /// Session start sent time
@@ -97,11 +101,13 @@ impl HostStateMachine {
     /// * `netplay` - Netplay metadata for validation
     /// * `host_info` - Host's player info
     /// * `network_config` - Network configuration for GGRS
+    /// * `save_config` - Optional save state synchronization configuration
     pub fn new(
         port: u16,
         netplay: NetplayMetadata,
         host_info: PlayerInfo,
         network_config: NetworkConfig,
+        save_config: Option<SaveConfig>,
     ) -> Result<Self, NchsError> {
         let socket = NchsSocket::bind(&format!("0.0.0.0:{}", port))
             .map_err(|e| NchsError::BindFailed(e.to_string()))?;
@@ -130,6 +136,7 @@ impl HostStateMachine {
             addr_to_handle: HashMap::new(),
             next_handle: 1, // Host is handle 0
             network_config,
+            save_config,
             random_seed: None,
             start_time: None,
             public_addr,

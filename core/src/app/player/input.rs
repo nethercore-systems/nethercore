@@ -53,6 +53,10 @@ where
                     self.frame_controller.request_step();
                     self.needs_redraw = true;
                 }
+                PhysicalKey::Code(KeyCode::Backquote) => {
+                    self.console_debug_panel_visible = !self.console_debug_panel_visible;
+                    self.needs_redraw = true;
+                }
                 PhysicalKey::Code(KeyCode::F11) => {
                     if let Some(window) = &self.window {
                         let is_fullscreen = window.fullscreen().is_some();

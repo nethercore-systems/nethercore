@@ -79,7 +79,7 @@ impl HostStateMachine {
             players,
             player_count: self.player_count(),
             network_config: self.network_config.clone(),
-            save_config: None, // TODO: Add save sync support
+            save_config: self.save_config.clone(),
             extra_data: vec![],
         };
 
@@ -117,7 +117,7 @@ impl HostStateMachine {
             players: self.build_player_connection_info(),
             player_count: self.player_count(),
             network_config: self.network_config.clone(),
-            save_config: None,
+            save_config: self.save_config.clone(),
             extra_data: vec![],
         })
     }

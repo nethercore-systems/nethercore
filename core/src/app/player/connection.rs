@@ -279,12 +279,177 @@ where
     })
 }
 
+/// Action from the join connection UI
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JoinConnectionAction {
+    /// No action needed
+    None,
+    /// User requested to retry the connection
+    Retry,
+    /// User requested to cancel and quit
+    Cancel,
+}
+
 impl<C, L> StandaloneApp<C, L>
 where
     C: Console + Clone,
     C::Graphics: super::types::StandaloneGraphicsSupport,
     L: RomLoader<Console = C>,
 {
+    /// Polls for join connection progress and creates session when connected
+    pub(super) fn poll_for_join_connection(&mut self) -> bool {
+        use super::error_ui::JoinConnectionState;
+
+        let joining = match &mut self.joining_peer {
+            Some(j) => j,
+            None => return false,
+        };
+
+        // Check for timeout
+        if joining.is_timed_out() && joining.state == JoinConnectionState::Connecting {
+            tracing::warn!("Join connection timed out after {:?}", joining.timeout);
+            joining.mark_timed_out();
+            self.needs_redraw = true;
+            return false;
+        }
+
+        // Send probe packets periodically while connecting
+        if joining.should_send_probe() {
+            let elapsed_ms = joining.elapsed().as_millis() as u64;
+            let probe_interval_ms = super::error_ui::JoiningPeer::PROBE_INTERVAL.as_millis() as u64;
+
+            if elapsed_ms / probe_interval_ms > joining.attempt_count as u64 {
+                joining.attempt_count += 1;
+
+                // Send probe packet to host
+                if let Some(peer_addr) = joining.socket.peer_addr() {
+                    let probe_data = super::error_ui::JoiningPeer::PROBE_MAGIC;
+                    if let Err(e) = joining.socket.socket().send_to(probe_data, peer_addr) {
+                        tracing::debug!("Failed to send probe packet: {}", e);
+                    } else {
+                        tracing::debug!(
+                            "Sent probe packet #{} to {}",
+                            joining.attempt_count,
+                            peer_addr
+                        );
+                    }
+                }
+            }
+        }
+
+        // Check for response from host
+        if joining.state == JoinConnectionState::Connecting {
+            let mut buf = [0u8; 128];
+            match joining.socket.socket().recv_from(&mut buf) {
+                Ok((len, from)) => {
+                    // Any response from the host means they're listening
+                    tracing::info!(
+                        "Received response from host {} ({} bytes), connection established",
+                        from,
+                        len
+                    );
+                    joining.mark_connected();
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    // No data yet, keep waiting
+                }
+                Err(e) => {
+                    tracing::debug!("Recv error (may be expected): {}", e);
+                }
+            }
+        }
+
+        // If connected, create the session and start the game
+        if joining.state == JoinConnectionState::Connected {
+            tracing::info!("Join connection established, creating P2P session");
+
+            // Take ownership of the joining state
+            let joining = self.joining_peer.take().unwrap();
+            let address = joining.address.clone();
+
+            // Create the P2P session
+            if let (Some(rom), Some(runner)) = (&self.loaded_rom, &mut self.runner) {
+                let specs = C::specs();
+                let session_config =
+                    SessionConfig::online(2).with_input_delay(self.config.input_delay);
+
+                // Joiner is player 1, host is player 0
+                let players = vec![
+                    (0, PlayerType::Remote(address.clone())),
+                    (1, PlayerType::Local),
+                ];
+                tracing::info!(
+                    "Join mode: creating P2P session (host=remote p0, local=p1)"
+                );
+
+                match RollbackSession::new_p2p(
+                    session_config,
+                    joining.socket,
+                    players,
+                    specs.ram_limit,
+                ) {
+                    Ok(session) => {
+                        tracing::info!(
+                            "Join mode: session created, local_players = {:?}",
+                            session.local_players()
+                        );
+                        if let Err(e) = runner.load_game_with_session(
+                            rom.console.clone(),
+                            &rom.code,
+                            session,
+                            None,
+                            &rom.game_id,
+                        ) {
+                            tracing::error!("Failed to load game with P2P session: {}", e);
+                            self.error_state = Some(super::super::GameError {
+                                summary: "Connection Error".to_string(),
+                                details: format!("Failed to start game: {}", e),
+                                stack_trace: None,
+                                tick: None,
+                                phase: GameErrorPhase::Update,
+                                suggestions: vec![],
+                            });
+                        } else {
+                            tracing::info!("Join mode: game started with host at {}", address);
+                            // Set audio volume
+                            if let Some(session) = runner.session_mut()
+                                && let Some(audio) = session.runtime.audio_mut()
+                            {
+                                let config = super::super::config::load();
+                                audio.set_master_volume(config.audio.master_volume);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to create P2P session: {}", e);
+                        self.error_state = Some(super::super::GameError {
+                            summary: "Connection Error".to_string(),
+                            details: format!("Failed to create session: {}", e),
+                            stack_trace: None,
+                            tick: None,
+                            phase: GameErrorPhase::Update,
+                            suggestions: vec![],
+                        });
+                    }
+                }
+            }
+
+            self.needs_redraw = true;
+            return true;
+        }
+
+        false
+    }
+
+    /// Handle retry action for join connection
+    pub(super) fn retry_join_connection(&mut self) {
+        if let Some(ref mut joining) = self.joining_peer {
+            tracing::info!("Retrying join connection to {}", joining.address);
+            joining.reset_for_retry();
+            self.needs_redraw = true;
+        }
+    }
+
     /// Polls for peer connection in Host mode and creates session when connected
     pub(super) fn poll_for_peer_connection(&mut self) -> bool {
         if let Some(ref mut waiting) = self.waiting_for_peer

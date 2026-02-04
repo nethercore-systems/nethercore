@@ -78,7 +78,11 @@ fn octahedral_to_angles(dir16: u16) -> (f32, f32) {
 
     let elevation = nz.clamp(-1.0, 1.0).asin() * 180.0 / PI;
     let azimuth = ny.atan2(nx) * 180.0 / PI;
-    let azimuth = if azimuth < 0.0 { azimuth + 360.0 } else { azimuth };
+    let azimuth = if azimuth < 0.0 {
+        azimuth + 360.0
+    } else {
+        azimuth
+    };
 
     (azimuth, elevation)
 }
@@ -124,7 +128,11 @@ fn test_u8_01_roundtrip_zero() {
     let raw = 0u8;
     let macro_val = u8_01_to_f32(raw);
     let back = f32_to_u8_01(macro_val);
-    assert_eq!(raw, back, "raw -> macro -> raw: {} -> {} -> {}", raw, macro_val, back);
+    assert_eq!(
+        raw, back,
+        "raw -> macro -> raw: {} -> {} -> {}",
+        raw, macro_val, back
+    );
     assert!((macro_val - 0.0).abs() < 0.001);
 }
 
@@ -134,7 +142,11 @@ fn test_u8_01_roundtrip_half() {
     let raw = 127u8;
     let macro_val = u8_01_to_f32(raw);
     let back = f32_to_u8_01(macro_val);
-    assert_eq!(raw, back, "raw -> macro -> raw: {} -> {} -> {}", raw, macro_val, back);
+    assert_eq!(
+        raw, back,
+        "raw -> macro -> raw: {} -> {} -> {}",
+        raw, macro_val, back
+    );
     assert!((macro_val - 0.498).abs() < 0.01);
 }
 
@@ -143,7 +155,11 @@ fn test_u8_01_roundtrip_max() {
     let raw = 255u8;
     let macro_val = u8_01_to_f32(raw);
     let back = f32_to_u8_01(macro_val);
-    assert_eq!(raw, back, "raw -> macro -> raw: {} -> {} -> {}", raw, macro_val, back);
+    assert_eq!(
+        raw, back,
+        "raw -> macro -> raw: {} -> {} -> {}",
+        raw, macro_val, back
+    );
     assert!((macro_val - 1.0).abs() < 0.001);
 }
 
@@ -265,7 +281,13 @@ fn test_u8_lerp_quantization_error() {
         let back = f32_to_u8_lerp(macro_val, min, max);
         // Allow off-by-one due to floating point rounding
         let diff = (raw as i16 - back as i16).abs();
-        assert!(diff <= 1, "raw {} had too much error (got {}, diff={})", raw, back, diff);
+        assert!(
+            diff <= 1,
+            "raw {} had too much error (got {}, diff={})",
+            raw,
+            back,
+            diff
+        );
     }
 }
 
@@ -355,7 +377,13 @@ fn test_dir16_oct_roundtrip_up() {
     let (_az_back, el_back) = octahedral_to_angles(packed);
 
     // Elevation should be close to 90 (azimuth undefined at poles)
-    assert!((el_back - 90.0).abs() < 5.0, "elevation: {} -> {} -> {}", el, packed, el_back);
+    assert!(
+        (el_back - 90.0).abs() < 5.0,
+        "elevation: {} -> {} -> {}",
+        el,
+        packed,
+        el_back
+    );
 }
 
 #[test]
@@ -366,7 +394,13 @@ fn test_dir16_oct_roundtrip_down() {
     let (_az_back, el_back) = octahedral_to_angles(packed);
 
     // Elevation should be close to -90 (azimuth undefined at poles)
-    assert!((el_back - (-90.0)).abs() < 5.0, "elevation: {} -> {} -> {}", el, packed, el_back);
+    assert!(
+        (el_back - (-90.0)).abs() < 5.0,
+        "elevation: {} -> {} -> {}",
+        el,
+        packed,
+        el_back
+    );
 }
 
 #[test]
@@ -377,19 +411,31 @@ fn test_dir16_oct_roundtrip_forward() {
     let (az_back, el_back) = octahedral_to_angles(packed);
 
     // Should be close to original
-    assert!((el_back - 0.0).abs() < 5.0, "elevation: {} -> {} -> {}", el, packed, el_back);
+    assert!(
+        (el_back - 0.0).abs() < 5.0,
+        "elevation: {} -> {} -> {}",
+        el,
+        packed,
+        el_back
+    );
     // Azimuth might wrap around, but at el=0 it should be close
-    assert!(az_back.abs() < 10.0 || (az_back - 360.0).abs() < 10.0, "azimuth: {} -> {} -> {}", az, packed, az_back);
+    assert!(
+        az_back.abs() < 10.0 || (az_back - 360.0).abs() < 10.0,
+        "azimuth: {} -> {} -> {}",
+        az,
+        packed,
+        az_back
+    );
 }
 
 #[test]
 fn test_dir16_oct_roundtrip_cardinal_directions() {
     // Test cardinal directions on the horizon
     let cardinals = [
-        (0.0, 0.0),    // +X (East)
-        (90.0, 0.0),   // +Y (North)
-        (180.0, 0.0),  // -X (West)
-        (270.0, 0.0),  // -Y (South)
+        (0.0, 0.0),   // +X (East)
+        (90.0, 0.0),  // +Y (North)
+        (180.0, 0.0), // -X (West)
+        (270.0, 0.0), // -Y (South)
     ];
 
     for (az, el) in cardinals {
@@ -397,32 +443,45 @@ fn test_dir16_oct_roundtrip_cardinal_directions() {
         let (az_back, el_back) = octahedral_to_angles(packed);
 
         // Elevation should be close to 0
-        assert!((el_back - el).abs() < 5.0, "elevation for ({}, {}): got {}", az, el, el_back);
+        assert!(
+            (el_back - el).abs() < 5.0,
+            "elevation for ({}, {}): got {}",
+            az,
+            el,
+            el_back
+        );
 
         // Azimuth should be close (with wrap-around handling)
         let az_diff = (az_back - az).abs();
         let az_diff_wrapped = (360.0 - az_diff).abs();
-        assert!(az_diff < 15.0 || az_diff_wrapped < 15.0,
-            "azimuth for ({}, {}): got {} (diff={})", az, el, az_back, az_diff.min(az_diff_wrapped));
+        assert!(
+            az_diff < 15.0 || az_diff_wrapped < 15.0,
+            "azimuth for ({}, {}): got {} (diff={})",
+            az,
+            el,
+            az_back,
+            az_diff.min(az_diff_wrapped)
+        );
     }
 }
 
 #[test]
 fn test_dir16_oct_roundtrip_45_degree_elevation() {
     // Test directions at 45 degrees elevation
-    let directions = [
-        (0.0, 45.0),
-        (90.0, 45.0),
-        (180.0, 45.0),
-        (270.0, 45.0),
-    ];
+    let directions = [(0.0, 45.0), (90.0, 45.0), (180.0, 45.0), (270.0, 45.0)];
 
     for (az, el) in directions {
         let packed = angles_to_octahedral(az, el);
         let (_az_back, el_back) = octahedral_to_angles(packed);
 
         // Elevation should be reasonably close
-        assert!((el_back - el).abs() < 10.0, "elevation for ({}, {}): got {}", az, el, el_back);
+        assert!(
+            (el_back - el).abs() < 10.0,
+            "elevation for ({}, {}): got {}",
+            az,
+            el,
+            el_back
+        );
     }
 }
 
@@ -441,7 +500,13 @@ fn test_dir16_oct_roundtrip_negative_elevation() {
         let (_az_back, el_back) = octahedral_to_angles(packed);
 
         // Elevation should be reasonably close
-        assert!((el_back - el).abs() < 15.0, "elevation for ({}, {}): got {}", az, el, el_back);
+        assert!(
+            (el_back - el).abs() < 15.0,
+            "elevation for ({}, {}): got {}",
+            az,
+            el,
+            el_back
+        );
     }
 }
 
@@ -456,7 +521,14 @@ fn test_dir16_oct_packed_value_range() {
             let u = packed & 0xFF;
             let v = (packed >> 8) & 0xFF;
             // Both components should be in valid range [0, 255]
-            assert!(u <= 255 && v <= 255, "packed components out of range for ({}, {}): u={}, v={}", az, el, u, v);
+            assert!(
+                u <= 255 && v <= 255,
+                "packed components out of range for ({}, {}): u={}, v={}",
+                az,
+                el,
+                u,
+                v
+            );
         }
     }
 }
@@ -475,8 +547,15 @@ fn test_macro_raw_macro_stability_u8_01() {
         let raw2 = f32_to_u8_01(macro1);
         let macro2 = u8_01_to_f32(raw2);
 
-        assert_eq!(raw1, raw2, "raw values should stabilize: {} -> {} -> {} -> {}", initial, raw1, macro1, raw2);
-        assert!((macro1 - macro2).abs() < 0.001, "macro values should stabilize");
+        assert_eq!(
+            raw1, raw2,
+            "raw values should stabilize: {} -> {} -> {} -> {}",
+            initial, raw1, macro1, raw2
+        );
+        assert!(
+            (macro1 - macro2).abs() < 0.001,
+            "macro values should stabilize"
+        );
     }
 }
 
@@ -492,7 +571,10 @@ fn test_macro_raw_macro_stability_u8_lerp() {
         let macro2 = u8_lerp_to_f32(raw2, min, max);
 
         assert_eq!(raw1, raw2, "raw values should stabilize");
-        assert!((macro1 - macro2).abs() < 0.001, "macro values should stabilize");
+        assert!(
+            (macro1 - macro2).abs() < 0.001,
+            "macro values should stabilize"
+        );
     }
 }
 
@@ -505,7 +587,10 @@ fn test_macro_raw_macro_stability_u4_01() {
         let macro2 = u4_01_to_f32(raw2);
 
         assert_eq!(raw1, raw2, "raw values should stabilize");
-        assert!((macro1 - macro2).abs() < 0.001, "macro values should stabilize");
+        assert!(
+            (macro1 - macro2).abs() < 0.001,
+            "macro values should stabilize"
+        );
     }
 }
 
@@ -513,12 +598,7 @@ fn test_macro_raw_macro_stability_u4_01() {
 fn test_macro_raw_macro_stability_dir16_oct() {
     // Direction encoding has inherent quantization - test that the output
     // direction remains close after roundtripping (not exact byte equality)
-    let directions = [
-        (0.0, 0.0),
-        (45.0, 30.0),
-        (180.0, 60.0),
-        (270.0, -45.0),
-    ];
+    let directions = [(0.0, 0.0), (45.0, 30.0), (180.0, 60.0), (270.0, -45.0)];
 
     for (az, el) in directions {
         // First conversion
@@ -535,8 +615,22 @@ fn test_macro_raw_macro_stability_dir16_oct() {
 
         // The angle values should converge to within a small tolerance
         // (the packed values may oscillate by 1 LSB due to quantization)
-        assert!((az2 - az3).abs() < 1.0, "azimuth should be close after 2 roundtrips for ({}, {}): {} vs {}", az, el, az2, az3);
-        assert!((el2 - el3).abs() < 1.0, "elevation should be close after 2 roundtrips for ({}, {}): {} vs {}", az, el, el2, el3);
+        assert!(
+            (az2 - az3).abs() < 1.0,
+            "azimuth should be close after 2 roundtrips for ({}, {}): {} vs {}",
+            az,
+            el,
+            az2,
+            az3
+        );
+        assert!(
+            (el2 - el3).abs() < 1.0,
+            "elevation should be close after 2 roundtrips for ({}, {}): {} vs {}",
+            az,
+            el,
+            el2,
+            el3
+        );
 
         // Packed values should be very close (at most 1 LSB difference per component)
         let u_diff = ((packed2 & 0xFF) as i16 - (packed3 & 0xFF) as i16).abs();
@@ -568,8 +662,20 @@ fn test_dir16_oct_quantization_bounded() {
         let v_diff = (((packed1 >> 8) & 0xFF) as i16 - ((packed2 >> 8) & 0xFF) as i16).abs();
 
         // Each component should differ by at most 2 (quantization error)
-        assert!(u_diff <= 2, "u component changed too much for ({}, {}): diff={}", az, el, u_diff);
-        assert!(v_diff <= 2, "v component changed too much for ({}, {}): diff={}", az, el, v_diff);
+        assert!(
+            u_diff <= 2,
+            "u component changed too much for ({}, {}): diff={}",
+            az,
+            el,
+            u_diff
+        );
+        assert!(
+            v_diff <= 2,
+            "v component changed too much for ({}, {}): diff={}",
+            az,
+            el,
+            v_diff
+        );
     }
 }
 
@@ -580,9 +686,9 @@ fn test_dir16_oct_quantization_bounded() {
 #[test]
 fn test_u8_01_edge_values() {
     // Test values very close to boundaries
-    assert_eq!(f32_to_u8_01(0.001), 0);  // Small positive
+    assert_eq!(f32_to_u8_01(0.001), 0); // Small positive
     assert_eq!(f32_to_u8_01(0.999), 254); // Just under 1.0
-    assert_eq!(f32_to_u8_01(0.004), 1);   // First value that maps to 1
+    assert_eq!(f32_to_u8_01(0.004), 1); // First value that maps to 1
 }
 
 #[test]
@@ -592,13 +698,17 @@ fn test_u8_lerp_edge_values() {
 
     // Mid-range should be approximately 127 or 128
     let mid = f32_to_u8_lerp(0.5, min, max);
-    assert!(mid == 127 || mid == 128, "mid value should be 127 or 128, got {}", mid);
+    assert!(
+        mid == 127 || mid == 128,
+        "mid value should be 127 or 128, got {}",
+        mid
+    );
 }
 
 #[test]
 fn test_u4_01_edge_values() {
     // Test boundary values
-    assert_eq!(f32_to_u4_01(1.0 / 15.0), 1);  // Exactly 1/15
+    assert_eq!(f32_to_u4_01(1.0 / 15.0), 1); // Exactly 1/15
     assert_eq!(f32_to_u4_01(14.0 / 15.0), 14); // Exactly 14/15
 }
 
@@ -627,8 +737,13 @@ fn test_common_edit_small_increment() {
     let new_raw = f32_to_u8_01(incremented);
 
     // Should produce a nearby raw value
-    assert!((new_raw as i16 - base as i16).abs() <= 3,
-        "small increment should produce nearby value: {} -> {} -> {}", base, macro_val, new_raw);
+    assert!(
+        (new_raw as i16 - base as i16).abs() <= 3,
+        "small increment should produce nearby value: {} -> {} -> {}",
+        base,
+        macro_val,
+        new_raw
+    );
 }
 
 #[test]
@@ -644,5 +759,9 @@ fn test_common_edit_lerp_range() {
 
     // Should be close to target (within quantization error)
     let error = (actual - target).abs() / (max - min);
-    assert!(error < 0.005, "quantization error should be < 0.5%: got {}", error);
+    assert!(
+        error < 0.005,
+        "quantization error should be < 0.5%: got {}",
+        error
+    );
 }

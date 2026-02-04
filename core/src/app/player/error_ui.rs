@@ -1,5 +1,7 @@
 //! Error screen UI and network waiting screen
 
+use std::time::{Duration, Instant};
+
 use super::super::GameError;
 use crate::rollback::LocalSocket;
 
@@ -37,6 +39,114 @@ impl WaitingForPeer {
     /// Generate a shareable join URL for an IP address
     pub fn join_url(&self, ip: &str) -> String {
         format!("nethercore://join/{}:{}/{}", ip, self.port, self.game_id)
+    }
+}
+
+/// State for connecting to a host in Join mode.
+pub struct JoiningPeer {
+    /// The socket used for connection
+    pub socket: LocalSocket,
+    /// Address we're connecting to
+    pub address: String,
+    /// When the connection attempt started
+    pub started_at: Instant,
+    /// Connection timeout duration
+    pub timeout: Duration,
+    /// Number of connection attempts made
+    pub attempt_count: u32,
+    /// Current connection state
+    pub state: JoinConnectionState,
+    /// Error message if connection failed
+    pub error: Option<String>,
+}
+
+/// State of a join connection attempt
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JoinConnectionState {
+    /// Attempting to connect to host
+    Connecting,
+    /// Connection established, waiting for initial response
+    WaitingForResponse,
+    /// Connected and ready
+    Connected,
+    /// Connection timed out
+    TimedOut,
+    /// Connection failed with error
+    Failed,
+}
+
+impl JoiningPeer {
+    /// Default connection timeout (10 seconds)
+    pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
+
+    /// Interval between connection probe packets
+    pub const PROBE_INTERVAL: Duration = Duration::from_millis(250);
+
+    /// Magic bytes for connection probe
+    pub const PROBE_MAGIC: &'static [u8] = b"NC_JOIN";
+
+    /// Magic bytes for connection acknowledgment
+    pub const ACK_MAGIC: &'static [u8] = b"NC_ACK";
+
+    pub fn new(socket: LocalSocket, address: String) -> Self {
+        Self {
+            socket,
+            address,
+            started_at: Instant::now(),
+            timeout: Self::DEFAULT_TIMEOUT,
+            attempt_count: 0,
+            state: JoinConnectionState::Connecting,
+            error: None,
+        }
+    }
+
+    /// Check if the connection attempt has timed out
+    pub fn is_timed_out(&self) -> bool {
+        self.started_at.elapsed() > self.timeout
+    }
+
+    /// Get elapsed time since connection started
+    pub fn elapsed(&self) -> Duration {
+        self.started_at.elapsed()
+    }
+
+    /// Get remaining time before timeout
+    pub fn remaining(&self) -> Duration {
+        self.timeout.saturating_sub(self.started_at.elapsed())
+    }
+
+    /// Reset the connection attempt for retry
+    pub fn reset_for_retry(&mut self) {
+        self.started_at = Instant::now();
+        self.attempt_count = 0;
+        self.state = JoinConnectionState::Connecting;
+        self.error = None;
+    }
+
+    /// Mark the connection as failed with an error
+    pub fn fail(&mut self, error: impl Into<String>) {
+        self.state = JoinConnectionState::Failed;
+        self.error = Some(error.into());
+    }
+
+    /// Mark the connection as timed out
+    pub fn mark_timed_out(&mut self) {
+        self.state = JoinConnectionState::TimedOut;
+        self.error = Some(format!(
+            "Connection timed out after {} seconds",
+            self.timeout.as_secs()
+        ));
+    }
+
+    /// Mark the connection as connected
+    pub fn mark_connected(&mut self) {
+        self.state = JoinConnectionState::Connected;
+        self.error = None;
+    }
+
+    /// Check if we should send another probe packet
+    pub fn should_send_probe(&self) -> bool {
+        matches!(self.state, JoinConnectionState::Connecting)
     }
 }
 
@@ -202,7 +312,7 @@ pub fn parse_key_code(s: &str) -> Option<winit::keyboard::KeyCode> {
 
 #[cfg(test)]
 mod tests {
-    use super::{WaitingForPeer, parse_key_code, sanitize_game_id};
+    use super::{JoinConnectionState, JoiningPeer, WaitingForPeer, parse_key_code, sanitize_game_id};
     use crate::rollback::LocalSocket;
     use winit::keyboard::KeyCode;
 
@@ -237,5 +347,66 @@ mod tests {
             waiting.join_url("127.0.0.1"),
             "nethercore://join/127.0.0.1:1234/my-game"
         );
+    }
+
+    #[test]
+    fn joining_peer_initial_state() {
+        let socket = LocalSocket::bind("0.0.0.0:0").expect("bind LocalSocket");
+        let joining = JoiningPeer::new(socket, "192.168.1.100:7777".to_string());
+
+        assert_eq!(joining.address, "192.168.1.100:7777");
+        assert_eq!(joining.state, JoinConnectionState::Connecting);
+        assert_eq!(joining.attempt_count, 0);
+        assert!(joining.error.is_none());
+        assert!(!joining.is_timed_out());
+    }
+
+    #[test]
+    fn joining_peer_fail_sets_error() {
+        let socket = LocalSocket::bind("0.0.0.0:0").expect("bind LocalSocket");
+        let mut joining = JoiningPeer::new(socket, "192.168.1.100:7777".to_string());
+
+        joining.fail("Connection refused");
+
+        assert_eq!(joining.state, JoinConnectionState::Failed);
+        assert_eq!(joining.error, Some("Connection refused".to_string()));
+    }
+
+    #[test]
+    fn joining_peer_mark_connected_clears_error() {
+        let socket = LocalSocket::bind("0.0.0.0:0").expect("bind LocalSocket");
+        let mut joining = JoiningPeer::new(socket, "192.168.1.100:7777".to_string());
+
+        joining.fail("Some error");
+        joining.mark_connected();
+
+        assert_eq!(joining.state, JoinConnectionState::Connected);
+        assert!(joining.error.is_none());
+    }
+
+    #[test]
+    fn joining_peer_reset_for_retry() {
+        let socket = LocalSocket::bind("0.0.0.0:0").expect("bind LocalSocket");
+        let mut joining = JoiningPeer::new(socket, "192.168.1.100:7777".to_string());
+
+        joining.attempt_count = 5;
+        joining.fail("Timed out");
+
+        joining.reset_for_retry();
+
+        assert_eq!(joining.state, JoinConnectionState::Connecting);
+        assert_eq!(joining.attempt_count, 0);
+        assert!(joining.error.is_none());
+    }
+
+    #[test]
+    fn joining_peer_should_send_probe_only_when_connecting() {
+        let socket = LocalSocket::bind("0.0.0.0:0").expect("bind LocalSocket");
+        let mut joining = JoiningPeer::new(socket, "192.168.1.100:7777".to_string());
+
+        assert!(joining.should_send_probe());
+
+        joining.mark_connected();
+        assert!(!joining.should_send_probe());
     }
 }

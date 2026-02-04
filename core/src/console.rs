@@ -237,6 +237,21 @@ pub trait Console: Send + 'static {
     /// Called at the start of each rendered frame to reset per-frame state
     /// like draw commands. Default implementation does nothing.
     fn clear_frame_state(_state: &mut Self::State) {}
+
+    /// Render console-specific debug UI.
+    ///
+    /// Called during egui rendering when the console debug panel is visible.
+    /// Default implementation does nothing.
+    fn render_debug_ui(&mut self, _ctx: &egui::Context, _visible: bool) {
+        // Default: no console-specific debug UI
+    }
+
+    /// Check if the console has a debug panel to render.
+    ///
+    /// Returns true if the console wants to render debug UI when visible.
+    fn has_debug_panel(&self) -> bool {
+        false
+    }
 }
 
 /// Trait for console-specific resource management

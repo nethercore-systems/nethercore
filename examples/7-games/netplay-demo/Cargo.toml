@@ -1,5 +1,5 @@
 [package]
-name = "epu-inspector"
+name = "netplay-demo"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,9 +8,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 libm = "0.2"
-
-[build-dependencies]
-zx-common = { path = "../../../zx-common", default-features = false }
 
 [profile.release]
 opt-level = "s"

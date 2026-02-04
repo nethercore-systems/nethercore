@@ -9,6 +9,10 @@
 mod bind_group_cache;
 mod blit;
 mod buffer_capacity;
+mod buffer_upload;
+mod frame_bind_group;
+mod pass_execution;
+mod perf_tracking;
 mod render_frame;
 
 // Re-export public items from submodules

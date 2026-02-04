@@ -12,6 +12,9 @@ use crate::debug::registry::RegisteredValue;
 use crate::debug::types::DebugValue;
 use crate::rollback::{ConnectionQuality, SessionType};
 
+use super::connection::JoinConnectionAction;
+use super::error_ui::JoinConnectionState;
+
 use super::super::ui::SettingsAction;
 use super::StandaloneApp;
 use super::error_ui::{ErrorAction, render_error_screen};
@@ -26,6 +29,7 @@ where
     /// Main render function: renders game, overlays, and handles UI interactions
     pub(super) fn render_impl(&mut self) {
         let mut restart_requested = false;
+        let mut join_retry_requested = false;
 
         // If a screenshot/GIF frame is pending, ensure the render target is freshly rendered
         // on this redraw, even if the sim loop didn't request a new render.
@@ -84,12 +88,16 @@ where
                 || self.error_state.is_some()
                 || self.network_overlay_visible
                 || self.waiting_for_peer.is_some()
+                || self.joining_peer.is_some()
+                || self.console_debug_panel_visible
             {
                 let pending_writes: RefCell<Vec<(RegisteredValue, DebugValue)>> =
                     RefCell::new(Vec::new());
                 let pending_action: RefCell<Option<ActionRequest>> = RefCell::new(None);
                 let settings_action: RefCell<SettingsAction> = RefCell::new(SettingsAction::None);
                 let error_action: RefCell<ErrorAction> = RefCell::new(ErrorAction::None);
+                let join_action: RefCell<JoinConnectionAction> =
+                    RefCell::new(JoinConnectionAction::None);
 
                 if let (Some(egui_state), Some(egui_renderer), Some(window)) =
                     (&mut self.egui_state, &mut self.egui_renderer, &self.window)
@@ -104,6 +112,7 @@ where
                     let settings_ui = &mut self.settings_ui;
                     let error_state_ref = &self.error_state;
                     let waiting_for_peer_ref = &self.waiting_for_peer;
+                    let joining_peer_ref = &self.joining_peer;
                     let network_overlay_visible = self.network_overlay_visible;
 
                     // Get network session info for overlay
@@ -131,6 +140,14 @@ where
                             (SessionType::Local, Vec::new(), SmallVec::new(), 0, 0)
                         }
                     };
+
+                    // Console debug panel visibility flag and pointer
+                    let console_debug_visible = self.console_debug_panel_visible;
+                    // SAFETY: We use a raw pointer to avoid borrow conflicts between
+                    // console (in session) and graphics (separate field). The pointer
+                    // is only used during egui_ctx.run(), before any graphics access.
+                    let console_ptr: Option<*mut C> =
+                        runner.console_mut().map(|c| c as *mut C);
 
                     let full_output = self.egui_ctx.run(raw_input, |ctx| {
                         let action = settings_ui.show_as_window(ctx);
@@ -334,10 +351,186 @@ where
                                 });
                         }
 
+                        // Joining peer connection dialog (Join mode)
+                        if let Some(joining) = joining_peer_ref {
+                            egui::Window::new("Joining Game")
+                                .collapsible(false)
+                                .resizable(false)
+                                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                                .show(ctx, |ui| {
+                                    ui.set_min_width(350.0);
+
+                                    match joining.state {
+                                        JoinConnectionState::Connecting => {
+                                            ui.vertical_centered(|ui| {
+                                                ui.add_space(10.0);
+                                                ui.spinner();
+                                                ui.add_space(10.0);
+                                                ui.label("Connecting to host...");
+                                                ui.add_space(5.0);
+                                                ui.monospace(&joining.address);
+                                                ui.add_space(15.0);
+                                            });
+
+                                            // Progress bar showing timeout
+                                            let progress = 1.0
+                                                - (joining.remaining().as_secs_f32()
+                                                    / joining.timeout.as_secs_f32());
+                                            ui.add(
+                                                egui::ProgressBar::new(progress)
+                                                    .text(format!(
+                                                        "Attempt {} - {:.0}s remaining",
+                                                        joining.attempt_count,
+                                                        joining.remaining().as_secs_f32()
+                                                    ))
+                                                    .animate(true),
+                                            );
+
+                                            ui.add_space(15.0);
+                                            ui.separator();
+                                            ui.add_space(10.0);
+
+                                            if ui.button("Cancel").clicked() {
+                                                *join_action.borrow_mut() =
+                                                    JoinConnectionAction::Cancel;
+                                            }
+                                        }
+                                        JoinConnectionState::WaitingForResponse => {
+                                            ui.vertical_centered(|ui| {
+                                                ui.add_space(10.0);
+                                                ui.spinner();
+                                                ui.add_space(10.0);
+                                                ui.label("Waiting for host response...");
+                                                ui.add_space(5.0);
+                                                ui.monospace(&joining.address);
+                                                ui.add_space(15.0);
+                                            });
+
+                                            ui.separator();
+                                            ui.add_space(10.0);
+
+                                            if ui.button("Cancel").clicked() {
+                                                *join_action.borrow_mut() =
+                                                    JoinConnectionAction::Cancel;
+                                            }
+                                        }
+                                        JoinConnectionState::Connected => {
+                                            ui.vertical_centered(|ui| {
+                                                ui.add_space(10.0);
+                                                ui.label(
+                                                    egui::RichText::new("Connected!")
+                                                        .size(18.0)
+                                                        .color(egui::Color32::GREEN),
+                                                );
+                                                ui.add_space(10.0);
+                                                ui.label("Starting game...");
+                                                ui.add_space(15.0);
+                                            });
+                                        }
+                                        JoinConnectionState::TimedOut => {
+                                            ui.vertical_centered(|ui| {
+                                                ui.add_space(10.0);
+                                                ui.label(
+                                                    egui::RichText::new("Connection Timed Out")
+                                                        .size(18.0)
+                                                        .color(egui::Color32::YELLOW),
+                                                );
+                                                ui.add_space(10.0);
+                                            });
+
+                                            ui.label("Could not reach the host. Possible causes:");
+                                            ui.add_space(5.0);
+                                            ui.horizontal(|ui| {
+                                                ui.label("  *");
+                                                ui.label("The host may not be running");
+                                            });
+                                            ui.horizontal(|ui| {
+                                                ui.label("  *");
+                                                ui.label("Firewall may be blocking the connection");
+                                            });
+                                            ui.horizontal(|ui| {
+                                                ui.label("  *");
+                                                ui.label("The address may be incorrect");
+                                            });
+
+                                            ui.add_space(15.0);
+                                            ui.separator();
+                                            ui.add_space(10.0);
+
+                                            ui.horizontal(|ui| {
+                                                if ui.button("Retry").clicked() {
+                                                    *join_action.borrow_mut() =
+                                                        JoinConnectionAction::Retry;
+                                                }
+                                                ui.add_space(20.0);
+                                                if ui.button("Cancel").clicked() {
+                                                    *join_action.borrow_mut() =
+                                                        JoinConnectionAction::Cancel;
+                                                }
+                                            });
+
+                                            ui.add_space(5.0);
+                                            ui.label(
+                                                egui::RichText::new("Press Escape to cancel")
+                                                    .weak()
+                                                    .small(),
+                                            );
+                                        }
+                                        JoinConnectionState::Failed => {
+                                            ui.vertical_centered(|ui| {
+                                                ui.add_space(10.0);
+                                                ui.label(
+                                                    egui::RichText::new("Connection Failed")
+                                                        .size(18.0)
+                                                        .color(egui::Color32::RED),
+                                                );
+                                                ui.add_space(10.0);
+                                            });
+
+                                            if let Some(ref error) = joining.error {
+                                                ui.label(error);
+                                            }
+
+                                            ui.add_space(15.0);
+                                            ui.separator();
+                                            ui.add_space(10.0);
+
+                                            ui.horizontal(|ui| {
+                                                if ui.button("Retry").clicked() {
+                                                    *join_action.borrow_mut() =
+                                                        JoinConnectionAction::Retry;
+                                                }
+                                                ui.add_space(20.0);
+                                                if ui.button("Cancel").clicked() {
+                                                    *join_action.borrow_mut() =
+                                                        JoinConnectionAction::Cancel;
+                                                }
+                                            });
+
+                                            ui.add_space(5.0);
+                                            ui.label(
+                                                egui::RichText::new("Press Escape to cancel")
+                                                    .weak()
+                                                    .small(),
+                                            );
+                                        }
+                                    }
+                                });
+                        }
+
                         if let Some(error) = error_state_ref {
                             let action = render_error_screen(ctx, error);
                             if action != ErrorAction::None {
                                 *error_action.borrow_mut() = action;
+                            }
+                        }
+
+                        // Console-specific debug panel (e.g., EPU panel for ZX)
+                        if let Some(ptr) = console_ptr {
+                            // SAFETY: The pointer is valid for the duration of this closure,
+                            // and no other code accesses the console during this time.
+                            unsafe {
+                                <C as Console>::render_debug_ui(&mut *ptr, ctx, console_debug_visible);
                             }
                         }
                     });
@@ -496,6 +689,19 @@ where
                         self.should_exit = true;
                     }
                 }
+
+                // Apply join connection actions
+                match join_action.into_inner() {
+                    JoinConnectionAction::None => {}
+                    JoinConnectionAction::Retry => {
+                        join_retry_requested = true;
+                    }
+                    JoinConnectionAction::Cancel => {
+                        tracing::info!("Join connection cancelled by user");
+                        self.joining_peer = None;
+                        self.should_exit = true;
+                    }
+                }
             }
 
             runner
@@ -538,6 +744,10 @@ where
 
         if restart_requested {
             self.restart_game();
+        }
+
+        if join_retry_requested {
+            self.retry_join_connection();
         }
     }
 }
