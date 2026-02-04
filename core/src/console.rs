@@ -252,6 +252,17 @@ pub trait Console: Send + 'static {
     fn has_debug_panel(&self) -> bool {
         false
     }
+
+    /// Sync state between console and debug UI before rendering.
+    ///
+    /// Called each frame when the debug panel may need state access.
+    /// This allows the debug UI to read from and write to console state,
+    /// enabling features like EPU lock mode where debug edits override game values.
+    ///
+    /// Default implementation does nothing.
+    fn sync_debug_ui_state(&mut self, _state: &mut Self::State) {
+        // Default: no-op for consoles without debug UI state sync
+    }
 }
 
 /// Trait for console-specific resource management

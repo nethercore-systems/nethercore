@@ -239,4 +239,16 @@ impl<C: Console> Runtime<C> {
     pub fn game_and_audio_mut(&mut self) -> GameAndAudioMut<'_, C> {
         (self.game.as_mut(), self.audio.as_mut())
     }
+
+    /// Get mutable references to console and game state for debug UI syncing.
+    ///
+    /// Returns (console, Option<state>) where state is the game's console state if loaded.
+    /// This allows debug UI to sync state between the console and game.
+    pub fn console_and_state_mut(&mut self) -> (&mut C, Option<&mut C::State>) {
+        let state = self
+            .game
+            .as_mut()
+            .map(|game| game.console_state_mut());
+        (&mut self.console, state)
+    }
 }

@@ -143,6 +143,17 @@ where
 
                     // Console debug panel visibility flag and pointer
                     let console_debug_visible = self.console_debug_panel_visible;
+
+                    // Sync debug UI state before rendering (enables EPU lock mode, etc.)
+                    if console_debug_visible
+                        && let Some(session) = runner.session_mut()
+                    {
+                        let (console, state_opt) = session.runtime.console_and_state_mut();
+                        if let Some(state) = state_opt {
+                            console.sync_debug_ui_state(state);
+                        }
+                    }
+
                     // SAFETY: We use a raw pointer to avoid borrow conflicts between
                     // console (in session) and graphics (separate field). The pointer
                     // is only used during egui_ctx.run(), before any graphics access.

@@ -59,6 +59,10 @@ pub struct EpuDebugPanel {
     preset_manager: PresetManager,
     /// Preset UI state
     preset_ui_state: PresetUiState,
+    /// Snapshot of game configs (for display when locked)
+    pub snapshot_configs: hashbrown::HashMap<u32, EpuConfig>,
+    /// Whether lock mode is active (debugger config replaces ALL game configs)
+    pub locked: bool,
 }
 
 impl Default for EpuDebugPanel {
@@ -86,7 +90,24 @@ impl EpuDebugPanel {
             editing_env_id: None,
             preset_manager: PresetManager::default(),
             preset_ui_state: PresetUiState::default(),
+            snapshot_configs: hashbrown::HashMap::new(),
+            locked: false,
         }
+    }
+
+    /// Update snapshot with current game configs
+    pub fn update_snapshot(&mut self, game_configs: &hashbrown::HashMap<u32, EpuConfig>) {
+        self.snapshot_configs.clone_from(game_configs);
+    }
+
+    /// Check if lock mode is active
+    pub fn is_locked(&self) -> bool {
+        self.locked
+    }
+
+    /// Get the debugger's override config (from editor state)
+    pub fn get_override_config(&self) -> EpuConfig {
+        self.editor.export_config()
     }
 
     /// Toggle panel visibility
@@ -107,16 +128,15 @@ impl EpuDebugPanel {
     /// Render the EPU debug panel
     ///
     /// Returns true if any value was changed (for future integration with live editing)
-    pub fn render(
-        &mut self,
-        ctx: &egui::Context,
-        epu_configs: &hashbrown::HashMap<u32, EpuConfig>,
-    ) -> bool {
+    pub fn render(&mut self, ctx: &egui::Context) -> bool {
         if !self.visible {
             return false;
         }
 
         let mut changed = false;
+
+        // Capture config count before closure to avoid borrow conflicts
+        let config_count = self.snapshot_configs.len();
 
         egui::Window::new("EPU Debug Panel")
             .id(egui::Id::new("epu_debug_panel"))
@@ -125,10 +145,34 @@ impl EpuDebugPanel {
             .resizable(true)
             .collapsible(true)
             .show(ctx, |ui| {
-                // Header with view mode tabs
+                // Lock mode banner (prominent when active)
+                if self.locked {
+                    ui.horizontal(|ui| {
+                        ui.add_space(4.0);
+                        let banner = egui::RichText::new("LOCKED - Game EPU disabled, using debugger config")
+                            .color(egui::Color32::WHITE)
+                            .strong();
+                        ui.colored_label(egui::Color32::from_rgb(200, 80, 40), banner);
+                    });
+                    ui.add_space(2.0);
+                }
+
+                // Header with view mode tabs and lock toggle
                 ui.horizontal(|ui| {
                     ui.heading("Environment Processing Unit");
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        // Lock toggle (prominent)
+                        let lock_text = if self.locked {
+                            egui::RichText::new("LOCK").color(egui::Color32::from_rgb(255, 120, 60)).strong()
+                        } else {
+                            egui::RichText::new("LOCK").color(egui::Color32::GRAY)
+                        };
+                        if ui.checkbox(&mut self.locked, lock_text).changed() {
+                            changed = true;
+                        }
+
+                        ui.separator();
+
                         if ui
                             .selectable_label(self.view_mode == PanelView::Editor, "Editor")
                             .clicked()
@@ -150,7 +194,12 @@ impl EpuDebugPanel {
                 ui.horizontal(|ui| {
                     ui.label(format!("Defined opcodes: {}", OPCODE_COUNT));
                     ui.separator();
-                    ui.label(format!("Active configs: {}", epu_configs.len()));
+                    let config_label = if self.locked {
+                        "Game configs (snapshot): ".to_string()
+                    } else {
+                        "Active configs: ".to_string()
+                    };
+                    ui.label(format!("{}{}", config_label, config_count));
                     if self.editor.dirty {
                         ui.separator();
                         ui.colored_label(egui::Color32::YELLOW, "* Modified");
@@ -177,16 +226,13 @@ impl EpuDebugPanel {
                                 self.render_opcode_details(&mut columns[1], opcode);
                             } else {
                                 columns[1].heading("Active Configs");
-                                self.render_active_configs_with_edit(
-                                    &mut columns[1],
-                                    epu_configs,
-                                );
+                                self.render_active_configs_with_edit(&mut columns[1]);
                             }
                         });
                     }
                     PanelView::Editor => {
                         // Semantic editor view
-                        changed |= self.render_editor_view(ui, epu_configs);
+                        changed |= self.render_editor_view(ui);
                     }
                 }
             });
@@ -195,14 +241,10 @@ impl EpuDebugPanel {
     }
 
     /// Render the semantic editor view
-    fn render_editor_view(
-        &mut self,
-        ui: &mut egui::Ui,
-        epu_configs: &hashbrown::HashMap<u32, EpuConfig>,
-    ) -> bool {
+    fn render_editor_view(&mut self, ui: &mut egui::Ui) -> bool {
         let mut changed = false;
 
-        // Environment selector
+        // Environment selector (uses snapshot configs)
         ui.horizontal(|ui| {
             ui.label("Environment:");
 
@@ -211,6 +253,7 @@ impl EpuDebugPanel {
                 None => "New Config".to_string(),
             };
 
+            let env_ids: Vec<u32> = self.snapshot_configs.keys().copied().collect();
             egui::ComboBox::from_id_salt("env_selector")
                 .selected_text(current_text)
                 .show_ui(ui, |ui| {
@@ -224,8 +267,8 @@ impl EpuDebugPanel {
 
                     ui.separator();
 
-                    // Existing configs
-                    for &env_id in epu_configs.keys() {
+                    // Existing configs from snapshot
+                    for env_id in env_ids {
                         if ui
                             .selectable_value(
                                 &mut self.editing_env_id,
@@ -234,7 +277,7 @@ impl EpuDebugPanel {
                             )
                             .clicked()
                         {
-                            if let Some(config) = epu_configs.get(&env_id) {
+                            if let Some(config) = self.snapshot_configs.get(&env_id) {
                                 self.editor.load_config(config);
                             }
                         }
@@ -244,7 +287,7 @@ impl EpuDebugPanel {
             // Load button
             if let Some(env_id) = self.editing_env_id {
                 if ui.button("Reload").clicked() {
-                    if let Some(config) = epu_configs.get(&env_id) {
+                    if let Some(config) = self.snapshot_configs.get(&env_id) {
                         self.editor.load_config(config);
                     }
                 }
@@ -284,13 +327,9 @@ impl EpuDebugPanel {
         changed
     }
 
-    /// Render active configs with edit buttons
-    fn render_active_configs_with_edit(
-        &mut self,
-        ui: &mut egui::Ui,
-        configs: &hashbrown::HashMap<u32, EpuConfig>,
-    ) {
-        if configs.is_empty() {
+    /// Render active configs with edit buttons (uses snapshot_configs)
+    fn render_active_configs_with_edit(&mut self, ui: &mut egui::Ui) {
+        if self.snapshot_configs.is_empty() {
             ui.label("No active EPU configs this frame");
             ui.label("");
             ui.label("EPU configs are created via epu_set() FFI calls.");
@@ -305,10 +344,17 @@ impl EpuDebugPanel {
             return;
         }
 
+        // Collect config data to avoid borrow conflicts
+        let config_entries: Vec<(u32, EpuConfig)> = self
+            .snapshot_configs
+            .iter()
+            .map(|(&id, cfg)| (id, cfg.clone()))
+            .collect();
+
         egui::ScrollArea::vertical()
             .id_salt("epu_active_configs")
             .show(ui, |ui| {
-                for (env_id, config) in configs.iter() {
+                for (env_id, config) in config_entries.iter() {
                     ui.horizontal(|ui| {
                         ui.collapsing(format!("Environment {}", env_id), |ui| {
                             self.render_config_summary(ui, config);

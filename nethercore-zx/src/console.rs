@@ -390,16 +390,25 @@ impl Console for NethercoreZX {
             self.epu_debug_panel.set_visible(true);
         }
         if self.epu_debug_panel.is_visible() {
-            // Note: We don't have access to EpuConfig here since it's in State.
-            // For now, render with empty configs. The panel can still show
-            // the opcode browser and metadata.
-            let empty_configs = hashbrown::HashMap::new();
-            let _changed = self.epu_debug_panel.render(ctx, &empty_configs);
+            // Configs are synced via sync_debug_ui_state before this call
+            let _changed = self.epu_debug_panel.render(ctx);
         }
     }
 
     fn has_debug_panel(&self) -> bool {
         true
+    }
+
+    fn sync_debug_ui_state(&mut self, state: &mut ZXFFIState) {
+        // Copy game configs to panel for display (even when locked, for reference)
+        self.epu_debug_panel.update_snapshot(&state.epu_frame_configs);
+
+        // If locked: clear game configs and insert our single override config for env_id 0
+        if self.epu_debug_panel.is_locked() {
+            let override_config = self.epu_debug_panel.get_override_config();
+            state.epu_frame_configs.clear();
+            state.epu_frame_configs.insert(0, override_config);
+        }
     }
 }
 
