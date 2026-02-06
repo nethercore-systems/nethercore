@@ -1,59 +1,41 @@
-# Nethercore - Claude Code Instructions
+# Nethercore
 
-## Purpose
+Runtime/player, shared types, console implementations (ZX), tooling, and game-dev documentation.
 
-This repo contains the Nethercore runtime/player, shared types, console implementations (ZX), tooling, and documentation.
+## Hard Rules
 
-## TL;DR (How to Navigate)
+- Anything reachable from `update()` must be deterministic and rollback-safe.
+- Avoid non-deterministic sources in simulation: wall-clock time, OS RNG, filesystem/network, thread timing, unordered iteration, floating-point drift.
+- Keep render-only work in rendering paths; rollback can re-run `update()` many times.
+- `include/zx.rs` is the ABI source of truth; verify any FFI change against it.
+- Cross-repo: `nethercore-platform/backend` depends on `shared/` and `zx-common/` via local path; changes must keep that repo building.
 
-- For **game-facing APIs / ABI**, treat `include/zx.rs` as the source of truth.
-- For **ROM packing + asset formats**, start at `docs/architecture/rom-format.md` and `zx-common/`.
-- For **rollback/determinism**, start at `docs/architecture/overview.md` and keep anything reachable from `update()` deterministic.
+## Verify
 
-## Start Here (Canonical Docs)
-
-- Game-dev docs (mdBook): `docs/book/`
-- Runtime/player architecture: `docs/architecture/overview.md`
-- ZX FFI signatures (ABI): `include/zx.rs`
-- NCHS (handshake protocol): `docs/architecture/nchs.md`
-- ZX rendering architecture: `docs/architecture/zx/rendering.md`
-
-## Repo Map (High Level)
-
-- `core/` — shared console framework (WASM runtime, rollback, netcode, inspection)
-- `library/` — native player UI + launcher
-- `nethercore-zx/` — ZX console implementation
-- `zx-common/` — ZX formats/ROM loader (also used by platform backend)
-- `shared/` — shared types used by platform backend (`nethercore-platform`)
-- `tools/` — CLI + exporters
-- `docs/` — mdBook + architecture notes
-- `examples/` — example games
-
-## Quick Commands
-
-- Build: `cargo build`
-- Test: `cargo test`
-- Format: `cargo fmt`
-- Lint: `cargo clippy --all-targets -- -D warnings`
-- Run player (library UI): `cargo run`
-- Serve mdBook: `cd docs/book && mdbook serve` (requires `mdbook` + `mdbook-tabs`)
-
-## Cross-Repo Dependency (Local Paths)
-
-`../nethercore-platform/backend` depends on:
-
-```toml
-nethercore-shared = { path = "../../nethercore/shared" }
-zx-common = { path = "../../nethercore/zx-common", default-features = false }
+```bash
+cargo build
+cargo test
+cargo fmt --check
+cargo clippy --all-targets -- -D warnings
 ```
 
-When changing shared types, keep platform building.
+## Navigate
 
-## Guardrails (Rollback/Determinism)
+| I need to...                | Start here                              |
+|-----------------------------|-----------------------------------------|
+| Understand game-facing APIs | `include/zx.rs`                         |
+| ROM packing + asset formats | `docs/architecture/rom-format.md`, `zx-common/` |
+| Rollback / determinism      | `docs/architecture/overview.md`         |
+| ZX rendering architecture   | `docs/architecture/zx/rendering.md`     |
+| NCHS handshake protocol     | `docs/architecture/nchs.md`             |
+| Game-dev docs (mdBook)      | `docs/book/`                            |
+| Repo map + full commands    | `AGENTS.md`                             |
 
-- Treat anything reachable from `update()` as deterministic and rollback-safe.
-- Keep render-only work in rendering paths; rollback can re-run simulation many times.
+## SSOT
 
-## AI Plugins
-
-See `../nethercore-ai-plugins/` (legacy plugin packs for Claude Code/Codex workflows).
+| What               | Where                              |
+|--------------------|------------------------------------|
+| ZX FFI signatures  | `include/zx.rs`                    |
+| Runtime architecture | `docs/architecture/overview.md`  |
+| Game-dev docs      | `docs/book/`                       |
+| Repo map           | `AGENTS.md`                        |
