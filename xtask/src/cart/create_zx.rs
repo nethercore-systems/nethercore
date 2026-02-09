@@ -6,9 +6,10 @@ use anyhow::{Context, Result};
 use clap::Args;
 use nethercore_shared::netplay::NetplayMetadata;
 use nethercore_shared::{
-    is_safe_game_id, read_file_with_limit, MAX_PNG_BYTES, MAX_WASM_BYTES, ZX_ROM_FORMAT,
+    is_safe_game_id, read_file_with_limit, MAX_PNG_BYTES, MAX_ROM_BYTES, MAX_WASM_BYTES,
+    ZX_ROM_FORMAT,
 };
-use zx_common::{ZXMetadata, ZXRom};
+use zx_common::{ZXDataPack, ZXMetadata, ZXRom};
 
 /// Arguments for creating a Nethercore ZX ROM
 #[derive(Debug, Args)]
@@ -47,6 +48,10 @@ pub struct CreateZxArgs {
     /// Optional screenshot paths (PNG, max 5)
     #[arg(long = "screenshot")]
     pub screenshots: Vec<PathBuf>,
+
+    /// Optional packed data file (bitcode-encoded ZXDataPack)
+    #[arg(long)]
+    pub data_pack: Option<PathBuf>,
 
     /// Optional platform game UUID
     #[arg(long)]
@@ -144,7 +149,32 @@ pub fn execute(args: CreateZxArgs) -> Result<()> {
         }
     }
 
-    // 5. Create metadata
+    // 5. Load optional packed assets
+    let data_pack = if let Some(ref data_pack_path) = args.data_pack {
+        let data_pack_bytes =
+            read_file_with_limit(data_pack_path, MAX_ROM_BYTES).with_context(|| {
+                format!(
+                    "Failed to read data pack file: {}",
+                    data_pack_path.display()
+                )
+            })?;
+        let parsed_data_pack: ZXDataPack =
+            bitcode::decode(&data_pack_bytes).with_context(|| {
+                format!(
+                    "Failed to decode ZXDataPack from {}",
+                    data_pack_path.display()
+                )
+            })?;
+        println!(
+            "  Data pack loaded ({} assets)",
+            parsed_data_pack.asset_count()
+        );
+        Some(parsed_data_pack)
+    } else {
+        None
+    };
+
+    // 6. Create metadata
     let created_at = chrono::Utc::now().to_rfc3339();
     let tool_version = env!("CARGO_PKG_VERSION").to_string();
 
@@ -168,20 +198,20 @@ pub fn execute(args: CreateZxArgs) -> Result<()> {
         },
     };
 
-    // 6. Create ROM
+    // 7. Create ROM
     let rom = ZXRom {
         version: ZX_ROM_FORMAT.version,
         metadata,
         code,
-        data_pack: None, // TODO: Support data pack via nether CLI
+        data_pack,
         thumbnail,
         screenshots,
     };
 
-    // 7. Validate ROM structure
+    // 8. Validate ROM structure
     rom.validate().context("ROM validation failed")?;
 
-    // 8. Serialize to file
+    // 9. Serialize to file
     let rom_bytes = rom.to_bytes().context("Failed to serialize ROM")?;
 
     std::fs::write(&args.output, &rom_bytes)
@@ -198,6 +228,9 @@ pub fn execute(args: CreateZxArgs) -> Result<()> {
     }
     if !rom.screenshots.is_empty() {
         println!("  Screenshots: {}", rom.screenshots.len());
+    }
+    if let Some(ref data_pack) = rom.data_pack {
+        println!("  Data pack assets: {}", data_pack.asset_count());
     }
 
     Ok(())
@@ -254,6 +287,7 @@ mod tests {
             tags: vec!["tag1".to_string(), "tag2".to_string()],
             thumbnail: None,
             screenshots: vec![],
+            data_pack: None,
             platform_game_id: None,
             platform_author_id: None,
             render_mode: None,
@@ -355,5 +389,44 @@ mod tests {
 
         let err = execute(args).expect_err("expected error");
         assert!(err.to_string().contains("Invalid PNG file"), "got: {err}");
+    }
+
+    #[test]
+    fn create_zx_includes_optional_data_pack() {
+        let tmp = TempDir::new().unwrap();
+        let data_pack_path = tmp.path().join("assets.zxdp");
+
+        let mut data_pack = ZXDataPack::new();
+        data_pack
+            .data
+            .push(zx_common::PackedData::new("level1", vec![1, 2, 3, 4]));
+        std::fs::write(&data_pack_path, bitcode::encode(&data_pack)).expect("write data pack");
+
+        let mut args = base_args(&tmp);
+        args.data_pack = Some(data_pack_path);
+        execute(args).expect("create-zx execute");
+
+        let bytes = std::fs::read(tmp.path().join("out.nczx")).expect("read out.nczx");
+        let rom = ZXRom::from_bytes(&bytes).expect("parse ZXRom");
+
+        let loaded_pack = rom.data_pack.expect("data pack present");
+        assert_eq!(loaded_pack.asset_count(), 1);
+        assert!(loaded_pack.find_data("level1").is_some());
+    }
+
+    #[test]
+    fn create_zx_rejects_invalid_data_pack() {
+        let tmp = TempDir::new().unwrap();
+        let data_pack_path = tmp.path().join("invalid.zxdp");
+        std::fs::write(&data_pack_path, b"not-a-valid-zxdp").expect("write invalid data pack");
+
+        let mut args = base_args(&tmp);
+        args.data_pack = Some(data_pack_path);
+        let err = execute(args).expect_err("expected invalid data pack error");
+
+        assert!(
+            err.to_string().contains("Failed to decode ZXDataPack"),
+            "got: {err}"
+        );
     }
 }
