@@ -100,8 +100,7 @@ impl Display {
             frame.render_widget(table, layout[2]);
 
             // Help bar
-            let help_text =
-                "[Space] Pause  [←/→] Row  [↑/↓] Pattern  [+/-] Tempo  [1-9] Mute  [V] Verbose  [Q] Quit";
+            let help_text = "[Space] Pause  [Left/Right] Row  [Up/Down] Pattern  [+/-] Tempo  [1-9] Mute  [V] Verbose  [Q] Quit";
             let help = Paragraph::new(help_text).block(Block::default().borders(Borders::ALL));
             frame.render_widget(help, layout[3]);
         })?;

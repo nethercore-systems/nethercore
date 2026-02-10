@@ -265,8 +265,13 @@ impl ZXAssetViewer {
                     .iter()
                     .find(|t| &t.id == id)
                     .map(|t| {
+                        let format_name = match t.format {
+                            zx_common::TrackerFormat::Xm => "XM",
+                            zx_common::TrackerFormat::It => "IT",
+                        };
                         format!(
-                            "XM Tracker, {} instruments, {} bytes pattern data",
+                            "{} Tracker, {} instruments, {} bytes pattern data",
+                            format_name,
                             t.instrument_count(),
                             t.pattern_data_size()
                         )
@@ -522,6 +527,7 @@ impl CoreAssetViewer<NethercoreZX, ZXDataPack> for ZXAssetViewer {
             // Generate samples using loaded sounds from data pack
             let mut stereo_samples = Vec::with_capacity(samples_to_generate * 2);
             let mut max_sample = 0.0f32;
+            let mut still_playing = true;
 
             if let (Some(engine), Some(state)) = (&mut self.tracker_engine, &mut self.tracker_state)
             {
@@ -535,6 +541,7 @@ impl CoreAssetViewer<NethercoreZX, ZXDataPack> for ZXAssetViewer {
                     stereo_samples.push(left);
                     stereo_samples.push(right);
                 }
+                still_playing = (state.flags & crate::state::tracker_flags::PLAYING) != 0;
             }
 
             // Debug: log once per second approximately
@@ -553,6 +560,10 @@ impl CoreAssetViewer<NethercoreZX, ZXDataPack> for ZXAssetViewer {
             // Push to audio output
             if let Some(audio_output) = &mut self.audio_output {
                 audio_output.push_samples(&stereo_samples);
+            }
+
+            if !still_playing {
+                self.tracker_playing = false;
             }
         }
     }

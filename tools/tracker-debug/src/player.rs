@@ -315,10 +315,21 @@ impl DebugPlayer {
                 self.paused = !self.paused;
             }
             PlayerCommand::SeekRow(delta) => {
-                let new_row = (self.state.row as i32 + delta).max(0) as u16;
+                let max_row = self
+                    .engine
+                    .get_module(self.state.handle)
+                    .and_then(|m| {
+                        let order = self.state.order_position as usize;
+                        let pat_idx = *m.order_table.get(order)? as usize;
+                        let rows = m.patterns.get(pat_idx)?.num_rows;
+                        rows.checked_sub(1)
+                    })
+                    .unwrap_or(u16::MAX);
+                let new_row = (self.state.row as i32 + delta).clamp(0, max_row as i32) as u16;
                 self.state.row = new_row;
                 self.state.tick = 0;
                 self.state.tick_sample_pos = 0;
+                self.engine.sync_to_state(&self.state, &self.sounds);
             }
             PlayerCommand::SeekPattern(delta) => {
                 let new_order = (self.state.order_position as i32 + delta)
@@ -327,6 +338,7 @@ impl DebugPlayer {
                 self.state.row = 0;
                 self.state.tick = 0;
                 self.state.tick_sample_pos = 0;
+                self.engine.sync_to_state(&self.state, &self.sounds);
             }
             PlayerCommand::AdjustTempo(delta) => {
                 let new_bpm = (self.state.bpm as i32 + delta as i32).clamp(32, 255) as u16;
@@ -335,6 +347,8 @@ impl DebugPlayer {
             PlayerCommand::ToggleMute(channel) => {
                 if (channel as usize) < 64 {
                     self.channel_mutes[channel as usize] = !self.channel_mutes[channel as usize];
+                    self.engine
+                        .set_channel_muted(channel as usize, self.channel_mutes[channel as usize]);
                 }
             }
             PlayerCommand::ToggleVerbose => {

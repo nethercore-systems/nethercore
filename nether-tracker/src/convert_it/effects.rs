@@ -50,10 +50,30 @@ pub(super) fn convert_it_effect(effect: u8, param: u8, volume: u8) -> TrackerEff
         }
 
         // Exx - Portamento down
-        nether_it::effects::PORTA_DOWN => TrackerEffect::PortamentoDown(param as u16),
+        // EEx = Extra-fine portamento down (tick 0 only)
+        // EFx = Fine portamento down (tick 0 only)
+        nether_it::effects::PORTA_DOWN => {
+            let hi = param >> 4;
+            let lo = param & 0x0F;
+            match hi {
+                0xE => TrackerEffect::ExtraFinePortaDown(lo as u16),
+                0xF => TrackerEffect::FinePortaDown(lo as u16),
+                _ => TrackerEffect::PortamentoDown(param as u16),
+            }
+        }
 
         // Fxx - Portamento up
-        nether_it::effects::PORTA_UP => TrackerEffect::PortamentoUp(param as u16),
+        // FEx = Extra-fine portamento up (tick 0 only)
+        // FFx = Fine portamento up (tick 0 only)
+        nether_it::effects::PORTA_UP => {
+            let hi = param >> 4;
+            let lo = param & 0x0F;
+            match hi {
+                0xE => TrackerEffect::ExtraFinePortaUp(lo as u16),
+                0xF => TrackerEffect::FinePortaUp(lo as u16),
+                _ => TrackerEffect::PortamentoUp(param as u16),
+            }
+        }
 
         // Gxx - Tone portamento
         nether_it::effects::TONE_PORTA => TrackerEffect::TonePortamento(param as u16),
@@ -318,6 +338,30 @@ mod tests {
     fn test_convert_it_effect_volume_slide() {
         let effect = convert_it_effect(nether_it::effects::VOLUME_SLIDE, 0x52, 0); // Up 5, down 2
         assert_eq!(effect, TrackerEffect::VolumeSlide { up: 5, down: 2 });
+    }
+
+    #[test]
+    fn test_convert_it_portamento_directions() {
+        let down = convert_it_effect(nether_it::effects::PORTA_DOWN, 0x12, 0);
+        assert_eq!(down, TrackerEffect::PortamentoDown(0x12));
+
+        let up = convert_it_effect(nether_it::effects::PORTA_UP, 0x34, 0);
+        assert_eq!(up, TrackerEffect::PortamentoUp(0x34));
+    }
+
+    #[test]
+    fn test_convert_it_portamento_fine_and_extrafine() {
+        let fine_down = convert_it_effect(nether_it::effects::PORTA_DOWN, 0xF3, 0);
+        assert_eq!(fine_down, TrackerEffect::FinePortaDown(3));
+
+        let xf_down = convert_it_effect(nether_it::effects::PORTA_DOWN, 0xE7, 0);
+        assert_eq!(xf_down, TrackerEffect::ExtraFinePortaDown(7));
+
+        let fine_up = convert_it_effect(nether_it::effects::PORTA_UP, 0xF2, 0);
+        assert_eq!(fine_up, TrackerEffect::FinePortaUp(2));
+
+        let xf_up = convert_it_effect(nether_it::effects::PORTA_UP, 0xE5, 0);
+        assert_eq!(xf_up, TrackerEffect::ExtraFinePortaUp(5));
     }
 
     #[test]

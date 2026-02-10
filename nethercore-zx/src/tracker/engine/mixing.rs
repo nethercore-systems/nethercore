@@ -147,6 +147,10 @@ impl TrackerEngine {
                 vol = 0.0;
             }
 
+            if self.channel_mutes[ch_idx] {
+                vol = 0.0;
+            }
+
             // Apply panning with envelope
             let mut pan = channel.panning;
 

@@ -7,6 +7,49 @@ use nether_tracker::{
     TrackerPattern,
 };
 
+fn make_it_module_with_second_row_effect(effect: TrackerEffect) -> TrackerModule {
+    let instr = TrackerInstrument {
+        fadeout: 1024,
+        ..Default::default()
+    };
+
+    let row0 = TrackerNote {
+        note: 48,
+        instrument: 1,
+        volume: 64,
+        effect: TrackerEffect::None,
+    };
+
+    let row1 = TrackerNote {
+        note: 0,
+        instrument: 0,
+        volume: 0,
+        effect,
+    };
+
+    let pattern = TrackerPattern {
+        num_rows: 2,
+        notes: vec![vec![row0], vec![row1]],
+    };
+
+    TrackerModule {
+        name: "IT Slide Test".to_string(),
+        num_channels: 1,
+        initial_speed: 6,
+        initial_tempo: 125,
+        global_volume: 128,
+        mix_volume: 128,
+        panning_separation: 128,
+        order_table: vec![0],
+        patterns: vec![pattern],
+        instruments: vec![instr],
+        samples: vec![],
+        format: FormatFlags::IS_IT_FORMAT | FormatFlags::INSTRUMENTS,
+        message: None,
+        restart_position: 0,
+    }
+}
+
 #[test]
 fn test_nna_uses_new_instrument_nna_not_channel_state() {
     // This test verifies that when a new note is triggered, the NNA action
@@ -151,5 +194,162 @@ fn test_nna_note_fade_triggers_key_off() {
     assert!(
         engine.channels[1].instrument_fadeout_rate > 0,
         "Fadeout rate should be set"
+    );
+}
+
+#[test]
+fn test_it_portamento_up_decreases_period() {
+    let mut engine = TrackerEngine::new();
+    let module = make_it_module_with_second_row_effect(TrackerEffect::PortamentoUp(4));
+    let handle = engine.load_tracker_module(module, vec![1]);
+
+    engine.current_order = 0;
+    engine.current_row = 0;
+    engine.process_row_tick0_internal(handle, &[]);
+    let start_period = engine.channels[0].period;
+
+    engine.current_row = 1;
+    engine.process_row_tick0_internal(handle, &[]);
+    engine.process_tick(1, 6);
+
+    assert!(
+        engine.channels[0].period < start_period,
+        "IT portamento up should decrease period (raise pitch)"
+    );
+}
+
+#[test]
+fn test_it_portamento_down_increases_period() {
+    let mut engine = TrackerEngine::new();
+    let module = make_it_module_with_second_row_effect(TrackerEffect::PortamentoDown(4));
+    let handle = engine.load_tracker_module(module, vec![1]);
+
+    engine.current_order = 0;
+    engine.current_row = 0;
+    engine.process_row_tick0_internal(handle, &[]);
+    let start_period = engine.channels[0].period;
+
+    engine.current_row = 1;
+    engine.process_row_tick0_internal(handle, &[]);
+    engine.process_tick(1, 6);
+
+    assert!(
+        engine.channels[0].period > start_period,
+        "IT portamento down should increase period (lower pitch)"
+    );
+}
+
+#[test]
+fn test_it_fine_porta_directions_on_tick0() {
+    let mut engine = TrackerEngine::new();
+    let up_module = make_it_module_with_second_row_effect(TrackerEffect::FinePortaUp(4));
+    let handle = engine.load_tracker_module(up_module, vec![1]);
+
+    engine.current_order = 0;
+    engine.current_row = 0;
+    engine.process_row_tick0_internal(handle, &[]);
+    let start_period = engine.channels[0].period;
+
+    engine.current_row = 1;
+    engine.process_row_tick0_internal(handle, &[]);
+    let up_period = engine.channels[0].period;
+
+    assert!(
+        up_period < start_period,
+        "IT fine portamento up should decrease period on tick 0"
+    );
+
+    let mut engine = TrackerEngine::new();
+    let down_module = make_it_module_with_second_row_effect(TrackerEffect::FinePortaDown(4));
+    let handle = engine.load_tracker_module(down_module, vec![1]);
+
+    engine.current_order = 0;
+    engine.current_row = 0;
+    engine.process_row_tick0_internal(handle, &[]);
+    let start_period = engine.channels[0].period;
+
+    engine.current_row = 1;
+    engine.process_row_tick0_internal(handle, &[]);
+    let down_period = engine.channels[0].period;
+
+    assert!(
+        down_period > start_period,
+        "IT fine portamento down should increase period on tick 0"
+    );
+}
+
+#[test]
+fn test_tone_porta_note_does_not_retrigger_active_note() {
+    let mut engine = TrackerEngine::new();
+    let instr = TrackerInstrument {
+        fadeout: 1024,
+        ..Default::default()
+    };
+
+    let row0 = TrackerNote {
+        note: 48,
+        instrument: 1,
+        volume: 64,
+        effect: TrackerEffect::None,
+    };
+    let row1 = TrackerNote {
+        note: 60,
+        instrument: 1,
+        volume: 64,
+        effect: TrackerEffect::TonePortamento(4),
+    };
+    let pattern = TrackerPattern {
+        num_rows: 2,
+        notes: vec![vec![row0], vec![row1]],
+    };
+    let module = TrackerModule {
+        name: "Tone Porta Trigger Test".to_string(),
+        num_channels: 1,
+        initial_speed: 6,
+        initial_tempo: 125,
+        global_volume: 128,
+        mix_volume: 128,
+        panning_separation: 128,
+        order_table: vec![0],
+        patterns: vec![pattern],
+        instruments: vec![instr],
+        samples: vec![],
+        format: FormatFlags::IS_IT_FORMAT | FormatFlags::INSTRUMENTS,
+        message: None,
+        restart_position: 0,
+    };
+
+    let handle = engine.load_tracker_module(module, vec![1]);
+    engine.current_order = 0;
+    engine.current_row = 0;
+    engine.process_row_tick0_internal(handle, &[]);
+
+    // Simulate in-flight sample playback before the porta row.
+    engine.channels[0].sample_pos = 12.5;
+    let before_period = engine.channels[0].period;
+
+    engine.current_row = 1;
+    engine.process_row_tick0_internal(handle, &[]);
+
+    // Gxx with a new note should continue current note instead of retriggering.
+    assert!(
+        (engine.channels[0].sample_pos - 12.5).abs() < f64::EPSILON,
+        "Tone portamento note should not reset sample position"
+    );
+    assert!(
+        (engine.channels[0].period - before_period).abs() < f32::EPSILON,
+        "Tone portamento note should not jump period on tick 0"
+    );
+
+    let target = engine.channels[0].target_period;
+    engine.process_tick(1, 6);
+    let after_tick = engine.channels[0].period;
+    assert!(
+        after_tick < before_period,
+        "Period should slide toward target"
+    );
+    assert!(
+        after_tick > target,
+        "Slide should not jump directly to target"
     );
 }

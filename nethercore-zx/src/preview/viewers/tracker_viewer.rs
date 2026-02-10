@@ -12,18 +12,13 @@ impl ZXAssetViewer {
     /// Start tracker playback
     pub fn start_tracker_playback(&mut self) {
         // Get tracker data (clone what we need to avoid borrow conflicts)
-        let (pattern_data, sample_ids) = match self.selected_tracker() {
-            Some(tracker) => (tracker.pattern_data.clone(), tracker.sample_ids.clone()),
+        let (format, pattern_data, sample_ids) = match self.selected_tracker() {
+            Some(tracker) => (
+                tracker.format,
+                tracker.pattern_data.clone(),
+                tracker.sample_ids.clone(),
+            ),
             None => return,
-        };
-
-        // Parse XM module (supports both full XM and minimal NCXM formats)
-        let xm_module = match nether_xm::parse_xm_minimal(&pattern_data) {
-            Ok(m) => m,
-            Err(e) => {
-                eprintln!("Failed to parse XM: {:?}", e);
-                return;
-            }
         };
 
         // Initialize audio output if needed
@@ -44,34 +39,12 @@ impl ZXAssetViewer {
         let mut sounds: Vec<Option<Sound>> = vec![None]; // Index 0 is unused
         let mut sound_handles: Vec<u32> = Vec::new();
 
-        eprintln!("DEBUG: Starting tracker playback");
-        eprintln!(
-            "DEBUG: Tracker has {} sample_ids: {:?}",
-            sample_ids.len(),
-            sample_ids
-        );
-        eprintln!(
-            "DEBUG: Data pack has {} sounds: {:?}",
-            self.data_pack.sounds.len(),
-            self.data_pack
-                .sounds
-                .iter()
-                .map(|s| &s.id)
-                .collect::<Vec<_>>()
-        );
-
         for sample_id in &sample_ids {
             if let Some(packed_sound) = self.data_pack.sounds.iter().find(|s| &s.id == sample_id) {
                 // Convert PackedSound to Sound
                 let sound = Sound {
                     data: Arc::new(packed_sound.data.clone()),
                 };
-                eprintln!(
-                    "DEBUG: Loaded sample '{}' with {} samples, handle={}",
-                    sample_id,
-                    packed_sound.data.len(),
-                    sounds.len()
-                );
                 sounds.push(Some(sound));
                 sound_handles.push(sounds.len() as u32 - 1); // Handle points to index
             } else {
@@ -84,21 +57,45 @@ impl ZXAssetViewer {
             }
         }
 
-        eprintln!(
-            "DEBUG: Total sounds loaded: {}, sound_handles: {:?}",
-            sounds.len(),
-            sound_handles
-        );
         self.tracker_sounds = sounds;
 
         // Initialize tracker engine
         let mut engine = TrackerEngine::new();
-        let handle = engine.load_xm_module(xm_module.clone(), sound_handles);
+        let (handle, speed, bpm) = match format {
+            zx_common::TrackerFormat::Xm => {
+                let xm_module = match nether_xm::parse_xm_minimal(&pattern_data) {
+                    Ok(m) => m,
+                    Err(e) => {
+                        eprintln!("Failed to parse XM tracker: {:?}", e);
+                        return;
+                    }
+                };
+                let speed = xm_module.default_speed as u16;
+                let bpm = xm_module.default_bpm as u16;
+                let handle = engine.load_xm_module(xm_module, sound_handles);
+                (handle, speed, bpm)
+            }
+            zx_common::TrackerFormat::It => {
+                let it_module = match nether_it::parse_it_minimal(&pattern_data) {
+                    Ok(m) => m,
+                    Err(e) => {
+                        eprintln!("Failed to parse IT tracker: {:?}", e);
+                        return;
+                    }
+                };
+                let speed = it_module.initial_speed as u16;
+                let bpm = it_module.initial_tempo as u16;
+                let handle = engine.load_it_module(it_module, sound_handles);
+                (handle, speed, bpm)
+            }
+        };
 
         // Initialize tracker state
         let state = TrackerState {
             handle,
             flags: tracker_flags::PLAYING,
+            speed,
+            bpm,
             volume: 256, // Full volume
             ..Default::default()
         };

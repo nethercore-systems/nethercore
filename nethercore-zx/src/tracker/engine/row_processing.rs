@@ -1,6 +1,6 @@
 //! Row and note processing at tick 0
 
-use nether_tracker::TrackerNote;
+use nether_tracker::{TrackerEffect, TrackerNote};
 
 use super::super::utils::note_to_period;
 use super::super::{FADE_IN_SAMPLES, TrackerEngine, raw_tracker_handle};
@@ -88,8 +88,17 @@ impl TrackerEngine {
         use super::CHANNEL_VOLUME_MAX;
 
         let raw_handle = raw_tracker_handle(handle);
+        let has_active_note =
+            self.channels[ch_idx].note_on && self.channels[ch_idx].sample_handle != 0;
+        let tone_porta_note_continues_current = note.has_note()
+            && has_active_note
+            && matches!(
+                note.effect,
+                TrackerEffect::TonePortamento(_) | TrackerEffect::TonePortaVolSlide { .. }
+            );
+
         // Handle instrument change
-        if note.has_instrument() {
+        if note.has_instrument() && !tone_porta_note_continues_current {
             let instr_idx = (note.instrument - 1) as usize;
             self.channels[ch_idx].instrument = note.instrument;
 
@@ -132,7 +141,7 @@ impl TrackerEngine {
         }
 
         // Handle note
-        if note.has_note() {
+        if note.has_note() && !tone_porta_note_continues_current {
             // Get module channel count and NNA data for processing
             let (num_channels, nna_data) = {
                 let loaded = match self

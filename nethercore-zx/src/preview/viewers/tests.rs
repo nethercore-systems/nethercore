@@ -1,7 +1,7 @@
 //! Tests for asset viewer
 
 use super::*;
-use zx_common::{PackedSound, PackedTexture};
+use zx_common::{PackedSound, PackedTexture, PackedTracker, TrackerFormat};
 
 fn create_test_data() -> PreviewData<ZXDataPack> {
     let mut data_pack = ZXDataPack::default();
@@ -15,6 +15,14 @@ fn create_test_data() -> PreviewData<ZXDataPack> {
     data_pack
         .sounds
         .push(PackedSound::new("test_sfx", vec![0i16; 11025]));
+
+    // Add a test IT tracker
+    data_pack.trackers.push(PackedTracker::new(
+        "test_it",
+        TrackerFormat::It,
+        vec![],
+        vec!["test_sfx".to_string()],
+    ));
 
     PreviewData {
         data_pack,
@@ -81,4 +89,14 @@ fn test_sound_controls() {
     viewer.sound_stop();
     assert!(!viewer.sound_is_playing());
     assert!((viewer.sound_progress()).abs() < f32::EPSILON);
+}
+
+#[test]
+fn test_tracker_info_includes_format() {
+    let data = create_test_data();
+    let mut viewer = ZXAssetViewer::new(&data);
+
+    viewer.select_asset(AssetCategory::Trackers, "test_it");
+    let info = viewer.selected_info().expect("tracker info");
+    assert!(info.contains("IT Tracker"));
 }

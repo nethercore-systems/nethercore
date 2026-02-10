@@ -112,6 +112,9 @@ pub struct TrackerEngine {
     /// Per-channel playback state
     pub(crate) channels: [TrackerChannel; MAX_TRACKER_CHANNELS],
 
+    /// Per-channel mute flags (debug/preview tooling)
+    pub(crate) channel_mutes: [bool; MAX_TRACKER_CHANNELS],
+
     /// Global volume (0.0-1.0)
     pub(crate) global_volume: f32,
 
@@ -171,6 +174,9 @@ pub struct TrackerEngineSnapshot {
     /// Per-channel playback state (cloned)
     pub channels: Box<[TrackerChannel; MAX_TRACKER_CHANNELS]>,
 
+    /// Per-channel mute flags
+    pub channel_mutes: [bool; MAX_TRACKER_CHANNELS],
+
     /// Global volume (0.0-1.0)
     pub global_volume: f32,
 
@@ -218,6 +224,7 @@ impl TrackerEngine {
                 volume_fadeout: 65535,
                 ..Default::default()
             }),
+            channel_mutes: [false; MAX_TRACKER_CHANNELS],
             global_volume: 1.0,
             next_handle: 1,
             current_order: 0,
@@ -291,6 +298,7 @@ impl TrackerEngine {
         for ch in &mut self.channels {
             ch.reset();
         }
+        self.channel_mutes = [false; MAX_TRACKER_CHANNELS];
         self.global_volume = 1.0;
         self.current_order = 0;
         self.current_row = 0;
@@ -307,6 +315,7 @@ impl TrackerEngine {
     pub fn snapshot(&self) -> TrackerEngineSnapshot {
         TrackerEngineSnapshot {
             channels: Box::new(self.channels.clone()),
+            channel_mutes: self.channel_mutes,
             global_volume: self.global_volume,
             current_order: self.current_order,
             current_row: self.current_row,
@@ -330,6 +339,7 @@ impl TrackerEngine {
     /// received from the main thread. Does NOT modify row_cache or next_handle.
     pub fn apply_snapshot(&mut self, snapshot: &TrackerEngineSnapshot) {
         self.channels = *snapshot.channels.clone();
+        self.channel_mutes = snapshot.channel_mutes;
         self.global_volume = snapshot.global_volume;
         self.current_order = snapshot.current_order;
         self.current_row = snapshot.current_row;
@@ -351,6 +361,22 @@ impl TrackerEngine {
     /// Returns Arc-wrapped modules that can be safely shared with audio thread.
     pub fn modules_arc(&self) -> &[Option<Arc<LoadedModule>>] {
         &self.modules
+    }
+
+    /// Mute or unmute a tracker channel.
+    pub fn set_channel_muted(&mut self, ch_idx: usize, muted: bool) {
+        if ch_idx < MAX_TRACKER_CHANNELS {
+            self.channel_mutes[ch_idx] = muted;
+        }
+    }
+
+    /// Check whether a tracker channel is muted.
+    pub fn is_channel_muted(&self, ch_idx: usize) -> bool {
+        if ch_idx < MAX_TRACKER_CHANNELS {
+            self.channel_mutes[ch_idx]
+        } else {
+            false
+        }
     }
 }
 
