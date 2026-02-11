@@ -5,17 +5,17 @@
 //! for each EPU opcode field.
 
 use super::super::epu_meta_gen::{
-    domain_count, domain_name, field_specs, opcode_kind, opcode_name, variant_count, variant_name,
-    FieldSpec, MapKind, OpcodeKind, OPCODES,
+    FieldSpec, MapKind, OPCODES, OpcodeKind, domain_count, domain_name, field_specs, opcode_kind,
+    opcode_name, variant_count, variant_name,
 };
 use super::isolation::{
-    render_color_swatch, render_contribution_preview, render_isolation_banner,
-    render_layer_isolation_controls, LayerContribution, LayerIsolationState,
+    LayerContribution, LayerIsolationState, render_color_swatch, render_contribution_preview,
+    render_isolation_banner, render_layer_isolation_controls,
 };
 use super::visualization::DirectionGizmo;
 use crate::graphics::epu::{
-    pack_meta5, EpuBlend, EpuConfig, EpuLayer, EpuOpcode, REGION_ALL, REGION_FLOOR, REGION_SKY,
-    REGION_WALLS,
+    EpuBlend, EpuConfig, EpuLayer, EpuOpcode, REGION_ALL, REGION_FLOOR, REGION_SKY, REGION_WALLS,
+    pack_meta5,
 };
 
 /// State for editing a single EPU layer.
@@ -429,10 +429,7 @@ impl EpuEditor {
                 .selected_text(format!("{}{}", current_name, kind_label))
                 .show_ui(ui, |ui| {
                     // NOP option
-                    if ui
-                        .selectable_value(&mut layer.opcode, 0, "NOP")
-                        .clicked()
-                    {
+                    if ui.selectable_value(&mut layer.opcode, 0, "NOP").clicked() {
                         changed = true;
                     }
 
@@ -636,11 +633,8 @@ impl EpuEditor {
         // Color A
         ui.horizontal(|ui| {
             ui.label("Color A:");
-            let mut color = egui::Color32::from_rgb(
-                layer.color_a[0],
-                layer.color_a[1],
-                layer.color_a[2],
-            );
+            let mut color =
+                egui::Color32::from_rgb(layer.color_a[0], layer.color_a[1], layer.color_a[2]);
             if egui::color_picker::color_edit_button_srgba(
                 ui,
                 &mut color,
@@ -666,11 +660,8 @@ impl EpuEditor {
         // Color B
         ui.horizontal(|ui| {
             ui.label("Color B:");
-            let mut color = egui::Color32::from_rgb(
-                layer.color_b[0],
-                layer.color_b[1],
-                layer.color_b[2],
-            );
+            let mut color =
+                egui::Color32::from_rgb(layer.color_b[0], layer.color_b[1], layer.color_b[2]);
             if egui::color_picker::color_edit_button_srgba(
                 ui,
                 &mut color,
@@ -700,7 +691,11 @@ impl EpuEditor {
                 ui.label("Raw (oct u16):");
                 let mut dir = layer.direction as i32;
                 if ui
-                    .add(egui::DragValue::new(&mut dir).range(0..=65535).hexadecimal(4, false, true))
+                    .add(
+                        egui::DragValue::new(&mut dir)
+                            .range(0..=65535)
+                            .hexadecimal(4, false, true),
+                    )
                     .changed()
                 {
                     layer.direction = dir.clamp(0, 65535) as u16;

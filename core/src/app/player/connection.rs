@@ -378,9 +378,7 @@ where
                     (0, PlayerType::Remote(address.clone())),
                     (1, PlayerType::Local),
                 ];
-                tracing::info!(
-                    "Join mode: creating P2P session (host=remote p0, local=p1)"
-                );
+                tracing::info!("Join mode: creating P2P session (host=remote p0, local=p1)");
 
                 match RollbackSession::new_p2p(
                     session_config,

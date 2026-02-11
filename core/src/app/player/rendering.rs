@@ -158,8 +158,7 @@ where
                     // SAFETY: We use a raw pointer to avoid borrow conflicts between
                     // console (in session) and graphics (separate field). The pointer
                     // is only used during egui_ctx.run(), before any graphics access.
-                    let console_ptr: Option<*mut C> =
-                        runner.console_mut().map(|c| c as *mut C);
+                    let console_ptr: Option<*mut C> = runner.console_mut().map(|c| c as *mut C);
 
                     let full_output = self.egui_ctx.run(raw_input, |ctx| {
                         let action = settings_ui.show_as_window(ctx);

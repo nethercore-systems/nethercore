@@ -401,7 +401,8 @@ impl Console for NethercoreZX {
 
     fn sync_debug_ui_state(&mut self, state: &mut ZXFFIState) {
         // Copy game configs to panel for display (even when locked, for reference)
-        self.epu_debug_panel.update_snapshot(&state.epu_frame_configs);
+        self.epu_debug_panel
+            .update_snapshot(&state.epu_frame_configs);
 
         // If locked: clear game configs and insert our single override config for env_id 0
         if self.epu_debug_panel.is_locked() {

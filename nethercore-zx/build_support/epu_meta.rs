@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 
-use zx_common::wgsl_meta_parser::{parse_wgsl_meta, MapKind, OpcodeKind, OpcodeMeta};
+use zx_common::wgsl_meta_parser::{MapKind, OpcodeKind, OpcodeMeta, parse_wgsl_meta};
 
 /// Maximum number of opcodes supported (5-bit opcode = 0x00..0x1F)
 const MAX_OPCODES: usize = 32;
@@ -23,8 +23,7 @@ const MAX_FIELDS: usize = 8;
 ///
 /// Returns the number of opcodes processed.
 pub fn generate() -> usize {
-    let manifest_dir =
-        std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
     let shader_base = PathBuf::from(&manifest_dir).join("shaders/epu");
 
     // Collect all WGSL files from bounds/ and features/

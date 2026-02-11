@@ -123,9 +123,7 @@ impl<C: Console> ConsoleRunner<C> {
     ///
     /// Returns separate references to graphics and session, allowing
     /// console debug UI to be rendered while graphics is still accessible.
-    pub fn split_for_debug_ui(
-        &mut self,
-    ) -> (&C::Graphics, &mut Option<GameSession<C>>) {
+    pub fn split_for_debug_ui(&mut self) -> (&C::Graphics, &mut Option<GameSession<C>>) {
         (&self.graphics, &mut self.session)
     }
 

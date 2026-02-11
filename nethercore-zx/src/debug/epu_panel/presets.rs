@@ -659,13 +659,16 @@ pub fn render_preset_ui(
                 ui.text_edit_multiline(&mut ui_state.save_description);
 
                 // Check for overwrite
-                let will_overwrite = !ui_state.save_name.is_empty()
-                    && manager.preset_exists(&ui_state.save_name);
+                let will_overwrite =
+                    !ui_state.save_name.is_empty() && manager.preset_exists(&ui_state.save_name);
 
                 if will_overwrite {
                     ui.colored_label(
                         egui::Color32::YELLOW,
-                        format!("Warning: '{}' already exists and will be overwritten", ui_state.save_name),
+                        format!(
+                            "Warning: '{}' already exists and will be overwritten",
+                            ui_state.save_name
+                        ),
                     );
                 }
 

@@ -43,21 +43,21 @@ mod types;
 mod tests;
 
 // Re-export runtime types
-pub use cache::{collect_active_envs, ActiveEnvList};
+pub use cache::{ActiveEnvList, collect_active_envs};
 pub use runtime::EpuRuntime;
 pub use settings::{
-    EpuRuntimeSettings, EPU_MAP_SIZE, EPU_MIN_MIP_SIZE, MAX_ACTIVE_ENVS, MAX_ENV_STATES,
+    EPU_MAP_SIZE, EPU_MIN_MIP_SIZE, EpuRuntimeSettings, MAX_ACTIVE_ENVS, MAX_ENV_STATES,
 };
 pub use types::EpuSh9;
 
 // Re-export layer types (core types, opcodes, enums, encoding utilities)
 pub use layer::{
-    encode_direction_u16, pack_meta5, pack_thresholds, EpuBlend, EpuConfig, EpuLayer, EpuOpcode,
-    EpuRegion, REGION_ALL, REGION_FLOOR, REGION_NONE, REGION_SKY, REGION_WALLS,
+    EpuBlend, EpuConfig, EpuLayer, EpuOpcode, EpuRegion, REGION_ALL, REGION_FLOOR, REGION_NONE,
+    REGION_SKY, REGION_WALLS, encode_direction_u16, pack_meta5, pack_thresholds,
 };
 
 // Re-export builder API
-pub use builder::{epu_begin, epu_finish, EpuBuilder};
+pub use builder::{EpuBuilder, epu_begin, epu_finish};
 
 // Re-export parameter structs and shape/pattern enums
 pub use params::{

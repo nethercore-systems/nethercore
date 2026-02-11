@@ -51,7 +51,9 @@ fn test_parse_valid_plane_meta() {
     assert_eq!(meta.kind, OpcodeKind::Radiance);
     assert_eq!(
         meta.variants,
-        vec!["TILES", "HEX", "STONE", "SAND", "WATER", "GRATING", "GRASS", "PAVEMENT"]
+        vec![
+            "TILES", "HEX", "STONE", "SAND", "WATER", "GRATING", "GRASS", "PAVEMENT"
+        ]
     );
     assert!(meta.domains.is_empty());
 

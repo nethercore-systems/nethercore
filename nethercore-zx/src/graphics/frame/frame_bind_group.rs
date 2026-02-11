@@ -6,9 +6,9 @@
 //! - Render mode changes (different bind group layout)
 //! - EPU resources are recreated
 
+use super::super::ZXGraphics;
 use super::super::command_buffer::VRPCommand;
 use super::super::render_state::{CullMode, PassConfig, RenderState};
-use super::super::ZXGraphics;
 use super::bind_group_cache::BindGroupKey;
 use crate::state::ZXFFIState;
 
@@ -150,10 +150,7 @@ impl ZXGraphics {
                 },
                 wgpu::BindGroupEntry {
                     binding: 9,
-                    resource: self
-                        .epu_runtime
-                        .frame_uniforms_buffer()
-                        .as_entire_binding(),
+                    resource: self.epu_runtime.frame_uniforms_buffer().as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 11,

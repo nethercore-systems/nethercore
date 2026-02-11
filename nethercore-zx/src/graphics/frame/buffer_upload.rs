@@ -7,8 +7,8 @@
 //! - MVP indices with absolute offsets
 //! - Bone matrices for animation
 
-use super::super::vertex::VERTEX_FORMAT_COUNT;
 use super::super::ZXGraphics;
+use super::super::vertex::VERTEX_FORMAT_COUNT;
 use crate::state::ZXFFIState;
 use std::time::Instant;
 
@@ -47,7 +47,11 @@ impl ZXGraphics {
 
     /// Upload unified transforms (model, view, projection matrices) to GPU buffer.
     /// Returns the elapsed time in nanoseconds if perf tracking is enabled.
-    pub(super) fn upload_transforms(&mut self, z_state: &ZXFFIState, perf_enabled: bool) -> Option<u64> {
+    pub(super) fn upload_transforms(
+        &mut self,
+        z_state: &ZXFFIState,
+        perf_enabled: bool,
+    ) -> Option<u64> {
         let model_count = z_state.model_matrices.len();
         let view_count = z_state.view_matrices.len();
         let proj_count = z_state.proj_matrices.len();
@@ -83,7 +87,11 @@ impl ZXGraphics {
 
     /// Upload shading states to GPU buffer.
     /// Returns the elapsed time in nanoseconds if perf tracking is enabled.
-    pub(super) fn upload_shading_states(&mut self, z_state: &ZXFFIState, perf_enabled: bool) -> Option<u64> {
+    pub(super) fn upload_shading_states(
+        &mut self,
+        z_state: &ZXFFIState,
+        perf_enabled: bool,
+    ) -> Option<u64> {
         if z_state.shading_pool.is_empty() {
             return None;
         }
@@ -99,7 +107,11 @@ impl ZXGraphics {
     /// Upload MVP indices with absolute offsets into unified_transforms buffer.
     /// CPU pre-computes absolute indices so shader does direct lookup without offset arithmetic.
     /// Returns the elapsed time in nanoseconds if perf tracking is enabled.
-    pub(super) fn upload_mvp_indices(&mut self, z_state: &ZXFFIState, perf_enabled: bool) -> Option<u64> {
+    pub(super) fn upload_mvp_indices(
+        &mut self,
+        z_state: &ZXFFIState,
+        perf_enabled: bool,
+    ) -> Option<u64> {
         let state_count = z_state.mvp_shading_states.len();
         if state_count == 0 {
             return None;
@@ -135,7 +147,11 @@ impl ZXGraphics {
     /// Upload bone matrices to unified_animation buffer (dynamic section).
     /// Bones are appended after static data (inverse_bind + keyframes).
     /// Returns the elapsed time in nanoseconds if perf tracking is enabled.
-    pub(super) fn upload_bone_matrices(&mut self, z_state: &ZXFFIState, perf_enabled: bool) -> Option<u64> {
+    pub(super) fn upload_bone_matrices(
+        &mut self,
+        z_state: &ZXFFIState,
+        perf_enabled: bool,
+    ) -> Option<u64> {
         if z_state.bone_matrices.is_empty() {
             return None;
         }

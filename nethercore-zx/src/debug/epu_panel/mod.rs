@@ -27,7 +27,7 @@ pub use editor::{EpuEditor, LayerEditState};
 pub use isolation::{LayerCategory, LayerContribution, LayerIsolationState};
 pub use presets::{EpuPreset, PresetManager, PresetUiState};
 
-use crate::debug::epu_meta_gen::{self, FieldSpec, MapKind, OpcodeKind, OPCODES, OPCODE_COUNT};
+use crate::debug::epu_meta_gen::{self, FieldSpec, MapKind, OPCODE_COUNT, OPCODES, OpcodeKind};
 use crate::graphics::epu::EpuConfig;
 
 /// View mode for the debug panel
@@ -149,9 +149,11 @@ impl EpuDebugPanel {
                 if self.locked {
                     ui.horizontal(|ui| {
                         ui.add_space(4.0);
-                        let banner = egui::RichText::new("LOCKED - Game EPU disabled, using debugger config")
-                            .color(egui::Color32::WHITE)
-                            .strong();
+                        let banner = egui::RichText::new(
+                            "LOCKED - Game EPU disabled, using debugger config",
+                        )
+                        .color(egui::Color32::WHITE)
+                        .strong();
                         ui.colored_label(egui::Color32::from_rgb(200, 80, 40), banner);
                     });
                     ui.add_space(2.0);
@@ -163,7 +165,9 @@ impl EpuDebugPanel {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         // Lock toggle (prominent)
                         let lock_text = if self.locked {
-                            egui::RichText::new("LOCK").color(egui::Color32::from_rgb(255, 120, 60)).strong()
+                            egui::RichText::new("LOCK")
+                                .color(egui::Color32::from_rgb(255, 120, 60))
+                                .strong()
                         } else {
                             egui::RichText::new("LOCK").color(egui::Color32::GRAY)
                         };

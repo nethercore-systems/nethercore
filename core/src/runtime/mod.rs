@@ -245,10 +245,7 @@ impl<C: Console> Runtime<C> {
     /// Returns (console, Option<state>) where state is the game's console state if loaded.
     /// This allows debug UI to sync state between the console and game.
     pub fn console_and_state_mut(&mut self) -> (&mut C, Option<&mut C::State>) {
-        let state = self
-            .game
-            .as_mut()
-            .map(|game| game.console_state_mut());
+        let state = self.game.as_mut().map(|game| game.console_state_mut());
         (&mut self.console, state)
     }
 }

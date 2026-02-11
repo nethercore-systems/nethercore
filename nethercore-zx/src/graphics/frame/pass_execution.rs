@@ -5,11 +5,11 @@
 //! - Executing draw commands with state tracking
 //! - Managing pipeline, bind group, and vertex buffer state
 
+use super::super::TextureHandleTable;
+use super::super::ZXGraphics;
 use super::super::command_buffer::{BufferSource, VRPCommand};
 use super::super::pipeline::{PipelineEntry, PipelineKey};
 use super::super::render_state::{RenderState, TextureHandle};
-use super::super::TextureHandleTable;
-use super::super::ZXGraphics;
 use crate::state::ZXFFIState;
 use hashbrown::HashMap;
 
@@ -356,7 +356,12 @@ impl ZXGraphics {
                 } else if is_quad {
                     PipelineKey::quad(&cmd_pass_config, is_screen_space_quad)
                 } else {
-                    PipelineKey::new(self.current_render_mode, format, &render_state, &cmd_pass_config)
+                    PipelineKey::new(
+                        self.current_render_mode,
+                        format,
+                        &render_state,
+                        &cmd_pass_config,
+                    )
                 };
 
                 let pipeline_entry = self

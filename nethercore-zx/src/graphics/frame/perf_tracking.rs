@@ -6,9 +6,9 @@
 //! - Per-format vertex/index byte counts
 //! - Pack immediate timing
 
+use super::super::ZXGraphics;
 use super::super::command_buffer::VRPCommand;
 use super::super::vertex::{VERTEX_FORMAT_COUNT, vertex_stride};
-use super::super::ZXGraphics;
 
 impl ZXGraphics {
     /// Collect performance metrics for the current frame's commands.
@@ -28,14 +28,12 @@ impl ZXGraphics {
             let packed_bytes = self.command_buffer.vertex_data(format).len() as u64;
             let index_bytes = (self.command_buffer.index_count(format) as u64) * 2;
 
-            self.perf.immediate_vertex_prepack_bytes[format_idx] = self.perf
-                .immediate_vertex_prepack_bytes[format_idx]
-                .wrapping_add(prepack_bytes);
-            self.perf.immediate_vertex_packed_bytes[format_idx] = self.perf
-                .immediate_vertex_packed_bytes[format_idx]
-                .wrapping_add(packed_bytes);
-            self.perf.immediate_index_bytes[format_idx] = self.perf.immediate_index_bytes[format_idx]
-                .wrapping_add(index_bytes);
+            self.perf.immediate_vertex_prepack_bytes[format_idx] =
+                self.perf.immediate_vertex_prepack_bytes[format_idx].wrapping_add(prepack_bytes);
+            self.perf.immediate_vertex_packed_bytes[format_idx] =
+                self.perf.immediate_vertex_packed_bytes[format_idx].wrapping_add(packed_bytes);
+            self.perf.immediate_index_bytes[format_idx] =
+                self.perf.immediate_index_bytes[format_idx].wrapping_add(index_bytes);
         }
 
         // Command counts + unique texture-slot combinations (FFI handles for meshes, TextureHandle IDs for quads).

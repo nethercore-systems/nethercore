@@ -7,7 +7,7 @@
 //! - Visual indicators for active vs inactive layers
 
 use super::editor::LayerEditState;
-use crate::debug::epu_meta_gen::{opcode_kind, opcode_name, variant_name, OpcodeKind};
+use crate::debug::epu_meta_gen::{OpcodeKind, opcode_kind, opcode_name, variant_name};
 use crate::graphics::epu::{REGION_ALL, REGION_FLOOR, REGION_SKY, REGION_WALLS};
 
 // =============================================================================
@@ -301,7 +301,10 @@ fn generate_layer_summary(
         }
         0x0A => {
             // SCATTER
-            format!("Scatters {} points{} on {}", color_desc, variant_str, region_str)
+            format!(
+                "Scatters {} points{} on {}",
+                color_desc, variant_str, region_str
+            )
         }
         0x0B => {
             // FLOW
@@ -309,7 +312,10 @@ fn generate_layer_summary(
         }
         0x0C => {
             // TRACE
-            format!("Draws {} traces{} on {}", color_desc, variant_str, region_str)
+            format!(
+                "Draws {} traces{} on {}",
+                color_desc, variant_str, region_str
+            )
         }
         0x0D => {
             // VEIL
@@ -317,19 +323,31 @@ fn generate_layer_summary(
         }
         0x0E => {
             // ATMOSPHERE
-            format!("Applies {} atmosphere{} to {}", color_desc, variant_str, region_str)
+            format!(
+                "Applies {} atmosphere{} to {}",
+                color_desc, variant_str, region_str
+            )
         }
         0x0F => {
             // PLANE
-            format!("Adds {} plane texture{} to {}", color_desc, variant_str, region_str)
+            format!(
+                "Adds {} plane texture{} to {}",
+                color_desc, variant_str, region_str
+            )
         }
         0x10 => {
             // CELESTIAL
-            format!("Renders {} celestial body{} on {}", color_desc, variant_str, region_str)
+            format!(
+                "Renders {} celestial body{} on {}",
+                color_desc, variant_str, region_str
+            )
         }
         0x11 => {
             // PORTAL
-            format!("Creates {} portal{} on {}", color_desc, variant_str, region_str)
+            format!(
+                "Creates {} portal{} on {}",
+                color_desc, variant_str, region_str
+            )
         }
         0x12 => {
             // LOBE
@@ -341,7 +359,10 @@ fn generate_layer_summary(
         }
         _ => {
             // Unknown/generic
-            format!("{}{}: {} on {}", opcode, variant_str, color_desc, region_str)
+            format!(
+                "{}{}: {} on {}",
+                opcode, variant_str, color_desc, region_str
+            )
         }
     }
 }
@@ -532,8 +553,7 @@ pub fn render_color_swatch(
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();
 
-        let primary_color =
-            egui::Color32::from_rgb(primary[0], primary[1], primary[2]);
+        let primary_color = egui::Color32::from_rgb(primary[0], primary[1], primary[2]);
 
         if let Some(sec) = secondary {
             // Draw gradient swatch
@@ -541,20 +561,14 @@ pub fn render_color_swatch(
 
             // Left half
             painter.rect_filled(
-                egui::Rect::from_min_max(
-                    rect.min,
-                    egui::pos2(rect.center().x, rect.max.y),
-                ),
+                egui::Rect::from_min_max(rect.min, egui::pos2(rect.center().x, rect.max.y)),
                 0.0,
                 primary_color,
             );
 
             // Right half
             painter.rect_filled(
-                egui::Rect::from_min_max(
-                    egui::pos2(rect.center().x, rect.min.y),
-                    rect.max,
-                ),
+                egui::Rect::from_min_max(egui::pos2(rect.center().x, rect.min.y), rect.max),
                 0.0,
                 secondary_color,
             );
@@ -684,7 +698,10 @@ mod tests {
     fn test_region_names() {
         assert_eq!(region_names(REGION_ALL), vec!["All"]);
         assert_eq!(region_names(REGION_SKY), vec!["Sky"]);
-        assert_eq!(region_names(REGION_SKY | REGION_WALLS), vec!["Sky", "Walls"]);
+        assert_eq!(
+            region_names(REGION_SKY | REGION_WALLS),
+            vec!["Sky", "Walls"]
+        );
         assert_eq!(region_names(0), vec!["None"]);
     }
 

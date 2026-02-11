@@ -18,7 +18,6 @@ This document reflects the canonical EPU architecture. The opcode slot assignmen
 
 ## Status Legend
 - [ ] Not started
-- [x] Implemented and verified
 
 ## Presets
 

@@ -312,7 +312,9 @@ pub fn parse_key_code(s: &str) -> Option<winit::keyboard::KeyCode> {
 
 #[cfg(test)]
 mod tests {
-    use super::{JoinConnectionState, JoiningPeer, WaitingForPeer, parse_key_code, sanitize_game_id};
+    use super::{
+        JoinConnectionState, JoiningPeer, WaitingForPeer, parse_key_code, sanitize_game_id,
+    };
     use crate::rollback::LocalSocket;
     use winit::keyboard::KeyCode;
 

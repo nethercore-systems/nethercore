@@ -198,14 +198,14 @@ impl DirectionGizmo {
     /// Draw the hemisphere outline and grid.
     fn draw_hemisphere(&self, painter: &egui::Painter, center: Pos2, radius: f32) {
         // Background circle (sphere outline)
-        painter.circle_stroke(
-            center,
-            radius,
-            Stroke::new(1.5, Color32::from_gray(100)),
-        );
+        painter.circle_stroke(center, radius, Stroke::new(1.5, Color32::from_gray(100)));
 
         // Inner fill (slightly transparent)
-        painter.circle_filled(center, radius, Color32::from_rgba_unmultiplied(40, 50, 60, 200));
+        painter.circle_filled(
+            center,
+            radius,
+            Color32::from_rgba_unmultiplied(40, 50, 60, 200),
+        );
 
         // Draw latitude lines (circles at different Z levels / depths)
         // These appear as concentric circles when viewing the front hemisphere
@@ -233,18 +233,11 @@ impl DirectionGizmo {
                 center.y - sin_a * radius, // Invert Y for screen coords
             );
 
-            painter.line_segment(
-                [center, end],
-                Stroke::new(0.5, Color32::from_gray(50)),
-            );
+            painter.line_segment([center, end], Stroke::new(0.5, Color32::from_gray(50)));
         }
 
         // Draw the equator (XY plane at Z=0) as a thicker line
-        painter.circle_stroke(
-            center,
-            radius,
-            Stroke::new(1.0, Color32::from_gray(70)),
-        );
+        painter.circle_stroke(center, radius, Stroke::new(1.0, Color32::from_gray(70)));
     }
 
     /// Draw the direction arrow.
@@ -536,11 +529,11 @@ mod tests {
         // Test various directions
         // Note: octahedral encoding maps X,Y to oct coords, Z is derived
         let test_cases = [
-            [0.0, 0.0, 1.0],   // +Z (forward) - center of octahedral map
-            [1.0, 0.0, 0.0],   // +X (right)
-            [0.0, 1.0, 0.0],   // +Y (up)
-            [-1.0, 0.0, 0.0],  // -X (left)
-            [0.0, -1.0, 0.0],  // -Y (down)
+            [0.0, 0.0, 1.0],       // +Z (forward) - center of octahedral map
+            [1.0, 0.0, 0.0],       // +X (right)
+            [0.0, 1.0, 0.0],       // +Y (up)
+            [-1.0, 0.0, 0.0],      // -X (left)
+            [0.0, -1.0, 0.0],      // -Y (down)
             [0.577, 0.577, 0.577], // diagonal (front hemisphere)
         ];
 
@@ -550,14 +543,16 @@ mod tests {
             let decoded = decode_direction_u16(encoded);
 
             // Allow for some quantization error due to 8-bit precision
-            let error =
-                (original_norm[0] - decoded[0]).abs() +
-                (original_norm[1] - decoded[1]).abs() +
-                (original_norm[2] - decoded[2]).abs();
+            let error = (original_norm[0] - decoded[0]).abs()
+                + (original_norm[1] - decoded[1]).abs()
+                + (original_norm[2] - decoded[2]).abs();
             assert!(
                 error < 0.15,
                 "Direction roundtrip failed: {:?} -> 0x{:04X} -> {:?} (error: {})",
-                original_norm, encoded, decoded, error
+                original_norm,
+                encoded,
+                decoded,
+                error
             );
         }
     }
@@ -566,7 +561,11 @@ mod tests {
     fn test_default_direction() {
         // 0x8080 = center of octahedral map = +Z direction
         let dir = decode_direction_u16(0x8080);
-        assert!(dir[2] > 0.9, "+Z component should be dominant for 0x8080, got {:?}", dir);
+        assert!(
+            dir[2] > 0.9,
+            "+Z component should be dominant for 0x8080, got {:?}",
+            dir
+        );
     }
 
     #[test]
@@ -581,8 +580,14 @@ mod tests {
         // Test encoding of cardinal directions
         let plus_z = encode_direction_u16([0.0, 0.0, 1.0]);
         // +Z should be near center (0x80, 0x80)
-        assert!((plus_z & 0xFF) >= 0x70 && (plus_z & 0xFF) <= 0x90, "+Z u byte should be near 0x80");
-        assert!(((plus_z >> 8) & 0xFF) >= 0x70 && ((plus_z >> 8) & 0xFF) <= 0x90, "+Z v byte should be near 0x80");
+        assert!(
+            (plus_z & 0xFF) >= 0x70 && (plus_z & 0xFF) <= 0x90,
+            "+Z u byte should be near 0x80"
+        );
+        assert!(
+            ((plus_z >> 8) & 0xFF) >= 0x70 && ((plus_z >> 8) & 0xFF) <= 0x90,
+            "+Z v byte should be near 0x80"
+        );
 
         let plus_x = encode_direction_u16([1.0, 0.0, 0.0]);
         // +X should have high u, mid v
