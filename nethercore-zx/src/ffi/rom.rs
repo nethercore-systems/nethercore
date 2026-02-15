@@ -19,6 +19,9 @@ use zx_common::TextureFormat;
 
 /// Register ROM data pack FFI functions
 pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
+    // Data pack probe
+    linker.func_wrap("env", "rom_data_pack_loaded", rom_data_pack_loaded)?;
+
     // GPU resources (return handles, uploaded to VRAM)
     linker.func_wrap("env", "rom_texture", rom_texture)?;
     linker.func_wrap("env", "rom_mesh", rom_mesh)?;
@@ -54,6 +57,22 @@ fn read_string_id(caller: &Caller<'_, ZXGameContext>, id_ptr: u32, id_len: u32) 
 
     let bytes = &data[start..end];
     String::from_utf8(bytes.to_vec()).ok()
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DATA PACK PROBE
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Check if a ROM data pack is loaded.
+///
+/// # Returns
+/// 1 if a data pack is present, 0 if not.
+fn rom_data_pack_loaded(caller: Caller<'_, ZXGameContext>) -> u32 {
+    if caller.data().ffi.data_pack.is_some() {
+        1
+    } else {
+        0
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -372,16 +391,17 @@ fn rom_data_len(caller: Caller<'_, ZXGameContext>, id_ptr: u32, id_len: u32) -> 
 
     let state = &caller.data().ffi;
 
-    // Get data pack
-    let data_pack = state
-        .data_pack
-        .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("rom_data_len: no data pack loaded"))?;
+    // Return 0 if no data pack loaded (graceful probe)
+    let data_pack = match state.data_pack.as_ref() {
+        Some(dp) => dp,
+        None => return Ok(0),
+    };
 
-    // Find data in data pack
-    let data = data_pack
-        .find_data(&id)
-        .ok_or_else(|| anyhow::anyhow!("rom_data_len: data '{}' not found in data pack", id))?;
+    // Return 0 if asset not found (graceful probe)
+    let data = match data_pack.find_data(&id) {
+        Some(d) => d,
+        None => return Ok(0),
+    };
 
     Ok(data.data.len() as u32)
 }

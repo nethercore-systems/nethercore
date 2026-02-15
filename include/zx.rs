@@ -183,6 +183,11 @@ pub unsafe fn music_stop() {}
 pub unsafe fn log(_ptr: *const u8, _len: u32) {}
 
 #[cfg(not(target_arch = "wasm32"))]
+pub unsafe fn rom_data_pack_loaded() -> u32 {
+    0
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 pub unsafe fn rom_texture(_id_ptr: *const u8, _id_len: u32) -> u32 {
     0
 }
@@ -1678,6 +1683,12 @@ extern "C" {
     // Load assets from the bundled ROM data pack by string ID.
     // Assets go directly to VRAM/audio memory, bypassing WASM linear memory.
     // All `rom_*` functions can only be called during `init()`.
+
+    /// Check if a ROM data pack is loaded.
+    ///
+    /// # Returns
+    /// 1 if a data pack is present, 0 if not.
+    pub fn rom_data_pack_loaded() -> u32;
 
     /// Load a texture from ROM data pack by ID.
     ///
