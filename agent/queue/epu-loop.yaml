@@ -10,8 +10,8 @@ jobs:
     batch_size: 18
     promotion_gate: blocked_until_front_mass_improves
     depends_on: 
-    attempts: 7
-    last_run_dir: agent\runs\20260312-230851-front-mass-body-ownership
+    attempts: 8
+    last_run_dir: agent\runs\20260313-053823-front-mass-body-ownership
     build_steps:
       - cargo test -p nethercore-zx --lib epu_capabilities
       - cargo dev
@@ -25,6 +25,7 @@ jobs:
       - current queue reason: rerun under the new outdoor benchmark rig profile before declaring a deeper surface-only blocker
       - latest rerun result: framing improved slightly but the front still fails and remains blocked
       - latest shared-artifact result: bounds-authority split made the wall belt darker and more centered, but the front still does not own the scene
+      - latest wave-3 result: MASS_SHELF local-body hold darkened and densified the front, but it still reads as a broad shelf/wall with weak motion and a generic hemispheric probe split
 
   - job_id: frozen-bed-identity
     status: blocked
@@ -34,8 +35,8 @@ jobs:
     batch_size: 18
     promotion_gate: blocked_until_frozen_bed_improves
     depends_on: 
-    attempts: 2
-    last_run_dir: agent\runs\20260312-230851-front-mass-body-ownership
+    attempts: 4
+    last_run_dir: agent\runs\20260313-052446-frozen-bed-identity
     build_steps:
       - cargo test -p nethercore-zx --lib epu_capabilities
       - cargo dev
@@ -47,6 +48,7 @@ jobs:
       - current queue reason: rerun under the new outdoor benchmark rig profile before declaring a deeper surface-only blocker
       - latest rerun result: framing improved slightly but the frozen-place read still fails and remains blocked
       - latest shared-artifact result: reused the bounds-authority split benchmark bundle; broad cold ridge improved, but frozen-surface identity still fails
+      - latest wave-2 result: calmer SURFACE_GLAZE sheet continuity still failed; the benchmark remains a pale soft berm with weak icy ownership
       - do not reopen Frozen Tundra showcase churn first
 
   - job_id: storm-front-promotion

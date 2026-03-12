@@ -140,11 +140,17 @@ fn eval_surface(
 
     switch variant {
         case SURFACE_VARIANT_GLAZE: {
-            let low = surface_fbm(uv * 0.55, 3u);
-            let veins = 1.0 - abs(surface_fbm(uv * 1.35 + vec2f(11.0, -3.0), 3u));
-            base = mix(low, veins, fracture * 0.4);
-            highlight = smoothstep(0.55, 0.98, graze + veins * 0.25) * (0.2 + sheen * 0.8);
-            coverage = smoothstep(0.18, 0.86, low);
+            let glaze_uv = mix(base_uv, uv, 0.42 + fracture * 0.18);
+            let low = surface_fbm(glaze_uv * 0.42, 3u);
+            let veins = 1.0 - abs(surface_fbm(glaze_uv * vec2f(0.34, 1.7) + vec2f(11.0, -3.0), 3u));
+            let strain = surface_fbm(glaze_uv * vec2f(0.2, 1.15) + vec2f(-6.0, 9.0), 2u);
+            let sheet = smoothstep(0.12, 0.84, low * 0.64 + strain * 0.22 + veins * 0.14);
+            let glaze = mix(low, strain, 0.26 + fracture * 0.08);
+            base = mix(glaze, sheet, 0.44 + (1.0 - fracture) * 0.18);
+            highlight = smoothstep(0.44, 0.95, graze + sheet * 0.22 + strain * 0.06)
+                * mix(0.18, 0.9, sheen)
+                * mix(0.88, 1.0, veins);
+            coverage = mix(sheet, 1.0, 0.28 + (1.0 - fracture) * 0.26);
         }
         case SURFACE_VARIANT_CRUST: {
             let vor = surface_voronoi(uv * mix(0.8, 2.0, fracture));

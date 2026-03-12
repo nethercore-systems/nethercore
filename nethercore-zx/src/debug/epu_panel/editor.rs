@@ -272,6 +272,7 @@ fn epu_opcode_from_u8(code: u8) -> EpuOpcode {
         0x14 => EpuOpcode::Mottle,
         0x15 => EpuOpcode::Advect,
         0x16 => EpuOpcode::Surface,
+        0x17 => EpuOpcode::Mass,
         _ => EpuOpcode::Nop,
     }
 }
@@ -1174,6 +1175,32 @@ mod tests {
         assert_eq!(restored.meta5, layer.meta5);
         assert_eq!(restored.color_a, layer.color_a);
         assert_eq!(restored.color_b, layer.color_b);
+    }
+
+    #[test]
+    fn test_decode_mass_layer() {
+        let layer = EpuLayer {
+            opcode: EpuOpcode::Mass,
+            region_mask: REGION_WALLS,
+            blend: EpuBlend::Lerp,
+            meta5: pack_meta5(0, 0),
+            color_a: [135, 152, 164],
+            color_b: [8, 13, 18],
+            alpha_a: 15,
+            alpha_b: 0,
+            intensity: 248,
+            param_a: 104,
+            param_b: 212,
+            param_c: 82,
+            param_d: 74,
+            direction: 0x8000,
+        };
+
+        let decoded = decode_packed_layer(layer.encode());
+
+        assert_eq!(decoded.opcode, EpuOpcode::Mass);
+        assert_eq!(decoded.region_mask, REGION_WALLS);
+        assert_eq!(decoded.blend, EpuBlend::Lerp);
     }
 
     #[test]

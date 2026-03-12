@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import time
@@ -16,7 +17,10 @@ from urllib import error, request
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_SESSION_FILE = REPO_ROOT / "tmp" / "epu-workbench" / "session.json"
+DEFAULT_LAUNCH_FILE = DEFAULT_SESSION_FILE.parent / "launch.json"
 API_PREFIX = "/api/epu-workbench"
+PRESET_SOURCE = REPO_ROOT / "examples" / "3-inspectors" / "epu-showcase" / "src" / "presets.rs"
+BENCHMARK_SOURCE = REPO_ROOT / "examples" / "3-inspectors" / "epu-showcase" / "src" / "benchmarks.rs"
 
 
 class CliError(Exception):
@@ -56,8 +60,59 @@ def default_session_file() -> Path:
     return DEFAULT_SESSION_FILE
 
 
+def default_launch_file() -> Path:
+    return DEFAULT_LAUNCH_FILE
+
+
+def launch_file_for_artifacts_dir(artifacts_dir: Path) -> Path:
+    return artifacts_dir / "launch.json"
+
+
+def session_file_for_artifacts_dir(artifacts_dir: Path) -> Path:
+    return artifacts_dir / "session.json"
+
+
+def load_json_path(path: Path, *, label: str) -> Any:
+    return load_json_value(path.read_text(encoding="utf-8"), label=label)
+
+
+def try_load_json_path(path: Path, *, label: str) -> Any | None:
+    if not path.is_file():
+        return None
+    return load_json_path(path, label=label)
+
+
+def resolve_artifacts_dir(args: argparse.Namespace) -> Path:
+    if getattr(args, "artifacts_dir", None):
+        return Path(args.artifacts_dir)
+    if getattr(args, "session_file", None):
+        return Path(args.session_file).parent
+    return default_session_file().parent
+
+
 def resolve_session_file(args: argparse.Namespace) -> Path:
-    return Path(args.session_file) if getattr(args, "session_file", None) else default_session_file()
+    if getattr(args, "session_file", None):
+        return Path(args.session_file)
+    if getattr(args, "artifacts_dir", None):
+        return session_file_for_artifacts_dir(resolve_artifacts_dir(args))
+    return default_session_file()
+
+
+def resolve_launch_file(args: argparse.Namespace) -> Path:
+    if getattr(args, "artifacts_dir", None):
+        return launch_file_for_artifacts_dir(resolve_artifacts_dir(args))
+    session_file = resolve_session_file(args)
+    if session_file == default_session_file():
+        return default_launch_file()
+    return launch_file_for_artifacts_dir(session_file.parent)
+
+
+def load_saved_connection_payloads(args: argparse.Namespace) -> tuple[Any | None, Any | None]:
+    session_file = resolve_session_file(args)
+    launch_file = resolve_launch_file(args)
+    session_payload = try_load_json_path(session_file, label=str(session_file))
+    launch_payload = try_load_json_path(launch_file, label=str(launch_file))
+    return session_payload, launch_payload
 
 
 def resolve_port(args: argparse.Namespace) -> int:
@@ -65,20 +120,29 @@ def resolve_port(args: argparse.Namespace) -> int:
         return int(args.port)
 
     session_file = resolve_session_file(args)
+    launch_file = resolve_launch_file(args)
     if session_file.is_file():
-        payload = load_json_value(session_file.read_text(encoding="utf-8"), label=str(session_file))
+        payload = load_json_path(session_file, label=str(session_file))
         port = payload.get("port")
         if port is None:
             raise CliError(f"session file does not contain a port: {session_file}")
         return int(port)
+    if launch_file.is_file():
+        payload = load_json_path(launch_file, label=str(launch_file))
+        port = payload.get("port")
+        if port is None:
+            raise CliError(f"launch file does not contain a port: {launch_file}")
+        return int(port)
 
     raise CliError(
-        f"no workbench port provided and no session file found at {session_file}",
+        f"no workbench port provided and no session/launch file found at {session_file.parent}",
         payload={
             "ok": False,
             "error": "missing_connection",
             "message": "Provide --port or launch a session first.",
             "session_file": str(session_file),
+            "launch_file": str(launch_file),
+            "artifacts_dir": str(session_file.parent),
         },
     )
 
@@ -216,6 +280,112 @@ def command_session(args: argparse.Namespace) -> dict[str, Any]:
     return api_request(args, "GET", "/session")
 
 
+def command_status(args: argparse.Namespace) -> dict[str, Any]:
+    session_file = resolve_session_file(args)
+    launch_file = resolve_launch_file(args)
+    artifacts_dir = resolve_artifacts_dir(args)
+
+    payload: dict[str, Any] = {
+        "ok": True,
+        "host": args.host,
+        "artifacts_dir": str(artifacts_dir),
+        "session_file": str(session_file),
+        "launch_file": str(launch_file),
+    }
+
+    try:
+        payload["port"] = resolve_port(args)
+    except CliError as exc:
+        payload["ok"] = False
+        payload["connection_error"] = exc.payload
+        saved_session, saved_launch = load_saved_connection_payloads(args)
+        if saved_session is not None:
+            payload["saved_session"] = summarize_session_payload(saved_session)
+            payload.update(extract_live_scene_info(saved_session, [], []))
+        if saved_launch is not None:
+            payload["launch"] = summarize_launch_payload(saved_launch)
+        return payload
+
+    try:
+        health = command_health(args)
+    except CliError as exc:
+        payload["connected"] = False
+        payload["health_error"] = exc.payload
+    else:
+        payload["connected"] = True
+        payload["health"] = health
+
+    try:
+        session = command_session(args)
+    except CliError as exc:
+        payload["session_error"] = exc.payload
+    else:
+        payload["session"] = summarize_session_payload(session)
+        payload.update(extract_live_scene_info(session, [], []))
+
+    saved_session, saved_launch = load_saved_connection_payloads(args)
+    if saved_session is not None:
+        payload["saved_session"] = summarize_session_payload(saved_session)
+    if saved_launch is not None:
+        payload["launch"] = summarize_launch_payload(saved_launch)
+
+    if payload.get("connected") is False and "session" not in payload:
+        payload["ok"] = False
+    return payload
+
+
+def command_list_scenes(args: argparse.Namespace) -> dict[str, Any]:
+    showcase_names = read_rust_string_array(PRESET_SOURCE, "PRESET_NAMES")
+    benchmark_labels = read_rust_string_array(BENCHMARK_SOURCE, "BENCHMARK_NAMES")
+    showcase = [
+        {"mode": "showcase", "scene_index": index, "name": name}
+        for index, name in enumerate(showcase_names)
+    ]
+    benchmark = [
+        {
+            "mode": "benchmark",
+            "scene_index": index,
+            "name": label.removeprefix("Benchmark: ").strip(),
+            "label": label,
+        }
+        for index, label in enumerate(benchmark_labels)
+    ]
+
+    session_file = resolve_session_file(args)
+    launch_file = resolve_launch_file(args)
+    live: dict[str, Any] = {
+        "connected": False,
+        "session_file": str(session_file),
+        "launch_file": str(launch_file),
+        "artifacts_dir": str(resolve_artifacts_dir(args)),
+    }
+    try:
+        session_payload = command_session(args)
+    except CliError as exc:
+        live["error"] = exc.payload
+        saved_session, saved_launch = load_saved_connection_payloads(args)
+        if saved_session is not None:
+            live["saved_session"] = summarize_session_payload(saved_session)
+            live.update(extract_live_scene_info(saved_session, showcase, benchmark))
+        if saved_launch is not None:
+            live["launch"] = summarize_launch_payload(saved_launch)
+    else:
+        live["connected"] = True
+        live["session"] = summarize_session_payload(session_payload)
+        live.update(extract_live_scene_info(session_payload, showcase, benchmark))
+
+    return {
+        "ok": True,
+        "showcase": showcase,
+        "benchmark": benchmark,
+        "live": live,
+        "sources": {
+            "showcase": str(PRESET_SOURCE),
+            "benchmark": str(BENCHMARK_SOURCE),
+        },
+    }
+
+
 def command_get_config(args: argparse.Namespace) -> dict[str, Any]:
     return api_request(args, "GET", "/config")
 
@@ -323,6 +493,8 @@ def command_launch(args: argparse.Namespace) -> dict[str, Any]:
         "host": args.host,
         "port": args.port,
         "artifacts_dir": str(artifacts_dir),
+        "session_file": str(session_file_for_artifacts_dir(artifacts_dir)),
+        "launch_file": str(launch_file_for_artifacts_dir(artifacts_dir)),
         "stdout_log": str(stdout_log),
         "stderr_log": str(stderr_log),
         "health": health,
@@ -385,13 +557,142 @@ def command_sweep_layer(args: argparse.Namespace) -> dict[str, Any]:
     return payload
 
 
-def add_connection_args(parser: argparse.ArgumentParser, *, default_port: int | None = None) -> None:
+def read_rust_string_array(path: Path, const_name: str) -> list[str]:
+    text = path.read_text(encoding="utf-8")
+    anchor = f"pub const {const_name}"
+    start = text.find(anchor)
+    if start < 0:
+        raise CliError(f"could not find {const_name} in {path}")
+    equals = text.find("=", start)
+    if equals < 0:
+        raise CliError(f"could not find assignment for {const_name} in {path}")
+    body_start = text.find("[", equals)
+    body_end = text.find("];", body_start)
+    if body_start < 0 or body_end < 0:
+        raise CliError(f"could not parse array body for {const_name} in {path}")
+    body = text[body_start + 1 : body_end]
+    values = re.findall(r'"([^"\\\\]*(?:\\\\.[^"\\\\]*)*)"', body)
+    if not values:
+        raise CliError(f"no string values found for {const_name} in {path}")
+    return [bytes(value, "utf-8").decode("unicode_escape") for value in values]
+
+
+def extract_live_scene_info(
+    payload: Any,
+    showcase: list[dict[str, Any]],
+    benchmark: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {}
+
+    session_payload = payload.get("session")
+    session = session_payload if isinstance(session_payload, dict) else payload
+    if not isinstance(session, dict):
+        return {}
+
+    mode = session.get("scene_mode")
+    scene_index = session.get("scene_index")
+    view = session.get("view")
+    if not mode and isinstance(view, dict):
+        show_benchmarks = view.get("show_benchmarks")
+        if show_benchmarks is not None:
+            mode = "benchmark" if bool(show_benchmarks) else "showcase"
+    if scene_index is None and isinstance(view, dict):
+        scene_index = view.get("scene_index")
+
+    info: dict[str, Any] = {
+        "scene_mode": mode,
+        "scene_index": scene_index,
+    }
+    if mode in {"showcase", "benchmark"} and isinstance(scene_index, int):
+        scenes = benchmark if mode == "benchmark" else showcase
+        if 0 <= scene_index < len(scenes):
+            info["scene_name"] = scenes[scene_index]["name"]
+    return info
+
+
+def summarize_session_payload(payload: Any) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {"payload_type": type(payload).__name__}
+
+    session_payload = payload.get("session")
+    session = session_payload if isinstance(session_payload, dict) else payload
+    if not isinstance(session, dict):
+        return {"payload_type": type(session).__name__}
+
+    summary: dict[str, Any] = {}
+    for key in ("artifacts_dir", "pid", "port", "updated_at"):
+        if key in payload:
+            summary[key] = payload[key]
+    for key in (
+        "game_id",
+        "protocol_version",
+        "scene_mode",
+        "scene_index",
+        "show_ui",
+        "show_probe",
+        "show_background",
+    ):
+        if key in session:
+            summary[key] = session[key]
+    view = session.get("view")
+    if isinstance(view, dict):
+        summary["view"] = {
+            key: view.get(key)
+            for key in (
+                "locked",
+                "selected_layer",
+                "isolated_layer",
+                "show_benchmarks",
+                "scene_index",
+            )
+        }
+    return summary
+
+
+def summarize_launch_payload(payload: Any) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {"payload_type": type(payload).__name__}
+
+    summary: dict[str, Any] = {}
+    for key in (
+        "artifacts_dir",
+        "session_file",
+        "launch_file",
+        "host",
+        "port",
+        "pid",
+        "stdout_log",
+        "stderr_log",
+    ):
+        if key in payload:
+            summary[key] = payload[key]
+    command = payload.get("command")
+    if isinstance(command, list):
+        summary["command"] = command
+    session = payload.get("session")
+    if session is not None:
+        summary["session"] = summarize_session_payload(session)
+    return summary
+
+
+def add_connection_args(
+    parser: argparse.ArgumentParser,
+    *,
+    default_port: int | None = None,
+    include_artifacts_dir: bool = True,
+) -> None:
     parser.add_argument("--host", default=DEFAULT_HOST, help="Workbench host (default: 127.0.0.1)")
     parser.add_argument("--port", type=int, default=default_port, help="Workbench port")
     parser.add_argument(
         "--session-file",
         help=f"Session artifact to read the port from (default: {DEFAULT_SESSION_FILE})",
     )
+    if include_artifacts_dir:
+        parser.add_argument(
+            "--artifacts-dir",
+            help="Workbench artifacts directory to resolve session.json/launch.json from",
+        )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -399,7 +700,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     launch = subparsers.add_parser("launch", help="Launch a local player with the workbench enabled")
-    add_connection_args(launch, default_port=4581)
+    add_connection_args(launch, default_port=4581, include_artifacts_dir=False)
     launch.add_argument("--rom", required=True, help="ROM to launch")
     launch.add_argument(
         "--artifacts-dir",
@@ -423,12 +724,21 @@ def build_parser() -> argparse.ArgumentParser:
     for name, help_text, handler in (
         ("health", "Check the live workbench server", command_health),
         ("session", "Read the current live workbench snapshot", command_session),
+        ("status", "Summarize live health/session plus saved connection artifacts", command_status),
         ("get-config", "Read the current 8-layer EPU config", command_get_config),
     ):
         sub = subparsers.add_parser(name, help=help_text)
         add_connection_args(sub)
         sub.add_argument("--timeout", type=float, default=10.0, help="HTTP request timeout in seconds")
         sub.set_defaults(handler=handler)
+
+    list_scenes = subparsers.add_parser(
+        "list-scenes",
+        help="List showcase and benchmark scene ids, with optional live-session annotation",
+    )
+    add_connection_args(list_scenes)
+    list_scenes.add_argument("--timeout", type=float, default=10.0, help="HTTP request timeout in seconds")
+    list_scenes.set_defaults(handler=command_list_scenes)
 
     select_scene = subparsers.add_parser("select-scene", help="Select a benchmark or showcase preset")
     add_connection_args(select_scene)

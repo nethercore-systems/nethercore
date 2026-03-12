@@ -236,7 +236,10 @@ mod tests {
     fn zx_loader_uses_ancestor_nether_toml_for_raw_wasm_render_mode() {
         let tmp = tempdir().unwrap();
         let project_dir = tmp.path().join("examples").join("epu-showcase");
-        let wasm_dir = project_dir.join("target").join("wasm32-unknown-unknown").join("release");
+        let wasm_dir = project_dir
+            .join("target")
+            .join("wasm32-unknown-unknown")
+            .join("release");
         fs::create_dir_all(&wasm_dir).unwrap();
 
         fs::write(

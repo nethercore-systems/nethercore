@@ -829,4 +829,3 @@ fn default_capture_crops(width: u32, height: u32) -> crate::workbench::EpuWorkbe
         },
     }
 }
-

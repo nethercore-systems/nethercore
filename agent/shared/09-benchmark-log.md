@@ -349,3 +349,61 @@ Benchmark review should judge metaphor/place strength and shipping utility for a
   - motion read: still minimal and not decision-moving
   - artifact or flat-band notes: a broad cold ridge/bank now survives in both direct background and reflective probe, which is real progress, but the material identity is still snow shelf / cold berm rather than frozen-surface read
   - promotion decision: blocked; do not promote this follow-up into `Frozen Tundra`
+
+### 2026-03-13 frozen-bed glaze-sheet follow-up
+
+- benchmark target:
+  - `Frozen Bed`
+- changes:
+  - fixed live-workbench `MASS` decode in `nethercore-zx/src/debug/epu_panel/editor.rs` so local discovery no longer flattens `MASS` layers to `NOP`
+  - added workbench CLI `status` and `list-scenes` support in `tools/epu_workbench.py` so overnight loops can reconnect and inspect scene ids from artifacts without guesswork
+  - retuned `SURFACE/GLAZE` in `nethercore-zx/shaders/epu/features/14_surface.wgsl` toward a calmer sheet-like icy variation with higher continuous coverage
+- build preconditions:
+  - `cargo fmt`
+  - `cargo test -p nethercore-zx --lib`
+  - `python -m py_compile tools/epu_workbench.py`
+  - `python tools/epu_workbench.py status --artifacts-dir tmp/epu-workbench-live`
+  - `python tools/epu_workbench.py list-scenes --artifacts-dir tmp/epu-workbench-live`
+  - `cargo run -p nether-cli -- build --project examples/3-inspectors/epu-showcase`
+  - `cargo run -p nether-cli -- replay validate examples/3-inspectors/epu-showcase/screenshot-benchmarks-anim3.ncrs`
+- capture path:
+  - `python tools/tmp/run_epu_loop_queue.py --job-id frozen-bed-identity`
+- determinism notes:
+  - the first queue rerun at `agent/runs/20260313-051613-frozen-bed-identity/` was useful as a fresh baseline but not treated as the final post-integration verdict because the wave-2 worker slice landed concurrently
+  - the post-integration queue rerun at `agent/runs/20260313-052446-frozen-bed-identity/` is the authoritative wave-2 pair
+  - batch A timestamps span `2026-03-13 05:29:30..05:29:37` local time
+  - batch B timestamps span `2026-03-13 05:29:39..05:29:45` local time
+  - the pair result reported `0` mismatches across all `18` frame pairs
+- benchmark review:
+  - `Frozen Bed`
+  - must-read result: still fail
+  - hard-fail trigger seen: yes; the benchmark still does not read as an icy bed or crusted frozen floor in either direct background or reflective probe
+  - motion read: still minimal and not decision-moving
+  - artifact or flat-band notes: the calmer glaze path holds the shelf together more continuously, but the result is still a pale soft frozen berm with weak icy ownership rather than a shipping-strength frozen surface
+  - promotion decision: blocked; do not promote this follow-up into `Frozen Tundra`
+
+### 2026-03-13 front-mass shelf-body hold follow-up
+
+- benchmark target:
+  - `Front Mass`
+- changes:
+  - reshaped `MASS/SHELF` in `nethercore-zx/shaders/epu/features/15_mass.wgsl` to replace the old underbelly-driven hemispheric split with a more local shelf-body hold
+  - strengthened belly/shoulder occupancy, reduced rim influence, and pushed alpha/density toward a denser abstract front body on top of the improved bounds-authority envelope
+- build preconditions:
+  - `cargo run -p nether-cli -- replay validate examples/3-inspectors/epu-showcase/screenshot-benchmarks-anim3.ncrs`
+  - `cargo run -p nether-cli -- build --project examples/3-inspectors/epu-showcase`
+  - `python tools/tmp/run_epu_loop_queue.py --job-id front-mass-body-ownership`
+- capture path:
+  - `python tools/tmp/run_epu_loop_queue.py --job-id front-mass-body-ownership`
+- determinism notes:
+  - the authoritative post-change run bundle is `agent/runs/20260313-053823-front-mass-body-ownership/`
+  - batch A timestamps span `2026-03-13 05:42:19..05:42:25` local time
+  - batch B timestamps span `2026-03-13 05:42:27..05:42:34` local time
+  - the pair result reported `0` mismatches across all `18` frame pairs
+- benchmark review:
+  - `Front Mass`
+  - must-read result: improved contrast, still fail
+  - hard-fail trigger seen: yes; the front body is darker and denser, but it still reads as a broad shelf/wall instead of a decisive scene-owning front
+  - motion read: still too weak across the reviewed frames to count as a benchmark pass
+  - artifact or flat-band notes: the old pale soft wall is reduced, but the reflective probe still collapses toward a generic bright-top/dark-bottom split and the direct background still lacks a distinct weather-body event
+  - promotion decision: blocked; do not promote this follow-up into `Storm Front`

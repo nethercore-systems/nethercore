@@ -44,6 +44,17 @@ This is not just a showcase-art task. It is a combined:
 - Runtime truth lives in code, replay scripts, and screenshots, not planning prose
 - If code/docs/prompts drift, fix the drift immediately before continuing broad loops
 
+## Subagent Mode
+
+When the current worker owns the loop end to end, operate with this default workflow:
+
+- Work in subagent orchestration mode.
+- Split the task into parallel workers with disjoint file ownership.
+- Do not implement locally unless integration or emergency repair is required.
+- Keep a live worker roster in every progress update: active workers, scope, completed slices, next queued lane.
+- Run work in waves and validate after each wave.
+- If a worker stalls, rescope it rather than silently waiting forever.
+
 ## Cold-Start Read Order
 
 Read these in order before choosing work:
