@@ -407,3 +407,135 @@ Benchmark review should judge metaphor/place strength and shipping utility for a
   - motion read: still too weak across the reviewed frames to count as a benchmark pass
   - artifact or flat-band notes: the old pale soft wall is reduced, but the reflective probe still collapses toward a generic bright-top/dark-bottom split and the direct background still lacks a distinct weather-body event
   - promotion decision: blocked; do not promote this follow-up into `Storm Front`
+
+### 2026-03-13 front-mass advect-front event follow-up
+
+- benchmark target:
+  - `Front Mass`
+- changes:
+  - retuned `ADVECT_FRONT` support behavior in `nethercore-zx/shaders/epu/features/13_advect.wgsl`
+  - increased internal pulse/event behavior, pushed support alpha harder, and reduced the remaining soft-rim bias so the subordinate transport layer could read as a clearer front-body event without becoming the primary body
+- build preconditions:
+  - `cargo test -p nethercore-zx --lib epu_capabilities`
+  - `cargo run -p nether-cli -- build --project examples/3-inspectors/epu-showcase`
+  - `cargo run -p nether-cli -- replay validate examples/3-inspectors/epu-showcase/screenshot-benchmarks-anim3.ncrs`
+  - `python tools/tmp/run_epu_loop_queue.py --job-id front-mass-body-ownership`
+- capture path:
+  - `python tools/tmp/run_epu_loop_queue.py --job-id front-mass-body-ownership`
+- determinism notes:
+  - the authoritative run bundle is `agent/runs/20260313-055544-front-mass-body-ownership/`
+  - batch A timestamps span `2026-03-13 05:59:36..05:59:43` local time
+  - batch B timestamps span `2026-03-13 05:59:45..05:59:51` local time
+  - the pair result reported `0` mismatches across all `18` frame pairs
+- benchmark review:
+  - `Front Mass`
+  - must-read result: still fail
+  - hard-fail trigger seen: yes; the benchmark still does not produce a distinct scene-owning weather-body event
+  - motion read: slightly livelier internally, but still too weak across the reviewed frames to count as a benchmark pass
+  - artifact or flat-band notes: the front remains a broad shelf/wall read, and the reflective probe still collapses toward a generic hemispheric split rather than a strong front-body read
+  - promotion decision: blocked; do not promote this follow-up into `Storm Front`
+
+### 2026-03-13 front-mass authored-stack follow-up
+
+- benchmark target:
+  - `Front Mass`
+- changes:
+  - changed the authored `Front Mass` benchmark stack in `examples/3-inspectors/epu-showcase/src/benchmarks.rs`
+  - switched the body layer to `MASS_SHELF` with a darker multiply path
+  - moved `ADVECT_FRONT` later in the stack on `SKY | WALLS` with a stronger authored support profile so the live benchmark itself, not just shader-side support logic, carried the next lever
+- build preconditions:
+  - `cargo run -p nether-cli -- build --project examples/3-inspectors/epu-showcase`
+  - `cargo run -p nether-cli -- replay validate examples/3-inspectors/epu-showcase/screenshot-benchmarks-anim3.ncrs`
+  - `python tools/tmp/run_epu_loop_queue.py --job-id front-mass-body-ownership`
+- capture path:
+  - `python tools/tmp/run_epu_loop_queue.py --job-id front-mass-body-ownership`
+- determinism notes:
+  - the authoritative run bundle is `agent/runs/20260313-060402-front-mass-body-ownership/`
+  - batch A timestamps span `2026-03-13 06:07:58..06:08:04` local time
+  - batch B timestamps span `2026-03-13 06:08:06..06:08:12` local time
+  - the pair result reported `0` mismatches across all `18` frame pairs
+- benchmark review:
+  - `Front Mass`
+  - must-read result: improved, still fail
+  - hard-fail trigger seen: softened; the direct background now shows a more localized darker event instead of only a uniform shelf
+  - motion read: still too weak overall to count as a benchmark pass
+  - artifact or flat-band notes: this is the strongest recent composition improvement for direct background ownership, but the reflective probe still collapses toward a generic bright-top/dark-bottom split and the full scene still does not read as a decisive front-body event
+  - promotion decision: blocked; do not promote this follow-up into `Storm Front` yet
+
+### 2026-03-13 front-mass embedded-support follow-up
+
+- benchmark target:
+  - `Front Mass`
+- changes:
+  - reordered the authored `Front Mass` stack in `examples/3-inspectors/epu-showcase/src/benchmarks.rs` so `ADVECT_FRONT` sits under the owning `MASS_SHELF` layer instead of reading as a later layer on top
+  - increased the authored Front Mass animation emphasis on the embedded-support path while keeping the body on a darker multiply shelf
+- build preconditions:
+  - `cargo run -p nether-cli -- build --project examples/3-inspectors/epu-showcase`
+  - `cargo run -p nether-cli -- replay validate examples/3-inspectors/epu-showcase/screenshot-benchmarks-anim3.ncrs`
+  - `python tools/tmp/run_epu_loop_queue.py --job-id front-mass-body-ownership`
+- capture path:
+  - `python tools/tmp/run_epu_loop_queue.py --job-id front-mass-body-ownership`
+- determinism notes:
+  - the authoritative run bundle is `agent/runs/20260313-061236-front-mass-body-ownership/`
+  - batch A timestamps span `2026-03-13 06:12:44..06:12:51` local time
+  - batch B timestamps span `2026-03-13 06:12:53..06:12:59` local time
+  - the pair result reported `0` mismatches across all `18` frame pairs
+- benchmark review:
+  - `Front Mass`
+  - must-read result: still fail
+  - hard-fail trigger seen: yes; the benchmark still does not achieve probe-side front-body ownership
+  - motion read: still too weak overall to count as a benchmark pass
+  - artifact or flat-band notes: the direct background keeps the localized darker event from the previous authored-stack pass, but embedding `ADVECT_FRONT` under `MASS_SHELF` does not materially improve the reflective probe; it still reads mostly as a generic hemisphere with a dark notch rather than a convincing front body
+  - promotion decision: blocked; do not promote this follow-up into `Storm Front`
+
+### 2026-03-13 front-mass probe-side shelf follow-up
+
+- benchmark target:
+  - `Front Mass`
+- changes:
+  - retuned `MASS_SHELF` in `nethercore-zx/shaders/epu/features/15_mass.wgsl` to emphasize a tighter shelf band and crown trim intended to improve probe-side ownership and reduce the generic hemispheric split
+- build preconditions:
+  - `cargo run -p nether-cli -- build --project examples/3-inspectors/epu-showcase`
+  - `cargo run -p nether-cli -- replay validate examples/3-inspectors/epu-showcase/screenshot-benchmarks-anim3.ncrs`
+  - `python tools/tmp/run_epu_loop_queue.py --job-id front-mass-body-ownership`
+- capture path:
+  - `python tools/tmp/run_epu_loop_queue.py --job-id front-mass-body-ownership`
+- determinism notes:
+  - the authoritative run bundle is `agent/runs/20260313-061721-front-mass-body-ownership/`
+  - batch A timestamps span `2026-03-13 06:21:10..06:21:14` local time
+  - batch B timestamps span `2026-03-13 06:21:16..06:21:22` local time
+  - the pair result reported `0` mismatches across all `18` frame pairs
+- benchmark review:
+  - `Front Mass`
+  - must-read result: still fail
+  - hard-fail trigger seen: yes; the benchmark falls back toward a generic bright-top/dark-bottom split
+  - motion read: still too weak overall to count as a benchmark pass
+  - artifact or flat-band notes: this probe-side shelf pass erases the best recent directional win in direct background and does not recover a stronger reflective-probe read, so it should be treated as a closed regression branch rather than a base for further tuning
+  - promotion decision: blocked; do not promote this follow-up into `Storm Front`
+
+### 2026-03-13 frozen-bed pane-crust follow-up
+
+- benchmark target:
+  - `Frozen Bed`
+- changes:
+  - retuned `SURFACE/GLAZE` and `SURFACE/CRUST` in `nethercore-zx/shaders/epu/features/14_surface.wgsl` toward pane-like glass, harder seams, and more crusted fracture contrast
+  - retuned the authored `Frozen Bed` benchmark composition in `examples/3-inspectors/epu-showcase/src/benchmarks.rs` so the floor layers own more of the read and the wall bank / sky spindrift compete less with the bed
+- build preconditions:
+  - `cargo test -p nethercore-zx --lib epu_capabilities`
+  - `cargo run -p nether-cli -- build --project examples/3-inspectors/epu-showcase`
+  - `cargo run -p nether-cli -- replay validate examples/3-inspectors/epu-showcase/screenshot-benchmarks-anim3.ncrs`
+  - `python tools/tmp/run_epu_loop_queue.py --job-id frozen-bed-identity`
+- capture path:
+  - `python tools/tmp/run_epu_loop_queue.py --job-id frozen-bed-identity`
+- determinism notes:
+  - the authoritative run bundle is `agent/runs/20260313-063533-frozen-bed-identity/`
+  - batch A timestamps span `2026-03-13 06:39:25..06:39:31` local time
+  - batch B timestamps span `2026-03-13 06:39:33..06:39:39` local time
+  - the pair result reported `0` mismatches across all `18` frame pairs
+- benchmark review:
+  - `Frozen Bed`
+  - must-read result: still fail
+  - hard-fail trigger seen: yes; the benchmark still does not read as an icy/crusted frozen bed with enough direct-view or probe-side identity
+  - motion read: still minimal and not decision-moving
+  - artifact or flat-band notes: the new pane/crust treatment is directionally coherent in code, but the reviewed frames still collapse toward the same generic cold shelf split instead of a memorable frozen-sheet or crusted-ice read
+  - promotion decision: blocked; do not promote this follow-up into `Frozen Tundra`

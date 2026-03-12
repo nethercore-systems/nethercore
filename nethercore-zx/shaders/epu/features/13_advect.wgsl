@@ -195,6 +195,7 @@ fn eval_advect(
     var front_erosion = 0.0;
     var front_crest = 0.0;
     var front_billow = 0.0;
+    var front_event = 0.0;
     switch variant {
         case ADVECT_VARIANT_SHEET: {
             let body = smoothstep(0.28, 0.78, body_noise * mix(0.75, 1.15, coverage));
@@ -248,7 +249,7 @@ fn eval_advect(
             );
         }
         case ADVECT_VARIANT_FRONT: {
-            let front_shift = travel * mix(1.8, 4.0, breakup);
+            let front_shift = travel * mix(2.8, 6.4, breakup);
             let horizon_band = 1.0 - smoothstep(0.18, 0.92, abs(dir.y + 0.02));
             let shelf_shape = smoothstep(
                 -half_width * 0.22 - soft_width * 0.8,
@@ -304,6 +305,14 @@ fn eval_advect(
                 ) * 0.5 + 0.5
             );
             let shear = advect_value_noise3(vec3f(q.y * 3.1 - front_shift * 3.3, q.x * 0.72 + 5.0, q.z * 0.18)) * 0.5 + 0.5;
+            let pulse = smoothstep(
+                0.24,
+                0.9,
+                advect_fbm3(
+                    q * vec3f(0.24, 2.24, 0.28) + vec3f(-front_shift * 4.6, front_shift * 0.94, 67.0),
+                    3u
+                ) * 0.5 + 0.5
+            );
             let shelf_mass = smoothstep(0.18, 0.84, occupied * 0.7 + front * 0.3);
             let wall_hold = smoothstep(0.16, 0.82, wall_depth * 0.82 + slab * 0.18);
             let leading_edge = smoothstep(
@@ -317,6 +326,13 @@ fn eval_advect(
                         + (crest * 2.0 - 1.0) * mix(0.05, 0.28, breakup)
                 )
             );
+            let event_band = occupied
+                * horizon_band
+                * wall_hold
+                * mix(0.32, 0.88, surge)
+                * mix(0.62, 1.0, leading_edge)
+                * mix(0.56, 1.0, pulse)
+                * mix(0.72, 1.0, billow);
             front_core = shelf_mass
                 * mix(0.78, 1.0, body_fill)
                 * mix(0.82, 1.0, roofline)
@@ -331,13 +347,10 @@ fn eval_advect(
             front_erosion = erosion * mix(0.64, 1.0, billow);
             front_crest = crest;
             front_billow = billow;
+            front_event = epu_saturate(pulse * 0.56 + surge * 0.34 + leading_edge * 0.24 - 0.22);
             density = max(
                 front_core * mix(0.56, 1.0, erosion) * mix(0.58, 1.0, crest),
-                occupied
-                    * horizon_band
-                    * wall_hold
-                    * mix(0.1, 0.62, surge)
-                    * mix(0.42, 1.0, leading_edge)
+                event_band * mix(0.58, 1.0, crest) * 1.18
             );
         }
         default: {
@@ -356,16 +369,17 @@ fn eval_advect(
         mix_w = epu_saturate(0.06 + bank_rim * 0.34 + bank_veining * 0.12 - bank_core * 0.14);
         alpha_scale = mix(1.08, 1.28, epu_saturate(bank_core));
     } else if (variant == ADVECT_VARIANT_FRONT) {
-        // FRONT should read as a broad scene-owning wall body first, with only a
-        // restrained upper rim and subtle internal turbulence.
+        // FRONT should carry visible transported energy inside a larger wall mass,
+        // without trying to become the primary body on its own.
         mix_w = epu_saturate(
-            0.01
+            0.012
             + front_rim * 0.12
             + front_erosion * 0.04
-            + front_crest * 0.08
-            - front_core * 0.18
+            + front_crest * 0.11
+            + front_event * 0.12
+            - front_core * 0.11
         );
-        alpha_scale = mix(1.28, 1.82, epu_saturate(front_core * 0.72 + front_billow * 0.28));
+        alpha_scale = mix(1.16, 1.82, epu_saturate(front_core * 0.4 + front_billow * 0.18 + front_event * 0.42));
     }
     let rgb = mix(instr_color_b(instr), instr_color_a(instr), mix_w);
     let intensity = u8_to_01(instr_intensity(instr));

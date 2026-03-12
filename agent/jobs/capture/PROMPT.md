@@ -2,6 +2,8 @@
 
 Use this pack for replay execution and screenshot batch collection only.
 
+Treat determinism as already solved unless a fresh regression says otherwise. The normal job here is to collect beautiful benchmark/showcase capture bundles for review, not to spend every wave re-proving the capture path.
+
 ## Read Order
 
 1. `agent/session-protocol.md`

@@ -30,6 +30,8 @@ There are four linked workstreams:
 The process should move from smaller truth-gates to larger art-validation loops, not the other way around.
 Live tuning sits ahead of replay validation when the task is local discovery rather than final proof.
 
+Default operating mode is persistent orchestration across waves. Each wave should choose the next smallest truthful slice, delegate disjoint ownership, validate through the required gate for that slice, log the result, and queue the next wave. The program is not complete until all 20 scenes are implemented, validated, reviewed, and logged, unless a real blocker is explicitly recorded.
+
 ## Source-Of-Truth Map
 
 Read these files as the durable state model:
@@ -287,6 +289,10 @@ For unattended deterministic pair capture, use:
 For queued unattended benchmark/showcase execution with durable artifacts, use:
 
 - `tools/tmp/run_epu_loop_queue.py`
+
+For long unattended supervision around that queue runner, use:
+
+- `tools/tmp/run_epu_overnight_loop.py`
 
 That helper runs the replay twice sequentially, records the exact batch windows, and compares the new screenshots pairwise.
 

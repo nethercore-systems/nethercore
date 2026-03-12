@@ -2,6 +2,8 @@
 
 Use this pack when the instruction is to own the entire EPU showcase effort end to end.
 
+Own the program as a long-running coordinator. Run workers in waves with disjoint file ownership, integrate only when needed, and keep advancing the 20-scene program until the current wave is validated and the next wave is queued. Never skip benchmark-first validation, replay review, or logging for surface/runtime changes.
+
 ## Read Order
 
 1. `agent/session-protocol.md`

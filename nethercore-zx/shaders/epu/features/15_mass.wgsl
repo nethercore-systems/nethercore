@@ -157,6 +157,20 @@ fn eval_mass(
                 0.44,
                 q.y - shelf_drop + (billow * 2.0 - 1.0) * mix(0.03, 0.16, breakup)
             );
+            let shelf_band = smoothstep(
+                0.14,
+                0.94,
+                1.0 - abs(
+                    q.y
+                    - (shelf_drop - mix(0.06, 0.18, coverage))
+                    + (billow * 2.0 - 1.0) * mix(0.02, 0.1, breakup)
+                )
+            );
+            let crown_trim = 1.0 - smoothstep(
+                mix(0.14, 0.3, coverage),
+                mix(0.44, 0.72, coverage),
+                q.y + (edge_noise * 2.0 - 1.0) * mix(0.02, 0.08, breakup)
+            );
             let nose = 1.0 - smoothstep(
                 -0.08,
                 mix(0.28, 0.88, coverage),
@@ -180,23 +194,30 @@ fn eval_mass(
                     q.y + drift * 0.16 + (edge_noise * 2.0 - 1.0) * mix(0.04, 0.18, breakup)
                 )
             );
-            let shoulder = smoothstep(0.18, 0.9, overhang) * smoothstep(0.2, 0.92, nose) * underside_hold;
-            let body_hold = mix(0.64, 1.0, belly_band) * mix(0.68, 1.0, underside_hold);
-            let recess = smoothstep(0.24, 0.92, nose) * body_hold * mix(0.72, 1.0, shoulder);
+            let shoulder = smoothstep(0.18, 0.9, overhang) * smoothstep(0.2, 0.92, nose) * underside_hold * shelf_band;
+            let body_hold = mix(0.62, 1.0, belly_band) * mix(0.66, 1.0, underside_hold) * mix(0.64, 1.0, shelf_band);
+            let recess = smoothstep(0.24, 0.92, nose) * body_hold * mix(0.72, 1.0, shoulder) * mix(0.7, 1.0, crown_trim);
             core = overhang
+                * shelf_band
                 * nose
                 * occupancy
                 * horizon_band
                 * wall_depth
                 * mix(0.64, 1.0, ribbing)
                 * body_hold
-                * mix(0.76, 1.0, shoulder);
-            rim = smoothstep(0.42, 0.96, overhang * nose) * horizon_band * wall_depth * mix(0.24, 0.58, shoulder);
+                * mix(0.76, 1.0, shoulder)
+                * mix(0.72, 1.0, crown_trim);
+            rim = smoothstep(0.42, 0.96, overhang * shelf_band * nose)
+                * horizon_band
+                * wall_depth
+                * mix(0.18, 0.46, shoulder)
+                * crown_trim;
             fade = erosion;
             density = max(
                 max(
                     core * mix(0.72, 1.0, fade),
                     overhang
+                        * shelf_band
                         * nose
                         * occupancy
                         * horizon_band
@@ -204,12 +225,13 @@ fn eval_mass(
                         * mix(0.14, 0.4, billow)
                         * body_hold
                         * mix(0.7, 1.0, shoulder)
+                        * mix(0.72, 1.0, crown_trim)
                 ),
-                overhang * horizon_band * wall_depth * recess * 0.26
+                overhang * shelf_band * horizon_band * wall_depth * recess * 0.3
             );
             density = smoothstep(0.06, 0.86, density);
-            mix_w = epu_saturate(0.004 + rim * 0.022 + fade * 0.012 - core * 0.56 - density * 0.22 - recess * 0.1);
-            alpha_scale = mix(1.46, 3.08, epu_saturate(core * 0.8 + recess * 0.2));
+            mix_w = epu_saturate(0.003 + rim * 0.016 + fade * 0.012 - core * 0.58 - density * 0.24 - recess * 0.12);
+            alpha_scale = mix(1.52, 3.18, epu_saturate(core * 0.76 + recess * 0.24));
         }
         case MASS_VARIANT_PLUME: {
             let spine = smoothstep(

@@ -10,8 +10,8 @@ jobs:
     batch_size: 18
     promotion_gate: blocked_until_front_mass_improves
     depends_on: 
-    attempts: 8
-    last_run_dir: agent\runs\20260313-053823-front-mass-body-ownership
+    attempts: 12
+    last_run_dir: agent\runs\20260313-061721-front-mass-body-ownership
     build_steps:
       - cargo test -p nethercore-zx --lib epu_capabilities
       - cargo dev
@@ -26,6 +26,10 @@ jobs:
       - latest rerun result: framing improved slightly but the front still fails and remains blocked
       - latest shared-artifact result: bounds-authority split made the wall belt darker and more centered, but the front still does not own the scene
       - latest wave-3 result: MASS_SHELF local-body hold darkened and densified the front, but it still reads as a broad shelf/wall with weak motion and a generic hemispheric probe split
+      - latest wave-4 result: stronger ADVECT_FRONT support motion made the internal event slightly livelier, but the front still lacks scene ownership and the probe still reads as a generic hemispheric split
+      - latest wave-5 result: authored Front Mass stack changes produced the first recent localized dark event in direct background, but probe ownership and total motion still fail
+      - latest wave-6 result: embedding ADVECT_FRONT under MASS_SHELF preserved the localized background event but still did not materially improve probe ownership
+      - latest wave-7 result: the MASS_SHELF probe-side pass regressed the localized event and still did not improve probe ownership, so it is a closed branch
 
   - job_id: frozen-bed-identity
     status: blocked
@@ -35,8 +39,8 @@ jobs:
     batch_size: 18
     promotion_gate: blocked_until_frozen_bed_improves
     depends_on: 
-    attempts: 4
-    last_run_dir: agent\runs\20260313-052446-frozen-bed-identity
+    attempts: 5
+    last_run_dir: agent\runs\20260313-063533-frozen-bed-identity
     build_steps:
       - cargo test -p nethercore-zx --lib epu_capabilities
       - cargo dev
@@ -49,6 +53,7 @@ jobs:
       - latest rerun result: framing improved slightly but the frozen-place read still fails and remains blocked
       - latest shared-artifact result: reused the bounds-authority split benchmark bundle; broad cold ridge improved, but frozen-surface identity still fails
       - latest wave-2 result: calmer SURFACE_GLAZE sheet continuity still failed; the benchmark remains a pale soft berm with weak icy ownership
+      - latest wave-8 result: pane/crust material tuning and stronger floor composition still collapse toward the same generic cold shelf split, so this branch is closed
       - do not reopen Frozen Tundra showcase churn first
 
   - job_id: storm-front-promotion

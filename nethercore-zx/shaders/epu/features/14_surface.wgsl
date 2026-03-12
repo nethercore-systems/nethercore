@@ -144,21 +144,50 @@ fn eval_surface(
             let low = surface_fbm(glaze_uv * 0.42, 3u);
             let veins = 1.0 - abs(surface_fbm(glaze_uv * vec2f(0.34, 1.7) + vec2f(11.0, -3.0), 3u));
             let strain = surface_fbm(glaze_uv * vec2f(0.2, 1.15) + vec2f(-6.0, 9.0), 2u);
-            let sheet = smoothstep(0.12, 0.84, low * 0.64 + strain * 0.22 + veins * 0.14);
-            let glaze = mix(low, strain, 0.26 + fracture * 0.08);
-            base = mix(glaze, sheet, 0.44 + (1.0 - fracture) * 0.18);
-            highlight = smoothstep(0.44, 0.95, graze + sheet * 0.22 + strain * 0.06)
-                * mix(0.18, 0.9, sheen)
-                * mix(0.88, 1.0, veins);
-            coverage = mix(sheet, 1.0, 0.28 + (1.0 - fracture) * 0.26);
+            let pane_vor = surface_voronoi(glaze_uv * mix(0.34, 1.02, fracture) + vec2f(5.0, -7.0));
+            let pane_body = smoothstep(0.06, 0.28, pane_vor.y + strain * 0.05);
+            let pane_seam = 1.0 - smoothstep(0.028, 0.16, pane_vor.y + (veins - 0.5) * 0.08);
+            let facet = 1.0 - abs(surface_fbm(glaze_uv * vec2f(0.58, 2.05) + vec2f(-13.0, 17.0), 3u) * 2.0 - 1.0);
+            let stress = 1.0 - abs(surface_fbm(glaze_uv * vec2f(0.22, 2.9) + vec2f(19.0, -23.0), 3u) * 2.0 - 1.0);
+            let pane_glass = smoothstep(0.12, 0.9, low * 0.34 + pane_body * 0.32 + strain * 0.18 + stress * 0.16);
+            let sheet = smoothstep(0.16, 0.9, low * 0.34 + strain * 0.16 + veins * 0.12 + pane_body * 0.2 + stress * 0.18);
+            let glaze = mix(low, strain, 0.18 + fracture * 0.08);
+            base = epu_saturate(
+                mix(glaze, pane_glass, 0.26 + (1.0 - fracture) * 0.08)
+                + sheet * 0.14
+                + pane_body * 0.22
+                + facet * 0.12
+                + stress * 0.1
+                - pane_seam * (0.18 + fracture * 0.18)
+            );
+            highlight = pow(
+                epu_saturate(graze + pane_seam * 0.14 + facet * 0.18 + stress * 0.14 + veins * 0.04),
+                mix(8.0, 20.0, sheen + fracture * 0.08)
+            ) * mix(0.16, 0.68, sheen + fracture * 0.16);
+            coverage = epu_saturate(max(sheet, pane_body * 0.94) + stress * 0.08 - pane_seam * 0.1 + facet * 0.04);
         }
         case SURFACE_VARIANT_CRUST: {
-            let vor = surface_voronoi(uv * mix(0.8, 2.0, fracture));
-            let plates = smoothstep(0.05, 0.26, vor.y + fracture * 0.12);
-            let powder = surface_fbm(uv * 1.3 + vec2f(-5.0, 9.0), 2u);
-            base = mix(powder, vor.z, 0.35);
-            highlight = smoothstep(0.72, 0.98, graze) * plates * sheen * 0.45;
-            coverage = plates * (0.7 + powder * 0.3);
+            let vor = surface_voronoi(uv * mix(0.95, 2.4, fracture) + vec2f(-3.0, 7.0));
+            let plate_body = smoothstep(0.08, 0.34, vor.y + fracture * 0.08);
+            let seam = 1.0 - smoothstep(
+                0.02,
+                0.16,
+                vor.y + (surface_noise(uv * 1.25 + vec2f(9.0, -11.0)) - 0.5) * 0.06
+            );
+            let powder = surface_fbm(uv * 1.35 + vec2f(-5.0, 9.0), 2u);
+            let ridge = 1.0 - abs(surface_fbm(uv * vec2f(0.72, 2.4) + vec2f(13.0, -17.0), 3u) * 2.0 - 1.0);
+            base = epu_saturate(
+                plate_body * 0.52
+                + powder * 0.18
+                + ridge * 0.2
+                + vor.z * 0.1
+                - seam * (0.16 + fracture * 0.18)
+            );
+            highlight = pow(
+                epu_saturate(graze + seam * 0.14 + ridge * 0.12),
+                mix(6.0, 16.0, sheen)
+            ) * mix(0.08, 0.34, sheen + fracture * 0.12);
+            coverage = epu_saturate(plate_body * 0.82 + ridge * 0.16 + powder * 0.08 - seam * 0.1);
         }
         case SURFACE_VARIANT_FACET: {
             let ridge = 1.0 - abs(surface_fbm(uv * mix(1.0, 3.0, fracture) + vec2f(13.0, 5.0), 3u));

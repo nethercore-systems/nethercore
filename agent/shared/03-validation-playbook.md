@@ -2,6 +2,8 @@
 
 Use this file for the actual build, replay, screenshot, and review loop.
 
+Treat screenshot determinism as a solved invariant unless a new engine/capture-path regression gives concrete reason to reopen it. The active loop should focus on beautiful, shippable benchmark and showcase results, not on re-proving determinism every wave.
+
 ## Final Validation Principle
 
 Final validation must use the real player with `--replay`.
@@ -33,7 +35,7 @@ EPU is not a literal feature-film skybox renderer. Validate it as a metaphor-fir
 7. Rebuild the correct binaries for the scope of change.
 8. Validate replay script syntax.
 9. Run the real player with `--replay`.
-10. Inspect the generated PNGs directly.
+10. Inspect the generated PNGs directly for beauty, place-read, ambient/reflection utility, and motion.
 11. Log findings.
 12. Only then promote healthy changes to the full showcase sweep.
 13. Fix and repeat until pass.
@@ -79,7 +81,7 @@ python tools/epu_workbench.py select-scene --mode benchmark --scene-index 0
 python tools/epu_workbench.py capture --label benchmark-0-baseline
 ```
 
-For unattended deterministic benchmark pairs from the repo root:
+For unattended benchmark/showcase capture bundles from the repo root:
 
 ```bash
 python tools/tmp/run_epu_replay_pair.py C:\Users\rdave\AppData\Roaming\Nethercore\data\screenshots target\release\nethercore-zx.exe examples\3-inspectors\epu-showcase\epu-showcase.nczx examples\3-inspectors\epu-showcase\screenshot-benchmarks-anim3.ncrs 18 --cwd D:\Development\nethercore-project\nethercore
@@ -130,15 +132,15 @@ Record which path was used. Do not describe a capture as authoritative if the pl
 - Visible artifacts or obvious rendering errors are automatic fails, even if the overall art direction is strong.
 - If a preset can be made to loop cleanly with phase-driven motion, prefer that over one-shot or chaotic motion.
 - Treat loopability as a validation target, not an assumption. When `param_d` or phase-driven motion is authored to loop, verify the result and escalate any shared failure as a likely engine or render-path bug.
-- Baseline expectation is deterministic screenshots across repeated runs from the same rebuilt binaries and ROM. If repeated runs diverge, stop and log a renderer or capture bug.
+- Baseline expectation is that capture determinism is already solved. Do not spend routine beauty waves re-proving it unless a fresh regression gives concrete reason to suspect the capture path again.
 - Treat looping or repeated patterning as a defect category and name it directly in review notes.
 - Treat giant flat bands or broad solid-color fields as a defect category unless the brief explicitly calls for a banded feature read.
 - If an artifact looks engine-driven or persists across presets, opcodes, or domains, log a suspected EPU/rendering bug and stop content-only churn until isolated.
 - If a preset looks borderline, treat it as failing until proven otherwise.
-- For benchmark or showcase determinism checks, compare content-matched capture windows. Do not blindly compare the latest `72` or `36` PNGs if benchmark and full-showcase runs were interleaved.
-- `tools/tmp/compare_epu_screenshot_batches.py` defaults to the latest two batches only. Use `--a-first`, `--b-first`, and `--batch-size` when captures are interleaved or when reviewing benchmark windows.
-- `tools/tmp/run_epu_replay_pair.py` is the preferred unattended path for deterministic pair capture because it runs both replays sequentially and emits the exact batch windows automatically.
-- `tools/tmp/run_epu_loop_queue.py` is the preferred unattended path when you want queue progression plus a durable `agent/runs/*` artifact bundle instead of a one-off pair.
+- If you do need to reopen capture determinism, compare content-matched capture windows. Do not blindly compare the latest `72` or `36` PNGs if benchmark and full-showcase runs were interleaved.
+- `tools/tmp/compare_epu_screenshot_batches.py` defaults to the latest two batches only. Use `--a-first`, `--b-first`, and `--batch-size` when captures are interleaved or when reopening a capture regression.
+- `tools/tmp/run_epu_replay_pair.py` remains the preferred path when you explicitly need a paired capture diagnostic.
+- `tools/tmp/run_epu_loop_queue.py` is the preferred unattended path for routine beauty-focused benchmark/showcase progression because it leaves a durable `agent/runs/*` artifact bundle for review.
 - `tools/epu_workbench.py` is the preferred local path when the goal is rapid EPU discovery, scripted sweeps, or candidate export rather than authoritative replay promotion.
 - Do not declare a pass from code inspection alone.
 

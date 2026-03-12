@@ -26,7 +26,7 @@ pub static BENCHMARK_ANIM_SPEEDS: [[u8; 8]; BENCHMARK_COUNT] = [
     [0, 0, 0, 3, 0, 0, 0, 0], // Region Isolation
     [0, 0, 4, 3, 4, 2, 0, 0], // Projection Bay
     [0, 0, 4, 0, 0, 0, 0, 0], // Transport Sweep
-    [0, 0, 2, 0, 4, 0, 0, 0], // Front Mass
+    [0, 0, 6, 2, 0, 0, 0, 0], // Front Mass
     [0, 0, 0, 1, 4, 0, 0, 0], // Frozen Bed
 ];
 
@@ -364,22 +364,22 @@ pub(super) const BENCHMARK_FRONT_MASS: Benchmark = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             ADVECT_FRONT,
-            0x9dadb8,
-            0x384753,
+            0x93a4af,
+            0x22303a,
         ),
-        lo(176, 56, 132, 96, 0, DIR_LEFT, 10, 0),
+        lo(220, 52, 176, 136, 0, DIR_LEFT, 13, 0),
     ],
     [
         hi_meta(
             OP_MASS,
             REGION_SKY | REGION_WALLS,
-            BLEND_LERP,
+            BLEND_MULTIPLY,
             DOMAIN_DIRECT3D,
-            MASS_BANK,
-            0x667783,
-            0x060a0f,
+            MASS_SHELF,
+            0x596a75,
+            0x04080c,
         ),
-        lo(248, 104, 212, 82, 0, DIR_LEFT, 15, 0),
+        lo(255, 96, 228, 64, 0, DIR_LEFT, 15, 0),
     ],
     [
         hi_meta(
@@ -433,10 +433,10 @@ pub(super) const BENCHMARK_FROZEN_BED: Benchmark = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             MASS_BANK,
-            0xd6e0e6,
-            0x425563,
+            0xc4d2da,
+            0x334450,
         ),
-        lo(232, 84, 188, 72, 0, DIR_UP, 13, 0),
+        lo(212, 84, 188, 72, 0, DIR_UP, 11, 0),
     ],
     [
         hi(
@@ -444,10 +444,10 @@ pub(super) const BENCHMARK_FROZEN_BED: Benchmark = [
             REGION_FLOOR,
             BLEND_LERP,
             SURFACE_GLAZE,
-            0xd7e2e8,
-            0x4f6474,
+            0xd1dde6,
+            0x324452,
         ),
-        lo(176, 66, 152, 40, 0, DIR_UP, 12, 0),
+        lo(200, 72, 198, 76, 0, DIR_UP, 14, 0),
     ],
     [
         hi(
@@ -455,10 +455,10 @@ pub(super) const BENCHMARK_FROZEN_BED: Benchmark = [
             REGION_FLOOR,
             BLEND_MULTIPLY,
             SURFACE_CRUST,
-            0xc3d0d8,
-            0x31404c,
+            0xb2c1cb,
+            0x1f2b35,
         ),
-        lo(152, 46, 220, 14, 18, DIR_UP, 10, 0),
+        lo(188, 54, 236, 22, 18, DIR_UP, 12, 0),
     ],
     [
         hi_meta(
@@ -467,10 +467,10 @@ pub(super) const BENCHMARK_FROZEN_BED: Benchmark = [
             BLEND_SCREEN,
             DOMAIN_DIRECT3D,
             ADVECT_SPINDRIFT,
-            0xf6fbff,
-            0xc0d0da,
+            0xe8f1f7,
+            0x9db0bc,
         ),
-        lo(180, 34, 86, 144, 0, DIR_RIGHT, 10, 0),
+        lo(148, 34, 86, 144, 0, DIR_RIGHT, 8, 0),
     ],
     [0, 0],
     [0, 0],

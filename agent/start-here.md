@@ -4,6 +4,8 @@ This is the single restart entrypoint for the entire EPU improvement program.
 
 If a session pauses and resumes later, start here again. Do not trust chat memory over the files listed here.
 
+Treat this as a long-running orchestration program, not a one-shot task. Keep running in validated waves across sessions until the full 20-scene program is complete, or a real blocker/user intervention stops progress. Do not short-circuit benchmark-first, replay review, or logging discipline just because one local patch looks promising.
+
 ## Mission
 
 Drive the EPU system and the EPU showcase to S+ quality with a benchmark-first workflow:
@@ -111,6 +113,8 @@ These files carry long-term program state and must stay current:
   Restartable unattended queue for benchmark/showcase jobs.
 - `tools/tmp/run_epu_loop_queue.py`
   Queue executor that turns the unattended queue into durable `agent/runs/*` bundles.
+- `tools/tmp/run_epu_overnight_loop.py`
+  Overnight supervisor that keeps the unattended queue alive for long sessions with heartbeat and idle-stop behavior.
 - `tools/epu_workbench.py`
   Thin local CLI for the live EPU workbench control surface.
 
