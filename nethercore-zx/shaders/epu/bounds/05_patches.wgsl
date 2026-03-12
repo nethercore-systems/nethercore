@@ -270,5 +270,5 @@ fn eval_patches(
     }
 
     // PATCHES is an enclosure source: return radiance sample + output regions
-    return BoundsResult(LayerSample(rgb, epu_saturate(total_w)), output_regions);
+    return BoundsResult(LayerSample(rgb, epu_saturate(total_w)), output_regions, 1.0);
 }

@@ -1130,9 +1130,14 @@ extern "C" {
     /// * `config_ptr` — Pointer to 16 u64 values (128 bytes total) in WASM memory
     ///
     /// # Configuration Layout
-    /// Each environment is exactly 8 x 128-bit instructions (each stored as [hi, lo]):
-    /// - Slots 0-3: Bounds layers (`0x01..0x07`)
-    /// - Slots 4-7: Radiance/feature layers (`0x08..0x1F`)
+    /// Each environment is exactly 8 x 128-bit instructions (each stored as [hi, lo]).
+    /// Slot position is author-defined; the runtime evaluates all 8 instructions
+    /// sequentially in authored order.
+    ///
+    /// Bounds carriers (`0x01..0x07`) establish or reshape region weights. Feature
+    /// carriers (`0x08+`) consume the current regions for readable motifs, lighting,
+    /// and motion. A common cadence is `BOUNDS -> FEATURES -> BOUNDS -> FEATURES`,
+    /// but it is not required.
     ///
     /// # Instruction Bit Layout (per 128-bit = 2 x u64)
     /// ```text
@@ -1157,18 +1162,28 @@ extern "C" {
     ///
     /// # Opcodes (common)
     /// - 0x00: NOP (disable layer)
-    /// - 0x01: RAMP (bounds gradient)
-    /// - 0x02: SECTOR (bounds modifier)
-    /// - 0x03: SILHOUETTE (bounds modifier)
-    /// - 0x04: SPLIT (bounds source)
-    /// - 0x05: CELL (bounds source)
-    /// - 0x06: PATCHES (bounds source)
-    /// - 0x07: APERTURE (bounds modifier)
-    /// - 0x08: DECAL (sharp SDF shape)
-    /// - 0x09: GRID (repeating lines/panels)
-    /// - 0x0A: SCATTER (point field)
-    /// - 0x0B: FLOW (animated noise/streaks)
-    /// - 0x0C..0x13: radiance opcodes (TRACE/VEIL/ATMOSPHERE/PLANE/CELESTIAL/PORTAL/LOBE_RADIANCE/BAND_RADIANCE)
+    /// - 0x01: RAMP (bounds carrier)
+    /// - 0x02: SECTOR (bounds shaper)
+    /// - 0x03: SILHOUETTE (bounds carrier)
+    /// - 0x04: SPLIT (bounds carrier)
+    /// - 0x05: CELL (bounds carrier)
+    /// - 0x06: PATCHES (bounds carrier)
+    /// - 0x07: APERTURE (bounds shaper)
+    /// - 0x08: DECAL (feature shape)
+    /// - 0x09: GRID (feature pattern)
+    /// - 0x0A: SCATTER (feature speckle field)
+    /// - 0x0B: FLOW (feature drift/streak field)
+    /// - 0x0C: TRACE (feature line/crack field)
+    /// - 0x0D: VEIL (feature curtain/ribbon field)
+    /// - 0x0E: ATMOSPHERE (feature atmospheric field)
+    /// - 0x0F: PLANE (feature surface/ground field)
+    /// - 0x10: CELESTIAL (feature sun/moon/planet body)
+    /// - 0x11: PORTAL (feature local frame/vortex field)
+    /// - 0x12: LOBE (feature directional glow)
+    /// - 0x13: BAND (feature band/accent)
+    /// - 0x14: MOTTLE (feature breakup/base variation)
+    /// - 0x15: ADVECT (feature broad transport/mass motion)
+    /// - 0x16: SURFACE (feature material/surface response)
     ///
     /// # Blend Modes
     /// - 0: ADD (dst + src * a)
@@ -1203,7 +1218,8 @@ extern "C" {
     /// # Notes
     /// - The EPU compute pass runs automatically before rendering
     /// - To set up multiple environments in a frame: call `environment_index(env_id)`, then `epu_set(config_ptr)`
-    /// - Determinism: the EPU has no host-managed time; animate by changing instruction parameters from the game
+    /// - Determinism: the EPU has no host-managed time; animate by changing only
+    ///   parameters the authored opcode/variant actually uses for motion
     pub fn epu_set(config_ptr: *const u64);
 
     /// Draw the environment background for the current viewport/pass.

@@ -139,8 +139,10 @@ pub const OP_SECTOR: u64 = 0x02;
 pub const OP_SILHOUETTE: u64 = 0x03;
 
 /// SPLIT - Planar cut bounds
-/// Variants: 0=HALF, 1=WEDGE, 2=CORNER, 3=BANDS, 4=CROSS, 5=PRISM
+/// Variants: 0=HALF, 1=WEDGE, 2=CORNER, 3=BANDS, 4=CROSS, 5=PRISM, 6=TIER, 7=FACE
 pub const OP_SPLIT: u64 = 0x04;
+pub const SPLIT_TIER: u64 = 6;
+pub const SPLIT_FACE: u64 = 7;
 
 /// CELL - Voronoi/mosaic cells
 /// Variants: 0=GRID, 1=HEX, 2=VORONOI, 3=RADIAL, 4=SHATTER, 5=BRICK
@@ -156,7 +158,7 @@ pub const OP_PATCHES: u64 = 0x06;
 pub const OP_APERTURE: u64 = 0x07;
 
 // =============================================================================
-// Radiance Opcodes (0x0C-0x13)
+// Feature Opcodes (0x0C-0x17)
 // =============================================================================
 
 /// TRACE - Line/crack patterns (lightning, cracks, lead lines, filaments)
@@ -191,6 +193,22 @@ pub const OP_LOBE: u64 = 0x12;
 
 /// BAND - Horizon band
 pub const OP_BAND: u64 = 0x13;
+
+/// MOTTLE - Abstract texture breakup / base variation
+/// Variants: 0=SOFT, 1=GRAIN, 2=RIDGE, 3=DAPPLE
+pub const OP_MOTTLE: u64 = 0x14;
+
+/// ADVECT - Broad transport / sheet motion carrier
+/// Variants: 0=SHEET, 1=SPINDRIFT, 2=SQUALL, 3=MIST, 4=BANK, 5=FRONT
+pub const OP_ADVECT: u64 = 0x15;
+
+/// SURFACE - Broad material / surface response carrier
+/// Variants: 0=GLAZE, 1=CRUST, 2=FACET, 3=DUSTED
+pub const OP_SURFACE: u64 = 0x16;
+
+/// MASS - Broad scene-owning body carrier
+/// Variants: 0=BANK, 1=SHELF, 2=PLUME, 3=VEIL
+pub const OP_MASS: u64 = 0x17;
 
 // =============================================================================
 // Domain ID Constants (for meta5 encoding)
@@ -277,6 +295,32 @@ pub const PLANE_WATER: u64 = 4;
 pub const PLANE_GRATING: u64 = 5;
 pub const PLANE_GRASS: u64 = 6;
 pub const PLANE_PAVEMENT: u64 = 7;
+
+// MOTTLE variants
+pub const MOTTLE_SOFT: u64 = 0;
+pub const MOTTLE_GRAIN: u64 = 1;
+pub const MOTTLE_RIDGE: u64 = 2;
+pub const MOTTLE_DAPPLE: u64 = 3;
+
+// ADVECT variants
+pub const ADVECT_SHEET: u64 = 0;
+pub const ADVECT_SPINDRIFT: u64 = 1;
+pub const ADVECT_SQUALL: u64 = 2;
+pub const ADVECT_MIST: u64 = 3;
+pub const ADVECT_BANK: u64 = 4;
+pub const ADVECT_FRONT: u64 = 5;
+
+// SURFACE variants
+pub const SURFACE_GLAZE: u64 = 0;
+pub const SURFACE_CRUST: u64 = 1;
+pub const SURFACE_FACET: u64 = 2;
+pub const SURFACE_DUSTED: u64 = 3;
+
+// MASS variants
+pub const MASS_BANK: u64 = 0;
+pub const MASS_SHELF: u64 = 1;
+pub const MASS_PLUME: u64 = 2;
+pub const MASS_VEIL: u64 = 3;
 
 // CELESTIAL variants
 pub const CELESTIAL_MOON: u64 = 0;

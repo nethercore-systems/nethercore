@@ -1,13 +1,13 @@
 //! EPU Debug Panel
 //!
 //! Provides an egui panel for inspecting and debugging the Environment Processing Unit (EPU).
-//! The EPU handles environmental rendering effects like atmosphere, terrain bounds, and radiance.
+//! The EPU handles environmental rendering effects like atmosphere, terrain bounds, and feature layers.
 //!
 //! Toggle with ` (backtick/grave) when running the player.
 //!
 //! # Features
 //!
-//! - Opcode browser with categorization (Bounds vs Radiance)
+//! - Opcode browser with categorization (Bounds vs Features)
 //! - Semantic field editor with metadata-driven controls
 //! - Layer-by-layer editing with per-opcode UI
 //! - Variant/Domain selectors when applicable
@@ -27,8 +27,13 @@ pub use editor::{EpuEditor, LayerEditState};
 pub use isolation::{LayerCategory, LayerContribution, LayerIsolationState};
 pub use presets::{EpuPreset, PresetManager, PresetUiState};
 
+use crate::debug::epu_capabilities;
 use crate::debug::epu_meta_gen::{self, FieldSpec, MapKind, OPCODE_COUNT, OPCODES, OpcodeKind};
 use crate::graphics::epu::EpuConfig;
+use nethercore_core::workbench::{
+    EpuWorkbenchConfig, EpuWorkbenchExportOptions, EpuWorkbenchExportResult, EpuWorkbenchMetadata,
+    EpuWorkbenchViewState,
+};
 
 /// View mode for the debug panel
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
@@ -107,7 +112,101 @@ impl EpuDebugPanel {
 
     /// Get the debugger's override config (from editor state)
     pub fn get_override_config(&self) -> EpuConfig {
-        self.editor.export_config()
+        self.editor.export_render_config()
+    }
+
+    pub fn export_workbench_config(&self) -> EpuWorkbenchConfig {
+        self.editor.export_workbench_config()
+    }
+
+    pub fn load_snapshot_env(&mut self, env_id: u32) -> bool {
+        if let Some(config) = self.snapshot_configs.get(&env_id) {
+            self.editor.load_config(config);
+            self.editing_env_id = Some(env_id);
+            self.view_mode = PanelView::Editor;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn load_workbench_config(&mut self, config: &EpuWorkbenchConfig) {
+        self.editor.load_workbench_config(config);
+        self.view_mode = PanelView::Editor;
+        self.editing_env_id = Some(0);
+    }
+
+    pub fn workbench_view(&self) -> EpuWorkbenchViewState {
+        EpuWorkbenchViewState {
+            selected_layer: Some(self.editor.selected_layer),
+            isolated_layer: self.editor.isolated_layer(),
+            clear_layer_isolation: Some(false),
+            locked: Some(self.locked),
+            show_benchmarks: None,
+            scene_index: None,
+            show_ui: None,
+            show_probe: None,
+            show_background: None,
+        }
+    }
+
+    pub fn set_workbench_view(&mut self, view: &EpuWorkbenchViewState) {
+        if let Some(selected_layer) = view.selected_layer {
+            self.editor.selected_layer = selected_layer.min(7);
+        }
+        if view.clear_layer_isolation.unwrap_or(false) {
+            self.editor.isolation.show_all();
+        } else if let Some(isolated_layer) = view.isolated_layer {
+            self.editor.isolation.show_all();
+            self.editor.isolation.toggle_solo(isolated_layer.min(7));
+        }
+        if let Some(locked) = view.locked {
+            self.locked = locked;
+        }
+    }
+
+    pub fn export_workbench(
+        &self,
+        options: &EpuWorkbenchExportOptions,
+    ) -> EpuWorkbenchExportResult {
+        let include_json = options.include_json_text || options.label.is_some();
+        let include_rust = options.include_rust_text || options.rust_const_name.is_some();
+
+        let json_text = include_json.then(|| {
+            let mut preset = presets::EpuPreset::new(
+                options
+                    .label
+                    .clone()
+                    .unwrap_or_else(|| "epu-workbench".to_string()),
+                &self.editor.layers,
+            );
+            if let Some(env_id) = self.editing_env_id {
+                preset.description = Some(format!("Loaded from env {}", env_id));
+            }
+            preset.to_json().unwrap_or_else(|_| "{}".to_string())
+        });
+
+        let rust_text = include_rust.then(|| {
+            let const_name = options
+                .rust_const_name
+                .clone()
+                .unwrap_or_else(|| "EPU_LAYERS".to_string());
+            format_rust_layers(&const_name, &self.editor.export_config())
+        });
+
+        EpuWorkbenchExportResult {
+            json_path: None,
+            rust_path: None,
+            json_text,
+            rust_text,
+        }
+    }
+
+    pub fn workbench_metadata(&self) -> EpuWorkbenchMetadata {
+        let opcode_names = (0..32u8)
+            .map(|opcode| epu_meta_gen::opcode_name(opcode).to_string())
+            .collect();
+        EpuWorkbenchMetadata { opcode_names }
     }
 
     /// Toggle panel visibility
@@ -391,8 +490,8 @@ impl EpuDebugPanel {
             }
         });
 
-        // Radiance opcodes
-        ui.collapsing("Radiance", |ui| {
+        // Feature opcodes
+        ui.collapsing("Features", |ui| {
             for (code, info_opt) in OPCODES.iter().enumerate() {
                 if let Some(info) = info_opt {
                     if info.kind == OpcodeKind::Radiance {
@@ -433,7 +532,7 @@ impl EpuDebugPanel {
                 "({})",
                 match info.kind {
                     OpcodeKind::Bounds => "Bounds",
-                    OpcodeKind::Radiance => "Radiance",
+                    OpcodeKind::Radiance => "Feature",
                 }
             ));
         });
@@ -469,6 +568,60 @@ impl EpuDebugPanel {
                 }
             });
         }
+
+        let base_report = epu_capabilities::base_report(opcode);
+        let variants = epu_meta_gen::VARIANTS[opcode as usize];
+        let domains = epu_meta_gen::DOMAINS[opcode as usize];
+        let has_variant_notes = variants.iter().enumerate().any(|(variant_id, _)| {
+            !epu_capabilities::variant_report(opcode, variant_id as u8).is_empty()
+        });
+        let has_domain_notes = domains.iter().enumerate().any(|(domain_id, _)| {
+            !epu_capabilities::domain_report(opcode, domain_id as u8).is_empty()
+        });
+
+        if !base_report.is_empty() || has_variant_notes || has_domain_notes {
+            ui.collapsing("Capability Guidance", |ui| {
+                if !base_report.is_empty() {
+                    epu_capabilities::render_report(ui, &base_report);
+                }
+
+                if has_variant_notes {
+                    if !base_report.is_empty() {
+                        ui.separator();
+                    }
+                    ui.small("Variant highlights");
+                    for (variant_id, name) in variants.iter().enumerate() {
+                        let report = epu_capabilities::variant_report(opcode, variant_id as u8);
+                        if report.is_empty() {
+                            continue;
+                        }
+
+                        ui.label(egui::RichText::new(*name).strong());
+                        ui.indent(format!("variant_hint_{}_{}", opcode, variant_id), |ui| {
+                            epu_capabilities::render_report(ui, &report);
+                        });
+                    }
+                }
+
+                if has_domain_notes {
+                    if !base_report.is_empty() || has_variant_notes {
+                        ui.separator();
+                    }
+                    ui.small("Domain highlights");
+                    for (domain_id, name) in domains.iter().enumerate() {
+                        let report = epu_capabilities::domain_report(opcode, domain_id as u8);
+                        if report.is_empty() {
+                            continue;
+                        }
+
+                        ui.label(egui::RichText::new(*name).strong());
+                        ui.indent(format!("domain_hint_{}_{}", opcode, domain_id), |ui| {
+                            epu_capabilities::render_report(ui, &report);
+                        });
+                    }
+                }
+            });
+        }
     }
 
     /// Render a single field specification
@@ -496,7 +649,7 @@ impl EpuDebugPanel {
     fn render_config_summary(&self, ui: &mut egui::Ui, config: &EpuConfig) {
         // Count active layers (non-NOP)
         let mut bounds_count = 0;
-        let mut radiance_count = 0;
+        let mut feature_count = 0;
 
         for (slot, layer) in config.layers.iter().enumerate() {
             let hi = layer[0];
@@ -507,34 +660,76 @@ impl EpuDebugPanel {
                 if opcode <= 0x07 {
                     bounds_count += 1;
                 } else {
-                    radiance_count += 1;
+                    feature_count += 1;
                 }
 
                 // Show layer info
                 let opcode_name = epu_meta_gen::opcode_name(opcode);
                 let region = ((hi >> 56) & 0x7) as u8;
                 let blend = ((hi >> 53) & 0x7) as u8;
+                let meta_hi = ((hi >> 49) & 0xF) as u8;
+                let meta_lo = ((hi >> 48) & 0x1) as u8;
+                let meta5 = (meta_hi << 1) | meta_lo;
+                let variant_id = meta5 & 0x07;
+                let domain_id = (meta5 >> 3) & 0x03;
+                let variant_name = epu_meta_gen::variant_name(opcode, variant_id);
+                let domain_name = epu_meta_gen::domain_name(opcode, domain_id);
+                let report = epu_capabilities::report_for(opcode, variant_id, domain_id);
+                let warning_count = report.warning_count();
 
                 ui.horizontal(|ui| {
                     ui.label(format!("Slot {}: ", slot));
                     ui.strong(format!("0x{:02X} {}", opcode, opcode_name));
+                    if warning_count > 0 {
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "{} warning{}",
+                                warning_count,
+                                if warning_count == 1 { "" } else { "s" }
+                            ))
+                            .small()
+                            .color(egui::Color32::from_rgb(255, 140, 140)),
+                        );
+                    }
                 });
 
                 ui.indent(format!("slot_{}_details", slot), |ui| {
                     ui.label(format!("Region: {:03b}", region));
                     ui.label(format!("Blend: {}", blend));
+                    if !variant_name.is_empty() {
+                        ui.label(format!("Variant: {}", variant_name));
+                    }
+                    if !domain_name.is_empty() {
+                        ui.label(format!("Domain: {}", domain_name));
+                    }
+                    if !report.is_empty() {
+                        epu_capabilities::render_compact_report(ui, &report, 1, 2);
+                    }
                 });
             }
         }
 
         ui.separator();
         ui.label(format!(
-            "Active layers: {} bounds, {} radiance",
-            bounds_count, radiance_count
+            "Active layers: {} bounds, {} features",
+            bounds_count, feature_count
         ));
 
         // Note about full instruction dump (future feature)
         ui.separator();
         ui.small("Full instruction editing coming in future update");
     }
+}
+
+fn format_rust_layers(const_name: &str, config: &EpuConfig) -> String {
+    let mut output = String::new();
+    output.push_str(&format!("const {}: [[u64; 2]; 8] = [\n", const_name));
+    for layer in config.layers {
+        output.push_str(&format!(
+            "    [0x{:016X}, 0x{:016X}],\n",
+            layer[0], layer[1]
+        ));
+    }
+    output.push_str("];\n");
+    output
 }

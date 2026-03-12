@@ -13,6 +13,10 @@ use winit::window::Window;
 
 use crate::debug::DebugStat;
 use crate::wasm::WasmGameContext;
+use crate::workbench::{
+    EpuWorkbenchCaptureCrops, EpuWorkbenchConfig, EpuWorkbenchExportOptions,
+    EpuWorkbenchExportResult, EpuWorkbenchLayerPatch, EpuWorkbenchMetadata, EpuWorkbenchViewState,
+};
 
 // Re-export ConsoleSpecs from shared crate for convenience
 pub use nethercore_shared::ConsoleSpecs;
@@ -262,6 +266,77 @@ pub trait Console: Send + 'static {
     /// Default implementation does nothing.
     fn sync_debug_ui_state(&mut self, _state: &mut Self::State) {
         // Default: no-op for consoles without debug UI state sync
+    }
+
+    /// Whether this console supports the local EPU workbench API.
+    fn has_epu_workbench(&self) -> bool {
+        false
+    }
+
+    /// Get the current editor config exposed by the console workbench.
+    fn epu_workbench_config(&self) -> Option<EpuWorkbenchConfig> {
+        None
+    }
+
+    /// Get console metadata helpful for workbench clients.
+    fn epu_workbench_metadata(&self) -> EpuWorkbenchMetadata {
+        EpuWorkbenchMetadata::default()
+    }
+
+    /// Load the current frame snapshot env config into the workbench editor.
+    fn epu_workbench_load_snapshot_env(&mut self, _env_id: u32) -> Result<()> {
+        anyhow::bail!("console does not support EPU workbench snapshot loading")
+    }
+
+    /// Replace the full editor config.
+    fn epu_workbench_set_config(&mut self, _config: &EpuWorkbenchConfig) -> Result<()> {
+        anyhow::bail!("console does not support EPU workbench config editing")
+    }
+
+    /// Patch a single editor layer.
+    fn epu_workbench_patch_layer(
+        &mut self,
+        _layer_index: usize,
+        _patch: &EpuWorkbenchLayerPatch,
+    ) -> Result<()> {
+        anyhow::bail!("console does not support EPU workbench layer editing")
+    }
+
+    /// Apply live view state changes.
+    fn epu_workbench_set_view(&mut self, _view: &EpuWorkbenchViewState) -> Result<()> {
+        anyhow::bail!("console does not support EPU workbench view editing")
+    }
+
+    /// Get the current live view state.
+    fn epu_workbench_view(&self) -> Option<EpuWorkbenchViewState> {
+        None
+    }
+
+    /// Export the current editor config to durable formats.
+    fn epu_workbench_export(
+        &self,
+        _options: &EpuWorkbenchExportOptions,
+    ) -> Result<EpuWorkbenchExportResult> {
+        anyhow::bail!("console does not support EPU workbench export")
+    }
+
+    /// Suggested default crops for background vs probe review.
+    fn epu_workbench_capture_crops(&self, width: u32, height: u32) -> EpuWorkbenchCaptureCrops {
+        let probe = EpuWorkbenchCaptureCrops {
+            background: crate::workbench::EpuWorkbenchCrop {
+                x: 0,
+                y: 0,
+                width,
+                height: height / 2,
+            },
+            probe: crate::workbench::EpuWorkbenchCrop {
+                x: width / 3,
+                y: height / 6,
+                width: width / 3,
+                height: height * 2 / 3,
+            },
+        };
+        probe
     }
 }
 

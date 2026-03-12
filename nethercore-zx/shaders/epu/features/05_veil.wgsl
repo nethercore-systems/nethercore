@@ -1,7 +1,7 @@
 // @epu_meta_begin
 // opcode = 0x0D
 // name = VEIL
-// kind = radiance
+// kind = feature
 // variants = [CURTAINS, PILLARS, LASER_BARS, RAIN_WALL, SHARDS]
 // domains = [DIRECT3D, AXIS_CYL, AXIS_POLAR, TANGENT_LOCAL]
 // field intensity = { label="brightness", map="u8_01" }
@@ -14,7 +14,7 @@
 // ============================================================================
 // VEIL - Curtain/Ribbon Effects (Curtains, Pillars, Laser Bars, Rain Wall, Shards)
 // Opcode: 0x0D
-// Role: Radiance (additive feature layer)
+// Role: Feature layer (additive emissive/detail carrier)
 //
 // Packed fields:
 //   color_a: Ribbon/bar color (RGB24)
@@ -24,16 +24,17 @@
 //   param_b: Thickness (0..255 -> 0.002..0.5/ribbon_count, scales with spacing)
 //   param_c: Curvature/sway amplitude (0..255 -> 0..1)
 //   param_d: Phase (0..255 -> 0..1, used by RAIN_WALL for animation)
-//   direction: Cylinder/polar axis (oct-u16)
+//   direction: Sheet/cylinder/polar axis or tangent-local center (oct-u16)
 //   alpha_a: Ribbon alpha (0..15 -> 0..1)
 //   alpha_b: Glow alpha (0..15 -> 0..1)
 //
 // Meta (via meta5):
-//   domain_id: 1 AXIS_CYL, 2 AXIS_POLAR, 3 TANGENT_LOCAL
+//   domain_id: 0 DIRECT3D, 1 AXIS_CYL, 2 AXIS_POLAR, 3 TANGENT_LOCAL
 //   variant_id: 0 CURTAINS, 1 PILLARS, 2 LASER_BARS, 3 RAIN_WALL, 4 SHARDS
 // ============================================================================
 
 // Domain IDs for VEIL
+const VEIL_DOMAIN_DIRECT3D: u32 = 0u;      // Planar world-space sheet chart around axis
 const VEIL_DOMAIN_AXIS_CYL: u32 = 1u;      // Cylindrical (azimuth, height)
 const VEIL_DOMAIN_AXIS_POLAR: u32 = 2u;    // Polar (angle, radius from axis)
 const VEIL_DOMAIN_TANGENT_LOCAL: u32 = 3u; // Tangent-local (gnomonic projection)
@@ -42,7 +43,7 @@ const VEIL_DOMAIN_TANGENT_LOCAL: u32 = 3u; // Tangent-local (gnomonic projection
 const VEIL_VARIANT_CURTAINS: u32 = 0u;     // Soft edges, variable thickness, transparency gradient
 const VEIL_VARIANT_PILLARS: u32 = 1u;      // Hard edges, uniform thickness, pole fade
 const VEIL_VARIANT_LASER_BARS: u32 = 2u;   // Very thin, bright core with wide glow
-const VEIL_VARIANT_RAIN_WALL: u32 = 3u;    // Many thin bars with v-scroll, flicker
+const VEIL_VARIANT_RAIN_WALL: u32 = 3u;    // Phase-driven falling streak sheet
 const VEIL_VARIANT_SHARDS: u32 = 4u;       // Irregular thickness, sharp edges, crystalline
 
 // Deterministic hash for ribbon variation (2D -> 3D)
@@ -58,6 +59,15 @@ fn veil_hash11(p: f32) -> f32 {
     p2 *= p2 + 33.33;
     p2 *= p2 + p2;
     return fract(p2);
+}
+
+// Map direction to a planar world-space sheet chart around the chosen axis
+fn veil_direct3d_uv(dir: vec3f, axis: vec3f) -> vec2f {
+    let up = select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(axis.y) > 0.9);
+    let t = normalize(cross(up, axis));
+    let u = dot(dir, t) * 0.5 + 0.5;
+    let v = dot(dir, axis);
+    return vec2f(u, v);
 }
 
 // Map direction to cylindrical UV with axis
@@ -239,7 +249,7 @@ fn eval_veil_laser_bars(
     return vec3f(min_dist, ribbon_mask, glow);
 }
 
-// RAIN_WALL variant: many thin bars with per-bar phase offsets, slight flicker
+// RAIN_WALL variant: many thin falling streaks with per-bar phase offsets and wind slant
 fn eval_veil_rain_wall(
     u: f32,
     v: f32,
@@ -371,13 +381,17 @@ fn eval_veil(
     let phase = u8_to_01(instr_d(instr));
 
     // Decode axis direction
-    let axis = decode_dir16(instr_dir16(instr));
+    let axis16 = instr_dir16(instr);
+    let axis = select(vec3f(0.0, 1.0, 0.0), decode_dir16(axis16), axis16 != 0u);
 
     // Map to 2D chart based on domain
     var uv = vec2f(0.0);
     var domain_w = 1.0;
 
     switch domain_id {
+        case VEIL_DOMAIN_DIRECT3D: {
+            uv = veil_direct3d_uv(dir, axis);
+        }
         case VEIL_DOMAIN_AXIS_CYL: {
             uv = veil_cyl_uv(dir, axis);
             // Pole fade at v near -1 or 1 (poles of cylinder)
@@ -394,9 +408,8 @@ fn eval_veil(
             domain_w = result.z;
         }
         default: {
-            // Default to AXIS_CYL with Y-up
-            uv = veil_cyl_uv(dir, vec3f(0.0, 1.0, 0.0));
-            domain_w = smoothstep(0.95, 0.8, abs(uv.y));
+            // Unknown domains: no output.
+            return LayerSample(vec3f(0.0), 0.0);
         }
     }
 

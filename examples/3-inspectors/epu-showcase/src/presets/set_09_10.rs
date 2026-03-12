@@ -100,37 +100,33 @@ pub(super) const PRESET_SKY_RUINS: [[u64; 2]; 8] = [
 // -----------------------------------------------------------------------------
 // Preset 10: "Combat Lab" - Sterile training facility
 // -----------------------------------------------------------------------------
-// Goal: harsh fluorescent bounds + grid floor + holographic UI cards.
-// Animation: scanning grid + pulsing HUD + shimmering hologram.
+// Goal: harsh fluorescent bounds + grid floor + a world-anchored projection bay.
+// Animation: scanning grid + projection-field sweep + luminous room scan motion.
 // Visual: a sterile high-tech training facility with harsh fluorescent lighting,
-// glassy walls, and a grid-lined floor. Holographic panels and a rectangular
-// hologram volume flicker with combat data while the room stays clean and clinical.
+// white structural bounds, and a grid-lined floor. A bright projection field
+// and a rectangular rear test-field frame are embedded into the room shell so
+// the space stays clean, clinical, and fully in-world.
 //
-// Cadence: BOUNDS (SECTOR) -> FEATURES (floor) -> FEATURES (grids) -> FEATURES (HUD/holo) -> FEATURES (motion)
+// Cadence: BOUNDS (RAMP) -> FEATURES (floor) -> FEATURES (bay framing) -> FEATURES (projection field) -> FEATURES (motion)
 //
-// L0: SECTOR/BOX           ALL         LERP   bright clinical white bounds
-// L1: PLANE/TILES          FLOOR       LERP   clean white tile floor
-// L2: GRID                 FLOOR       ADD    vivid cyan scanning grid (animated)
-// L3: GRID                 WALLS       ADD    cyan wall scan lines (animated)
-// L4: DECAL/RECT           WALLS       ADD    glowing HUD panels (animated)
-// L5: PORTAL/RECT          WALLS       ADD    holographic display volume (animated)
-// L6: LOBE                 ALL         ADD    harsh fluorescent overhead key
-// L7: VEIL/LASER_BARS      ALL         ADD    holographic scan bars (animated)
+// L0: RAMP                 ALL         LERP   cool ceiling / wall / floor enclosure
+// L1: PLANE/TILES          FLOOR       LERP   sterile floor tiles with darker grout
+// L2: GRID                 FLOOR       ADD    readable cyan floor grid scan (animated)
+// L3: GRID                 WALLS       ADD    broad wall-bay scan lattice (animated)
+// L4: DECAL/RECT           WALLS       ADD    hero animated projection field in direct view
+// L5: PORTAL/RECT          WALLS       ADD    static rear test-field frame behind the projection field
+// L6: LOBE                 ALL         ADD    overhead fluorescent pulse
+// L7: VEIL/RAIN_WALL       WALLS       ADD    broader scanner sweep bars
 pub(super) const PRESET_COMBAT_LAB: [[u64; 2]; 8] = [
-    // L0: SECTOR/BOX - bright clinical white bounds
+    // L0: RAMP - brighter white shell so the room reads as a clean training bay rather than a gray chamber
     [
-        hi_meta(
-            OP_SECTOR,
-            REGION_ALL,
-            BLEND_LERP,
-            DOMAIN_DIRECT3D,
-            SECTOR_BOX,
-            0xffffff, // pure white
-            0xf0f4f8, // barely tinted shadow
+        hi(
+            OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0xe6f2f8, // bright white-cyan structural shell
+            0x091118, // darker floor base under the tile layer
         ),
-        lo(255, 140, 0, 0, 0, DIR_UP, 15, 15),
+        lo(86, 0x2f, 0x38, 0x42, THRESH_INTERIOR, DIR_UP, 15, 15),
     ],
-    // L1: PLANE/TILES - clinical floor with clean tile pattern
+    // L1: PLANE/TILES - darker training-room deck so the cyan grid stays foreground-dominant
     [
         hi_meta(
             OP_PLANE,
@@ -138,42 +134,35 @@ pub(super) const PRESET_COMBAT_LAB: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             PLANE_TILES,
-            0xf8fafc, // near-white floor
-            0xd8e0e8, // light gray grout
+            0x25333c, // darker graphite tile surface
+            0x091118, // darker grout for structure
         ),
-        lo(255, 80, 10, 160, 0, DIR_UP, 15, 10),
+        lo(242, 96, 28, 20, 0, DIR_UP, 15, 12),
     ],
-    // L2: GRID - vivid cyan scanning grid on floor (animated)
+    // L2: GRID - brighter floor grid with larger cells so it reads before the sphere reflection
     [
         hi(
             OP_GRID,
             REGION_FLOOR,
             BLEND_ADD,
             0,
-            0x00ffff, // vivid cyan
+            0x9cffff, // vivid cyan highlight
             0x000000,
         ),
-        lo(180, 120, 6, 0x18, 0, 0, 15, 0),
+        lo(220, 42, 44, 0x1a, 0, 0, 15, 0),
     ],
-    // L3: GRID - cyan wall scan lines (animated)
+    // L3: GRID - restore the broader run25 wall bay so the rear chamber feels embedded in architecture again
     [
-        hi(
-            OP_GRID,
-            REGION_WALLS,
-            BLEND_ADD,
-            0,
-            0x00e0ff, // bright cyan
-            0x000000,
-        ),
-        lo(120, 200, 4, 0x20, 0, 0, 14, 0),
+        hi(OP_GRID, REGION_WALLS, BLEND_ADD, 0, 0xd6f6ff, 0x000000),
+        lo(104, 18, 28, 0x15, 0, 0, 9, 0),
     ],
-    // L4: DECAL/RECT - glowing HUD panels on walls (bright cyan/green)
+    // L4: DECAL/RECT - make the projection field itself the animated hero plane anchored to the rear bay
     [
-        hi(OP_DECAL, REGION_WALLS, BLEND_ADD, 0, 0x00ffff, 0x40ffa0),
-        // shape=RECT, glow params
-        lo(255, 0x24, 60, 200, 0x30, DIR_BACK, 15, 15),
+        hi(OP_DECAL, REGION_WALLS, BLEND_ADD, 0, 0xf8ffff, 0x62ecff),
+        // param_a=0x24 => RECT shape with light edge softening.
+        lo(240, 0x24, 184, 40, 0, 0x80c8, 15, 11),
     ],
-    // L5: PORTAL/RECT - holographic display volume (vivid)
+    // L5: PORTAL/RECT - keep a static rectangular test-field frame behind the animated projection field
     [
         hi_meta(
             OP_PORTAL,
@@ -181,27 +170,27 @@ pub(super) const PRESET_COMBAT_LAB: [[u64; 2]; 8] = [
             BLEND_ADD,
             DOMAIN_TANGENT_LOCAL,
             PORTAL_RECT,
-            0x60e0ff, // bright hologram blue
-            0x00ffff, // cyan edge
+            0x0d2430, // darker structural backplate
+            0xd7fbff, // cool cyan frame edge
         ),
-        lo(255, 100, 120, 140, 0, DIR_FORWARD, 15, 15),
+        lo(176, 198, 56, 0, 0, 0x80c8, 8, 13),
     ],
-    // L6: LOBE - harsh fluorescent overhead key
+    // L6: LOBE - keep the ceiling pulse restrained so it stops washing out the wall devices
     [
-        hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0xffffff, 0xe8f4ff),
-        lo(180, 200, 70, 1, 0, DIR_UP, 15, 10),
+        hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0xf2fbff, 0x28495f),
+        lo(15, 176, 42, 2, 0, DIR_UP, 6, 0),
     ],
-    // L7: VEIL/LASER_BARS - holographic scan bars (animated)
+    // L7: VEIL/RAIN_WALL - fewer, broader scanner slabs so the wall scan reads as authored tech instead of rain
     [
         hi_meta(
             OP_VEIL,
-            REGION_ALL,
+            REGION_WALLS,
             BLEND_ADD,
             DOMAIN_AXIS_CYL,
-            VEIL_LASER_BARS,
-            0x40f0ff, // cyan laser
-            0x00c0ff, // blue edge
+            VEIL_RAIN_WALL,
+            0xf4ffff, // scanner core
+            0x62ecff, // scanner glow
         ),
-        lo(80, 60, 20, 30, 0, DIR_UP, 12, 8),
+        lo(96, 28, 184, 36, 0, DIR_UP, 11, 7),
     ],
 ];

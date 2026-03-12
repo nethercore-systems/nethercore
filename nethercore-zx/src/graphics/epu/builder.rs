@@ -4,10 +4,10 @@
 //! with semantic methods for adding bounds and feature layers.
 
 use super::{
-    ApertureParams, AtmosphereParams, BandRadianceParams, CellParams, DecalParams, EpuBlend,
-    EpuConfig, EpuLayer, EpuOpcode, FlowParams, GridParams, LobeRadianceParams, PatchesParams,
-    REGION_ALL, RampParams, ScatterParams, SectorParams, SilhouetteParams, SplitParams,
-    encode_direction_u16, pack_meta5, pack_thresholds,
+    AdvectParams, ApertureParams, AtmosphereParams, BandRadianceParams, CellParams, DecalParams,
+    EpuBlend, EpuConfig, EpuLayer, EpuOpcode, FlowParams, GridParams, LobeRadianceParams,
+    PatchesParams, REGION_ALL, RampParams, ScatterParams, SectorParams, SilhouetteParams,
+    SplitParams, SurfaceParams, encode_direction_u16, pack_meta5, pack_thresholds,
 };
 
 // =============================================================================
@@ -16,7 +16,7 @@ use super::{
 
 /// Begin building an EPU configuration.
 ///
-/// Returns an `EpuBuilder` that can be used to add bounds and feature layers.
+/// Layers are appended in authored order across all 8 instruction slots.
 #[inline]
 pub fn epu_begin() -> EpuBuilder {
     EpuBuilder::new()
@@ -30,13 +30,11 @@ pub fn epu_finish(builder: EpuBuilder) -> EpuConfig {
 
 /// Builder for constructing EPU configurations with semantic methods.
 ///
-/// Automatically manages layer slot allocation:
-/// - Bounds (RAMP + bounds ops) goes to slots 0-3
-/// - Radiance (feature ops) goes to slots 4-7
+/// Layers are appended in authored order across all 8 instruction slots.
+/// This matches the runtime shader model directly.
 pub struct EpuBuilder {
     cfg: EpuConfig,
-    next_bounds: usize,
-    next_feature: usize,
+    next_slot: usize,
 }
 
 impl Default for EpuBuilder {
@@ -51,8 +49,7 @@ impl EpuBuilder {
     pub fn new() -> Self {
         Self {
             cfg: EpuConfig::default(),
-            next_bounds: 0,
-            next_feature: 4,
+            next_slot: 0,
         }
     }
 
@@ -62,31 +59,30 @@ impl EpuBuilder {
         self.cfg
     }
 
-    /// Push a bounds layer (slots 0-3). Silently ignored if full.
+    /// Push a bounds layer. Silently ignored if no slots remain.
     fn push_bounds(&mut self, layer: EpuLayer) {
-        if self.next_bounds >= 4 {
-            return;
-        }
-        self.cfg.layers[self.next_bounds] = layer.encode();
-        self.next_bounds += 1;
+        self.push_layer(layer);
     }
 
-    /// Push a feature layer (slots 4-7). Silently ignored if full.
+    /// Push a feature layer. Silently ignored if no slots remain.
     fn push_feature(&mut self, layer: EpuLayer) {
-        if self.next_feature >= 8 {
+        self.push_layer(layer);
+    }
+
+    #[inline]
+    fn push_layer(&mut self, layer: EpuLayer) {
+        if self.next_slot >= 8 {
             return;
         }
-        self.cfg.layers[self.next_feature] = layer.encode();
-        self.next_feature += 1;
+        self.cfg.layers[self.next_slot] = layer.encode();
+        self.next_slot += 1;
     }
 
     // =========================================================================
     // Bounds Helpers
     // =========================================================================
 
-    /// Set the bounds gradient (RAMP) - always goes to slot 0.
-    ///
-    /// This establishes the base colors and region weights used by all other layers.
+    /// Set the bounds gradient (RAMP).
     pub fn ramp_bounds(&mut self, p: RampParams) {
         let layer = EpuLayer {
             opcode: EpuOpcode::Ramp,
@@ -104,9 +100,7 @@ impl EpuBuilder {
             param_d: pack_thresholds(p.ceil_q, p.floor_q),
             direction: encode_direction_u16(p.up),
         };
-        // RAMP always goes to slot 0
-        self.cfg.layers[0] = layer.encode();
-        self.next_bounds = self.next_bounds.max(1);
+        self.push_layer(layer);
     }
 
     /// Apply a SECTOR bounds modifier.
@@ -375,6 +369,46 @@ impl EpuBuilder {
             param_c: p.mie_concentration,
             param_d: p.mie_exponent,
             direction: encode_direction_u16(p.sun_dir),
+        });
+    }
+
+    /// Add broad transport / mass motion (ADVECT).
+    pub fn advect(&mut self, p: AdvectParams) {
+        self.push_feature(EpuLayer {
+            opcode: EpuOpcode::Advect,
+            region_mask: p.region.to_mask(),
+            blend: p.blend,
+            meta5: pack_meta5(p.domain_id, p.variant as u8),
+            color_a: p.color,
+            color_b: p.color_b,
+            alpha_a: p.alpha,
+            alpha_b: 0,
+            intensity: p.intensity,
+            param_a: p.scale,
+            param_b: p.coverage,
+            param_c: p.breakup,
+            param_d: p.phase,
+            direction: encode_direction_u16(p.dir),
+        });
+    }
+
+    /// Add broad material / surface response (SURFACE).
+    pub fn surface(&mut self, p: SurfaceParams) {
+        self.push_feature(EpuLayer {
+            opcode: EpuOpcode::Surface,
+            region_mask: p.region.to_mask(),
+            blend: p.blend,
+            meta5: pack_meta5(0, p.variant as u8),
+            color_a: p.color,
+            color_b: p.color_b,
+            alpha_a: p.alpha,
+            alpha_b: 0,
+            intensity: p.intensity,
+            param_a: p.scale,
+            param_b: p.fracture,
+            param_c: p.sheen,
+            param_d: p.phase,
+            direction: encode_direction_u16(p.dir),
         });
     }
 }

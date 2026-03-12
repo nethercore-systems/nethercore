@@ -1,6 +1,6 @@
 # Environment Processing Unit (EPU)
 
-The Environment Processing Unit (EPU) is ZX’s instruction-based procedural environment system. You provide a packed 128-byte configuration (8 × 128-bit instructions) and use `epu_set(config_ptr)` + `draw_epu()` to:
+The Environment Processing Unit (EPU) is ZX's instruction-based procedural environment system. You provide a packed 128-byte configuration (8 x 128-bit instructions) and use `epu_set(config_ptr)` + `draw_epu()` to:
 
 - Render the environment background
 - Drive ambient + reflection lighting for lit materials (computed on the GPU)
@@ -53,7 +53,7 @@ To configure multiple environments in the same frame, call `environment_index(en
 /// Store the EPU config for the current environment_index(...).
 ///
 /// config_ptr points to 16 u64 values (128 bytes):
-/// 8 instructions × (hi u64, lo u64)
+/// 8 instructions x (hi u64, lo u64)
 fn epu_set(config_ptr: *const u64);
 ```
 {{#endtab}}
@@ -63,7 +63,7 @@ fn epu_set(config_ptr: *const u64);
 /// Store the EPU config for the current environment_index(...).
 ///
 /// config_ptr points to 16 u64 values (128 bytes):
-/// 8 instructions × (hi u64, lo u64)
+/// 8 instructions x (hi u64, lo u64)
 void epu_set(const uint64_t* config_ptr);
 ```
 {{#endtab}}
@@ -73,7 +73,7 @@ void epu_set(const uint64_t* config_ptr);
 /// Store the EPU config for the current environment_index(...).
 ///
 /// config_ptr points to 16 u64 values (128 bytes):
-/// 8 instructions × (hi u64, lo u64)
+/// 8 instructions x (hi u64, lo u64)
 pub extern fn epu_set(config_ptr: [*]const u64) void;
 ```
 {{#endtab}}
@@ -121,12 +121,11 @@ Notes:
 
 ## Configuration Layout
 
-Each environment is exactly **8 × 128-bit instructions** (128 bytes total). In memory, that’s 16 `u64` values laid out as 8 `[hi, lo]` pairs.
+Each environment is exactly **8 x 128-bit instructions** (128 bytes total). In memory, that is 16 `u64` values laid out as 8 `[hi, lo]` pairs.
 
-| Slot | Kind | Recommended Use |
-|------|------|------------------|
-| 0–3 | Bounds | Any bounds opcode (`0x01..0x07`). Common convention: start with `RAMP` to explicitly set `up/ceil/floor/softness`, then add `SECTOR`/`SILHOUETTE`/etc., but it is not required. |
-| 4–7 | Radiance | `DECAL` / `GRID` / `SCATTER` / `FLOW` + radiance ops (`0x0C..0x13`) |
+| Slots | Kind | Authoring Model |
+|------|------|-----------------|
+| `0-7` | Mixed | The runtime evaluates all 8 instructions sequentially in authored order. Bounds opcodes (`0x01..0x07`) establish or reshape region weights; feature opcodes (`0x08+`) consume the current regions. A common cadence is `BOUNDS -> FEATURES -> BOUNDS -> FEATURES`, but it is not required. |
 
 ---
 
@@ -162,7 +161,7 @@ bits 3..0:     alpha_b    (4)  - color_b alpha (0=transparent, 15=opaque)
 
 The EPU has **no host-managed time input**. Any temporal variation (scrolling, pulsing, drifting, twinkling, etc.) must be driven explicitly by the game by changing instruction parameters as part of deterministic simulation.
 
-In practice this usually means incrementing an opcode-specific **phase** parameter (often `param_d`, see the opcode catalog) each frame: `0, 1, 2, 3, …` (wrapping at 255), and re-calling `epu_set(...)` with the updated config.
+In practice this often means incrementing an opcode-specific motion or modulation parameter each frame and re-calling `epu_set(...)` with the updated config. Many animated variants use `param_d` for this, but not all do; some variants use `param_d` as seed or waveform selection rather than smooth motion.
 
 ---
 
@@ -180,18 +179,21 @@ This is the opcode number. Some opcodes use `meta5` for domain/variant selection
 | `0x05` | `CELL` | Bounds |
 | `0x06` | `PATCHES` | Bounds |
 | `0x07` | `APERTURE` | Bounds |
-| `0x08` | `DECAL` | Radiance |
-| `0x09` | `GRID` | Radiance |
-| `0x0A` | `SCATTER` | Radiance |
-| `0x0B` | `FLOW` | Radiance |
-| `0x0C` | `TRACE` | Radiance |
-| `0x0D` | `VEIL` | Radiance |
-| `0x0E` | `ATMOSPHERE` | Radiance |
-| `0x0F` | `PLANE` | Radiance |
-| `0x10` | `CELESTIAL` | Radiance |
-| `0x11` | `PORTAL` | Radiance |
-| `0x12` | `LOBE` | Radiance |
-| `0x13` | `BAND` | Radiance |
+| `0x08` | `DECAL` | Feature |
+| `0x09` | `GRID` | Feature |
+| `0x0A` | `SCATTER` | Feature |
+| `0x0B` | `FLOW` | Feature |
+| `0x0C` | `TRACE` | Feature |
+| `0x0D` | `VEIL` | Feature |
+| `0x0E` | `ATMOSPHERE` | Feature |
+| `0x0F` | `PLANE` | Feature |
+| `0x10` | `CELESTIAL` | Feature |
+| `0x11` | `PORTAL` | Feature |
+| `0x12` | `LOBE` | Feature |
+| `0x13` | `BAND` | Feature |
+| `0x14` | `MOTTLE` | Feature |
+| `0x15` | `ADVECT` | Feature |
+| `0x16` | `SURFACE` | Feature |
 
 For full per-opcode packing/algorithm details, see:
 - `nethercore-design/specs/epu-feature-catalog.md`
@@ -214,9 +216,9 @@ Regions are combinable using bitwise OR:
 | 3 | `0b011` | `WALLS_FLOOR` | Walls + floor |
 | 0 | `0b000` | `NONE` | Layer disabled |
 
-The region mask is consumed by feature/radiance opcodes: their contribution is multiplied by `region_weight(current_regions, mask)`.
+The region mask is consumed by feature opcodes: their contribution is multiplied by `region_weight(current_regions, mask)`.
 
-`current_regions` comes from the most recent bounds opcode; every bounds opcode outputs updated `RegionWeights` for subsequent layers. (Bounds opcodes do not use the region mask.)
+`current_regions` comes from the most recent bounds opcode; every bounds opcode outputs updated `RegionWeights` for subsequent layers. Bounds opcodes do not use the region mask.
 
 ---
 

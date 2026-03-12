@@ -7,10 +7,10 @@
 #![allow(dead_code)]
 
 /// Total number of defined opcodes
-pub const OPCODE_COUNT: usize = 19;
+pub const OPCODE_COUNT: usize = 23;
 
 /// Highest opcode number (for array sizing)
-pub const MAX_OPCODE: usize = 19;
+pub const MAX_OPCODE: usize = 23;
 
 /// Kind of EPU opcode
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -18,7 +18,7 @@ pub const MAX_OPCODE: usize = 19;
 pub enum OpcodeKind {
     /// Bounds opcode (defines regions)
     Bounds = 0,
-    /// Radiance opcode (additive feature layer)
+    /// Feature opcode (additive feature layer)
     Radiance = 1,
 }
 
@@ -43,7 +43,7 @@ pub struct OpcodeInfo {
     pub code: u8,
     /// Opcode name (e.g., "PLANE", "RAMP")
     pub name: &'static str,
-    /// Opcode kind (bounds or radiance)
+    /// Opcode kind (bounds or feature-layer)
     pub kind: OpcodeKind,
 }
 
@@ -86,10 +86,10 @@ pub static OPCODES: [Option<OpcodeInfo>; 32] = [
     Some(OpcodeInfo { code: 0x11, name: "PORTAL", kind: OpcodeKind::Radiance }),
     Some(OpcodeInfo { code: 0x12, name: "LOBE", kind: OpcodeKind::Radiance }),
     Some(OpcodeInfo { code: 0x13, name: "BAND", kind: OpcodeKind::Radiance }),
-    None,
-    None,
-    None,
-    None,
+    Some(OpcodeInfo { code: 0x14, name: "MOTTLE", kind: OpcodeKind::Radiance }),
+    Some(OpcodeInfo { code: 0x15, name: "ADVECT", kind: OpcodeKind::Radiance }),
+    Some(OpcodeInfo { code: 0x16, name: "SURFACE", kind: OpcodeKind::Radiance }),
+    Some(OpcodeInfo { code: 0x17, name: "MASS", kind: OpcodeKind::Radiance }),
     None,
     None,
     None,
@@ -106,7 +106,7 @@ pub static VARIANTS: [&[&str]; 32] = [
     &[],
     &["BOX", "TUNNEL", "CAVE"],
     &["MOUNTAINS", "CITY", "FOREST", "DUNES", "WAVES", "RUINS", "INDUSTRIAL", "SPIRES"],
-    &["HALF", "WEDGE", "CORNER", "BANDS", "CROSS", "PRISM"],
+    &["HALF", "WEDGE", "CORNER", "BANDS", "CROSS", "PRISM", "TIER", "FACE"],
     &["GRID", "HEX", "VORONOI", "RADIAL", "SHATTER", "BRICK"],
     &["BLOBS", "ISLANDS", "DEBRIS", "MEMBRANE", "STATIC", "STREAKS"],
     &["CIRCLE", "RECT", "ROUNDED_RECT", "ARCH", "BARS", "MULTI", "IRREGULAR"],
@@ -122,10 +122,10 @@ pub static VARIANTS: [&[&str]; 32] = [
     &["CIRCLE", "RECT", "TEAR", "VORTEX", "CRACK", "RIFT"],
     &[],
     &[],
-    &[],
-    &[],
-    &[],
-    &[],
+    &["SOFT", "GRAIN", "RIDGE", "DAPPLE"],
+    &["SHEET", "SPINDRIFT", "SQUALL", "MIST", "BANK", "FRONT"],
+    &["GLAZE", "CRUST", "FACET", "DUSTED"],
+    &["BANK", "SHELF", "PLUME", "VEIL"],
     &[],
     &[],
     &[],
@@ -159,9 +159,9 @@ pub static DOMAINS: [&[&str]; 32] = [
     &[],
     &[],
     &[],
+    &["DIRECT3D", "AXIS_CYL", "AXIS_POLAR"],
     &[],
-    &[],
-    &[],
+    &["DIRECT3D", "AXIS_CYL", "AXIS_POLAR"],
     &[],
     &[],
     &[],
@@ -305,6 +305,34 @@ static FIELDS_13: [FieldSpec; 5] = [
     FieldSpec { name: "param_c", label: "softness", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_d", label: "phase", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
 ];
+static FIELDS_14: [FieldSpec; 5] = [
+    FieldSpec { name: "intensity", label: "brightness", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
+    FieldSpec { name: "param_a", label: "scale", unit: Some("x"), map: MapKind::U8Lerp, min: 0.500000, max: 20.000000 },
+    FieldSpec { name: "param_b", label: "contrast", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
+    FieldSpec { name: "param_c", label: "detail", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
+    FieldSpec { name: "param_d", label: "phase", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
+];
+static FIELDS_15: [FieldSpec; 5] = [
+    FieldSpec { name: "intensity", label: "brightness", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
+    FieldSpec { name: "param_a", label: "scale", unit: Some("x"), map: MapKind::U8Lerp, min: 0.500000, max: 12.000000 },
+    FieldSpec { name: "param_b", label: "coverage", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
+    FieldSpec { name: "param_c", label: "breakup", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
+    FieldSpec { name: "param_d", label: "phase", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
+];
+static FIELDS_16: [FieldSpec; 5] = [
+    FieldSpec { name: "intensity", label: "contrast", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
+    FieldSpec { name: "param_a", label: "scale", unit: Some("x"), map: MapKind::U8Lerp, min: 0.500000, max: 16.000000 },
+    FieldSpec { name: "param_b", label: "fracture", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
+    FieldSpec { name: "param_c", label: "sheen", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
+    FieldSpec { name: "param_d", label: "phase", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
+];
+static FIELDS_17: [FieldSpec; 5] = [
+    FieldSpec { name: "intensity", label: "density", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
+    FieldSpec { name: "param_a", label: "scale", unit: Some("x"), map: MapKind::U8Lerp, min: 0.500000, max: 10.000000 },
+    FieldSpec { name: "param_b", label: "coverage", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
+    FieldSpec { name: "param_c", label: "breakup", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
+    FieldSpec { name: "param_d", label: "phase", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
+];
 
 /// Field specifications per opcode
 pub static FIELD_SPECS: [&[FieldSpec]; 32] = [
@@ -328,10 +356,10 @@ pub static FIELD_SPECS: [&[FieldSpec]; 32] = [
     &FIELDS_11,
     &FIELDS_12,
     &FIELDS_13,
-    &[],
-    &[],
-    &[],
-    &[],
+    &FIELDS_14,
+    &FIELDS_15,
+    &FIELDS_16,
+    &FIELDS_17,
     &[],
     &[],
     &[],

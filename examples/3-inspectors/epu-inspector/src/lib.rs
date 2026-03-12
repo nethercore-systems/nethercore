@@ -726,25 +726,54 @@ pub extern "C" fn update() {
 // Browse Action Handlers
 // ============================================================================
 
-/// Find the next valid opcode (wrapping from 0x13 to 0x01)
+/// Find the next defined opcode, skipping NOP.
 fn next_valid_opcode(current: u8) -> u8 {
-    let mut next = current + 1;
-    if next > 0x13 {
-        next = 0x01;
+    let mut next = current & 0x1F;
+    for _ in 0..32 {
+        next = (next + 1) & 0x1F;
+        if next != 0 && epu_meta::is_defined(next) {
+            return next;
+        }
     }
-    // Skip opcode 0x00 (NOP) - not useful for editing
-    if next == 0x00 {
-        next = 0x01;
-    }
-    next
+    current
 }
 
-/// Find the previous valid opcode (wrapping from 0x01 to 0x13)
+/// Find the previous defined opcode, skipping NOP.
 fn prev_valid_opcode(current: u8) -> u8 {
-    if current <= 0x01 {
-        return 0x13;
+    let mut prev = current & 0x1F;
+    for _ in 0..32 {
+        prev = prev.wrapping_sub(1) & 0x1F;
+        if prev != 0 && epu_meta::is_defined(prev) {
+            return prev;
+        }
     }
-    current - 1
+    current
+}
+
+fn variant_count_u8(opcode: u8) -> u8 {
+    epu_meta::variant_count(opcode).min(8) as u8
+}
+
+fn domain_count_u8(opcode: u8) -> u8 {
+    epu_meta::domain_count(opcode).min(4) as u8
+}
+
+fn clamp_variant_id(opcode: u8, variant_id: u8) -> u8 {
+    let count = variant_count_u8(opcode);
+    if count == 0 || variant_id >= count {
+        0
+    } else {
+        variant_id
+    }
+}
+
+fn clamp_domain_id(opcode: u8, domain_id: u8) -> u8 {
+    let count = domain_count_u8(opcode);
+    if count == 0 || domain_id >= count {
+        0
+    } else {
+        domain_id
+    }
 }
 
 /// Handle browse action button presses
@@ -764,9 +793,11 @@ unsafe fn handle_browse_actions() {
     // Previous variant (wraps 0-7)
     if BROWSE_PREV_VARIANT != 0 {
         BROWSE_PREV_VARIANT = 0;
-        let max_variant = (epu_meta::variant_count(EDITOR.opcode) as u8).max(1) - 1;
-        if EDITOR.variant_id == 0 {
-            EDITOR.variant_id = max_variant.min(7);
+        let count = variant_count_u8(EDITOR.opcode);
+        if count <= 1 {
+            EDITOR.variant_id = 0;
+        } else if EDITOR.variant_id == 0 {
+            EDITOR.variant_id = count - 1;
         } else {
             EDITOR.variant_id -= 1;
         }
@@ -775,27 +806,42 @@ unsafe fn handle_browse_actions() {
     // Next variant (wraps 0-7)
     if BROWSE_NEXT_VARIANT != 0 {
         BROWSE_NEXT_VARIANT = 0;
-        let max_variant = (epu_meta::variant_count(EDITOR.opcode) as u8).max(1) - 1;
-        EDITOR.variant_id += 1;
-        if EDITOR.variant_id > max_variant || EDITOR.variant_id > 7 {
+        let count = variant_count_u8(EDITOR.opcode);
+        if count <= 1 {
             EDITOR.variant_id = 0;
+        } else {
+            EDITOR.variant_id += 1;
+            if EDITOR.variant_id >= count {
+                EDITOR.variant_id = 0;
+            }
         }
     }
 
-    // Previous domain (wraps 0-3)
+    // Previous domain
     if BROWSE_PREV_DOMAIN != 0 {
         BROWSE_PREV_DOMAIN = 0;
-        if EDITOR.domain_id == 0 {
-            EDITOR.domain_id = 3;
+        let count = domain_count_u8(EDITOR.opcode);
+        if count <= 1 {
+            EDITOR.domain_id = 0;
+        } else if EDITOR.domain_id == 0 {
+            EDITOR.domain_id = count - 1;
         } else {
             EDITOR.domain_id -= 1;
         }
     }
 
-    // Next domain (wraps 0-3)
+    // Next domain
     if BROWSE_NEXT_DOMAIN != 0 {
         BROWSE_NEXT_DOMAIN = 0;
-        EDITOR.domain_id = (EDITOR.domain_id + 1) & 0x3;
+        let count = domain_count_u8(EDITOR.opcode);
+        if count <= 1 {
+            EDITOR.domain_id = 0;
+        } else {
+            EDITOR.domain_id += 1;
+            if EDITOR.domain_id >= count {
+                EDITOR.domain_id = 0;
+            }
+        }
     }
 
     // Reset layer to defaults
@@ -828,6 +874,15 @@ unsafe fn handle_browse_actions() {
         EXPORT_RUST = 0;
         do_export_rust();
     }
+
+    if EDITOR.opcode != PREV_OPCODE {
+        EDITOR.variant_id = 0;
+        EDITOR.domain_id = 0;
+        PREV_OPCODE = EDITOR.opcode;
+    } else {
+        EDITOR.variant_id = clamp_variant_id(EDITOR.opcode, EDITOR.variant_id);
+        EDITOR.domain_id = clamp_domain_id(EDITOR.opcode, EDITOR.domain_id);
+    }
 }
 
 #[no_mangle]
@@ -859,9 +914,14 @@ pub extern "C" fn render() {
 
         // Draw reference mesh with material properties
         push_identity();
+        use_uniform_color(1);
+        use_uniform_metallic(1);
+        use_uniform_roughness(1);
+        use_uniform_emissive(1);
         set_color(0xAAAAAAFF);
         material_metallic(MATERIAL_METALLIC);
         material_roughness(MATERIAL_ROUGHNESS);
+        material_emissive(0.0);
 
         let mesh = match SHAPE_INDEX {
             0 => SPHERE_MESH,
@@ -1085,65 +1145,24 @@ fn get_opcode_hints(
             b"softness",
             b"phase",
         ),
+        0x14 => (
+            b"MOTTLE",
+            b"brightness",
+            b"scale",
+            b"contrast",
+            b"detail",
+            b"phase",
+        ),
         _ => (b"UNKNOWN", b"-", b"-", b"-", b"-", b"-"),
     }
 }
 
-/// Get variant name for opcodes that have variants
 fn get_variant_hint(opcode: u8, variant_id: u8) -> &'static [u8] {
-    match opcode {
-        0x07 => match variant_id {
-            // APERTURE
-            0 => b"RECT",
-            1 => b"ARCH",
-            2 => b"BARRED",
-            3 => b"LATTICE",
-            4 => b"RAGGED",
-            _ => b"",
-        },
-        0x0E => match variant_id {
-            // ATMOSPHERE
-            0 => b"ABSORPTION",
-            1 => b"RAYLEIGH",
-            2 => b"MIE",
-            3 => b"FULL",
-            _ => b"",
-        },
-        0x0F => match variant_id {
-            // PLANE
-            0 => b"TILES",
-            1 => b"HEX",
-            2 => b"STONE",
-            3 => b"SAND",
-            4 => b"WATER",
-            5 => b"GRATING",
-            6 => b"GRASS",
-            7 => b"PAVEMENT",
-            _ => b"",
-        },
-        0x10 => match variant_id {
-            // CELESTIAL
-            0 => b"MOON",
-            1 => b"SUN",
-            2 => b"PLANET",
-            3 => b"GAS_GIANT",
-            4 => b"RINGED",
-            5 => b"BINARY",
-            6 => b"ECLIPSE",
-            _ => b"",
-        },
-        0x11 => match variant_id {
-            // PORTAL
-            0 => b"CIRCLE",
-            1 => b"RECT",
-            2 => b"TEAR",
-            3 => b"VORTEX",
-            4 => b"CRACK",
-            5 => b"RIFT",
-            _ => b"",
-        },
-        _ => b"", // No variants for this opcode
-    }
+    epu_meta::variant_name(opcode, variant_id).as_bytes()
+}
+
+fn get_domain_hint(opcode: u8, domain_id: u8) -> &'static [u8] {
+    epu_meta::domain_name(opcode, domain_id).as_bytes()
 }
 
 fn copy_slice(dst: &mut [u8], src: &[u8]) -> usize {
@@ -1168,14 +1187,21 @@ fn get_blend_name(blend: u8) -> &'static [u8] {
 }
 
 unsafe fn draw_hints() {
-    let (name, hint_i, hint_a, hint_b, hint_c, hint_d) = get_opcode_hints(EDITOR.opcode);
+    let (_name, hint_i, hint_a, hint_b, hint_c, hint_d) = get_opcode_hints(EDITOR.opcode);
+    let opcode_name = epu_meta::opcode_name(EDITOR.opcode).as_bytes();
 
     let y_base = 60.0;
     let line_height = 14.0;
     set_color(0x88FF88FF);
 
     // Opcode name
-    draw_text(name.as_ptr(), name.len() as u32, 10.0, y_base, 14.0);
+    draw_text(
+        opcode_name.as_ptr(),
+        opcode_name.len() as u32,
+        10.0,
+        y_base,
+        14.0,
+    );
 
     // Blend mode (next to opcode name)
     let blend_name = get_blend_name(EDITOR.blend);
@@ -1249,6 +1275,20 @@ unsafe fn draw_hints() {
             len_v as u32,
             10.0,
             y_base + line_height * 6.0,
+            12.0,
+        );
+    }
+
+    let domain_hint = get_domain_hint(EDITOR.opcode, EDITOR.domain_id);
+    if !domain_hint.is_empty() {
+        set_color(0x88CCCCFF);
+        buf[0..5].copy_from_slice(b"dom: ");
+        let len_domain = 5 + copy_slice(&mut buf[5..], domain_hint);
+        draw_text(
+            buf.as_ptr(),
+            len_domain as u32,
+            10.0,
+            y_base + line_height * 7.0,
             12.0,
         );
     }

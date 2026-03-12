@@ -1,0 +1,149 @@
+console = "zx"
+seed = 0
+players = 1
+
+# Screenshot the benchmark suite, 3 frames each.
+#
+# Purpose:
+# - benchmark-first validation for engine/opcode/capability changes
+# - smaller and cheaper than the full 12-preset showcase sweep
+# - intended to answer "did the surface improve?" before agents burn a full roster pass
+#
+# Flow:
+# - press Start once to switch from Showcase to Benchmarks
+# - press Y once to hide the UI
+# - capture 6 benchmark scenes, 3 frames each, with 20-frame spacing
+
+[[frames]]
+f = 1
+p1 = "start"
+
+[[frames]]
+f = 2
+p1 = ""
+
+[[frames]]
+f = 3
+p1 = "y"
+
+[[frames]]
+f = 4
+p1 = ""
+
+# Benchmark 1
+[[frames]]
+f = 20
+screenshot = true
+
+[[frames]]
+f = 40
+screenshot = true
+
+[[frames]]
+f = 60
+screenshot = true
+
+[[frames]]
+f = 66
+p1 = "a"
+
+[[frames]]
+f = 67
+p1 = ""
+
+# Benchmark 2
+[[frames]]
+f = 90
+screenshot = true
+
+[[frames]]
+f = 110
+screenshot = true
+
+[[frames]]
+f = 130
+screenshot = true
+
+[[frames]]
+f = 136
+p1 = "a"
+
+[[frames]]
+f = 137
+p1 = ""
+
+# Benchmark 3
+[[frames]]
+f = 160
+screenshot = true
+
+[[frames]]
+f = 180
+screenshot = true
+
+[[frames]]
+f = 200
+screenshot = true
+
+[[frames]]
+f = 206
+p1 = "a"
+
+[[frames]]
+f = 207
+p1 = ""
+
+# Benchmark 4
+[[frames]]
+f = 230
+screenshot = true
+
+[[frames]]
+f = 250
+screenshot = true
+
+[[frames]]
+f = 270
+screenshot = true
+
+[[frames]]
+f = 276
+p1 = "a"
+
+[[frames]]
+f = 277
+p1 = ""
+
+# Benchmark 5
+[[frames]]
+f = 300
+screenshot = true
+
+[[frames]]
+f = 320
+screenshot = true
+
+[[frames]]
+f = 340
+screenshot = true
+
+[[frames]]
+f = 346
+p1 = "a"
+
+[[frames]]
+f = 347
+p1 = ""
+
+# Benchmark 6
+[[frames]]
+f = 370
+screenshot = true
+
+[[frames]]
+f = 390
+screenshot = true
+
+[[frames]]
+f = 410
+screenshot = true

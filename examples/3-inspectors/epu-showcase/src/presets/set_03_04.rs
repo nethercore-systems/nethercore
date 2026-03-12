@@ -8,15 +8,16 @@ use crate::constants::*;
 // -----------------------------------------------------------------------------
 // Visual: BOUNDLESS deep water column - RAMP creates infinite depth gradient.
 // Dark overall with bright surface glow above fading to abyssal black below.
-// Feature layers add caustic light patterns, god-rays, and bioluminescence.
+// Feature layers add brighter surface caustics, readable god-rays, and a more
+// direct abyssal bioluminescent accent while keeping the seabed legible.
 // L0: RAMP                 ALL            LERP   deep water column gradient (dark base)
-// L1: PLANE/STONE          FLOOR          LERP   basalt seabed
-// L2: FLOW (caustic)       SKY            ADD    caustics dancing on surface (animated)
-// L3: VEIL/PILLARS         ALL            ADD    god-rays streaking down
+// L1: PLANE/STONE          FLOOR          LERP   darker basalt trench floor
+// L2: FLOW (caustic)       SKY            ADD    caustic shimmer drifting through upper water (animated)
+// L3: VEIL/PILLARS         ALL            ADD    readable god-rays / depth shafts
 // L4: LOBE                 SKY            ADD    bright surface glow above
-// L5: PORTAL/VORTEX        SKY            ADD    biolum surface eddy (animated)
-// L6: SCATTER/DUST         ALL            ADD    marine snow particles
-// L7: SCATTER/BUBBLES      ALL            ADD    rising bubbles
+// L5: PORTAL/VORTEX        SKY            ADD    deeper bioluminescent vent glow (animated)
+// L6: SCATTER/DUST         ALL            ADD    restrained marine snow particles
+// L7: SCATTER/BUBBLES      ALL            ADD    brighter rising bubbles
 pub(super) const PRESET_OCEAN_DEPTHS: [[u64; 2]; 8] = [
     // L0: RAMP - deep water column gradient (boundless depth)
     [
@@ -24,7 +25,7 @@ pub(super) const PRESET_OCEAN_DEPTHS: [[u64; 2]; 8] = [
         // Dark teal surface fading to near-black abyss
         lo(255, 0x08, 0x18, 0x28, THRESH_VAST, DIR_UP, 15, 15),
     ],
-    // L1: PLANE/STONE - dark basalt seabed
+    // L1: PLANE/STONE - darker basalt trench floor with bigger, more readable slabs
     [
         hi_meta(
             OP_PLANE,
@@ -32,18 +33,17 @@ pub(super) const PRESET_OCEAN_DEPTHS: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             PLANE_STONE,
-            0x081820,
-            0x020608,
+            0x142a33,
+            0x04090d,
         ),
-        lo(200, 120, 70, 150, 15, DIR_UP, 15, 14),
+        lo(236, 96, 92, 196, 0, DIR_UP, 15, 14),
     ],
-    // L2: FLOW - caustic shimmer at surface (SLOW animation)
+    // L2: FLOW - brighter surface caustics without filling the whole frame with teal fog
     [
-        hi(OP_FLOW, REGION_SKY, BLEND_ADD, 0, 0x40a0b0, 0x183848),
-        // SLOW animation (alpha_b=1)
-        lo(100, 80, 140, 0x1c, 15, DIR_DOWN, 9, 1),
+        hi(OP_FLOW, REGION_SKY, BLEND_ADD, 0, 0x74d1d8, 0x1d4757),
+        lo(136, 92, 150, 0x1c, 15, DIR_DOWN, 10, 1),
     ],
-    // L3: VEIL/PILLARS - god-rays (SLOW)
+    // L3: VEIL/PILLARS - readable shafts of overhead water light to re-establish depth
     [
         hi_meta(
             OP_VEIL,
@@ -51,18 +51,17 @@ pub(super) const PRESET_OCEAN_DEPTHS: [[u64; 2]; 8] = [
             BLEND_ADD,
             DOMAIN_AXIS_CYL,
             VEIL_PILLARS,
-            0x206060, // muted cyan rays
-            0x081420,
+            0x2d6a74,
+            0x0a1824,
         ),
-        // SLOW animation (alpha_b=1)
-        lo(80, 45, 80, 55, 5, DIR_DOWN, 8, 1),
+        lo(96, 52, 88, 44, 5, DIR_DOWN, 10, 1),
     ],
-    // L4: LOBE - surface glow from above
+    // L4: LOBE - stronger surface glow to hold the top-to-bottom depth gradient
     [
-        hi(OP_LOBE, REGION_SKY, BLEND_ADD, 0, 0x308090, 0x102030),
-        lo(120, 160, 80, 0, 0, DIR_UP, 10, 0),
+        hi(OP_LOBE, REGION_SKY, BLEND_ADD, 0, 0x88d7dc, 0x163847),
+        lo(180, 184, 92, 0, 0, DIR_UP, 11, 0),
     ],
-    // L5: PORTAL/VORTEX - bioluminescent glow (SLOW)
+    // L5: PORTAL/VORTEX - brighter abyssal glow that stays underwater instead of reading as central debris
     [
         hi_meta(
             OP_PORTAL,
@@ -70,13 +69,12 @@ pub(super) const PRESET_OCEAN_DEPTHS: [[u64; 2]; 8] = [
             BLEND_ADD,
             DOMAIN_TANGENT_LOCAL,
             PORTAL_VORTEX,
-            0x20a080, // cyan-green biolum
-            0x103030,
+            0x164146,
+            0x8fffe8,
         ),
-        // SLOW animation (alpha_b=1)
-        lo(100, 120, 130, 140, 8, DIR_UP, 9, 1),
+        lo(148, 132, 148, 156, 8, DIR_UP, 10, 1),
     ],
-    // L6: SCATTER/DUST - marine snow (SLOW drift)
+    // L6: SCATTER/DUST - marine snow stays present but no longer overwhelms the trench structure
     [
         hi_meta(
             OP_SCATTER,
@@ -84,13 +82,12 @@ pub(super) const PRESET_OCEAN_DEPTHS: [[u64; 2]; 8] = [
             BLEND_ADD,
             DOMAIN_DIRECT3D,
             SCATTER_DUST,
-            0x508090,
-            0x203040,
+            0x86a6b3,
+            0x234253,
         ),
-        // SLOW animation (alpha_b=1)
-        lo(40, 20, 15, 0x14, 25, DIR_DOWN, 6, 1),
+        lo(24, 14, 12, 0x10, 22, DIR_DOWN, 5, 1),
     ],
-    // L7: SCATTER/BUBBLES - rising bubbles (SLOW)
+    // L7: SCATTER/BUBBLES - fewer but brighter bubbles to read as underwater support, not static grain
     [
         hi_meta(
             OP_SCATTER,
@@ -98,11 +95,10 @@ pub(super) const PRESET_OCEAN_DEPTHS: [[u64; 2]; 8] = [
             BLEND_ADD,
             DOMAIN_DIRECT3D,
             SCATTER_BUBBLES,
-            0x406070,
-            0x102030,
+            0x88c8d6,
+            0x1d3644,
         ),
-        // SLOW animation (alpha_b=1)
-        lo(30, 15, 10, 0x10, 20, DIR_UP, 5, 1),
+        lo(42, 10, 12, 0x20, 18, DIR_UP, 7, 1),
     ],
 ];
 

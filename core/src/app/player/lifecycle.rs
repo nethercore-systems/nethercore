@@ -165,11 +165,19 @@ where
         }
 
         let tick_start = Instant::now();
+        let replay_driven = self.replay_executor.is_some();
         let (ticks, _alpha) = if should_run {
-            session
-                .runtime
-                .frame_with_time_scale(time_scale)
-                .map_err(|e| RuntimeError(format!("Game frame error: {}", e)))?
+            if replay_driven {
+                session
+                    .runtime
+                    .replay_step()
+                    .map_err(|e| RuntimeError(format!("Game frame error: {}", e)))?
+            } else {
+                session
+                    .runtime
+                    .frame_with_time_scale(time_scale)
+                    .map_err(|e| RuntimeError(format!("Game frame error: {}", e)))?
+            }
         } else {
             (0, 0.0)
         };

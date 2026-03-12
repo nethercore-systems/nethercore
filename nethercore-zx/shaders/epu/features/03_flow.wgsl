@@ -76,6 +76,7 @@ fn value_noise3(p: vec3f) -> f32 {
 fn eval_flow(
     dir: vec3f,
     instr: vec4u,
+    bounds_dir: vec3f,
     region_w: f32
 ) -> LayerSample {
     if region_w < 0.001 { return LayerSample(vec3f(0.0), 0.0); }
@@ -137,20 +138,45 @@ fn eval_flow(
             color_mix = pat;
         }
         case 1u: { // STREAKS
-            // Rain / particle streaks across the whole environment.
-            //
-            // Generate "lanes" in a plane perpendicular to `flow_dir`, and animate droplets
-            // along the flow axis using the 3D domain `p` (so motion is seam-free).
-            let up = select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(flow_dir.y) > 0.9);
-            let t_axis = normalize(cross(up, flow_dir));
-            let b_axis = normalize(cross(flow_dir, t_axis));
+            // Project streak coordinates onto a floor plane derived from the active bounds up
+            // vector. This keeps floor lanes straight in local space instead of wrapping into
+            // spherical contour arcs on the environment map.
+            let bounds_len2 = dot(bounds_dir, bounds_dir);
+            let floor_up = normalize(select(vec3f(0.0, 1.0, 0.0), bounds_dir, bounds_len2 > 1e-6));
+            let basis_hint = select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(floor_up.y) > 0.9);
+            let floor_right = normalize(cross(basis_hint, floor_up));
+            let floor_forward = cross(floor_up, floor_right);
 
-            let lane_freq = 10.0 + scale * 4.0;
+            let flow_flat = flow_dir - floor_up * dot(flow_dir, floor_up);
+            let flow_flat_len2 = dot(flow_flat, flow_flat);
+            let along_axis = normalize(select(floor_forward, flow_flat, flow_flat_len2 > 1e-4));
+            let across_axis = cross(floor_up, along_axis);
+
+            let floor_view = max(-dot(dir, floor_up), 0.0);
+            let floor_proj = max(floor_view, 0.12);
+            let floor_fade = smoothstep(0.02, 0.12, floor_view);
+
+            var floor_uv = vec2f(
+                dot(dir, across_axis),
+                dot(dir, along_axis)
+            ) / floor_proj;
+
+            if turbulence > 0.001 {
+                let turb_freq = 1.5 + scale * 0.2;
+                let turb_uv = floor_uv * turb_freq;
+                let turb = vec2f(
+                    value_noise(turb_uv + vec2f(13.7, 7.1)),
+                    value_noise(turb_uv + vec2f(29.3, 17.9))
+                );
+                floor_uv += turb * turbulence * 0.18;
+            }
+
+            let lane_freq = 6.0 + scale * 1.5;
             // Lower base frequency + per-lane variation keeps rain from collapsing into a
             // perfectly regular dot-grid pattern.
-            let seg_freq = 3.0 + scale * 1.6;
+            let seg_freq = 1.8 + scale * 0.55;
 
-            let across = dot(dir, t_axis) * lane_freq;
+            let across = floor_uv.x * lane_freq;
             let lane = floor(across);
 
             // Per-lane variation (deterministic, cheap).
@@ -158,22 +184,22 @@ fn eval_flow(
             let h1 = epu_hash21(vec2f(lane, f32(octaves) * 23.0));
 
             // Thin line mask (lanes).
-            let width = mix(0.035, 0.085, h0);
+            let width = mix(0.05, 0.11, h0);
             let xf = abs(fract(across + h0) - 0.5);
-            let line = 1.0 - smoothstep(width, width * 1.8, xf);
+            let line = 1.0 - smoothstep(width, width * 1.7, xf);
 
-            // Periodic droplet modulation along the flow axis. Use a cosine bump so the
-            // wrap boundary is always zero (no visible "cut off" points).
+            // Periodic droplet modulation along the projected flow axis. Use a cosine bump so
+            // the wrap boundary is always zero (no visible "cut off" points).
             let seg_freq_lane = seg_freq * mix(0.65, 1.35, h1);
-            let along = dot(p, flow_dir) * seg_freq_lane + h1;
+            let along = floor_uv.y * seg_freq_lane - (t * (1.0 / TAU)) * mix(1.2, 2.6, h0) + h1;
             let phase = fract(along);
             let bump = 0.5 - 0.5 * cos(phase * TAU);
             // Wider bumps read as streaks instead of pinpoint dots.
-            let seg = pow(bump, mix(0.8, 2.2, h1));
+            let seg = pow(bump, mix(0.85, 2.1, h1));
 
             // Slight lateral wobble so streaks aren't perfectly rigid.
-            let wobble = dot(dir, b_axis) * (2.0 + h1 * 6.0);
-            pat = line * seg * (0.85 + 0.15 * sin(wobble + t * 1.5));
+            let wobble = floor_uv.x * (1.5 + h1 * 4.0) + floor_uv.y * 0.35;
+            pat = line * seg * (0.88 + 0.12 * sin(wobble + t * 1.5)) * floor_fade;
             color_mix = h0;
         }
         case 2u: { // CAUSTIC

@@ -45,7 +45,7 @@ fn evaluate_env_radiance(dir: vec3f, st: PackedEnvironmentState) -> vec3f {
             // Bounds opcode: update bounds_dir, get sample + output regions
             bounds_dir = bounds_dir_from_layer(instr, opcode, bounds_dir);
             let bounds_result = evaluate_bounds_layer(dir, instr, opcode, bounds_dir, regions);
-            regions = bounds_result.regions;  // Use output regions for subsequent features
+            regions = compose_bounds_regions(regions, bounds_result.regions, bounds_result.region_mix);
             radiance = apply_blend(radiance, bounds_result.sample, blend);
         } else {
             // Feature opcode: just get sample using current regions

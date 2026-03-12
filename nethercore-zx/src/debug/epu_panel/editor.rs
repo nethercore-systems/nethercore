@@ -4,6 +4,7 @@
 //! `epu_meta_gen` to display semantic labels, units, and appropriate controls
 //! for each EPU opcode field.
 
+use super::super::epu_capabilities;
 use super::super::epu_meta_gen::{
     FieldSpec, MapKind, OPCODES, OpcodeKind, domain_count, domain_name, field_specs, opcode_kind,
     opcode_name, variant_count, variant_name,
@@ -16,6 +17,9 @@ use super::visualization::DirectionGizmo;
 use crate::graphics::epu::{
     EpuBlend, EpuConfig, EpuLayer, EpuOpcode, REGION_ALL, REGION_FLOOR, REGION_SKY, REGION_WALLS,
     pack_meta5,
+};
+use nethercore_core::workbench::{
+    EpuWorkbenchBlend, EpuWorkbenchConfig, EpuWorkbenchLayer, EpuWorkbenchLayerPatch,
 };
 
 /// State for editing a single EPU layer.
@@ -120,6 +124,126 @@ impl LayerEditState {
             direction: self.direction,
         }
     }
+
+    pub fn to_workbench_layer(&self) -> EpuWorkbenchLayer {
+        EpuWorkbenchLayer {
+            opcode: self.opcode,
+            variant_id: self.variant_id,
+            domain_id: self.domain_id,
+            region_mask: self.region_mask,
+            blend: self.blend.into(),
+            color_a: self.color_a,
+            color_b: self.color_b,
+            alpha_a: self.alpha_a,
+            alpha_b: self.alpha_b,
+            intensity: self.intensity,
+            param_a: self.param_a,
+            param_b: self.param_b,
+            param_c: self.param_c,
+            param_d: self.param_d,
+            direction: self.direction,
+        }
+    }
+
+    pub fn apply_workbench_patch(&mut self, patch: &EpuWorkbenchLayerPatch) {
+        if let Some(opcode) = patch.opcode {
+            self.opcode = opcode;
+        }
+        if let Some(variant_id) = patch.variant_id {
+            self.variant_id = variant_id;
+        }
+        if let Some(domain_id) = patch.domain_id {
+            self.domain_id = domain_id;
+        }
+        if let Some(region_mask) = patch.region_mask {
+            self.region_mask = region_mask;
+        }
+        if let Some(blend) = patch.blend {
+            self.blend = blend.into();
+        }
+        if let Some(color_a) = patch.color_a {
+            self.color_a = color_a;
+        }
+        if let Some(color_b) = patch.color_b {
+            self.color_b = color_b;
+        }
+        if let Some(alpha_a) = patch.alpha_a {
+            self.alpha_a = alpha_a.min(15);
+        }
+        if let Some(alpha_b) = patch.alpha_b {
+            self.alpha_b = alpha_b.min(15);
+        }
+        if let Some(intensity) = patch.intensity {
+            self.intensity = intensity;
+        }
+        if let Some(param_a) = patch.param_a {
+            self.param_a = param_a;
+        }
+        if let Some(param_b) = patch.param_b {
+            self.param_b = param_b;
+        }
+        if let Some(param_c) = patch.param_c {
+            self.param_c = param_c;
+        }
+        if let Some(param_d) = patch.param_d {
+            self.param_d = param_d;
+        }
+        if let Some(direction) = patch.direction {
+            self.direction = direction;
+        }
+    }
+}
+
+impl From<&EpuWorkbenchLayer> for LayerEditState {
+    fn from(layer: &EpuWorkbenchLayer) -> Self {
+        Self {
+            opcode: layer.opcode,
+            variant_id: layer.variant_id,
+            domain_id: layer.domain_id,
+            region_mask: layer.region_mask,
+            blend: layer.blend.into(),
+            color_a: layer.color_a,
+            color_b: layer.color_b,
+            alpha_a: layer.alpha_a,
+            alpha_b: layer.alpha_b,
+            intensity: layer.intensity,
+            param_a: layer.param_a,
+            param_b: layer.param_b,
+            param_c: layer.param_c,
+            param_d: layer.param_d,
+            direction: layer.direction,
+        }
+    }
+}
+
+impl From<EpuBlend> for EpuWorkbenchBlend {
+    fn from(blend: EpuBlend) -> Self {
+        match blend {
+            EpuBlend::Add => EpuWorkbenchBlend::Add,
+            EpuBlend::Multiply => EpuWorkbenchBlend::Multiply,
+            EpuBlend::Max => EpuWorkbenchBlend::Max,
+            EpuBlend::Lerp => EpuWorkbenchBlend::Lerp,
+            EpuBlend::Screen => EpuWorkbenchBlend::Screen,
+            EpuBlend::HsvMod => EpuWorkbenchBlend::HsvMod,
+            EpuBlend::Min => EpuWorkbenchBlend::Min,
+            EpuBlend::Overlay => EpuWorkbenchBlend::Overlay,
+        }
+    }
+}
+
+impl From<EpuWorkbenchBlend> for EpuBlend {
+    fn from(blend: EpuWorkbenchBlend) -> Self {
+        match blend {
+            EpuWorkbenchBlend::Add => EpuBlend::Add,
+            EpuWorkbenchBlend::Multiply => EpuBlend::Multiply,
+            EpuWorkbenchBlend::Max => EpuBlend::Max,
+            EpuWorkbenchBlend::Lerp => EpuBlend::Lerp,
+            EpuWorkbenchBlend::Screen => EpuBlend::Screen,
+            EpuWorkbenchBlend::HsvMod => EpuBlend::HsvMod,
+            EpuWorkbenchBlend::Min => EpuBlend::Min,
+            EpuWorkbenchBlend::Overlay => EpuBlend::Overlay,
+        }
+    }
 }
 
 /// Convert u8 to EpuOpcode (with bounds check).
@@ -145,6 +269,9 @@ fn epu_opcode_from_u8(code: u8) -> EpuOpcode {
         0x11 => EpuOpcode::Portal,
         0x12 => EpuOpcode::LobeRadiance,
         0x13 => EpuOpcode::BandRadiance,
+        0x14 => EpuOpcode::Mottle,
+        0x15 => EpuOpcode::Advect,
+        0x16 => EpuOpcode::Surface,
         _ => EpuOpcode::Nop,
     }
 }
@@ -199,6 +326,40 @@ impl EpuEditor {
             config.layers[i] = state.to_layer().encode();
         }
         config
+    }
+
+    /// Export the current render config with solo/mute visibility applied.
+    pub fn export_render_config(&self) -> EpuConfig {
+        let mut config = self.export_config();
+        let visibility_mask = self.layer_visibility_mask();
+        for (index, layer) in config.layers.iter_mut().enumerate() {
+            if visibility_mask & (1 << index) == 0 {
+                *layer = [0, 0];
+            }
+        }
+        config
+    }
+
+    pub fn export_workbench_config(&self) -> EpuWorkbenchConfig {
+        EpuWorkbenchConfig {
+            layers: [
+                self.layers[0].to_workbench_layer(),
+                self.layers[1].to_workbench_layer(),
+                self.layers[2].to_workbench_layer(),
+                self.layers[3].to_workbench_layer(),
+                self.layers[4].to_workbench_layer(),
+                self.layers[5].to_workbench_layer(),
+                self.layers[6].to_workbench_layer(),
+                self.layers[7].to_workbench_layer(),
+            ],
+        }
+    }
+
+    pub fn load_workbench_config(&mut self, config: &EpuWorkbenchConfig) {
+        for (index, layer) in config.layers.iter().enumerate() {
+            self.layers[index] = LayerEditState::from(layer);
+        }
+        self.dirty = true;
     }
 
     /// Render the full editor UI.
@@ -393,7 +554,15 @@ impl EpuEditor {
         // Domain selector (if opcode has domains)
         changed |= Self::render_domain_selector(ui, layer);
 
-        ui.separator();
+        let capability_report =
+            epu_capabilities::report_for(layer.opcode, layer.variant_id, layer.domain_id);
+        if !capability_report.is_empty() {
+            ui.group(|ui| {
+                ui.label(egui::RichText::new("Capability guidance").strong());
+                epu_capabilities::render_report(ui, &capability_report);
+            });
+            ui.separator();
+        }
 
         // Common controls: region, blend, colors
         changed |= Self::render_common_controls(ui, layer);
@@ -421,7 +590,7 @@ impl EpuEditor {
 
             let kind_label = match opcode_kind(layer.opcode) {
                 Some(OpcodeKind::Bounds) => " [bounds]",
-                Some(OpcodeKind::Radiance) => " [radiance]",
+                Some(OpcodeKind::Radiance) => " [feature]",
                 None => "",
             };
 
@@ -452,9 +621,9 @@ impl EpuEditor {
                     }
 
                     ui.separator();
-                    ui.label("Radiance:");
+                    ui.label("Features:");
 
-                    // Radiance opcodes (0x08..=0x1F)
+                    // Feature opcodes (0x08..=0x1F)
                     for code in 8u8..=0x1F {
                         if let Some(info) = &OPCODES[code as usize] {
                             if ui

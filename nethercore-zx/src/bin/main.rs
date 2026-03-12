@@ -104,6 +104,14 @@ struct Args {
     #[arg(long, value_name = "FILE")]
     replay: Option<PathBuf>,
 
+    /// Enable the local EPU workbench HTTP service on 127.0.0.1:<port>
+    #[arg(long)]
+    epu_workbench_port: Option<u16>,
+
+    /// Durable directory for EPU workbench captures/exports
+    #[arg(long, value_name = "DIR")]
+    epu_workbench_dir: Option<PathBuf>,
+
     // === Preview Mode ===
     /// Run in preview mode to inspect ROM assets
     #[arg(long)]
@@ -175,6 +183,8 @@ fn main() -> Result<()> {
         input_delay: args.input_delay,
         connection_mode,
         replay_script: args.replay,
+        epu_workbench_port: args.epu_workbench_port,
+        epu_workbench_dir: args.epu_workbench_dir,
     };
 
     run(config)

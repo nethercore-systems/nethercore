@@ -13,6 +13,11 @@ use nethercore_core::{
     console::{Audio, Console, ConsoleInput, ConsoleSpecs, RawInput, SoundHandle},
     debug::DebugStat,
     wasm::WasmGameContext,
+    workbench::{
+        EpuWorkbenchCaptureCrops, EpuWorkbenchConfig, EpuWorkbenchCrop, EpuWorkbenchExportOptions,
+        EpuWorkbenchExportResult, EpuWorkbenchLayerPatch, EpuWorkbenchMetadata,
+        EpuWorkbenchViewState,
+    },
 };
 use zx_common::ZXDataPack;
 
@@ -409,6 +414,80 @@ impl Console for NethercoreZX {
             let override_config = self.epu_debug_panel.get_override_config();
             state.epu_frame_configs.clear();
             state.epu_frame_configs.insert(0, override_config);
+        }
+    }
+
+    fn has_epu_workbench(&self) -> bool {
+        true
+    }
+
+    fn epu_workbench_config(&self) -> Option<EpuWorkbenchConfig> {
+        Some(self.epu_debug_panel.export_workbench_config())
+    }
+
+    fn epu_workbench_metadata(&self) -> EpuWorkbenchMetadata {
+        self.epu_debug_panel.workbench_metadata()
+    }
+
+    fn epu_workbench_load_snapshot_env(&mut self, env_id: u32) -> Result<()> {
+        if self.epu_debug_panel.load_snapshot_env(env_id) {
+            Ok(())
+        } else {
+            anyhow::bail!("snapshot env {} not available", env_id)
+        }
+    }
+
+    fn epu_workbench_set_config(&mut self, config: &EpuWorkbenchConfig) -> Result<()> {
+        self.epu_debug_panel.load_workbench_config(config);
+        Ok(())
+    }
+
+    fn epu_workbench_patch_layer(
+        &mut self,
+        layer_index: usize,
+        patch: &EpuWorkbenchLayerPatch,
+    ) -> Result<()> {
+        let Some(layer) = self.epu_debug_panel.editor.layers.get_mut(layer_index) else {
+            anyhow::bail!("layer index out of range: {}", layer_index);
+        };
+        layer.apply_workbench_patch(patch);
+        self.epu_debug_panel.editor.dirty = true;
+        Ok(())
+    }
+
+    fn epu_workbench_set_view(&mut self, view: &EpuWorkbenchViewState) -> Result<()> {
+        self.epu_debug_panel.set_workbench_view(view);
+        Ok(())
+    }
+
+    fn epu_workbench_view(&self) -> Option<EpuWorkbenchViewState> {
+        Some(self.epu_debug_panel.workbench_view())
+    }
+
+    fn epu_workbench_export(
+        &self,
+        options: &EpuWorkbenchExportOptions,
+    ) -> Result<EpuWorkbenchExportResult> {
+        Ok(self.epu_debug_panel.export_workbench(options))
+    }
+
+    fn epu_workbench_capture_crops(&self, width: u32, height: u32) -> EpuWorkbenchCaptureCrops {
+        let probe_size = width.min(height) / 3;
+        let probe_x = width.saturating_sub(probe_size) / 2;
+        let probe_y = height.saturating_sub(probe_size) / 2;
+        EpuWorkbenchCaptureCrops {
+            background: EpuWorkbenchCrop {
+                x: width / 20,
+                y: height / 12,
+                width: width * 3 / 8,
+                height: height * 5 / 12,
+            },
+            probe: EpuWorkbenchCrop {
+                x: probe_x,
+                y: probe_y,
+                width: probe_size,
+                height: probe_size,
+            },
         }
     }
 }

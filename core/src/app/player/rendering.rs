@@ -64,7 +64,7 @@ where
 
             // Sync debug UI state before rendering (enables EPU lock mode, etc.)
             // Must happen before render_game_to_target so overrides take effect.
-            if self.console_debug_panel_visible {
+            if self.console_debug_panel_visible || self.workbench.is_some() {
                 if let Some(session) = runner.session_mut() {
                     let (console, state_opt) = session.runtime.console_and_state_mut();
                     if let Some(state) = state_opt {
@@ -733,6 +733,8 @@ where
                 );
                 self.capture.process_frame(pixels, width, height);
             }
+
+            self.maybe_complete_workbench_capture();
 
             // Check for capture results
             if let Some(result) = self.capture.poll_save_result() {

@@ -235,36 +235,44 @@ fn eval_plane_sand(
     return vec2f(brightness, grain);
 }
 
-// WATER variant: layered sinusoidal ripples
+// WATER variant: loopable directional wave bands
 fn eval_plane_water(
     uv: vec2f,
     t: f32,
 ) -> vec2f {
     // Returns (ripple_brightness, specular_highlight)
-    // Multiple overlapping ripple layers
-    let center1 = vec2f(0.3, 0.4);
-    let center2 = vec2f(0.7, 0.6);
-    let center3 = vec2f(0.5, 0.2);
+    // Keep motion strictly phase-looped: all time terms are integer harmonics of t,
+    // so param_d wraps cleanly without the radial "bowl" artifact from fixed centers.
+    let dir1 = normalize(vec2f(0.92, 0.38));
+    let dir2 = normalize(vec2f(-0.28, 0.96));
+    let dir3 = normalize(vec2f(0.97, -0.24));
+    let phase_circle = vec2f(cos(t), sin(t));
 
-    let d1 = length(fract(uv) - center1);
-    let d2 = length(fract(uv * 0.7 + vec2f(0.2, 0.3)) - center2);
-    let d3 = length(fract(uv * 1.3 + vec2f(0.5, 0.1)) - center3);
+    // Gentle loopable domain warp keeps the bands organic without reintroducing rings.
+    let warp = vec2f(
+        sin(dot(uv, vec2f(0.60, -0.80)) * 1.4 + t),
+        cos(dot(uv, vec2f(0.80, 0.50)) * 1.7 - t * 2.0)
+    ) * 0.08;
+    let warped_uv = uv + warp;
 
-    // Sinusoidal ripples
-    let ripple1 = sin(d1 * 20.0 - t * 3.0) * 0.5 + 0.5;
-    let ripple2 = sin(d2 * 15.0 - t * 2.5 + 1.0) * 0.5 + 0.5;
-    let ripple3 = sin(d3 * 25.0 - t * 3.5 + 2.0) * 0.5 + 0.5;
+    let band1 = dot(warped_uv, dir1);
+    let band2 = dot(warped_uv, dir2);
+    let band3 = dot(warped_uv + phase_circle * 0.15, dir3);
 
-    // Combine ripples
-    let combined = (ripple1 + ripple2 + ripple3) / 3.0;
+    let wave1 = sin(band1 * 7.0 - t) * 0.5 + 0.5;
+    let wave2 = sin(band2 * 11.0 - t * 2.0 + 1.1) * 0.5 + 0.5;
+    let wave3 = sin(band3 * 17.0 + t * 3.0 + 2.4) * 0.5 + 0.5;
 
-    // Subtle caustic-like pattern
-    let caustic = plane_noise(uv * 8.0 + vec2f(0.0, 0.0)) * 0.2;
+    let combined = wave1 * 0.50 + wave2 * 0.33 + wave3 * 0.17;
 
-    // Specular highlight approximation
-    let specular = pow(combined, 4.0) * 0.5;
+    // Subtle moving caustic detail, also phase-looped.
+    let caustic = plane_noise(warped_uv * 6.0 + phase_circle * 0.6) * 0.10;
 
-    return vec2f(combined * 0.6 + 0.4 + caustic, specular);
+    // Concentrate highlights near crest regions instead of broad radial hot spots.
+    let crest = smoothstep(0.68, 0.98, combined + caustic * 0.5);
+    let specular = pow(crest, 3.0) * 0.55;
+
+    return vec2f(combined * 0.55 + 0.35 + caustic, specular);
 }
 
 // GRATING variant: parallel bars with gaps

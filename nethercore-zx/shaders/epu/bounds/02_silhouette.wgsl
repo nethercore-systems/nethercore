@@ -216,5 +216,5 @@ fn eval_silhouette(
 
     let rgb = background_color * regions.sky + silhouette_color * regions.wall + floor_color * regions.floor;
 
-    return BoundsResult(LayerSample(rgb, 1.0), regions);
+    return BoundsResult(LayerSample(rgb, strength), regions, 1.0);
 }

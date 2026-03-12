@@ -417,7 +417,7 @@ fn test_builder_lobe_radiance() {
     });
     let config = epu_finish(builder);
 
-    let [hi, _lo] = config.layers[4];
+    let [hi, _lo] = config.layers[0];
     let opcode = (hi >> 59) & 0x1F;
     assert_eq!(opcode, EpuOpcode::LobeRadiance as u64);
 }
@@ -440,7 +440,7 @@ fn test_builder_band_radiance() {
     });
     let config = epu_finish(builder);
 
-    let [hi, _lo] = config.layers[4];
+    let [hi, _lo] = config.layers[0];
     let opcode = (hi >> 59) & 0x1F;
     assert_eq!(opcode, EpuOpcode::BandRadiance as u64);
 }
@@ -464,7 +464,7 @@ fn test_builder_atmosphere_absorption() {
     });
     let config = epu_finish(builder);
 
-    let [hi, _lo] = config.layers[4];
+    let [hi, _lo] = config.layers[0];
 
     let opcode = (hi >> 59) & 0x1F;
     assert_eq!(opcode, EpuOpcode::Atmosphere as u64);
@@ -493,8 +493,7 @@ fn test_builder_decal() {
     });
     let config = epu_finish(builder);
 
-    // Feature should be in slot 4
-    let [hi, lo] = config.layers[4];
+    let [hi, lo] = config.layers[0];
 
     let opcode = (hi >> 59) & 0x1F;
     assert_eq!(opcode, EpuOpcode::Decal as u64);
@@ -537,7 +536,7 @@ fn test_builder_scatter() {
     });
     let config = epu_finish(builder);
 
-    let [hi, lo] = config.layers[4];
+    let [hi, lo] = config.layers[0];
 
     let opcode = (hi >> 59) & 0x1F;
     assert_eq!(opcode, EpuOpcode::Scatter as u64);
@@ -571,7 +570,7 @@ fn test_builder_grid() {
     });
     let config = epu_finish(builder);
 
-    let [hi, lo] = config.layers[4];
+    let [hi, lo] = config.layers[0];
 
     let opcode = (hi >> 59) & 0x1F;
     assert_eq!(opcode, EpuOpcode::Grid as u64);
@@ -605,7 +604,7 @@ fn test_builder_flow() {
     });
     let config = epu_finish(builder);
 
-    let [hi, lo] = config.layers[4];
+    let [hi, lo] = config.layers[0];
 
     let opcode = (hi >> 59) & 0x1F;
     assert_eq!(opcode, EpuOpcode::Flow as u64);
@@ -630,41 +629,189 @@ fn test_builder_flow() {
 fn test_builder_slot_allocation() {
     let mut builder = epu_begin();
 
-    // Add bounds layers (slots 0-3)
+    // Add bounds and feature layers in authored order.
     builder.ramp_bounds(RampParams::default());
-    builder.sector_bounds(SectorParams::default());
-    builder.split_bounds(SplitParams::default());
-    builder.cell_bounds(CellParams::default());
-
-    // Add feature layers (slots 4-7)
     builder.decal(DecalParams::default());
+    builder.sector_bounds(SectorParams::default());
     builder.grid(GridParams::default());
+    builder.split_bounds(SplitParams::default());
     builder.scatter(ScatterParams::default());
+    builder.cell_bounds(CellParams::default());
     builder.flow(FlowParams::default());
 
     let config = epu_finish(builder);
 
-    // Verify bounds slots
+    // Verify authored order
     assert_eq!((config.layers[0][0] >> 59) & 0x1F, EpuOpcode::Ramp as u64);
-    assert_eq!((config.layers[1][0] >> 59) & 0x1F, EpuOpcode::Sector as u64);
-    assert_eq!((config.layers[2][0] >> 59) & 0x1F, EpuOpcode::Split as u64);
-    assert_eq!((config.layers[3][0] >> 59) & 0x1F, EpuOpcode::Cell as u64);
-
-    // Verify feature slots
-    assert_eq!((config.layers[4][0] >> 59) & 0x1F, EpuOpcode::Decal as u64);
-    assert_eq!((config.layers[5][0] >> 59) & 0x1F, EpuOpcode::Grid as u64);
+    assert_eq!((config.layers[1][0] >> 59) & 0x1F, EpuOpcode::Decal as u64);
+    assert_eq!((config.layers[2][0] >> 59) & 0x1F, EpuOpcode::Sector as u64);
+    assert_eq!((config.layers[3][0] >> 59) & 0x1F, EpuOpcode::Grid as u64);
+    assert_eq!((config.layers[4][0] >> 59) & 0x1F, EpuOpcode::Split as u64);
     assert_eq!(
-        (config.layers[6][0] >> 59) & 0x1F,
+        (config.layers[5][0] >> 59) & 0x1F,
         EpuOpcode::Scatter as u64
     );
+    assert_eq!((config.layers[6][0] >> 59) & 0x1F, EpuOpcode::Cell as u64);
     assert_eq!((config.layers[7][0] >> 59) & 0x1F, EpuOpcode::Flow as u64);
+}
+
+#[test]
+fn test_builder_advect() {
+    let mut builder = epu_begin();
+    builder.advect(AdvectParams {
+        region: EpuRegion::Sky,
+        blend: EpuBlend::Screen,
+        dir: Vec3::X,
+        color: [220, 230, 240],
+        color_b: [80, 96, 112],
+        intensity: 180,
+        scale: 40,
+        coverage: 160,
+        breakup: 144,
+        phase: 20,
+        alpha: 12,
+        domain_id: 0,
+        variant: AdvectVariant::Squall,
+    });
+    let config = epu_finish(builder);
+
+    let [hi, lo] = config.layers[0];
+
+    let opcode = (hi >> 59) & 0x1F;
+    assert_eq!(opcode, EpuOpcode::Advect as u64);
+
+    let meta5 = (hi >> 48) & 0x1F;
+    assert_eq!(meta5, pack_meta5(0, AdvectVariant::Squall as u8) as u64);
+
+    let phase = (lo >> 24) & 0xFF;
+    assert_eq!(phase, 20);
+}
+
+#[test]
+fn test_builder_advect_bank_variant() {
+    let mut builder = epu_begin();
+    builder.advect(AdvectParams {
+        region: EpuRegion::Walls,
+        blend: EpuBlend::Lerp,
+        dir: Vec3::NEG_X,
+        color: [217, 229, 238],
+        color_b: [27, 37, 48],
+        intensity: 248,
+        scale: 92,
+        coverage: 156,
+        breakup: 104,
+        phase: 0,
+        alpha: 13,
+        domain_id: 0,
+        variant: AdvectVariant::Bank,
+    });
+    let config = epu_finish(builder);
+
+    let [hi, _lo] = config.layers[0];
+    let opcode = (hi >> 59) & 0x1F;
+    assert_eq!(opcode, EpuOpcode::Advect as u64);
+
+    let meta5 = (hi >> 48) & 0x1F;
+    assert_eq!(meta5, pack_meta5(0, AdvectVariant::Bank as u8) as u64);
+}
+
+#[test]
+fn test_builder_advect_front_variant() {
+    let mut builder = epu_begin();
+    builder.advect(AdvectParams {
+        region: EpuRegion::Walls,
+        blend: EpuBlend::Multiply,
+        dir: Vec3::NEG_X,
+        color: [156, 172, 184],
+        color_b: [13, 19, 25],
+        intensity: 255,
+        scale: 88,
+        coverage: 210,
+        breakup: 64,
+        phase: 0,
+        alpha: 15,
+        domain_id: 0,
+        variant: AdvectVariant::Front,
+    });
+    let config = epu_finish(builder);
+
+    let [hi, _lo] = config.layers[0];
+    let opcode = (hi >> 59) & 0x1F;
+    assert_eq!(opcode, EpuOpcode::Advect as u64);
+
+    let meta5 = (hi >> 48) & 0x1F;
+    assert_eq!(meta5, pack_meta5(0, AdvectVariant::Front as u8) as u64);
+}
+
+#[test]
+fn test_builder_surface() {
+    let mut builder = epu_begin();
+    builder.surface(SurfaceParams {
+        region: EpuRegion::Floor,
+        blend: EpuBlend::Lerp,
+        dir: Vec3::Y,
+        color: [240, 244, 248],
+        color_b: [96, 112, 128],
+        intensity: 180,
+        scale: 44,
+        fracture: 160,
+        sheen: 220,
+        phase: 12,
+        alpha: 11,
+        variant: SurfaceVariant::Crust,
+    });
+    let config = epu_finish(builder);
+
+    let [hi, lo] = config.layers[0];
+
+    let opcode = (hi >> 59) & 0x1F;
+    assert_eq!(opcode, EpuOpcode::Surface as u64);
+
+    let meta5 = (hi >> 48) & 0x1F;
+    assert_eq!(meta5, pack_meta5(0, SurfaceVariant::Crust as u8) as u64);
+
+    let fracture = (lo >> 40) & 0xFF;
+    let sheen = (lo >> 32) & 0xFF;
+    assert_eq!(fracture, 160);
+    assert_eq!(sheen, 220);
+}
+
+#[test]
+fn test_builder_overflow_ignored_after_eight_layers() {
+    let mut builder = epu_begin();
+
+    for i in 0..10u8 {
+        if i % 2 == 0 {
+            builder.sector_bounds(SectorParams {
+                sky_color: [i, 0, 0],
+                ..SectorParams::default()
+            });
+        } else {
+            builder.decal(DecalParams {
+                color: [i, i, i],
+                ..DecalParams::default()
+            });
+        }
+    }
+
+    let config = epu_finish(builder);
+
+    for (slot, [hi, _lo]) in config.layers.iter().enumerate() {
+        let opcode = (hi >> 59) & 0x1F;
+        let expected = if slot % 2 == 0 {
+            EpuOpcode::Sector as u64
+        } else {
+            EpuOpcode::Decal as u64
+        };
+        assert_eq!(opcode, expected, "unexpected opcode in slot {slot}");
+    }
 }
 
 #[test]
 fn test_builder_bounds_overflow_ignored() {
     let mut builder = epu_begin();
 
-    // Add 5 bounds layers (only 4 slots available)
+    // Add 5 bounds layers; all should fit while slots remain.
     builder.sector_bounds(SectorParams {
         sky_color: [255, 0, 0],
         ..SectorParams::default()
@@ -684,20 +831,18 @@ fn test_builder_bounds_overflow_ignored() {
     builder.sector_bounds(SectorParams {
         sky_color: [255, 0, 255],
         ..SectorParams::default()
-    }); // This should be ignored
+    });
 
     let config = epu_finish(builder);
 
-    // 5th layer should not appear anywhere
+    // All 5 layers should be present in authored order.
     for (i, [hi, _lo]) in config.layers.iter().enumerate() {
-        if i < 4 {
-            // Bounds slots should have sectors
+        if i < 5 {
             let opcode = (hi >> 59) & 0x1F;
             assert_eq!(opcode, EpuOpcode::Sector as u64);
         } else {
-            // Feature slots should be empty (NOP)
             let opcode = (hi >> 59) & 0x1F;
-            assert_eq!(opcode, 0, "Feature slot {i} should be NOP");
+            assert_eq!(opcode, 0, "Slot {i} should be NOP");
         }
     }
 }
@@ -706,7 +851,7 @@ fn test_builder_bounds_overflow_ignored() {
 fn test_builder_feature_overflow_ignored() {
     let mut builder = epu_begin();
 
-    // Add 5 feature layers (only 4 slots available)
+    // Add 5 feature layers; all should fit while slots remain.
     for i in 0..5u8 {
         builder.decal(DecalParams {
             color: [i * 50, i * 40, i * 30],
@@ -716,10 +861,14 @@ fn test_builder_feature_overflow_ignored() {
 
     let config = epu_finish(builder);
 
-    // Only first 4 should appear in slots 4-7
-    for i in 4..8 {
+    // All 5 should appear in slots 0-4.
+    for i in 0..5 {
         let opcode = (config.layers[i][0] >> 59) & 0x1F;
         assert_eq!(opcode, EpuOpcode::Decal as u64);
+    }
+    for i in 5..8 {
+        let opcode = (config.layers[i][0] >> 59) & 0x1F;
+        assert_eq!(opcode, 0, "Slot {i} should be NOP");
     }
 }
 
@@ -773,14 +922,14 @@ fn test_void_with_stars() {
     // Verify RAMP in slot 0
     assert_eq!((config.layers[0][0] >> 59) & 0x1F, EpuOpcode::Ramp as u64);
 
-    // Verify SCATTER in slot 4
+    // Verify SCATTER in slot 1
     assert_eq!(
-        (config.layers[4][0] >> 59) & 0x1F,
+        (config.layers[1][0] >> 59) & 0x1F,
         EpuOpcode::Scatter as u64
     );
 
     // Verify meta5 is 0
-    let meta5 = (config.layers[4][0] >> 48) & 0x1F;
+    let meta5 = (config.layers[1][0] >> 48) & 0x1F;
     assert_eq!(meta5, 0);
 }
 
@@ -830,10 +979,10 @@ fn test_sunny_meadow() {
     // Verify structure
     assert_eq!((config.layers[0][0] >> 59) & 0x1F, EpuOpcode::Ramp as u64);
     assert_eq!(
-        (config.layers[4][0] >> 59) & 0x1F,
+        (config.layers[1][0] >> 59) & 0x1F,
         EpuOpcode::LobeRadiance as u64
     );
-    assert_eq!((config.layers[5][0] >> 59) & 0x1F, EpuOpcode::Decal as u64);
+    assert_eq!((config.layers[2][0] >> 59) & 0x1F, EpuOpcode::Decal as u64);
 }
 
 // =============================================================================

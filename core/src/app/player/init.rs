@@ -256,6 +256,7 @@ where
         self.window = Some(window);
         self.runner = Some(runner);
         self.next_tick = Instant::now();
+        self.maybe_start_workbench()?;
 
         tracing::info!("Game loaded: {}", self.config.rom_path.display());
         tracing::info!("Player startup total {:?}", startup_started.elapsed());

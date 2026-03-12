@@ -27,6 +27,7 @@ pub mod save_store;
 #[cfg(test)]
 pub mod test_utils;
 pub mod wasm;
+pub mod workbench;
 
 // Re-export core traits and types
 pub use console::{

@@ -10,10 +10,11 @@ mod set_03_04;
 mod set_05_06;
 mod set_07_08;
 mod set_09_10;
+mod set_11_12;
 
 // Keep this showcase focused: a small set of "hero" presets with strong
 // genre/mood variety and broad opcode coverage.
-pub const PRESET_COUNT: usize = 10;
+pub const PRESET_COUNT: usize = 12;
 
 pub type Preset = [[u64; 2]; 8];
 
@@ -29,6 +30,8 @@ pub static PRESETS: [Preset; PRESET_COUNT] = [
     set_07_08::PRESET_VOLCANIC_CORE,
     set_09_10::PRESET_SKY_RUINS,
     set_09_10::PRESET_COMBAT_LAB,
+    set_11_12::PRESET_FROZEN_TUNDRA,
+    set_11_12::PRESET_STORM_FRONT,
 ];
 
 /// Animation speeds per layer per preset.
@@ -37,18 +40,25 @@ pub static PRESETS: [Preset; PRESET_COUNT] = [
 /// Only meaningful for opcodes that read param_d as phase:
 /// FLOW, LOBE, GRID, PLANE, PORTAL, BAND, DECAL.
 /// For SCATTER, patching param_d changes the seed — produces shimmer/respawn, not smooth motion.
+/// Variant-specific note:
+/// treat phase support as a property of the authored variant, not the opcode family.
+/// In this showcase, reliable movers include FLOW, LOBE, GRID, BAND, DECAL,
+/// PLANE/WATER, VEIL/RAIN_WALL, and PORTAL/VORTEX.
+/// PORTAL/RECT stays static, and SCATTER still uses `param_d` as a seed rather than smooth phase.
 pub static ANIM_SPEEDS: [[u8; 8]; PRESET_COUNT] = [
     //                                   L0 L1 L2 L3 L4 L5 L6 L7
     [0, 0, 0, 1, 2, 0, 1, 1], // 0: Neon Metropolis (rain streaks slow)
     [0, 0, 1, 1, 1, 0, 0, 0], // 1: Sakura Shrine (gentle)
-    [0, 0, 1, 1, 0, 1, 0, 0], // 2: Ocean Depths (very slow - underwater)
+    [0, 0, 3, 0, 0, 4, 0, 0], // 2: Ocean Depths (caustic drift + biolum vent need obvious motion)
     [0, 1, 0, 0, 0, 0, 0, 1], // 3: Void Station
     [0, 0, 1, 1, 1, 1, 0, 0], // 4: Desert Mirage (slow heat shimmer)
     [0, 0, 1, 1, 1, 0, 0, 1], // 5: Enchanted Grove (slow light shafts)
     [0, 0, 1, 0, 0, 1, 1, 0], // 6: Astral Void (very subtle)
     [0, 0, 0, 0, 0, 0, 0, 0], // 7: Hell Core (STATIC - no seizures!)
     [0, 0, 0, 1, 1, 1, 1, 1], // 8: Sky Ruins
-    [0, 0, 1, 1, 1, 1, 1, 1], // 9: Combat Lab
+    [0, 0, 4, 4, 4, 0, 2, 4], // 9: Combat Lab (floor scan + wall bay scan + projection field pulse)
+    [0, 0, 3, 5, 0, 1, 1, 0], // 10: Frozen Tundra (two bounds set the ridge/face first; SURFACE glaze/crust then carry the ice bed while ADVECT stays subordinate)
+    [0, 6, 1, 2, 0, 4, 8, 0], // 11: Storm Front (MASS owns the shelf; ADVECT carries subordinate internal transport)
 ];
 
 /// Preset names for display
@@ -63,4 +73,6 @@ pub const PRESET_NAMES: [&str; PRESET_COUNT] = [
     "Hell Core",
     "Sky Ruins",
     "Combat Lab",
+    "Frozen Tundra",
+    "Storm Front",
 ];

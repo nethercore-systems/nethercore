@@ -1,7 +1,7 @@
 // @epu_meta_begin
 // opcode = 0x0C
 // name = TRACE
-// kind = radiance
+// kind = feature
 // variants = [LIGHTNING, CRACKS, LEAD_LINES, FILAMENTS]
 // domains = [DIRECT3D, AXIS_CYL, AXIS_POLAR, TANGENT_LOCAL]
 // field intensity = { label="brightness", map="u8_01" }
@@ -14,7 +14,7 @@
 // ============================================================================
 // TRACE - Procedural Line/Crack Patterns (Lightning, Cracks, Lead Lines, Filaments)
 // Opcode: 0x0C
-// Role: Radiance (additive feature layer)
+// Role: Feature layer (additive emissive/detail carrier)
 //
 // Packed fields:
 //   color_a: Line/trace color (RGB24)
@@ -25,23 +25,23 @@
 //   param_c: Jitter/roughness (0..255 -> 0..1)
 //   param_d[7:4]: Seed value (0..15)
 //   param_d[3:0]: Shape modifier (variant-specific)
-//   direction: Axis (AXIS_CYL/AXIS_POLAR) or chart center (TANGENT_LOCAL)
+//   direction: Chart axis (DIRECT3D/AXIS_CYL/AXIS_POLAR) or chart center (TANGENT_LOCAL)
 //   alpha_a: Line alpha (0..15 -> 0..1)
 //   alpha_b: Glow alpha (0..15 -> 0..1)
 //
 // Meta (via meta5):
-//   domain_id: 1 AXIS_CYL, 2 AXIS_POLAR, 3 TANGENT_LOCAL
+//   domain_id: 0 DIRECT3D, 1 AXIS_CYL, 2 AXIS_POLAR, 3 TANGENT_LOCAL
 //   variant_id: 0 LIGHTNING, 1 CRACKS, 2 LEAD_LINES, 3 FILAMENTS
 // ============================================================================
 
 // Domain IDs for TRACE
-const TRACE_DOMAIN_DIRECT3D: u32 = 0u;      // Reserved/default
+const TRACE_DOMAIN_DIRECT3D: u32 = 0u;      // Planar world-space chart around axis
 const TRACE_DOMAIN_AXIS_CYL: u32 = 1u;      // Cylindrical (azimuth, height)
 const TRACE_DOMAIN_AXIS_POLAR: u32 = 2u;    // Polar (angle, radius from axis)
 const TRACE_DOMAIN_TANGENT_LOCAL: u32 = 3u; // Tangent plane at direction
 
 // Variant IDs for TRACE
-const TRACE_VARIANT_LIGHTNING: u32 = 0u;    // Jagged lightning bolts with branching
+const TRACE_VARIANT_LIGHTNING: u32 = 0u;    // Static jagged strike silhouettes with branching
 const TRACE_VARIANT_CRACKS: u32 = 1u;       // Random branching crack patterns
 const TRACE_VARIANT_LEAD_LINES: u32 = 2u;   // Stained-glass polygonal cells
 const TRACE_VARIANT_FILAMENTS: u32 = 3u;    // Organic spline-like curves
@@ -64,6 +64,15 @@ fn trace_hash32(p: vec3f) -> vec2f {
     let h1 = dot(p, vec3f(127.1, 311.7, 74.7));
     let h2 = dot(p, vec3f(269.5, 183.3, 246.1));
     return fract(sin(vec2f(h1, h2)) * 43758.5453123);
+}
+
+// Map direction to a planar world-space chart around the chosen axis
+fn trace_direct3d_uv(dir: vec3f, axis: vec3f) -> vec2f {
+    let up = select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(axis.y) > 0.9);
+    let t = normalize(cross(up, axis));
+    let u = dot(dir, t) * 0.5 + 0.5;
+    let v = dot(dir, axis) * 0.5 + 0.5;
+    return vec2f(u, v);
 }
 
 // Distance from point to line segment
@@ -358,13 +367,21 @@ fn eval_trace(
     let shape_q = pd & 0xFu;
 
     // Decode axis/center direction
-    let axis_or_center = decode_dir16(instr_dir16(instr));
+    let axis_or_center16 = instr_dir16(instr);
+    let axis_or_center = select(
+        vec3f(0.0, 1.0, 0.0),
+        decode_dir16(axis_or_center16),
+        axis_or_center16 != 0u
+    );
 
     // Map to 2D chart based on domain
     var uv = vec2f(0.0);
     var domain_w = 1.0;
 
     switch domain_id {
+        case TRACE_DOMAIN_DIRECT3D: {
+            uv = trace_direct3d_uv(dir, axis_or_center);
+        }
         case TRACE_DOMAIN_AXIS_CYL: {
             uv = trace_cyl_uv(dir, axis_or_center);
             // Pole fade at v near 0 or 1
@@ -387,7 +404,7 @@ fn eval_trace(
             uv = uv * 0.5 + 0.5;
         }
         default: {
-            // Reserved/unknown domains: no output.
+            // Unknown domains: no output.
             return LayerSample(vec3f(0.0), 0.0);
         }
     }

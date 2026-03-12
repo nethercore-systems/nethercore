@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use ggrs::GgrsError;
+use ggrs::SessionState;
 
 use crate::console::Console;
 use crate::rollback::{RollbackSession, SessionEvent};
@@ -175,6 +176,50 @@ impl<C: Console> Runtime<C> {
             &mut self.session,
             time_scale,
         )
+    }
+
+    /// Run exactly one deterministic simulation step.
+    ///
+    /// This is intended for replay-driven execution, where one replay frame must
+    /// map to exactly one game tick regardless of host wall-clock jitter.
+    pub fn replay_step(&mut self) -> Result<(u32, f32)> {
+        // Ignore wall-clock catchup while replay stepping. Otherwise a slow host
+        // frame can execute multiple updates before one replay frame advances.
+        self.accumulator = Duration::ZERO;
+        self.last_update = Some(Instant::now());
+
+        let mut ticks = 0u32;
+
+        if let Some(session) = &mut self.session {
+            if let Some(state) = session.session_state() {
+                if state != SessionState::Running {
+                    return Ok((0, 0.0));
+                }
+            }
+
+            let requests = session
+                .advance_frame()
+                .map_err(|e| anyhow::anyhow!("GGRS advance_frame failed: {}", e))?;
+
+            if let Some(game) = &mut self.game {
+                let advance_inputs = session
+                    .handle_requests(game, requests)
+                    .map_err(|e| anyhow::anyhow!("GGRS handle_requests failed: {}", e))?;
+
+                for inputs in advance_inputs {
+                    for (player_idx, (input, _status)) in inputs.iter().enumerate() {
+                        game.set_input(player_idx, *input);
+                    }
+                    game.update(self.tick_duration.as_secs_f32())?;
+                    ticks += 1;
+                }
+            }
+        } else if let Some(game) = &mut self.game {
+            game.update(self.tick_duration.as_secs_f32())?;
+            ticks = 1;
+        }
+
+        Ok((ticks, 0.0))
     }
 
     /// Render the current frame

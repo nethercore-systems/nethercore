@@ -48,12 +48,12 @@ impl MapKind {
     }
 }
 
-/// Kind of EPU opcode (bounds vs radiance).
+/// Kind of EPU opcode (bounds vs feature).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OpcodeKind {
     /// Bounds opcode (defines regions)
     Bounds,
-    /// Radiance opcode (additive feature layer)
+    /// Feature opcode (internally still named `Radiance` for compatibility)
     Radiance,
 }
 
@@ -65,9 +65,9 @@ impl OpcodeKind {
     pub fn parse(s: &str) -> Self {
         match s {
             "bounds" => OpcodeKind::Bounds,
-            "radiance" => OpcodeKind::Radiance,
+            "radiance" | "feature" => OpcodeKind::Radiance,
             _ => panic!(
-                "Unknown opcode kind: '{}' (expected 'bounds' or 'radiance')",
+                "Unknown opcode kind: '{}' (expected 'bounds' or 'feature'; 'radiance' is a legacy alias)",
                 s
             ),
         }
@@ -98,7 +98,7 @@ pub struct OpcodeMeta {
     pub opcode: u8,
     /// Opcode name (e.g., "PLANE", "RAMP")
     pub name: String,
-    /// Opcode kind (bounds or radiance)
+    /// Opcode kind (bounds or feature)
     pub kind: OpcodeKind,
     /// Variant names (max 8)
     pub variants: Vec<String>,

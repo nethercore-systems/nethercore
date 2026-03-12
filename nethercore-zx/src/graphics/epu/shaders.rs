@@ -43,7 +43,7 @@ pub(super) const EPU_BOUNDS: &str = concat!(
     )),
 );
 
-/// EPU feature opcodes (DECAL, GRID, SCATTER, FLOW, TRACE, VEIL, ATMOSPHERE, PLANE, CELESTIAL, PORTAL, LOBE_RADIANCE, BAND_RADIANCE) + dispatch entry.
+/// EPU feature opcodes (DECAL, GRID, SCATTER, FLOW, TRACE, VEIL, ATMOSPHERE, PLANE, CELESTIAL, PORTAL, LOBE_RADIANCE, BAND_RADIANCE, MOTTLE, ADVECT, SURFACE) + dispatch entry.
 pub(super) const EPU_FEATURES: &str = concat!(
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -92,6 +92,22 @@ pub(super) const EPU_FEATURES: &str = concat!(
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/shaders/epu/features/11_band_radiance.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/12_mottle.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/13_advect.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/14_surface.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/15_mass.wgsl"
     )),
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),

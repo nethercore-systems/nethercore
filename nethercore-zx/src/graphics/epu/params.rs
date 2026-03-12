@@ -466,6 +466,141 @@ impl Default for FlowParams {
     }
 }
 
+/// Variants for ADVECT feature transport.
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum AdvectVariant {
+    /// Broad transport sheet
+    #[default]
+    Sheet = 0,
+    /// Wind-driven suspended snow / particulate drift
+    Spindrift = 1,
+    /// Dense storm front / squall mass
+    Squall = 2,
+    /// Soft low-contrast fog or haze
+    Mist = 3,
+    /// Forceful wall-attached mass / front body
+    Bank = 4,
+    /// Broad dominant storm shelf / front wall
+    Front = 5,
+}
+
+/// Parameters for ADVECT feature.
+#[derive(Clone, Copy, Debug)]
+pub struct AdvectParams {
+    /// Region mask
+    pub region: EpuRegion,
+    /// Blend mode
+    pub blend: EpuBlend,
+    /// Prevailing travel direction / wind axis
+    pub dir: Vec3,
+    /// Primary tint / leading edge color
+    pub color: [u8; 3],
+    /// Secondary tint / recess tone
+    pub color_b: [u8; 3],
+    /// Brightness / density
+    pub intensity: u8,
+    /// Scene-scale pattern scale
+    pub scale: u8,
+    /// Broad coverage / slab width
+    pub coverage: u8,
+    /// Macro breakup / irregularity
+    pub breakup: u8,
+    /// Looping phase (0..255 maps to 0..1).
+    ///
+    /// Advance this from your game (deterministic) to animate transport.
+    pub phase: u8,
+    /// Alpha (0-15)
+    pub alpha: u8,
+    /// Domain selection (0=DIRECT3D, 1=AXIS_CYL, 2=AXIS_POLAR)
+    pub domain_id: u8,
+    /// Variant selection
+    pub variant: AdvectVariant,
+}
+
+impl Default for AdvectParams {
+    fn default() -> Self {
+        Self {
+            region: EpuRegion::Sky,
+            blend: EpuBlend::Screen,
+            dir: Vec3::X,
+            color: [255, 255, 255],
+            color_b: [96, 96, 96],
+            intensity: 160,
+            scale: 48,
+            coverage: 144,
+            breakup: 128,
+            phase: 0,
+            alpha: 12,
+            domain_id: 0,
+            variant: AdvectVariant::Sheet,
+        }
+    }
+}
+
+/// Variants for SURFACE feature response.
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum SurfaceVariant {
+    /// Smooth glazed sheet with restrained fracture
+    #[default]
+    Glaze = 0,
+    /// Broken crust / plate read
+    Crust = 1,
+    /// Angular faceted crystalline response
+    Facet = 2,
+    /// Powder-soft frosted veil
+    Dusted = 3,
+}
+
+/// Parameters for SURFACE feature.
+#[derive(Clone, Copy, Debug)]
+pub struct SurfaceParams {
+    /// Region mask
+    pub region: EpuRegion,
+    /// Blend mode
+    pub blend: EpuBlend,
+    /// Preferred surface normal / response axis
+    pub dir: Vec3,
+    /// Primary tint / bright response
+    pub color: [u8; 3],
+    /// Secondary tint / recess tone
+    pub color_b: [u8; 3],
+    /// Contrast
+    pub intensity: u8,
+    /// Pattern scale
+    pub scale: u8,
+    /// Fracture / breakup amount
+    pub fracture: u8,
+    /// Sheen / reflective response
+    pub sheen: u8,
+    /// Looping phase (0..255 maps to 0..1).
+    pub phase: u8,
+    /// Alpha (0-15)
+    pub alpha: u8,
+    /// Variant selection
+    pub variant: SurfaceVariant,
+}
+
+impl Default for SurfaceParams {
+    fn default() -> Self {
+        Self {
+            region: EpuRegion::Floor,
+            blend: EpuBlend::Lerp,
+            dir: Vec3::Y,
+            color: [240, 244, 248],
+            color_b: [96, 112, 128],
+            intensity: 160,
+            scale: 52,
+            fracture: 128,
+            sheen: 180,
+            phase: 0,
+            alpha: 12,
+            variant: SurfaceVariant::Glaze,
+        }
+    }
+}
+
 /// Parameters for LOBE_RADIANCE feature.
 #[derive(Clone, Copy, Debug)]
 pub struct LobeRadianceParams {

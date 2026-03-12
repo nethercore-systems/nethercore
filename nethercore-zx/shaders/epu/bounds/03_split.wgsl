@@ -2,7 +2,7 @@
 // opcode = 0x04
 // name = SPLIT
 // kind = bounds
-// variants = [HALF, WEDGE, CORNER, BANDS, CROSS, PRISM]
+// variants = [HALF, WEDGE, CORNER, BANDS, CROSS, PRISM, TIER, FACE]
 // domains = []
 // field intensity = { label="-", map="u8_01" }
 // field param_a = { label="blend_width", map="u8_01" }
@@ -22,7 +22,7 @@
 //   param_c: Band count (0..255 -> 2..16) - BANDS; side count - PRISM
 //   param_d: Band offset (0..255 -> 0.0..1.0) - BANDS; rotation - PRISM
 //   direction: Cut plane normal / primary axis (oct-u16)
-//   variant_id: 0=HALF, 1=WEDGE, 2=CORNER, 3=BANDS, 4=CROSS, 5=PRISM
+//   variant_id: 0=HALF, 1=WEDGE, 2=CORNER, 3=BANDS, 4=CROSS, 5=PRISM, 6=TIER, 7=FACE
 // ============================================================================
 
 // Build orthonormal basis around a given axis
@@ -146,6 +146,49 @@ fn split_prism(dir: vec3f, n0: vec3f, basis: mat3x3f, side_count: f32, rotation:
     return vec3f(w_sky, w_wall, w_floor);
 }
 
+// TIER variant (6): Stepped structural split with a broad middle shelf band.
+fn split_tier(
+    dir: vec3f,
+    n0: vec3f,
+    basis: mat3x3f,
+    tilt_angle: f32,
+    tier_span: f32,
+    tier_center: f32,
+    bw: f32,
+) -> vec3f {
+    let tilt = mix(-0.35, 0.35, tilt_angle / PI);
+    let profile = dot(dir, n0) + dot(dir, basis[1]) * tilt;
+    let half_span = max(tier_span * 0.5, 0.02);
+
+    let sky = smoothstep(tier_center + half_span - bw, tier_center + half_span + bw, profile);
+    let floor = 1.0 - smoothstep(tier_center - half_span - bw, tier_center - half_span + bw, profile);
+    let wall = max(0.0, 1.0 - sky - floor);
+
+    return vec3f(sky, wall, floor);
+}
+
+// FACE variant (7): One dominant structural face with sky/floor compressed to either side.
+fn split_face(
+    dir: vec3f,
+    n0: vec3f,
+    basis: mat3x3f,
+    tilt_angle: f32,
+    face_width: f32,
+    face_center: f32,
+    bw: f32,
+) -> vec3f {
+    let tilt = mix(-0.25, 0.25, tilt_angle / PI);
+    let profile = dot(dir, n0) + dot(dir, basis[1]) * tilt - face_center;
+    let width = max(face_width, 0.03);
+
+    let wall_raw = 1.0 - smoothstep(width, width + bw, abs(profile));
+    let sky_raw = smoothstep(width * 0.4, width + bw, profile);
+    let floor_raw = smoothstep(width * 0.4, width + bw, -profile);
+    let total = max(wall_raw + sky_raw + floor_raw, 0.0001);
+
+    return vec3f(sky_raw, wall_raw, floor_raw) / total;
+}
+
 fn eval_split(
     dir: vec3f,
     instr: vec4u,
@@ -164,7 +207,7 @@ fn eval_split(
     let pd = instr_d(instr);
 
     // blend_width: 0..255 -> 0.0..0.2
-    let blend_width = u8_to_01(pa) * 1.0;
+    let blend_width = u8_to_01(pa) * 0.2;
     // Minimum blend width for AA stability
     let bw = max(blend_width, 0.001);
 
@@ -232,8 +275,21 @@ fn eval_split(
             w_wall = weights.y;
             w_floor = weights.z;
         }
+        case 6u: {
+            // TIER: Broad stepped middle band for shelf / terrace / layered structure
+            let weights = split_tier(dir, n0, basis, wedge_angle, u8_to_01(pc), band_offset * 2.0 - 1.0, bw);
+            w_sky = weights.x;
+            w_wall = weights.y;
+            w_floor = weights.z;
+        }
+        case 7u: {
+            // FACE: One dominant wall/far-field face with compressed sky/floor edges
+            let weights = split_face(dir, n0, basis, wedge_angle, mix(0.08, 0.45, u8_to_01(pc)), band_offset * 1.2 - 0.6, bw);
+            w_sky = weights.x;
+            w_wall = weights.y;
+            w_floor = weights.z;
+        }
         default: {
-            // Reserved variants (6..7) default to HALF behavior
             let regions = split_half(dir, n0, bw);
             w_sky = regions.sky;
             w_wall = regions.wall;
@@ -247,8 +303,9 @@ fn eval_split(
 
     // Blend colors based on region weights
     let rgb = sky_color * w_sky + wall_color * w_wall + floor_color * w_floor;
+    let paint_alpha = instr_alpha_a_f32(instr);
 
     // SPLIT defines its own regions
     let output_regions = RegionWeights(w_sky, w_wall, w_floor);
-    return BoundsResult(LayerSample(rgb, 1.0), output_regions);
+    return BoundsResult(LayerSample(rgb, paint_alpha), output_regions, 1.0);
 }

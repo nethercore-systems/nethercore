@@ -34,7 +34,7 @@ fn evaluate_bounds_layer(
             return eval_aperture(dir, instr, base_regions);
         }
         default: {
-            return BoundsResult(LayerSample(vec3f(0.0), 0.0), base_regions);
+            return BoundsResult(LayerSample(vec3f(0.0), 0.0), base_regions, 1.0);
         }
     }
 }
@@ -58,7 +58,7 @@ fn evaluate_layer(
         case OP_DECAL:   { return eval_decal(dir, instr, region_w); }
         case OP_GRID:    { return eval_grid(dir, instr, region_w); }
         case OP_SCATTER: { return eval_scatter(dir, instr, region_w); }
-        case OP_FLOW:    { return eval_flow(dir, instr, region_w); }
+        case OP_FLOW:    { return eval_flow(dir, instr, bounds_dir, region_w); }
 
         // Additional radiance opcodes (0x0C..0x13)
         case OP_TRACE: { return eval_trace(dir, instr, region_w); }
@@ -80,6 +80,18 @@ fn evaluate_layer(
         }
         case OP_BAND_RADIANCE: {
             return eval_band_radiance(dir, instr, region_w);
+        }
+        case OP_MOTTLE: {
+            return eval_mottle(dir, instr, region_w);
+        }
+        case OP_ADVECT: {
+            return eval_advect(dir, instr, region_w);
+        }
+        case OP_SURFACE: {
+            return eval_surface(dir, instr, region_w);
+        }
+        case OP_MASS: {
+            return eval_mass(dir, instr, region_w);
         }
 
         default: { return LayerSample(vec3f(0.0), 0.0); }

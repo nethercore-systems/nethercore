@@ -155,8 +155,8 @@ pub enum LayerCategory {
     Disabled,
     /// Bounds opcode (defines geometry/regions)
     Bounds,
-    /// Radiance opcode (adds color/light)
-    Radiance,
+    /// Feature opcode (adds visible detail/light)
+    Feature,
 }
 
 impl LayerContribution {
@@ -185,7 +185,7 @@ impl LayerContribution {
         // Determine category
         let category = match kind {
             Some(OpcodeKind::Bounds) => LayerCategory::Bounds,
-            Some(OpcodeKind::Radiance) => LayerCategory::Radiance,
+            Some(OpcodeKind::Radiance) => LayerCategory::Feature,
             None => LayerCategory::Disabled,
         };
 
@@ -214,7 +214,7 @@ impl LayerContribution {
         match self.category {
             LayerCategory::Disabled => "-",
             LayerCategory::Bounds => "B",
-            LayerCategory::Radiance => "R",
+            LayerCategory::Feature => "F",
         }
     }
 }
@@ -356,6 +356,27 @@ fn generate_layer_summary(
         0x13 => {
             // BAND
             format!("Adds {} horizontal band to {}", color_desc, region_str)
+        }
+        0x14 => {
+            // MOTTLE
+            format!(
+                "Adds {} texture breakup{} to {}",
+                color_desc, variant_str, region_str
+            )
+        }
+        0x15 => {
+            // ADVECT
+            format!(
+                "Adds {} transport mass{} to {}",
+                color_desc, variant_str, region_str
+            )
+        }
+        0x16 => {
+            // SURFACE
+            format!(
+                "Adds {} surface response{} to {}",
+                color_desc, variant_str, region_str
+            )
         }
         _ => {
             // Unknown/generic
@@ -522,7 +543,7 @@ pub fn render_contribution_preview(
         let category_color = match contribution.category {
             LayerCategory::Disabled => egui::Color32::DARK_GRAY,
             LayerCategory::Bounds => egui::Color32::from_rgb(100, 180, 255),
-            LayerCategory::Radiance => egui::Color32::from_rgb(255, 200, 100),
+            LayerCategory::Feature => egui::Color32::from_rgb(255, 200, 100),
         };
 
         ui.colored_label(category_color, contribution.status_icon());

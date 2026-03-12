@@ -32,7 +32,7 @@ const OP_GRID: u32 = 0x09u;
 const OP_SCATTER: u32 = 0x0Au;
 const OP_FLOW: u32 = 0x0Bu;
 
-// Radiance opcodes (0x0C-0x13)
+// Feature opcodes (0x0C-0x14+)
 const OP_TRACE: u32 = 0x0Cu;        // Procedural line/crack patterns (lightning, cracks, lead lines, filaments)
 const OP_VEIL: u32 = 0x0Du;         // Curtain/ribbon effects (curtains, pillars, laser bars, rain wall, shards)
 const OP_ATMOSPHERE: u32 = 0x0Eu;   // Atmospheric absorption + scattering
@@ -41,7 +41,11 @@ const OP_CELESTIAL: u32 = 0x10u;    // Moon/sun/planet bodies
 const OP_PORTAL: u32 = 0x11u;       // Swirling vortex/portal effect
 const OP_LOBE_RADIANCE: u32 = 0x12u; // Region-masked directional glow
 const OP_BAND_RADIANCE: u32 = 0x13u; // Region-masked horizon band
-// 0x14..0x1F reserved for future radiance ops
+const OP_MOTTLE: u32 = 0x14u;       // Abstract texture breakup / base variation
+const OP_ADVECT: u32 = 0x15u;       // Broad transport / sheet motion carrier
+const OP_SURFACE: u32 = 0x16u;      // Broad material / surface response carrier
+const OP_MASS: u32 = 0x17u;         // Broad scene-owning body carrier
+// 0x18..0x1F reserved for future feature ops
 
 // ============================================================================
 // REGION MASK CONSTANTS (3-bit bitfield)
@@ -284,6 +288,38 @@ struct RegionWeights {
     floor: f32,
 }
 
+fn normalize_region_weights(weights: RegionWeights) -> RegionWeights {
+    let total = max(weights.sky + weights.wall + weights.floor, 0.0001);
+    return RegionWeights(weights.sky / total, weights.wall / total, weights.floor / total);
+}
+
+fn sharpen_region_weights(weights: RegionWeights, exponent: f32) -> RegionWeights {
+    return normalize_region_weights(RegionWeights(
+        pow(max(weights.sky, 0.0), exponent),
+        pow(max(weights.wall, 0.0), exponent),
+        pow(max(weights.floor, 0.0), exponent)
+    ));
+}
+
+// Compose sequential bounds passes without letting a later organizer erase the
+// floor/sky ownership established by an earlier one. This keeps multi-bounds
+// authoring usable for outdoor scenes where one layer sets a horizon contract
+// and another adds secondary structure.
+fn compose_bounds_regions(base: RegionWeights, next: RegionWeights, amount: f32) -> RegionWeights {
+    let preserved = RegionWeights(
+        max(base.sky, next.sky),
+        max(base.wall, next.wall),
+        max(base.floor, next.floor)
+    );
+    let composed = sharpen_region_weights(normalize_region_weights(preserved), 2.25);
+    let t = epu_saturate(amount);
+    return normalize_region_weights(RegionWeights(
+        mix(base.sky, composed.sky, t),
+        mix(base.wall, composed.wall, t),
+        mix(base.floor, composed.floor, t)
+    ));
+}
+
 // Extract bounds direction from a layer's instruction.
 // Bounds layers that define a direction will update bounds_dir for subsequent features.
 fn bounds_dir_from_layer(instr: vec4u, opcode: u32, prev_dir: vec3f) -> vec3f {
@@ -299,16 +335,27 @@ fn bounds_dir_from_layer(instr: vec4u, opcode: u32, prev_dir: vec3f) -> vec3f {
 // mask is a 3-bit bitfield: SKY=0b100, WALLS=0b010, FLOOR=0b001
 fn region_weight(weights: RegionWeights, mask: u32) -> f32 {
     var w = 0.0;
+    var bits = 0u;
     if (mask & REGION_SKY) != 0u {
         w += weights.sky;
+        bits += 1u;
     }
     if (mask & REGION_WALLS) != 0u {
         w += weights.wall;
+        bits += 1u;
     }
     if (mask & REGION_FLOOR) != 0u {
         w += weights.floor;
+        bits += 1u;
     }
-    return w;
+
+    // Dedicated single-region features should remain readable even when bounds
+    // composition softens ownership nearby. Multi-region masks already have
+    // enough coverage, so only boost the focused one-region case.
+    if bits == 1u {
+        return pow(epu_saturate(w), 0.72);
+    }
+    return epu_saturate(w);
 }
 
 // Convert signed distance to region weights.
@@ -334,6 +381,7 @@ struct LayerSample {
 struct BoundsResult {
     sample: LayerSample,
     regions: RegionWeights,  // The regions to use for all subsequent features
+    region_mix: f32,         // How strongly the new regions retag subsequent features
 }
 
 fn apply_blend(dst: vec3f, s: LayerSample, blend: u32) -> vec3f {

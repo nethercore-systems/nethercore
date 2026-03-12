@@ -64,6 +64,15 @@ where
     }
 
     fn advance_simulation(&mut self) {
+        self.process_workbench_requests();
+
+        // Replay capture must stay locked to rendered frames. If a redraw is still pending,
+        // advancing another simulation step can move replay-driven animation and screenshot
+        // requests ahead of the frame that will actually be captured.
+        if self.replay_executor.is_some() && self.needs_redraw {
+            return;
+        }
+
         self.last_sim_rendered = false;
 
         if self.error_state.is_some() {

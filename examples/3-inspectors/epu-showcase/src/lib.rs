@@ -40,8 +40,10 @@ fn panic(_info: &PanicInfo) -> ! {
 // ============================================================================
 
 mod constants;
+mod benchmarks;
 mod presets;
 
+use benchmarks::{BENCHMARK_ANIM_SPEEDS, BENCHMARK_COUNT, BENCHMARK_NAMES, BENCHMARKS};
 use presets::{ANIM_SPEEDS, PRESETS, PRESET_COUNT, PRESET_NAMES};
 
 // ============================================================================
@@ -57,7 +59,7 @@ use ffi::*;
 // ============================================================================
 
 static mut FRAME: u32 = 0;
-static mut PRESET_INDEX: i32 = 0;
+static mut SCENE_INDEX: i32 = 0;
 static mut CAM_ANGLE: f32 = 0.0;
 static mut CAM_ELEVATION: f32 = 15.0;
 static mut SPHERE_MESH: u32 = 0;
@@ -67,9 +69,74 @@ static mut SHAPE_INDEX: i32 = 0;
 static mut MATERIAL_METALLIC_U8: i32 = 255; // ~1 * 255
 static mut MATERIAL_ROUGHNESS_U8: i32 = 96; // ~0.38 * 255
 static mut SHOW_UI: bool = true;
+static mut SHOW_BENCHMARKS: bool = false;
+static mut SHOW_PROBE: bool = true;
+static mut SHOW_BACKGROUND: bool = true;
+
+#[derive(Clone, Copy)]
+pub struct SceneRig {
+    distance: f32,
+    elevation: f32,
+    fov: f32,
+    probe_scale: f32,
+}
+
+impl SceneRig {
+    pub const fn new(distance: f32, elevation: f32, fov: f32, probe_scale: f32) -> Self {
+        Self {
+            distance,
+            elevation,
+            fov,
+            probe_scale,
+        }
+    }
+}
+
+const DEFAULT_SHOWCASE_RIG: SceneRig = SceneRig::new(5.0, 15.0, 60.0, 1.0);
 
 const SHAPE_COUNT: i32 = 3;
 const SHAPE_NAMES: [&str; 3] = ["Sphere", "Cube", "Torus"];
+const SCENE_SET_NAMES: [&str; 2] = ["Showcase", "Benchmarks"];
+
+unsafe fn current_scene_count() -> i32 {
+    if SHOW_BENCHMARKS {
+        BENCHMARK_COUNT as i32
+    } else {
+        PRESET_COUNT as i32
+    }
+}
+
+unsafe fn current_scene_name() -> &'static str {
+    if SHOW_BENCHMARKS {
+        BENCHMARK_NAMES[SCENE_INDEX as usize]
+    } else {
+        PRESET_NAMES[SCENE_INDEX as usize]
+    }
+}
+
+unsafe fn current_scene_layers() -> &'static [[u64; 2]; 8] {
+    if SHOW_BENCHMARKS {
+        &BENCHMARKS[SCENE_INDEX as usize]
+    } else {
+        &PRESETS[SCENE_INDEX as usize]
+    }
+}
+
+unsafe fn current_anim_speeds() -> &'static [u8; 8] {
+    if SHOW_BENCHMARKS {
+        &BENCHMARK_ANIM_SPEEDS[SCENE_INDEX as usize]
+    } else {
+        &ANIM_SPEEDS[SCENE_INDEX as usize]
+    }
+}
+
+unsafe fn current_scene_rig() -> SceneRig {
+    if SHOW_BENCHMARKS {
+        benchmarks::BENCHMARK_RIGS[SCENE_INDEX as usize]
+    } else {
+        DEFAULT_SHOWCASE_RIG
+    }
+}
 
 // ============================================================================
 // Game Implementation
@@ -87,8 +154,20 @@ pub extern "C" fn init() {
         TORUS_MESH = torus(1.0, 0.4, 32, 16);
 
         // Register debug values
-        debug_group_begin(b"preset".as_ptr(), 6);
-        debug_register_i32(b"index".as_ptr(), 5, &raw const PRESET_INDEX as *const u8);
+        debug_group_begin(b"scene".as_ptr(), 5);
+        debug_register_i32(b"index".as_ptr(), 5, &raw const SCENE_INDEX as *const u8);
+        debug_register_bool(
+            b"show_benchmarks".as_ptr(),
+            15,
+            &raw const SHOW_BENCHMARKS as *const u8,
+        );
+        debug_register_bool(b"show_ui".as_ptr(), 7, &raw const SHOW_UI as *const u8);
+        debug_register_bool(b"show_probe".as_ptr(), 10, &raw const SHOW_PROBE as *const u8);
+        debug_register_bool(
+            b"show_background".as_ptr(),
+            15,
+            &raw const SHOW_BACKGROUND as *const u8,
+        );
         debug_group_end();
 
         debug_group_begin(b"camera".as_ptr(), 6);
@@ -122,12 +201,13 @@ pub extern "C" fn init() {
 #[no_mangle]
 pub extern "C" fn on_debug_change() {
     unsafe {
-        // Clamp preset index
-        if PRESET_INDEX < 0 {
-            PRESET_INDEX = 0;
+        // Clamp scene index
+        if SCENE_INDEX < 0 {
+            SCENE_INDEX = 0;
         }
-        if PRESET_INDEX >= PRESET_COUNT as i32 {
-            PRESET_INDEX = PRESET_COUNT as i32 - 1;
+        let scene_count = current_scene_count();
+        if SCENE_INDEX >= scene_count {
+            SCENE_INDEX = scene_count - 1;
         }
 
         // Clamp shape index
@@ -152,12 +232,19 @@ pub extern "C" fn update() {
     unsafe {
         FRAME = FRAME.wrapping_add(1);
 
-        // Cycle presets with A/B buttons
+        // Toggle between hero showcase presets and capability benchmarks.
+        if button_pressed(0, button::START) != 0 {
+            SHOW_BENCHMARKS = !SHOW_BENCHMARKS;
+            SCENE_INDEX = 0;
+        }
+
+        // Cycle scenes with A/B buttons
+        let scene_count = current_scene_count();
         if button_pressed(0, button::A) != 0 {
-            PRESET_INDEX = (PRESET_INDEX + 1) % PRESET_COUNT as i32;
+            SCENE_INDEX = (SCENE_INDEX + 1) % scene_count;
         }
         if button_pressed(0, button::B) != 0 {
-            PRESET_INDEX = (PRESET_INDEX + PRESET_COUNT as i32 - 1) % PRESET_COUNT as i32;
+            SCENE_INDEX = (SCENE_INDEX + scene_count - 1) % scene_count;
         }
 
         // Cycle shapes with X button
@@ -189,20 +276,25 @@ pub extern "C" fn render() {
     unsafe {
         // Calculate camera position
         let angle_rad = CAM_ANGLE * 0.0174533;
-        let elev_rad = CAM_ELEVATION * 0.0174533;
-        let dist = 5.0;
+        let rig = current_scene_rig();
+        let elevation = if SHOW_BENCHMARKS {
+            rig.elevation
+        } else {
+            CAM_ELEVATION
+        };
+        let elev_rad = elevation * 0.0174533;
+        let dist = rig.distance;
 
         let cam_x = dist * libm::cosf(elev_rad) * libm::sinf(angle_rad);
         let cam_y = dist * libm::sinf(elev_rad) + 1.0;
         let cam_z = dist * libm::cosf(elev_rad) * libm::cosf(angle_rad);
 
         camera_set(cam_x, cam_y, cam_z, 0.0, 0.0, 0.0);
-        camera_fov(60.0);
+        camera_fov(rig.fov);
 
-        // Copy preset to mutable buffer and patch animation phases
-        let idx = PRESET_INDEX as usize;
-        let mut buf = PRESETS[idx];
-        let speeds = &ANIM_SPEEDS[idx];
+        // Copy current scene to mutable buffer and patch animation phases.
+        let mut buf = *current_scene_layers();
+        let speeds = current_anim_speeds();
         for layer in 0..8 {
             let spd = speeds[layer] as u32;
             if spd > 0 {
@@ -213,21 +305,31 @@ pub extern "C" fn render() {
         }
         epu_set(buf.as_ptr() as *const u64);
 
-        // Draw a shape to show lighting from the environment
-        push_identity();
-        set_color(0xAAAAAAFF);
-        material_metallic((MATERIAL_METALLIC_U8 as f32) / 255.0);
-        material_roughness((MATERIAL_ROUGHNESS_U8 as f32) / 255.0);
+        if SHOW_PROBE {
+            // Draw a shape to show lighting from the environment.
+            push_identity();
+            push_scale(rig.probe_scale, rig.probe_scale, rig.probe_scale);
+            use_uniform_color(1);
+            use_uniform_metallic(1);
+            use_uniform_roughness(1);
+            use_uniform_emissive(1);
+            set_color(0xAAAAAAFF);
+            material_metallic((MATERIAL_METALLIC_U8 as f32) / 255.0);
+            material_roughness((MATERIAL_ROUGHNESS_U8 as f32) / 255.0);
+            material_emissive(0.0);
 
-        let mesh = match SHAPE_INDEX {
-            0 => SPHERE_MESH,
-            1 => CUBE_MESH,
-            _ => TORUS_MESH,
-        };
-        draw_mesh(mesh);
+            let mesh = match SHAPE_INDEX {
+                0 => SPHERE_MESH,
+                1 => CUBE_MESH,
+                _ => TORUS_MESH,
+            };
+            draw_mesh(mesh);
+        }
 
         // Draw environment background after 3D so it fills only background pixels.
-        draw_epu();
+        if SHOW_BACKGROUND {
+            draw_epu();
+        }
 
         // Draw UI overlay
         if SHOW_UI {
@@ -259,6 +361,9 @@ fn opcode_name(opcode: u8) -> &'static [u8] {
         0x11 => b"PORTAL",
         0x12 => b"LOBE",
         0x13 => b"BAND",
+        0x14 => b"MOTTLE",
+        0x15 => b"ADVECT",
+        0x16 => b"SURFACE",
         _ => b"???",
     }
 }
@@ -275,9 +380,9 @@ unsafe fn draw_ui() {
     draw_text(title.as_ptr(), title.len() as u32, 10.0, 10.0, 24.0);
 
     // Current preset name
-    let preset_name = PRESET_NAMES[PRESET_INDEX as usize];
+    let preset_name = current_scene_name();
     let mut label = [0u8; 48];
-    let prefix = b"Preset: ";
+    let prefix = b"Scene: ";
     label[..prefix.len()].copy_from_slice(prefix);
     let name = preset_name.as_bytes();
     let name_len = if name.len() > 40 { 40 } else { name.len() };
@@ -308,17 +413,32 @@ unsafe fn draw_ui() {
     );
 
     // Instructions
-    let hint1 = b"A/B: Cycle presets | X: Cycle shapes | Y: Toggle UI";
+    let hint1 = b"A/B: Cycle scenes | X: Cycle shapes | Y: Toggle UI";
     set_color(0x888888FF);
     draw_text(hint1.as_ptr(), hint1.len() as u32, 10.0, 94.0, 14.0);
 
-    let hint2 = b"Left stick: Orbit camera | F4: Debug panel";
+    let hint2 = b"Start: Toggle benchmark suite | Left stick: Orbit camera | F4: Debug panel";
     draw_text(hint2.as_ptr(), hint2.len() as u32, 10.0, 112.0, 14.0);
 
-    // Preset index indicator (supports up to 99 presets)
+    let set_name = SCENE_SET_NAMES[SHOW_BENCHMARKS as usize];
+    let mut set_label = [0u8; 32];
+    let set_prefix = b"Set: ";
+    set_label[..set_prefix.len()].copy_from_slice(set_prefix);
+    let set_bytes = set_name.as_bytes();
+    set_label[set_prefix.len()..set_prefix.len() + set_bytes.len()].copy_from_slice(set_bytes);
+    set_color(0x999999FF);
+    draw_text(
+        set_label.as_ptr(),
+        (set_prefix.len() + set_bytes.len()) as u32,
+        10.0,
+        130.0,
+        14.0,
+    );
+
+    // Scene index indicator (supports up to 99 scenes)
     let mut idx_label = [0u8; 16];
-    let current = PRESET_INDEX as u8 + 1;
-    let total = PRESET_COUNT as u8;
+    let current = SCENE_INDEX as u8 + 1;
+    let total = current_scene_count() as u8;
     let mut pos = 0usize;
 
     idx_label[pos] = b'[';
@@ -347,7 +467,7 @@ unsafe fn draw_ui() {
     pos += 1;
 
     set_color(0x666666FF);
-    draw_text(idx_label.as_ptr(), pos as u32, 10.0, 130.0, 12.0);
+    draw_text(idx_label.as_ptr(), pos as u32, 10.0, 148.0, 12.0);
 
     // Layer breakdown - show active opcodes for current preset
     let layers_title = b"Layers:";
@@ -356,12 +476,12 @@ unsafe fn draw_ui() {
         layers_title.as_ptr(),
         layers_title.len() as u32,
         10.0,
-        152.0,
+        170.0,
         12.0,
     );
 
-    let preset = &PRESETS[PRESET_INDEX as usize];
-    let mut y_offset = 166.0f32;
+    let preset = current_scene_layers();
+    let mut y_offset = 184.0f32;
 
     #[allow(clippy::needless_range_loop)]
     for layer_idx in 0..8 {

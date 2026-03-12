@@ -221,6 +221,39 @@ fn test_runtime_render_with_game() {
     assert!(result.is_ok());
 }
 
+#[test]
+fn test_runtime_replay_step_ignores_wall_clock_catchup() {
+    let console = TestConsole;
+    let mut runtime = Runtime::<TestConsole>::new(console);
+
+    let engine = WasmEngine::new().unwrap();
+    let wasm = wat::parse_str(
+        r#"
+            (module
+                (memory (export "memory") 1)
+                (func (export "update") (param f32))
+            )
+        "#,
+    )
+    .unwrap();
+    let module = engine.load_module(&wasm).unwrap();
+    let linker = Linker::new(engine.engine());
+    let game =
+        GameInstance::<TestInput, ()>::with_ram_limit(&engine, &module, &linker, test_ram_limit())
+            .unwrap();
+
+    runtime.load_game(game);
+    runtime.accumulator = runtime.tick_duration() * 5;
+    runtime.last_update = Some(std::time::Instant::now() - runtime.tick_duration() * 5);
+
+    let (ticks, alpha) = runtime.replay_step().unwrap();
+
+    assert_eq!(ticks, 1);
+    assert_eq!(alpha, 0.0);
+    assert_eq!(runtime.game().unwrap().state().tick_count, 1);
+    assert_eq!(runtime.accumulator, std::time::Duration::ZERO);
+}
+
 // ============================================================================
 // Input Tests
 // ============================================================================

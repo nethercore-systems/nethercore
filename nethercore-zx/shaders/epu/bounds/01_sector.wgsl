@@ -118,6 +118,7 @@ fn eval_sector(
     let wall_color = instr_color_b(instr);
     let floor_color = wall_color * 0.5;
     let rgb = sky_color * output_regions.sky + wall_color * output_regions.wall + floor_color * output_regions.floor;
+    let paint_alpha = instr_alpha_a_f32(instr);
 
-    return BoundsResult(LayerSample(rgb, 1.0), output_regions);
+    return BoundsResult(LayerSample(rgb, paint_alpha), output_regions, 1.0);
 }

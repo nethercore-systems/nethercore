@@ -13,6 +13,7 @@ mod rendering;
 mod tests;
 mod trait_impl;
 mod types;
+mod workbench;
 
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -88,6 +89,7 @@ where
     ///
     /// Consoles can use this flag to show their own debug panels (e.g., EPU debug panel for ZX).
     pub console_debug_panel_visible: bool,
+    workbench: Option<workbench::WorkbenchBridge>,
 }
 
 impl<C, L> StandaloneApp<C, L>
@@ -173,6 +175,7 @@ where
             _loader_marker: std::marker::PhantomData,
             replay_executor: None,
             console_debug_panel_visible: false,
+            workbench: None,
         }
     }
 }

@@ -1,0 +1,69 @@
+# EPU unattended loop queue
+# Update statuses instead of inventing new chat-only state.
+
+jobs:
+  - job_id: front-mass-body-ownership
+    status: blocked
+    mode: benchmark
+    target: Front Mass
+    replay: examples/3-inspectors/epu-showcase/screenshot-benchmarks-anim3.ncrs
+    batch_size: 18
+    promotion_gate: blocked_until_front_mass_improves
+    depends_on: 
+    attempts: 7
+    last_run_dir: agent\runs\20260312-230851-front-mass-body-ownership
+    build_steps:
+      - cargo test -p nethercore-zx --lib epu_capabilities
+      - cargo dev
+      - cargo run -p nether-cli -- build --project examples/3-inspectors/epu-showcase
+      - cargo run -p nether-cli -- replay validate examples/3-inspectors/epu-showcase/screenshot-benchmarks-anim3.ncrs
+    notes:
+      - active weather-body benchmark lane
+      - current closed levers: density-only MASS tightening and darker core-bias on MASS_SHELF
+      - current benchmark cleanup: lightning accent is removed so the body must own the frame by itself
+      - current closed branches: density-only MASS tightening, darker core-bias, and MASS_BANK profile all failed under the old shared rig
+      - current queue reason: rerun under the new outdoor benchmark rig profile before declaring a deeper surface-only blocker
+      - latest rerun result: framing improved slightly but the front still fails and remains blocked
+      - latest shared-artifact result: bounds-authority split made the wall belt darker and more centered, but the front still does not own the scene
+
+  - job_id: frozen-bed-identity
+    status: blocked
+    mode: benchmark
+    target: Frozen Bed
+    replay: examples/3-inspectors/epu-showcase/screenshot-benchmarks-anim3.ncrs
+    batch_size: 18
+    promotion_gate: blocked_until_frozen_bed_improves
+    depends_on: 
+    attempts: 2
+    last_run_dir: agent\runs\20260312-230851-front-mass-body-ownership
+    build_steps:
+      - cargo test -p nethercore-zx --lib epu_capabilities
+      - cargo dev
+      - cargo run -p nether-cli -- build --project examples/3-inspectors/epu-showcase
+      - cargo run -p nether-cli -- replay validate examples/3-inspectors/epu-showcase/screenshot-benchmarks-anim3.ncrs
+    notes:
+      - second benchmark-gated outdoor lane
+      - current closed branch: added MASS_BANK structural wall-body support but Frozen Bed still failed under the old shared rig
+      - current queue reason: rerun under the new outdoor benchmark rig profile before declaring a deeper surface-only blocker
+      - latest rerun result: framing improved slightly but the frozen-place read still fails and remains blocked
+      - latest shared-artifact result: reused the bounds-authority split benchmark bundle; broad cold ridge improved, but frozen-surface identity still fails
+      - do not reopen Frozen Tundra showcase churn first
+
+  - job_id: storm-front-promotion
+    status: blocked
+    mode: showcase
+    target: Storm Front
+    replay: examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    batch_size: 36
+    promotion_gate: only_after_front_mass_health
+    depends_on: front-mass-body-ownership
+    attempts: 0
+    last_run_dir: 
+    build_steps:
+      - cargo test -p nethercore-zx --lib epu_capabilities
+      - cargo dev
+      - cargo run -p nether-cli -- build --project examples/3-inspectors/epu-showcase
+      - cargo run -p nether-cli -- replay validate examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    notes:
+      - blocked by Front Mass benchmark
+      - do not burn full showcase sweeps until benchmark ownership materially improves

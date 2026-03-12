@@ -14,7 +14,7 @@ use glam::Vec3;
 /// Opcode ranges:
 /// - `0x00`: NOP (universal)
 /// - `0x01..=0x07`: Bounds ops
-/// - `0x08..=0x1F`: Radiance ops
+/// - `0x08..=0x1F`: Feature ops
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum EpuOpcode {
@@ -59,6 +59,14 @@ pub enum EpuOpcode {
     LobeRadiance = 0x12,
     /// Region-masked horizon band
     BandRadiance = 0x13,
+    /// Abstract texture breakup / base variation
+    Mottle = 0x14,
+    /// Broad transport / mass motion carrier
+    Advect = 0x15,
+    /// Broad material / surface response carrier
+    Surface = 0x16,
+    /// Broad scene-owning body carrier
+    Mass = 0x17,
 }
 
 // =============================================================================
@@ -273,9 +281,9 @@ impl EpuLayer {
 /// This is the GPU-consumable format. Each environment state is exactly
 /// 8 layers packed into 128 bytes (each layer is 2 x u64 = 16 bytes).
 ///
-/// Recommended slot usage:
-/// - Slots 0-3: Bounds (RAMP + optional bounds ops)
-/// - Slots 4-7: Radiance (DECAL/GRID/SCATTER/FLOW + radiance ops)
+/// Layers are evaluated sequentially in authored order.
+/// A common cadence is to establish bounds early, then layer features,
+/// then optionally insert more bounds to retag regions for later features.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct EpuConfig {

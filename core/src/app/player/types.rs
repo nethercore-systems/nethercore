@@ -77,4 +77,8 @@ pub struct StandaloneConfig {
     pub connection_mode: ConnectionMode,
     /// Replay script path (.ncrs file) for automated playback
     pub replay_script: Option<PathBuf>,
+    /// Local EPU workbench HTTP port (127.0.0.1). None disables the service.
+    pub epu_workbench_port: Option<u16>,
+    /// Durable directory for workbench artifacts.
+    pub epu_workbench_dir: Option<PathBuf>,
 }

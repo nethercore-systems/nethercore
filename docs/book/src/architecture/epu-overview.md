@@ -25,7 +25,7 @@ The system is designed around these hard constraints:
 | Constraint | Value |
 |------------|-------|
 | Config size | 128 bytes per environment state |
-| Layer count | 8 instructions (4 Bounds + 4 Radiance) |
+| Layer count | 8 sequential instructions |
 | Instruction size | 128 bits (two u64 values) |
 | Cubemaps | None (fully procedural octahedral maps) |
 | Mipmaps | Yes (compute-generated downsample pyramid) |
@@ -66,10 +66,9 @@ roughness-based reflections, and extracts SH9 coefficients for diffuse ambient.
 
 Each environment is exactly **8 x 128-bit instructions**:
 
-| Slot | Kind | Recommended Use |
+| Slots | Kind | Recommended Use |
 |------|------|-----------------|
-| 0-3 | Bounds | Any bounds opcode (`0x01..0x07`). Any bounds opcode can be first; each bounds layer outputs `RegionWeights` consumed by later feature/radiance layers. |
-| 4-7 | Radiance | `DECAL` / `GRID` / `SCATTER` / `FLOW` + radiance ops (`0x0C..0x13`) |
+| 0-7 | Mixed | Author layers in the order you want them evaluated. Bounds rewrite `RegionWeights`; later feature layers consume the current regions. A common cadence is `BOUNDS -> FEATURES -> BOUNDS -> FEATURES`. |
 
 Implementation note: in the shaders, bounds opcodes return `(sample, regions)`. Dispatch updates `regions` after every bounds layer, and feature layers apply region masking using the current regions.
 
@@ -111,18 +110,18 @@ bits 3..0:     alpha_b    (4)  - color_b alpha (0-15)
 | `0x05` | `CELL` | Bounds | Voronoi/mosaic cells |
 | `0x06` | `PATCHES` | Bounds | Noise patches |
 | `0x07` | `APERTURE` | Bounds | Shaped opening/viewport |
-| `0x08` | `DECAL` | Radiance | Sharp SDF shape (disk/ring/rect/line) |
-| `0x09` | `GRID` | Radiance | Repeating lines/panels |
-| `0x0A` | `SCATTER` | Radiance | Point field (stars/dust/bubbles) |
-| `0x0B` | `FLOW` | Radiance | Animated noise/streaks/caustics |
-| `0x0C` | `TRACE` | Radiance | Line/crack patterns |
-| `0x0D` | `VEIL` | Radiance | Curtain/ribbon effects |
-| `0x0E` | `ATMOSPHERE` | Radiance | Atmospheric absorption + scattering |
-| `0x0F` | `PLANE` | Radiance | Ground/surface textures |
-| `0x10` | `CELESTIAL` | Radiance | Moon/sun/planet bodies |
-| `0x11` | `PORTAL` | Radiance | Portal/vortex effects |
-| `0x12` | `LOBE` | Radiance | Region-masked directional glow |
-| `0x13` | `BAND` | Radiance | Region-masked horizon band |
+| `0x08` | `DECAL` | Feature | Sharp SDF shape (disk/ring/rect/line) |
+| `0x09` | `GRID` | Feature | Repeating lines/panels |
+| `0x0A` | `SCATTER` | Feature | Point field (stars/dust/bubbles) |
+| `0x0B` | `FLOW` | Feature | Animated noise/streaks/caustics |
+| `0x0C` | `TRACE` | Feature | Line/crack patterns |
+| `0x0D` | `VEIL` | Feature | Curtain/ribbon effects |
+| `0x0E` | `ATMOSPHERE` | Feature | Atmospheric absorption + scattering |
+| `0x0F` | `PLANE` | Feature | Ground/surface textures |
+| `0x10` | `CELESTIAL` | Feature | Moon/sun/planet bodies |
+| `0x11` | `PORTAL` | Feature | Portal/vortex effects |
+| `0x12` | `LOBE` | Feature | Region-masked directional glow |
+| `0x13` | `BAND` | Feature | Region-masked horizon band |
 
 ### Blend Modes (8 modes)
 

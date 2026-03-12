@@ -6,12 +6,21 @@ players = 1
 #
 # How to use:
 # - Copy this file and add/remove A presses to reach the preset you want.
+# - The Y press below turns the UI off for clean captures; keep it before the 3 screenshots.
 # - Each A press is a press+release pair.
-# - Then it captures 3 screenshots spaced 20 frames apart.
+# - After the UI is off and the preset is selected, it captures 3 screenshots spaced 20 frames apart.
 
 # Example target: Preset 1 (index 0) - no presses needed.
 
 # To reach preset N (0-based), add N press pairs below.
+
+[[frames]]
+f = 1
+p1 = "y"
+
+[[frames]]
+f = 2
+p1 = ""
 
 # [[frames]]
 # f = 10

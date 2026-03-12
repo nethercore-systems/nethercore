@@ -155,7 +155,7 @@ fn generate_code(opcodes: &BTreeMap<u8, OpcodeMeta>) -> String {
     code.push_str("pub enum OpcodeKind {\n");
     code.push_str("    /// Bounds opcode (defines regions)\n");
     code.push_str("    Bounds = 0,\n");
-    code.push_str("    /// Radiance opcode (additive feature layer)\n");
+    code.push_str("    /// Feature opcode (additive feature layer)\n");
     code.push_str("    Radiance = 1,\n");
     code.push_str("}\n\n");
 
@@ -182,7 +182,7 @@ fn generate_code(opcodes: &BTreeMap<u8, OpcodeMeta>) -> String {
     code.push_str("    pub code: u8,\n");
     code.push_str("    /// Opcode name (e.g., \"PLANE\", \"RAMP\")\n");
     code.push_str("    pub name: &'static str,\n");
-    code.push_str("    /// Opcode kind (bounds or radiance)\n");
+    code.push_str("    /// Opcode kind (bounds or feature-layer)\n");
     code.push_str("    pub kind: OpcodeKind,\n");
     code.push_str("}\n\n");
 

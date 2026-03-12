@@ -79,3 +79,16 @@ examples/**/tools/**/output/
 tools/gen-assets/examples/
 
 nul
+
+# Local EPU authoring / proof artifacts
+tmp/
+target-live-proof/
+tools/__pycache__/
+tools/tmp/__pycache__/
+agent/workbench/current-session.json
+agent/workbench/**/stdout.log
+agent/workbench/**/stderr.log
+agent/workbench/**/captures/
+agent/workbench/**/exports/
+agent/runs/
+agent/runs/**/screenshots/

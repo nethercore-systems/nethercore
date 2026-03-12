@@ -96,6 +96,22 @@ pub(crate) const COMMON: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/shaders/epu/features/11_band_radiance.wgsl"
     )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/12_mottle.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/13_advect.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/14_surface.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/15_mass.wgsl"
+    )),
     // Layer dispatch
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -171,6 +187,10 @@ const RERUN_IF_CHANGED_FILES: &[&str] = &[
     "shaders/epu/features/09_portal.wgsl",
     "shaders/epu/features/10_lobe_radiance.wgsl",
     "shaders/epu/features/11_band_radiance.wgsl",
+    "shaders/epu/features/12_mottle.wgsl",
+    "shaders/epu/features/13_advect.wgsl",
+    "shaders/epu/features/14_surface.wgsl",
+    "shaders/epu/features/15_mass.wgsl",
     // EPU compute shaders
     "shaders/epu/epu_compute_env.wgsl",
     "shaders/epu/epu_compute_blur.wgsl",

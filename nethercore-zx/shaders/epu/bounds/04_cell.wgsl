@@ -317,5 +317,5 @@ fn eval_cell(
     let w = w_sky + w_wall + w_floor;
 
     // CELL is an enclosure source: return radiance sample + output regions.
-    return BoundsResult(LayerSample(rgb, epu_saturate(w)), output_regions);
+    return BoundsResult(LayerSample(rgb, epu_saturate(w)), output_regions, 1.0);
 }

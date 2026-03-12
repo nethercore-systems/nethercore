@@ -10,6 +10,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use serde::Deserialize;
 
 use nethercore_core::Console;
 use nethercore_core::app::player::sanitize_game_id;
@@ -31,6 +32,28 @@ pub type PlayerConfig = StandaloneConfig;
 pub struct ZXRomLoader;
 
 const MAX_MANIFEST_BYTES: u64 = 64 * 1024;
+
+#[derive(Default)]
+struct RawWasmMetadata {
+    game_name: String,
+    game_id: String,
+    render_mode: u8,
+}
+
+#[derive(Default, Deserialize)]
+struct RawWasmNetherManifest {
+    #[serde(default)]
+    game: RawWasmGameManifest,
+}
+
+#[derive(Default, Deserialize)]
+struct RawWasmGameManifest {
+    #[serde(default)]
+    id: String,
+    #[serde(default)]
+    title: String,
+    render_mode: Option<u8>,
+}
 
 impl RomLoader for ZXRomLoader {
     type Console = NethercoreZX;
@@ -78,42 +101,84 @@ impl RomLoader for ZXRomLoader {
             let wasm =
                 read_file_with_limit(path, MAX_WASM_BYTES).context("Failed to read WASM file")?;
 
-            let fallback_game_id = sanitize_game_id(&fallback_name);
-            let game_id = wasm_game_id_from_path(path).unwrap_or(fallback_game_id);
+            let metadata = raw_wasm_metadata_from_path(path, &fallback_name);
 
             Ok(LoadedRom {
                 code: wasm,
-                console: NethercoreZX::new(),
-                game_name: fallback_name,
-                game_id,
+                console: NethercoreZX::with_datapack_and_render_mode(None, metadata.render_mode),
+                game_name: metadata.game_name,
+                game_id: metadata.game_id,
             })
         }
     }
 }
 
-fn wasm_game_id_from_path(path: &Path) -> Option<String> {
-    let parent = path.parent()?;
+fn raw_wasm_metadata_from_path(path: &Path, fallback_name: &str) -> RawWasmMetadata {
+    let fallback_game_id = sanitize_game_id(fallback_name);
+    let mut resolved_game_id = false;
+    let mut metadata = RawWasmMetadata {
+        game_name: fallback_name.to_string(),
+        game_id: fallback_game_id.clone(),
+        render_mode: 0,
+    };
+
+    let Some(parent) = path.parent() else {
+        return metadata;
+    };
 
     // Prefer manifest.json next to the ROM.
     let manifest_path = parent.join("manifest.json");
     if manifest_path.is_file() {
-        let bytes = read_file_with_limit(&manifest_path, MAX_MANIFEST_BYTES).ok()?;
-        let manifest = serde_json::from_slice::<LocalGameManifest>(&bytes).ok()?;
-        if !manifest.id.is_empty() && is_safe_game_id(&manifest.id) {
-            return Some(manifest.id);
+        if let Ok(bytes) = read_file_with_limit(&manifest_path, MAX_MANIFEST_BYTES)
+            && let Ok(manifest) = serde_json::from_slice::<LocalGameManifest>(&bytes)
+        {
+            if !manifest.title.is_empty() {
+                metadata.game_name = manifest.title;
+            }
+            if !manifest.id.is_empty() && is_safe_game_id(&manifest.id) {
+                metadata.game_id = manifest.id;
+                resolved_game_id = true;
+            }
+        }
+    }
+
+    if let Some(manifest) = raw_wasm_nether_manifest_from_path(path) {
+        if !manifest.game.title.is_empty() {
+            metadata.game_name = manifest.game.title;
+        }
+        if !manifest.game.id.is_empty() && is_safe_game_id(&manifest.game.id) {
+            metadata.game_id = manifest.game.id;
+            resolved_game_id = true;
+        }
+        if let Some(render_mode) = manifest.game.render_mode {
+            metadata.render_mode = render_mode.min(3);
         }
     }
 
     // Next, accept the parent directory name if it is already safe.
-    if let Some(dir_name) = parent.file_name().and_then(|s| s.to_str())
+    if !resolved_game_id
+        && let Some(dir_name) = parent.file_name().and_then(|s| s.to_str())
         && is_safe_game_id(dir_name)
     {
-        return Some(dir_name.to_string());
+        metadata.game_id = dir_name.to_string();
     }
 
     // Finally, sanitize the file stem.
-    let file_stem = path.file_stem()?.to_str()?;
-    Some(sanitize_game_id(file_stem))
+    metadata
+}
+
+fn raw_wasm_nether_manifest_from_path(path: &Path) -> Option<RawWasmNetherManifest> {
+    let parent = path.parent()?;
+    for ancestor in parent.ancestors() {
+        let manifest_path = ancestor.join("nether.toml");
+        if !manifest_path.is_file() {
+            continue;
+        }
+        let bytes = read_file_with_limit(&manifest_path, MAX_MANIFEST_BYTES).ok()?;
+        let text = std::str::from_utf8(&bytes).ok()?;
+        return toml::from_str::<RawWasmNetherManifest>(text).ok();
+    }
+    None
 }
 
 /// Run the standalone player
@@ -133,9 +198,12 @@ pub fn run(config: PlayerConfig) -> Result<()> {
 mod tests {
     use std::fs;
 
+    use nethercore_core::Console;
     use nethercore_core::app::RomLoader;
     use nethercore_shared::local::LocalGameManifest;
     use tempfile::tempdir;
+
+    use crate::state::ZXFFIState;
 
     use super::ZXRomLoader;
 
@@ -162,5 +230,30 @@ mod tests {
 
         let loaded = ZXRomLoader::load_rom(&wasm_path).unwrap();
         assert_eq!(loaded.game_id, manifest_id);
+    }
+
+    #[test]
+    fn zx_loader_uses_ancestor_nether_toml_for_raw_wasm_render_mode() {
+        let tmp = tempdir().unwrap();
+        let project_dir = tmp.path().join("examples").join("epu-showcase");
+        let wasm_dir = project_dir.join("target").join("wasm32-unknown-unknown").join("release");
+        fs::create_dir_all(&wasm_dir).unwrap();
+
+        fs::write(
+            project_dir.join("nether.toml"),
+            "[game]\nid = \"epu-showcase\"\ntitle = \"EPU Showcase\"\nrender_mode = 2\n",
+        )
+        .unwrap();
+
+        let wasm_path = wasm_dir.join("epu_showcase.wasm");
+        fs::write(&wasm_path, [0_u8, 1, 2, 3]).unwrap();
+
+        let loaded = ZXRomLoader::load_rom(&wasm_path).unwrap();
+        assert_eq!(loaded.game_id, "epu-showcase");
+        assert_eq!(loaded.game_name, "EPU Showcase");
+
+        let mut state = ZXFFIState::default();
+        loaded.console.initialize_ffi_state(&mut state);
+        assert_eq!(state.init_config.render_mode, 2);
     }
 }

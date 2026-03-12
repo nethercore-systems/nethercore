@@ -187,7 +187,7 @@ fn eval_aperture(
 
     // On back hemisphere, return all-sky (aperture only affects front)
     if front_w <= 0.0 {
-        return BoundsResult(LayerSample(vec3f(0.0), 0.0), RegionWeights(1.0, 0.0, 0.0));
+        return BoundsResult(LayerSample(vec3f(0.0), 0.0), RegionWeights(1.0, 0.0, 0.0), 1.0);
     }
 
     // Clamp for projection stability (prevents division blow-ups near the horizon).
@@ -290,5 +290,5 @@ fn eval_aperture(
     let a = epu_saturate(zone_w * front_w);
 
     // Output regions computed from SDF geometry
-    return BoundsResult(LayerSample(rgb, a), regions);
+    return BoundsResult(LayerSample(rgb, a), regions, 1.0);
 }

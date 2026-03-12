@@ -377,6 +377,7 @@ fn test_map_kind_parse_all_types() {
 fn test_opcode_kind_parse() {
     assert_eq!(OpcodeKind::parse("bounds"), OpcodeKind::Bounds);
     assert_eq!(OpcodeKind::parse("radiance"), OpcodeKind::Radiance);
+    assert_eq!(OpcodeKind::parse("feature"), OpcodeKind::Radiance);
 }
 
 #[test]

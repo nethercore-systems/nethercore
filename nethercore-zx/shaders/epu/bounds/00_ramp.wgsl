@@ -71,7 +71,10 @@ fn eval_ramp(
 
     let rgb = sky * w_sky + wall * w_wall + floor * w_floor;
 
-    // RAMP is a base layer: treat as fully weighted (w=1).
+    let paint_alpha = instr_alpha_a_f32(instr);
+
+    // RAMP stays a full structural organizer, but its visible paint can now be
+    // reduced so later features own more of the scene.
     let regions = RegionWeights(w_sky, w_wall, w_floor);
-    return BoundsResult(LayerSample(rgb, 1.0), regions);
+    return BoundsResult(LayerSample(rgb, paint_alpha), regions, 1.0);
 }
