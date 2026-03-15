@@ -33,14 +33,20 @@ fn silhouette_hash(x: f32, seed: f32) -> f32 {
     return fract(sin(x * 127.1 + seed * 311.7) * 43758.5453123);
 }
 
+fn silhouette_wrap_index(i: f32, period: f32) -> f32 {
+    let p = max(period, 1.0);
+    return i - floor(i / p) * p;
+}
+
 // 1D periodic value noise for seamless height functions
 fn silhouette_noise(u: f32, freq: f32, seed: f32) -> f32 {
-    let p = u * freq;
+    let period = max(freq, 1.0);
+    let p = fract(u) * period;
     let i = floor(p);
     let f = fract(p);
     let s = f * f * (3.0 - 2.0 * f); // smoothstep interpolation
-    let a = silhouette_hash(i, seed);
-    let b = silhouette_hash(i + 1.0, seed);
+    let a = silhouette_hash(silhouette_wrap_index(i, period), seed);
+    let b = silhouette_hash(silhouette_wrap_index(i + 1.0, period), seed);
     return mix(a, b, s) * 2.0 - 1.0;
 }
 
@@ -60,8 +66,9 @@ fn silhouette_fbm(u: f32, octaves: u32, seed: f32) -> f32 {
 // CITY variant: rectangular blocks with varying heights
 fn silhouette_city(u: f32, seed: f32) -> f32 {
     let block_freq = 16.0;
-    let block_id = floor(u * block_freq);
-    let block_fract = fract(u * block_freq);
+    let p = fract(u) * block_freq;
+    let block_id = silhouette_wrap_index(floor(p), block_freq);
+    let block_fract = fract(p);
     let h = silhouette_hash(block_id, seed);
     // Sharper edges for buildings
     let edge = smoothstep(0.0, 0.1, block_fract) * smoothstep(1.0, 0.9, block_fract);
@@ -71,8 +78,9 @@ fn silhouette_city(u: f32, seed: f32) -> f32 {
 // FOREST variant: triangular/conical tree shapes
 fn silhouette_forest(u: f32, seed: f32) -> f32 {
     let tree_freq = 12.0;
-    let tree_id = floor(u * tree_freq);
-    let tree_fract = fract(u * tree_freq);
+    let p = fract(u) * tree_freq;
+    let tree_id = silhouette_wrap_index(floor(p), tree_freq);
+    let tree_fract = fract(p);
     let h = silhouette_hash(tree_id, seed);
     // Triangular shape: peak at center
     let tree = 1.0 - 2.0 * abs(tree_fract - 0.5);
@@ -95,8 +103,9 @@ fn silhouette_waves(u: f32, seed: f32) -> f32 {
 // RUINS variant: broken blocks with gaps
 fn silhouette_ruins(u: f32, seed: f32) -> f32 {
     let block_freq = 10.0;
-    let block_id = floor(u * block_freq);
-    let block_fract = fract(u * block_freq);
+    let p = fract(u) * block_freq;
+    let block_id = silhouette_wrap_index(floor(p), block_freq);
+    let block_fract = fract(p);
     let h = silhouette_hash(block_id, seed);
     let gap = step(0.3, silhouette_hash(block_id + 100.0, seed));
     let edge = smoothstep(0.0, 0.15, block_fract) * smoothstep(1.0, 0.85, block_fract);
@@ -106,8 +115,9 @@ fn silhouette_ruins(u: f32, seed: f32) -> f32 {
 // INDUSTRIAL variant: tall stacks and horizontal elements
 fn silhouette_industrial(u: f32, seed: f32) -> f32 {
     let stack_freq = 8.0;
-    let stack_id = floor(u * stack_freq);
-    let stack_fract = fract(u * stack_freq);
+    let p = fract(u) * stack_freq;
+    let stack_id = silhouette_wrap_index(floor(p), stack_freq);
+    let stack_fract = fract(p);
     let h = silhouette_hash(stack_id, seed);
     // Thin vertical stacks
     let stack_width = 0.2 + 0.1 * silhouette_hash(stack_id + 50.0, seed);

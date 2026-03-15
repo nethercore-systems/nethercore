@@ -4,59 +4,50 @@
 use crate::constants::*;
 
 // -----------------------------------------------------------------------------
-// Preset 7: "Astral Void" - Cosmic void
+// Preset 7: "Astral Void" - composed cosmic tableau
 // -----------------------------------------------------------------------------
-// Visual: BOUNDLESS infinite cosmic void - RAMP is perfect for endless space.
-// Near-black with subtle purple-indigo gradient suggesting infinite depth.
-// Feature layers add nebula gas, prismatic drift, stars, and celestial bodies.
+// Goal: one readable structured void field in direct view: a dark depth cut,
+// broad void pockets, one soft orienting cosmic lane, a small subordinate moon,
+// and restrained distant drift. This should recover the field read without
+// collapsing into either a single glossy hero orb or a bright cellular shell.
 pub(super) const PRESET_ASTRAL_VOID: [[u64; 2]; 8] = [
-    // L0: RAMP - VERY dark void (near black, mysterious)
+    // L0: RAMP - keep the bed deep and cold so the scene starts from open void, not from a pale cosmic shell.
     [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x020108, 0x000001),
-        // Almost pure black with barely visible purple hint
-        lo(255, 0x01, 0x00, 0x02, THRESH_VAST, DIR_UP, 15, 15),
+        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x140f32, 0x000001),
+        lo(232, 0x06, 0x08, 0x18, THRESH_VAST, DIR_UP, 15, 15),
     ],
-    // L1: SCATTER/STARS - dense starfield
+    // L1: SPLIT/FACE - cut one broad dark depth partition through the field so the composition starts from negative space instead of from a central body.
     [
         hi_meta(
-            OP_SCATTER,
+            OP_SPLIT,
             REGION_ALL,
-            BLEND_ADD,
+            BLEND_MULTIPLY,
             DOMAIN_DIRECT3D,
-            SCATTER_STARS,
-            0xffffff, // bright white stars
-            0x8090c0, // blue-tinted secondary
+            SPLIT_FACE,
+            0x18193f,
+            0x010103,
         ),
-        lo(180, 22, 15, 0x58, 6, 0, 14, 8),
+        lo(184, 104, 18, 144, 0, DIR_UP, 12, 0),
     ],
-    // L2: FLOW/NOISE - very subtle dark purple nebula wisp
+    // L2: MASS/VEIL - broaden the main void pocket so the field reads as layered depth with open negative space instead of a single sphere.
     [
         hi_meta(
-            OP_FLOW,
-            REGION_ALL,
-            BLEND_ADD,
+            OP_MASS,
+            REGION_SKY | REGION_WALLS,
+            BLEND_MULTIPLY,
             DOMAIN_DIRECT3D,
-            0,
-            0x180830, // very dark purple
-            0x0c0418, // near black violet
+            MASS_VEIL,
+            0x14173a,
+            0x010204,
         ),
-        lo(40, 180, 40, 0x38, 0, DIR_RIGHT, 6, 2),
+        lo(220, 86, 182, 66, 0, DIR_LEFT, 12, 0),
     ],
-    // L3: CELESTIAL/ECLIPSE - large eclipsed body (upper-left sky)
+    // L3: BAND - keep one soft lane as orientation only; it should live in the field, not become a bright shaft or ring edge.
     [
-        hi_meta(
-            OP_CELESTIAL,
-            REGION_SKY,
-            BLEND_ADD,
-            DOMAIN_DIRECT3D,
-            CELESTIAL_ECLIPSE,
-            0x304080, // cold blue corona
-            0x010204, // near-black body
-        ),
-        // DIR_SUNSET = upper left area of sky
-        lo(180, 60, 150, 0, 0, DIR_SUNSET, 13, 11),
+        hi(OP_BAND, REGION_SKY, BLEND_SCREEN, 0, 0x626fd0, 0x171f46),
+        lo(68, 82, 42, 132, 0, DIR_SUNSET, 6, 1),
     ],
-    // L4: CELESTIAL/MOON - smaller moon (opposite side - lower right)
+    // L4: CELESTIAL/MOON - keep one smaller moon anchor as a subordinate focal embedded in the field instead of as a hero orb or hard eclipse ring.
     [
         hi_meta(
             OP_CELESTIAL,
@@ -64,93 +55,65 @@ pub(super) const PRESET_ASTRAL_VOID: [[u64; 2]; 8] = [
             BLEND_ADD,
             DOMAIN_DIRECT3D,
             CELESTIAL_MOON,
-            0x202838, // dim bluish surface
-            0x101018, // dark shadow
+            0xa5b6ff,
+            0x0a1021,
         ),
-        // DIR_FORWARD = opposite side of sky from DIR_SUNSET
-        lo(120, 35, 120, 60, 0, DIR_FORWARD, 10, 8),
+        lo(40, 24, 74, 18, 0, DIR_RIGHT, 6, 2),
     ],
-    // L5: BAND - faint galactic plane
-    [
-        hi(OP_BAND, REGION_ALL, BLEND_ADD, 0, 0x100818, 0x080410),
-        lo(30, 80, 60, 150, 0, DIR_FORWARD, 6, 3),
-    ],
-    // L6: FLOW - very subtle teal wisp (counterpoint)
-    [
-        hi(OP_FLOW, REGION_ALL, BLEND_ADD, 0, 0x081820, 0x040810),
-        lo(25, 200, 30, 0x30, 0, DIR_LEFT, 4, 2),
-    ],
-    // L7: ATMOSPHERE/ABSORPTION - void darkening
+    // L5: FLOW - keep only faint distant drift so motion sits in the field and does not wrap a body.
     [
         hi_meta(
-            OP_ATMOSPHERE,
-            REGION_ALL,
+            OP_FLOW,
+            REGION_SKY,
+            BLEND_SCREEN,
+            DOMAIN_DIRECT3D,
+            0,
+            0x6b83ef,
+            0x1a2755,
+        ),
+        lo(44, 96, 38, 0x14, 8, DIR_RIGHT, 6, 1),
+    ],
+    // L6: MOTTLE/SOFT - deepen the soft recession layer so the field breaks into broad pockets instead of reading as one shell.
+    [
+        hi_meta(
+            OP_MOTTLE,
+            REGION_SKY | REGION_WALLS,
             BLEND_MULTIPLY,
             DOMAIN_DIRECT3D,
-            ATMO_ABSORPTION,
-            0x040408, // very dark
-            0x020204,
+            MOTTLE_SOFT,
+            0x25305d,
+            0x05080f,
         ),
-        lo(30, 120, 100, 0, 0, DIR_UP, 6, 0),
+        lo(132, 20, 168, 92, 10, DIR_RIGHT, 9, 0),
+    ],
+    // L7: SCATTER/STARS - let stars confirm scale more clearly again, but keep them distant so they do not become the main event.
+    [
+        hi_meta(
+            OP_SCATTER,
+            REGION_SKY,
+            BLEND_ADD,
+            DOMAIN_DIRECT3D,
+            SCATTER_STARS,
+            0xf7fbff,
+            0x98a8dd,
+        ),
+        lo(64, 6, 8, 0x24, 4, 0, 4, 1),
     ],
 ];
 
 // -----------------------------------------------------------------------------
-// Preset 8: "Hell Core" — THE HEART OF HELL
+// Preset 8: "Hell Core" - cracked volcanic heart
 // -----------------------------------------------------------------------------
-// Visual: Fractured hellscape with molten lava cracks. Dangerous but NOT seizure-
-// inducing. Static shattered foundation with glowing cracks - minimal animation.
-// Sparse large embers rise slowly. Ominous, not overwhelming.
+// Goal: make the frame read as shattered volcanic ground first. The lava
+// fissures and lower rift should dominate while the rest of the scene supports
+// them with charred rock, infernal underglow, and sparse embers.
 pub(super) const PRESET_VOLCANIC_CORE: [[u64; 2]; 8] = [
-    // L0: CELL/SHATTER - fractured reality, broken hellscape foundation
+    // L0: RAMP - keep infernal pressure but trim the upper hot band one more small step so the floor fissures lead.
     [
-        hi_meta(
-            OP_CELL,
-            REGION_ALL,
-            BLEND_LERP,
-            DOMAIN_DIRECT3D,
-            CELL_SHATTER,
-            0x040000, // near-black char
-            0x100400, // dark ember glow at edges
-        ),
-        // Large shatter fragments - STATIC (alpha_a=15, alpha_b=0)
-        lo(255, 50, 90, 0x30, 0, DIR_UP, 15, 0),
+        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x010000, 0x010000),
+        lo(255, 0x01, 0x02, 0x00, THRESH_OPEN, DIR_UP, 15, 15),
     ],
-    // L1: TRACE/CRACKS - PRIMARY lava fissures (thick, bright)
-    [
-        hi_meta(
-            OP_TRACE,
-            REGION_ALL,
-            BLEND_ADD,
-            DOMAIN_DIRECT3D,
-            TRACE_CRACKS,
-            0xff5000, // hot orange lava core
-            0xa01800, // deep red edges
-        ),
-        // Thick cracks, STATIC (alpha_b=0)
-        lo(180, 160, 25, 120, 0x60, DIR_UP, 14, 0),
-    ],
-    // L2: PORTAL/RIFT - hellgate maw below (static glow)
-    [
-        hi_meta(
-            OP_PORTAL,
-            REGION_FLOOR,
-            BLEND_ADD,
-            DOMAIN_TANGENT_LOCAL,
-            PORTAL_RIFT,
-            0xa02800, // orange core (less intense)
-            0x200400, // dark bloody rim
-        ),
-        // STATIC rift (alpha_b=0)
-        lo(120, 180, 160, 180, 0, DIR_DOWN, 10, 0),
-    ],
-    // L3: LOBE - infernal glow from below (reduced, STATIC)
-    [
-        hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0xa01800, 0x100200),
-        // STATIC glow (alpha_b=0)
-        lo(100, 180, 70, 0, 0, DIR_DOWN, 10, 0),
-    ],
-    // L4: PLANE/STONE - dark volcanic rock floor texture
+    // L1: PLANE/STONE - darker volcanic deck under the fissures.
     [
         hi_meta(
             OP_PLANE,
@@ -158,44 +121,79 @@ pub(super) const PRESET_VOLCANIC_CORE: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             PLANE_STONE,
-            0x100804, // dark volcanic rock
-            0x040200, // charred crevices
+            0x0d0703,
+            0x030100,
         ),
-        // STATIC (alpha_b=0)
-        lo(180, 100, 60, 140, 20, DIR_UP, 14, 0),
+        lo(255, 120, 102, 178, 0, DIR_UP, 15, 7),
     ],
-    // L5: SCATTER/EMBERS - VERY SPARSE, COMPLETELY STATIC
+    // L2: CELL/SHATTER - add a little more crack-linked floor segmentation so the infernal fracture field overtakes the last smooth plates.
+    [
+        hi_meta(
+            OP_CELL,
+            REGION_FLOOR,
+            BLEND_MULTIPLY,
+            DOMAIN_DIRECT3D,
+            CELL_SHATTER,
+            0x090402,
+            0x060200,
+        ),
+        lo(255, 12, 220, 0x0d, 0, DIR_UP, 15, 0),
+    ],
+    // L3: TRACE/CRACKS - give the side-floor fissures one more small width/contrast push so they dominate over the remaining smooth chamber planes.
+    [
+        hi_meta(
+            OP_TRACE,
+            REGION_FLOOR,
+            BLEND_ADD,
+            DOMAIN_DIRECT3D,
+            TRACE_CRACKS,
+            0xffefaf,
+            0xff3a00,
+        ),
+        lo(255, 255, 8, 250, 0x60, DIR_UP, 15, 13),
+    ],
+    // L4: PORTAL/RIFT - keep the lower hellgate present, but trim its central vertical emphasis one more notch behind the floor fissure web.
+    [
+        hi_meta(
+            OP_PORTAL,
+            REGION_FLOOR,
+            BLEND_ADD,
+            DOMAIN_TANGENT_LOCAL,
+            PORTAL_RIFT,
+            0xe26000,
+            0x2e0500,
+        ),
+        lo(132, 182, 148, 188, 0, DIR_DOWN, 9, 0),
+    ],
+    // L5: LOBE - keep the underglow tight and subordinate to the cracks plus hellgate.
+    [
+        hi(OP_LOBE, REGION_FLOOR, BLEND_ADD, 0, 0xac2400, 0x120200),
+        lo(56, 180, 74, 0, 0, DIR_DOWN, 7, 0),
+    ],
+    // L6: SCATTER/EMBERS - keep embers floor-biased and very sparse so the chamber does not glow back up.
     [
         hi_meta(
             OP_SCATTER,
-            REGION_ALL,
+            REGION_FLOOR,
             BLEND_ADD,
             DOMAIN_DIRECT3D,
             SCATTER_EMBERS,
-            0xff8020, // orange-yellow sparks
-            0xc04000, // orange
+            0xff962c,
+            0xc84200,
         ),
-        // EXTREMELY sparse, STATIC (density=3, alpha_b=0)
-        lo(60, 3, 180, 0x14, 4, DIR_UP, 8, 0),
+        lo(8, 2, 148, 0x10, 4, DIR_UP, 3, 0),
     ],
-    // L6: BAND - subtle heat glow at horizon (STATIC)
-    [
-        hi(OP_BAND, REGION_ALL, BLEND_ADD, 0, 0x500c00, 0x180400),
-        // STATIC glow band (alpha_b=0)
-        lo(50, 80, 100, 140, 0, DIR_DOWN, 7, 0),
-    ],
-    // L7: ATMOSPHERE/ABSORPTION - smoky haze
+    // L7: ATMOSPHERE/ABSORPTION - darken walls harder so broad amber facets recede behind the floor event.
     [
         hi_meta(
             OP_ATMOSPHERE,
-            REGION_ALL,
+            REGION_WALLS,
             BLEND_MULTIPLY,
             DOMAIN_DIRECT3D,
             ATMO_ABSORPTION,
-            0x140804, // warm dark
-            0x060200, // very dark
+            0x0c0201,
+            0x040100,
         ),
-        // STATIC haze (alpha_b=0)
-        lo(50, 90, 80, 0, 0, DIR_UP, 10, 0),
+        lo(148, 128, 112, 0, 0, DIR_UP, 15, 0),
     ],
 ];

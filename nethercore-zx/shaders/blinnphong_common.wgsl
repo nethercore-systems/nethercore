@@ -60,7 +60,14 @@ fn env_brdf_approx(roughness: f32, NdotV: f32) -> vec2<f32> {
     let v = r * c0 + c1;
 
     let a004 = min(v.x * v.x, exp2(-9.28 * NoV)) * v.x + v.y;
-    return max(vec2<f32>(-1.04, 1.04) * a004 + v.zw, vec2<f32>(0.0));
+    let brdf = max(vec2<f32>(-1.04, 1.04) * a004 + v.zw, vec2<f32>(0.0));
+
+    // Mid/high-roughness grazing reflections can hold onto a persistent shell
+    // read on metallic probes. Compress only that regime so the BRDF gain stage
+    // stops re-amplifying the same cached env structure.
+    let grazing = 1.0 - NoV;
+    let shell_compress = 1.0 - 0.28 * smoothstep(0.3, 0.8, r) * grazing * grazing;
+    return brdf * shell_compress;
 }
 
 // Normalized Blinn-Phong specular lighting
@@ -71,6 +78,7 @@ fn normalized_blinn_phong_specular(
     V: vec3<f32>,               // View direction (normalized, surface TO camera)
     light_dir: vec3<f32>,       // Light direction (direction rays travel)
     shininess: f32,             // 1-256 range (mapped from roughness/texture)
+    roughness: f32,
     specular_color: vec3<f32>,  // Specular highlight color
     light_color: vec3<f32>,
 ) -> vec3<f32> {
@@ -84,8 +92,12 @@ fn normalized_blinn_phong_specular(
     // Gotanda normalization for energy conservation
     let norm = gotanda_normalization(shininess);
     let spec = norm * pow(NdotH, shininess);
+    // Direct-light specular can keep reinforcing the same metallic shell read.
+    // Compress only the high-F0, mid/high-roughness regime here.
+    let metallic_direct_gate = smoothstep(0.5, 0.9, max(max(specular_color.r, specular_color.g), specular_color.b));
+    let direct_shell_compress = 1.0 - 0.24 * metallic_direct_gate * smoothstep(0.28, 0.8, roughness);
 
-    return specular_color * spec * light_color * NdotL;
+    return specular_color * spec * light_color * NdotL * direct_shell_compress;
 }
 
 // Rim lighting (edge highlights)
@@ -191,7 +203,14 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     // - Roughness controls which EnvRadiance mip we sample (blur/LOD).
     // - EnvBRDF approx controls intensity vs roughness/view angle (prevents rough metals going black).
     let brdf = env_brdf_approx(roughness, NdotV);
-    final_color += specular_env * (fresnel * brdf.x + brdf.y);
+    // Metallic probes can keep a persistent shell through the env-specular path
+    // when grazing Fresnel re-amplifies the same cached reflection structure.
+    // Keep base F0 intact and only compress the extra grazing boost for high-F0,
+    // mid/high-roughness materials in this environment path.
+    let metallic_env_gate = smoothstep(0.5, 0.9, max(max(specular_color.r, specular_color.g), specular_color.b));
+    let env_shell_compress = 1.0 - 0.22 * metallic_env_gate * smoothstep(0.28, 0.8, roughness) * pow(1.0 - NdotV, 2.0);
+    let env_fresnel = specular_color + (fresnel - specular_color) * env_shell_compress;
+    final_color += specular_env * (env_fresnel * brdf.x + brdf.y);
 
     // Track dominant light color for rim lighting coherence
     var dominant_light_color = vec3<f32>(0.0);
@@ -211,12 +230,12 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
             }
 
             // Diffuse
-            final_color += lambert_diffuse(N, light.direction, albedo, light.color)
+            final_color += lambert_diffuse_probe_tamed(N, light.direction, albedo, roughness, specular_color, light.color)
                            * diffuse_factor * diffuse_fresnel;
 
             // Specular
             final_color += normalized_blinn_phong_specular(
-                N, view_dir, light.direction, shininess, specular_color, light.color
+                N, view_dir, light.direction, shininess, roughness, specular_color, light.color
             );
         }
     }
@@ -227,7 +246,11 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     // If no lights enabled, use white for rim to maintain visibility
     let scene_tint = select(vec3<f32>(1.0), dominant_light_color, max_light_intensity > 0.0);
     let rim_color = specular_color * scene_tint;
-    let rim = rim_lighting(N, view_dir, rim_color, rim_intensity, rim_power);
+    // Metallic, mid/high-roughness materials can keep a persistent shell read
+    // through the explicit rim-light add. Compress only that regime.
+    let metallic_local_gate = smoothstep(0.5, 0.9, max(max(specular_color.r, specular_color.g), specular_color.b));
+    let rim_shell_compress = 1.0 - 0.32 * metallic_local_gate * smoothstep(0.28, 0.8, roughness);
+    let rim = rim_lighting(N, view_dir, rim_color, rim_intensity, rim_power) * rim_shell_compress;
     final_color += rim;
 
     // Dither transparency (two-layer: base_alpha × effect_alpha)

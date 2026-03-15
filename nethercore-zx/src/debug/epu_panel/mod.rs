@@ -147,6 +147,8 @@ impl EpuDebugPanel {
             show_ui: None,
             show_probe: None,
             show_background: None,
+            camera_angle: None,
+            camera_elevation: None,
         }
     }
 

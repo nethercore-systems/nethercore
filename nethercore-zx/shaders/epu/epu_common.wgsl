@@ -83,9 +83,180 @@ fn epu_saturate3(v: vec3f) -> vec3f { return clamp(v, vec3f(0.0), vec3f(1.0)); }
 fn u8_to_01(x: u32) -> f32 { return f32(x) / 255.0; }
 fn u4_to_01(x: u32) -> f32 { return f32(x) / 15.0; }
 
+// Center a periodic coordinate into [-0.5, 0.5) so repeated patterns can be
+// shaped without hard phase seams at the tile boundary.
+fn epu_periodic_centered(x: f32) -> f32 {
+    return fract(x + 0.5) - 0.5;
+}
+
+// Distance from a periodic coordinate to its nearest tile edge in [0, 0.5].
+fn epu_periodic_edge_distance(x: f32) -> f32 {
+    return 0.5 - abs(epu_periodic_centered(x));
+}
+
+// Bounded pseudo-organic relief for de-correlating repeated technical edges.
+// This stays deterministic and loops cleanly when fed periodic coordinates.
+fn epu_relief_wave(p: vec2f, phase: f32) -> f32 {
+    let q0 = dot(p, vec2f(2.73, -4.11)) + phase * TAU;
+    let q1 = dot(p, vec2f(-5.27, -1.93)) - phase * PI;
+    let q2 = dot(p, vec2f(3.17, 6.21)) + phase * TAU * 0.61803398875;
+    return (sin(q0) + sin(q1) + sin(q2)) * (1.0 / 3.0);
+}
+
+// Phase values used for authored motion should loop over [0, 1) rather than
+// duplicating both 0.0 and 1.0. That keeps the final pre-wrap sample adjacent
+// to the first sample instead of forcing a duplicated endpoint.
+fn epu_loop_phase01(raw: u32) -> f32 {
+    return f32(raw & 0xFFu) * (1.0 / 256.0);
+}
+
+fn epu_phase_circle(phase01: f32) -> vec2f {
+    let theta = fract(phase01) * TAU;
+    return vec2f(cos(theta), sin(theta));
+}
+
+// Loop-safe hash that embeds phase on the unit circle so seeded offsets remain
+// identical at the wrap boundary instead of jumping when phase returns to 0.
+fn epu_phase_hash11(seed: f32, phase01: f32) -> f32 {
+    let circle = epu_phase_circle(phase01);
+    let q = vec3f(seed * 0.1031 + 17.3, circle.x * 0.5 + 0.5, circle.y * 0.5 + 0.5);
+    return fract(sin(dot(q, vec3f(127.1, 311.7, 74.7))) * 43758.5453123);
+}
+
+fn epu_axis_basis(axis: vec3f) -> mat3x3f {
+    let n = normalize(axis);
+    let ref_vec = select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(n.y) > 0.9);
+    let t = normalize(cross(ref_vec, n));
+    let b = normalize(cross(n, t));
+    return mat3x3f(t, n, b);
+}
+
+fn epu_phase_orbit3(axis: vec3f, phase01: f32, radius_t: f32, radius_b: f32) -> vec3f {
+    let basis = epu_axis_basis(axis);
+    let circle = epu_phase_circle(phase01);
+    return basis[0] * (circle.x * radius_t) + basis[2] * (circle.y * radius_b);
+}
+
+// Bell-shaped envelope in [0, 1] that suppresses relief near the ends of a
+// range, useful for keeping center poles / hard outer caps stable.
+fn epu_relief_envelope(x: f32, lo0: f32, lo1: f32, hi0: f32, hi1: f32) -> f32 {
+    return smoothstep(lo0, lo1, x) * (1.0 - smoothstep(hi0, hi1, x));
+}
+
+// Bend a nominal xyz body frame into a slightly curved local space so layers
+// that use x/y/z masks do not collapse back into obvious slab/panel guides.
+fn epu_body_curve_coords(p: vec3f, breakup: f32, phase: f32) -> vec3f {
+    let amt = breakup * breakup;
+    if amt <= 1e-5 {
+        return p;
+    }
+
+    let bend0 = epu_relief_wave(vec2f(p.y * 0.43, p.z * 0.31), phase + p.x * 0.19);
+    let bend1 = epu_relief_wave(vec2f(p.z * 0.37, p.x * 0.29), phase * 0.73 + p.y * 0.23);
+    let bend2 = epu_relief_wave(vec2f(p.x * 0.34, p.y * 0.27), phase * 1.21 - p.z * 0.17);
+    let bend_amt = mix(0.0, 0.34, amt);
+
+    return vec3f(
+        p.x + (p.y * 0.22 + bend0 * 0.58 + bend2 * 0.16) * bend_amt,
+        p.y + (p.z * -0.12 + bend1 * 0.44 + bend0 * 0.09) * bend_amt,
+        p.z + (p.x * 0.19 + bend1 * 0.31 + bend2 * 0.23) * bend_amt
+    );
+}
+
+// Build a slightly irregular wrapped lattice position while keeping ordering
+// stable. This is useful for curtains/bars that should stay repeated, but not
+// lock into ruler-straight rails.
+fn epu_staggered_lattice_phase(index: f32, count: f32, phase: f32, amount: f32) -> f32 {
+    let inv_count = 1.0 / max(count, 1.0);
+    let base = (index + 0.5) * inv_count;
+    let phase01 = fract(phase);
+    let h0 = epu_phase_hash11(index * 17.13 + count * 1.7, phase01);
+    let h1 = epu_phase_hash11(index * 37.31 + count * 0.9, phase01 + 0.37);
+    let wave = sin((index + 1.0) * 2.39996323 + phase01 * TAU) * 0.5;
+    let offset = ((h0 - 0.5) * 0.72 + (h1 - 0.5) * 0.28 + wave * 0.35) * amount * inv_count;
+    return fract(base + offset);
+}
+
+// Apply small deterministic relief to a wrapped UV chart. The u channel stays
+// periodic, so cylindrical domains keep looping cleanly while avoiding visible
+// seam locks and ruler-straight repeats.
+fn epu_wrapped_relief_uv(uv: vec2f, phase: f32, u_amount: f32, v_amount: f32) -> vec2f {
+    let uc = epu_periodic_centered(uv.x);
+    let seam_gate = smoothstep(0.025, 0.12, epu_periodic_edge_distance(uv.x));
+    let v_edge = min(uv.y, 1.0 - uv.y);
+    let v_gate = smoothstep(0.03, 0.14, v_edge);
+    let relief_gate = seam_gate * v_gate;
+    let gated_u_amount = u_amount * relief_gate;
+    let gated_v_amount = v_amount * relief_gate;
+    let p0 = vec2f(uc * 2.3, uv.y * 1.7);
+    let p1 = vec2f(uc * -3.1 + uv.y * 0.38, uv.y * 1.29 - uc * 0.62);
+    let wave0 = epu_relief_wave(p0, phase);
+    let wave1 = epu_relief_wave(p1, phase + 0.37);
+    let u = fract(uv.x + wave0 * gated_u_amount + wave1 * gated_u_amount * 0.45);
+    let v = uv.y + wave1 * gated_v_amount + wave0 * gated_v_amount * 0.22;
+    return vec2f(u, v);
+}
+
 // Deterministic 1D hash: f32 -> f32 in [0, 1).
 fn epu_hash11(x: f32) -> f32 {
     return fract(sin(x * 127.1) * 43758.5453123);
+}
+
+// 3D hash with lower directional correlation than the older sin(dot()) form.
+// This is used by shared noise carriers that were exposing faint guide planes
+// in direct background views.
+fn epu_noise_hash31(p: vec3f) -> f32 {
+    var q = fract(p * vec3f(0.1031, 0.1030, 0.0973));
+    q += dot(q, q.yzx + 33.33);
+    return fract((q.x + q.y) * q.z);
+}
+
+// Fixed orthonormal basis for sampling shared value-noise fields away from the
+// world axes without changing their character every octave.
+fn epu_noise_rotate3(p: vec3f) -> vec3f {
+    return vec3f(
+        dot(p, vec3f(0.0, 0.8, 0.6)),
+        dot(p, vec3f(-0.8, 0.36, -0.48)),
+        dot(p, vec3f(-0.6, -0.48, 0.64))
+    );
+}
+
+fn epu_value_noise3(p: vec3f) -> f32 {
+    let i = floor(p);
+    let f = fract(p);
+    let u = f * f * (3.0 - 2.0 * f);
+
+    let a = epu_noise_hash31(i + vec3f(0.0, 0.0, 0.0));
+    let b = epu_noise_hash31(i + vec3f(1.0, 0.0, 0.0));
+    let c = epu_noise_hash31(i + vec3f(0.0, 1.0, 0.0));
+    let d = epu_noise_hash31(i + vec3f(1.0, 1.0, 0.0));
+    let e = epu_noise_hash31(i + vec3f(0.0, 0.0, 1.0));
+    let f1 = epu_noise_hash31(i + vec3f(1.0, 0.0, 1.0));
+    let g = epu_noise_hash31(i + vec3f(0.0, 1.0, 1.0));
+    let h = epu_noise_hash31(i + vec3f(1.0, 1.0, 1.0));
+
+    let ab = mix(a, b, u.x);
+    let cd = mix(c, d, u.x);
+    let ef = mix(e, f1, u.x);
+    let gh = mix(g, h, u.x);
+    let abcd = mix(ab, cd, u.y);
+    let efgh = mix(ef, gh, u.y);
+
+    return mix(abcd, efgh, u.z) * 2.0 - 1.0;
+}
+
+fn epu_fbm3(p: vec3f, octaves: u32) -> f32 {
+    var value = 0.0;
+    var amplitude = 0.5;
+    var pp = epu_noise_rotate3(p);
+
+    for (var i = 0u; i < octaves; i++) {
+        value += amplitude * epu_value_noise3(pp);
+        amplitude *= 0.5;
+        pp = pp * 2.01 + vec3f(17.3, 31.7, 11.9);
+    }
+
+    return value;
 }
 
 fn nibble_to_signed_1(v4: u32) -> f32 {

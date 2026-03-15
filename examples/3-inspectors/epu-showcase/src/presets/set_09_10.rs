@@ -4,44 +4,69 @@
 use crate::constants::*;
 
 // -----------------------------------------------------------------------------
-// Preset 9: "Sky Ruins" - Floating colonnades among clouds
+// Preset 9: "Sky Ruins" - Open-air terrace among broken colonnades
 // -----------------------------------------------------------------------------
-// Goal: outdoor "edge of the world" platforming vibe with dramatic clouds.
-// Motion: cloud drift + sun band pulse + subtle scanning floor grid.
-// Visual: crumbling stone platforms and shattered colonnades suspended among
-// clouds, with warm sunlight breaking through dramatic cloud banks. The floor
-// reads as weathered marble, the skyline reads as ruins silhouettes, and the sky
-// layers drift to make the whole scene feel alive and windy.
+// Goal: one unmistakable ruined colonnade silhouette, one readable marble
+// terrace floor in the lower frame, and layered cloud depth that keeps the
+// frame feeling high and exposed instead of collapsing into a centered orb.
 //
-// L0: RAMP                  ALL        LERP   blazing sunset gradient (orange to violet)
-// L1: SILHOUETTE/RUINS      SKY        LERP   broken colonnades against blazing sky
-// L2: PLANE/STONE           FLOOR      LERP   warm cream marble platforms
-// L3: GRID                  FLOOR      ADD    subtle marble tile lines
-// L4: VEIL/CURTAINS         SKY        SCREEN billowing golden clouds
-// L5: FLOW (noise)          SKY        SCREEN warm cloud drift (animated)
-// L6: BAND                  SKY        ADD    intense sun break band (animated)
-// L7: LOBE                  ALL        ADD    blazing golden sun key (animated)
+// Cadence: SKY BED -> OPEN COURT CUT -> RUIN MASONRY -> COLUMN RHYTHM ->
+// FLOOR OWNER -> DISTANT CLOUD SHELF -> CLOUD DRIFT -> COOL AIR LIFT
+//
+// L0: RAMP                  ALL         LERP    cool sky over darker terrace base
+// L1: SECTOR/BOX            ALL         LERP    open court cut so the scene reads as an exterior platform
+// L2: CELL/BRICK            WALLS       LERP    broken marble wall / ruin masonry owner
+// L3: VEIL/PILLARS          WALLS       SCREEN  sparse colonnade rhythm instead of a solid slab
+// L4: PLANE/STONE           FLOOR       LERP    pale marble terrace owner
+// L5: MASS/SHELF            SKY         LERP    broad cloud shelf behind the ruin line
+// L6: ADVECT/FRONT          SKY         SCREEN  directional cloud-light drift
+// L7: BAND                  SKY|WALLS   SCREEN  cool horizon lift to separate ruins from cloud depth
 pub(super) const PRESET_SKY_RUINS: [[u64; 2]; 8] = [
-    // L0: RAMP - epic sunset sky gradient (blazing orange to warm violet)
+    // L0: RAMP - hold the frame in a cool open-sky gradient with a darker terrace base so the composition starts elevated, not sun-washed.
     [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0xffa040, 0x6040a0),
-        // Blazing orange sunset at horizon, warm violet depths
-        lo(255, 0x60, 0x40, 0xa0, THRESH_OPEN, DIR_UP, 15, 15),
+        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0xf1f5fb, 0x55657c),
+        lo(232, 0x28, 0x24, 0x6c, THRESH_OPEN, DIR_UP, 15, 15),
     ],
-    // L1: SILHOUETTE/RUINS - broken colonnades against blazing sky
+    // L1: SECTOR/BOX - force one open terrace court so the frame reads as an exterior platform with side structure, not a centered vault.
     [
         hi_meta(
-            OP_SILHOUETTE,
-            REGION_SKY,
+            OP_SECTOR,
+            REGION_ALL,
             BLEND_LERP,
             DOMAIN_DIRECT3D,
-            SILHOUETTE_RUINS,
-            0x201820, // dark ruins silhouettes
-            0xffb060, // blazing sky behind
+            SECTOR_BOX,
+            0xd2dbe9,
+            0x76859a,
         ),
-        lo(255, 110, 200, 0x60, 0, DIR_UP, 15, 14),
+        lo(196, 118, 148, 0x34, 0, DIR_FORWARD, 14, 10),
     ],
-    // L2: PLANE/STONE - weathered cream marble platforms
+    // L2: CELL/BRICK - switch from soft silhouette to explicit broken stone courses so the ruin owner reads as architecture.
+    [
+        hi_meta(
+            OP_CELL,
+            REGION_WALLS,
+            BLEND_LERP,
+            DOMAIN_DIRECT3D,
+            CELL_BRICK,
+            0x8d96a9,
+            0x1d1a20,
+        ),
+        lo(176, 20, 212, 28, 0, DIR_UP, 15, 11),
+    ],
+    // L3: VEIL/PILLARS - add a sparse colonnade rhythm so one broken ruin band reads before any cloud support.
+    [
+        hi_meta(
+            OP_VEIL,
+            REGION_WALLS,
+            BLEND_SCREEN,
+            DOMAIN_AXIS_CYL,
+            VEIL_PILLARS,
+            0xe3e8f0,
+            0x7e8492,
+        ),
+        lo(132, 18, 26, 20, 0, DIR_UP, 10, 4),
+    ],
+    // L4: PLANE/STONE - give the lower frame one pale marble terrace owner so the floor plane stays readable under the ruins.
     [
         hi_meta(
             OP_PLANE,
@@ -49,51 +74,48 @@ pub(super) const PRESET_SKY_RUINS: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             PLANE_STONE,
-            0xf8f0e0, // warm cream marble
-            0xc0a080, // golden shadow
+            0xf3efe6,
+            0x687284,
         ),
-        lo(255, 60, 25, 140, 0, DIR_UP, 15, 12),
+        lo(246, 94, 18, 164, 0, DIR_UP, 15, 14),
     ],
-    // L3: GRID - marble tile lines (subtle warm)
-    [
-        hi(OP_GRID, REGION_FLOOR, BLEND_ADD, 0, 0xffe8d0, 0x000000),
-        lo(40, 90, 3, 0x10, 0, 0, 8, 0),
-    ],
-    // L4: VEIL/CURTAINS - billowing golden clouds
+    // L5: MASS/SHELF - hold one broad cloud shelf behind the ruin line so the background reads as layered banks, not a blank vault.
     [
         hi_meta(
-            OP_VEIL,
+            OP_MASS,
             REGION_SKY,
-            BLEND_SCREEN,
-            DOMAIN_AXIS_CYL,
-            VEIL_CURTAINS,
-            0xffd080, // golden cloud highlights
-            0xff8030, // deep orange
+            BLEND_LERP,
+            DOMAIN_DIRECT3D,
+            MASS_SHELF,
+            0xf5f7fc,
+            0x7388a3,
         ),
-        lo(255, 70, 40, 45, 0, DIR_RIGHT, 15, 13),
+        lo(188, 104, 146, 66, 0, DIR_LEFT, 14, 9),
     ],
-    // L5: FLOW/NOISE - warm cloud drift (animated)
+    // L6: ADVECT/FRONT - carry one directional cloud-light drift across the open sky without restoring a centered glow.
     [
         hi_meta(
-            OP_FLOW,
+            OP_ADVECT,
             REGION_SKY,
             BLEND_SCREEN,
             DOMAIN_DIRECT3D,
-            0,
-            0xffc060, // golden drift
-            0xff6020, // orange accent
+            ADVECT_FRONT,
+            0xe7eef7,
+            0x8a9bb0,
         ),
-        lo(200, 100, 55, 0x20, 0, DIR_RIGHT, 14, 10),
+        lo(76, 46, 82, 86, 0, DIR_LEFT, 8, 3),
     ],
-    // L6: BAND - intense sun break band across horizon
+    // L7: BAND - use one cool horizon lift to separate ruin silhouette from cloud depth instead of relying on global atmosphere.
     [
-        hi(OP_BAND, REGION_SKY, BLEND_ADD, 0, 0xffe080, 0xffa040),
-        lo(255, 55, 160, 220, 0, DIR_SUN, 15, 13),
-    ],
-    // L7: LOBE - blazing golden sun key (animated)
-    [
-        hi(OP_LOBE, REGION_ALL, BLEND_ADD, 0, 0xffc050, 0x906020),
-        lo(255, 200, 100, 1, 0, DIR_SUN, 15, 8),
+        hi(
+            OP_BAND,
+            REGION_SKY | REGION_WALLS,
+            BLEND_SCREEN,
+            0,
+            0xdfe8f4,
+            0x7b8ea8,
+        ),
+        lo(28, 92, 124, 98, 0, DIR_FORWARD, 5, 1),
     ],
 ];
 
@@ -121,7 +143,8 @@ pub(super) const PRESET_COMBAT_LAB: [[u64; 2]; 8] = [
     // L0: RAMP - brighter white shell so the room reads as a clean training bay rather than a gray chamber
     [
         hi(
-            OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0xe6f2f8, // bright white-cyan structural shell
+            OP_RAMP, REGION_ALL, BLEND_LERP, 0,
+            0xe6f2f8, // bright white-cyan structural shell
             0x091118, // darker floor base under the tile layer
         ),
         lo(86, 0x2f, 0x38, 0x42, THRESH_INTERIOR, DIR_UP, 15, 15),

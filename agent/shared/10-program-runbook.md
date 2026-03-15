@@ -30,7 +30,52 @@ There are four linked workstreams:
 The process should move from smaller truth-gates to larger art-validation loops, not the other way around.
 Live tuning sits ahead of replay validation when the task is local discovery rather than final proof.
 
+## Required Gate Ladder
+
+The program must progress through these gates in order:
+
+1. screenshot determinism
+2. seamless 3D-position looping and spatial wrap
+3. seamless animation-value or phase looping
+4. opcode quality through benchmark validation
+5. full 20-scene showcase quality
+
+Current standing truth:
+
+- determinism is considered solved until a fresh regression proves otherwise
+- spatial seams are not considered solved without a 360-degree direct-background orbit check
+- animation looping is not considered solved without checking the actual phase-wrap boundary
+- benchmark and showcase work must not be used to hide unresolved shared loop defects
+
 Default operating mode is persistent orchestration across waves. Each wave should choose the next smallest truthful slice, delegate disjoint ownership, validate through the required gate for that slice, log the result, and queue the next wave. The program is not complete until all 20 scenes are implemented, validated, reviewed, and logged, unless a real blocker is explicitly recorded.
+
+When the current session is acting as the orchestration owner:
+
+- do not personally implement, capture, or review if a worker can own that slice
+- use implementation workers for code and preset edits
+- use capture workers or unattended queue machinery for replay runs
+- use fresh-context review workers for screenshot judgment
+- keep local work limited to integration, queue control, and emergency repair
+
+## Stop-Loss Policy
+
+The loop must optimize for roster progress, not local perfection.
+
+- Hard cap: `3` validated waves per active lane before a forced classification.
+- Forced classifications:
+  - `pass`
+  - `banked near-pass`
+  - `parked fail`
+  - `benchmark-blocked`
+- `banked near-pass` means stop active churn. It stays available for a later shipping-polish pass, but it is not allowed to keep consuming the next wave by default.
+- If two consecutive waves on the same lane produce only micro-delta reviews, the third wave must be the last one before bank/park.
+- Do not run more than `2` consecutive active waves in the same source file unless the previous wave materially changed the review class.
+- If a lane is blocked by capability, move it to benchmark or engine work and immediately rotate a different showcase lane into the active batch.
+- Keep parallel breadth:
+  - one survivor lane
+  - one rebuild lane
+  - one benchmark or blocked lane tracked separately without stealing every wave
+- Protect passes and banked near-passes from needless reopen churn.
 
 ## Source-Of-Truth Map
 
@@ -87,6 +132,8 @@ If process truth drifts, fix that before broad implementation churn.
 
 Use the benchmark suite for small, fast truth checks.
 
+Do not enter this phase dishonestly. If spatial wrap or animation wrap is still visibly broken in shared runtime behavior, the benchmark phase is blocked until those technical gates are closed.
+
 Judge benchmark health by whether the carrier class is shippable for EPU's actual role:
 
 - readable enough in direct view
@@ -130,6 +177,15 @@ Use the live workbench for:
 
 The live workbench is for fast local discovery on one machine. It should teach the surface faster, then export winning candidates back into durable source and replay validation.
 
+Live iteration does not waive artifact quality:
+
+- obvious concentric rings are failures
+- visible noise or tiling seams are failures
+- visible phase-wrap flashes or end-of-loop pops are failures
+- repeated technical pattern edges that read as shader seams are failures
+
+If those survive across multiple presets or carrier swaps, treat the problem as engine/surface work rather than more blind content churn.
+
 ### Phase 3: EPU Surface Development
 
 Only add or reshape surface vocabulary when repeated deterministic evidence shows the current surface is insufficient.
@@ -162,15 +218,17 @@ The showcase is where the system proves it can create scene identity, not where 
 
 Scene identity here still means metaphor-first place read and shippable world-light utility, not literal prop-perfect rendering.
 
-### Phase 5: Roster Expansion
+### Phase 5: Full-Roster Finish
 
-Do not expand from 12 presets toward 20 until:
+The 20-scene roster already exists in code and the full replay sweep is the active validation surface.
 
-- at least one outdoor proof-of-life is genuinely healthy
-- the benchmark suite is stable
-- current major surface gaps are either closed or explicitly parked
+Do not create additional roster churn beyond the current 20 scenes until:
 
-Expansion without proof-of-life just multiplies noise.
+- the current 20-scene set is honestly classified lane by lane
+- benchmark-blocked outdoor lanes are either improved or explicitly parked with system-level follow-up
+- the benchmark suite is stable enough that new scene additions would not just multiply the same uncertainty
+
+Expansion without current-roster health just multiplies noise.
 
 ## Decision Tree
 
@@ -225,6 +283,8 @@ Examples:
 - code and docs disagree
 - behavior violates parameter contract
 - different presets/opcodes fail in the same artifact pattern
+- concentric rings, seam lines, or repeated technical edges survive across scenes or carrier swaps
+- loop-wrap flashes or phase snaps survive across scenes or carrier swaps
 - repeated deterministic captures show the same obviously wrong runtime behavior
 
 Action:
@@ -240,6 +300,10 @@ Every meaningful loop should leave durable evidence:
 ### Surface/engine loop
 
 - code changes
+- technical loop validation for the relevant open gate:
+  - determinism pair if capture truth is suspect
+  - 360-degree orbit if spatial wrap is suspect
+  - full phase-cycle wrap check if animation looping is suspect
 - benchmark replay run
 - benchmark review note
 - updated `agent/shared/06-open-gaps.md`
@@ -277,7 +341,8 @@ Canonical high-level paths:
 - Showcase:
   - build
   - replay validate `screenshot-all-anim3.ncrs`
-  - real player `--replay` on the showcase script
+  - single real-player `--replay` on the showcase script by default
+  - paired replay only for milestone proof, engine/shader/replay changes, or suspected capture drift
 
 Final visual authority is always the real-player screenshot batch.
 Fast local discovery authority lives in the live workbench captures and exports described in `agent/shared/12-live-workbench.md`.
@@ -302,7 +367,8 @@ As of the current state in `agent/shared/06-open-gaps.md`:
 
 - protect known proof-of-life wins
 - use the benchmark harness as the first gate for EPU surface work
-- close the strongest remaining benchmark blockers before reopening broad showcase churn
+- move the showcase roster in broader parallel batches instead of endless micro-polish on one survivor
+- bank near-passes aggressively and reopen them only for explicit final-shipping polish
 - keep the prompt pack accurate as soon as new capabilities or limits are proven
 
 ## Handoff / Restart Checklist

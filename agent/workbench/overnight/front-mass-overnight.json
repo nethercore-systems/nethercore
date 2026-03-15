@@ -1,0 +1,236 @@
+{
+  "manifest_version": 1,
+  "kind": "epu_workbench_batch",
+  "name": "front-mass-overnight",
+  "lane": "Front Mass",
+  "target": {
+    "mode": "benchmark",
+    "scene_index": 4,
+    "scene_name": "Front Mass"
+  },
+  "artifacts_dir_hint": "tmp/epu-workbench-live",
+  "description": "Small overnight discovery batch for the blocked Front Mass lane. Every candidate resets the live benchmark scene, restores the review view, captures the triplet, and exports the patched config.",
+  "review_focus": [
+    "stronger scene-owning wall/front body in direct background",
+    "probe read should stop collapsing into a generic hemispheric split",
+    "support motion should stay visible without replacing MASS as the primary carrier"
+  ],
+  "candidates": [
+    {
+      "id": "baseline-current",
+      "hypothesis": "Capture the current authored Front Mass baseline before testing new support/body balance.",
+      "steps": [
+        {
+          "action": "select-scene",
+          "mode": "benchmark",
+          "scene_index": 4,
+          "load_into_editor": true,
+          "lock_editor": true
+        },
+        {
+          "action": "set-view",
+          "view": {
+            "locked": true,
+            "show_benchmarks": true,
+            "scene_index": 4,
+            "show_ui": false,
+            "show_probe": true,
+            "show_background": true,
+            "clear_layer_isolation": true
+          }
+        },
+        {
+          "action": "capture",
+          "label": "front-mass-baseline-current"
+        },
+        {
+          "action": "export",
+          "label": "front-mass-baseline-current",
+          "rust_const_name": "BENCHMARK_FRONT_MASS_BASELINE_CURRENT",
+          "include_json_text": true,
+          "include_rust_text": true
+        }
+      ]
+    },
+    {
+      "id": "wall-core-event",
+      "hypothesis": "Keep the shelf body on the wall band only, then let a lighter screened ADVECT event ride inside it instead of tinting the whole upper shell.",
+      "steps": [
+        {
+          "action": "select-scene",
+          "mode": "benchmark",
+          "scene_index": 4,
+          "load_into_editor": true,
+          "lock_editor": true
+        },
+        {
+          "action": "set-view",
+          "view": {
+            "locked": true,
+            "show_benchmarks": true,
+            "scene_index": 4,
+            "show_ui": false,
+            "show_probe": true,
+            "show_background": true,
+            "clear_layer_isolation": true
+          }
+        },
+        {
+          "action": "patch-layer",
+          "layer": 2,
+          "patch": {
+            "blend": "screen",
+            "color_a": [179, 198, 210],
+            "color_b": [46, 62, 74],
+            "alpha_a": 9,
+            "intensity": 188,
+            "param_b": 184,
+            "param_c": 152
+          }
+        },
+        {
+          "action": "patch-layer",
+          "layer": 3,
+          "patch": {
+            "region_mask": 2,
+            "color_a": [78, 94, 104],
+            "color_b": [3, 7, 11],
+            "intensity": 248,
+            "param_b": 208,
+            "param_c": 52
+          }
+        },
+        {
+          "action": "capture",
+          "label": "front-mass-wall-core-event"
+        },
+        {
+          "action": "export",
+          "label": "front-mass-wall-core-event",
+          "rust_const_name": "BENCHMARK_FRONT_MASS_WALL_CORE_EVENT",
+          "include_json_text": true,
+          "include_rust_text": true
+        }
+      ]
+    },
+    {
+      "id": "ridge-led-body",
+      "hypothesis": "Push internal wall ridges harder so the dark body stops reading as one soft shelf and picks up a more decisive event pattern in direct view.",
+      "steps": [
+        {
+          "action": "select-scene",
+          "mode": "benchmark",
+          "scene_index": 4,
+          "load_into_editor": true,
+          "lock_editor": true
+        },
+        {
+          "action": "set-view",
+          "view": {
+            "locked": true,
+            "show_benchmarks": true,
+            "scene_index": 4,
+            "show_ui": false,
+            "show_probe": true,
+            "show_background": true,
+            "clear_layer_isolation": true
+          }
+        },
+        {
+          "action": "patch-layer",
+          "layer": 3,
+          "patch": {
+            "param_b": 216,
+            "param_c": 56
+          }
+        },
+        {
+          "action": "patch-layer",
+          "layer": 4,
+          "patch": {
+            "blend": "overlay",
+            "color_a": [140, 156, 168],
+            "color_b": [10, 16, 22],
+            "alpha_a": 8,
+            "intensity": 112,
+            "param_b": 188,
+            "param_c": 128,
+            "param_d": 24
+          }
+        },
+        {
+          "action": "capture",
+          "label": "front-mass-ridge-led-body"
+        },
+        {
+          "action": "export",
+          "label": "front-mass-ridge-led-body",
+          "rust_const_name": "BENCHMARK_FRONT_MASS_RIDGE_LED_BODY",
+          "include_json_text": true,
+          "include_rust_text": true
+        }
+      ]
+    },
+    {
+      "id": "embedded-sky-support",
+      "hypothesis": "Let the mass stay wall-owned, but extend low-alpha screened support into the sky belt so the probe can pick up more front mood without reopening the pale-shell failure.",
+      "steps": [
+        {
+          "action": "select-scene",
+          "mode": "benchmark",
+          "scene_index": 4,
+          "load_into_editor": true,
+          "lock_editor": true
+        },
+        {
+          "action": "set-view",
+          "view": {
+            "locked": true,
+            "show_benchmarks": true,
+            "scene_index": 4,
+            "show_ui": false,
+            "show_probe": true,
+            "show_background": true,
+            "clear_layer_isolation": true
+          }
+        },
+        {
+          "action": "patch-layer",
+          "layer": 2,
+          "patch": {
+            "region_mask": 6,
+            "blend": "screen",
+            "color_a": [164, 184, 196],
+            "color_b": [40, 54, 66],
+            "alpha_a": 7,
+            "intensity": 160,
+            "param_b": 156,
+            "param_c": 144
+          }
+        },
+        {
+          "action": "patch-layer",
+          "layer": 3,
+          "patch": {
+            "region_mask": 2,
+            "color_a": [80, 96, 108],
+            "color_b": [3, 7, 11],
+            "intensity": 244,
+            "param_b": 204
+          }
+        },
+        {
+          "action": "capture",
+          "label": "front-mass-embedded-sky-support"
+        },
+        {
+          "action": "export",
+          "label": "front-mass-embedded-sky-support",
+          "rust_const_name": "BENCHMARK_FRONT_MASS_EMBEDDED_SKY_SUPPORT",
+          "include_json_text": true,
+          "include_rust_text": true
+        }
+      ]
+    }
+  ]
+}

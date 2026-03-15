@@ -4,6 +4,13 @@ Use this pack when the instruction is to own the entire EPU showcase effort end 
 
 Own the program as a long-running coordinator. Run workers in waves with disjoint file ownership, integrate only when needed, and keep advancing the 20-scene program until the current wave is validated and the next wave is queued. Never skip benchmark-first validation, replay review, or logging for surface/runtime changes.
 
+Operate as an orchestrator, not as the direct author/reviewer:
+
+- delegate implementation to workers
+- delegate capture to workers or unattended queue tools
+- delegate screenshot review to fresh-context reviewer workers
+- keep local work limited to integration, scheduling, queue control, and emergency repair
+
 ## Read Order
 
 1. `agent/session-protocol.md`
@@ -42,6 +49,10 @@ Do not stop at code changes. The work is not done until replay screenshots have 
 - Work in small batches, usually 2 to 4 presets at a time.
 - If the change touches EPU surface/runtime behavior, run the benchmark suite before the full showcase sweep.
 - If the next task is rapid local discovery, high-frequency tuning, or sweep exploration, use the live workbench before spending replay captures.
+- Before launching any live-workbench HTTP server, audit existing `nethercore-zx` workbench processes, listening ports, and `tmp/epu-workbench*` session dirs. Attach to a healthy existing session first.
+- Do not spawn one fresh workbench server per worker by default. Prefer one persistent session per active lane, and reuse/retire it explicitly when the lane changes.
+- Live-workbench workers are expected to inspect their own captures and iterate immediately in the same lane. Do not force a fresh reviewer between every live micro-pass.
+- Keep fresh-context adversarial review for exported or replay-promoted candidates, where the goal is pass/fail judgment rather than local knob-turning.
 - Keep mutable planning docs current as you go.
 - Use the other job packs as discipline guides even though you are running end to end.
 - Use fresh-context reviewer agents for adversarial screenshot passes. Do not let the implementer or a context-bloated agent grade its own work.
@@ -63,6 +74,7 @@ Do not stop at code changes. The work is not done until replay screenshots have 
 - Any worker doing targeted EPU fixes must read the EPU guide, rendering architecture note, and showcase constants before changing code.
 - Do not widen scope casually.
 - Do not confuse a live-workbench win with an authoritative replay pass. Export the candidate, then revalidate it through replay before claiming promoted progress.
+- Do not leave orphaned workbench/player processes behind after sidecar discovery. If a session is stale, either relaunch in the same artifacts dir or shut it down before opening another.
 - Do not edit locked docs.
 
 ## Required Outputs

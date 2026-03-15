@@ -236,6 +236,8 @@ def build_view_payload(args: argparse.Namespace) -> dict[str, Any]:
         "show_ui",
         "show_probe",
         "show_background",
+        "camera_angle",
+        "camera_elevation",
     ):
         value = getattr(args, key, None)
         if value is not None:
@@ -645,6 +647,8 @@ def summarize_session_payload(payload: Any) -> dict[str, Any]:
                 "isolated_layer",
                 "show_benchmarks",
                 "scene_index",
+                "camera_angle",
+                "camera_elevation",
             )
         }
     return summary
@@ -778,6 +782,8 @@ def build_parser() -> argparse.ArgumentParser:
     set_view.add_argument("--show-ui", type=parse_bool)
     set_view.add_argument("--show-probe", type=parse_bool)
     set_view.add_argument("--show-background", type=parse_bool)
+    set_view.add_argument("--camera-angle", type=float)
+    set_view.add_argument("--camera-elevation", type=float)
     set_view.add_argument("--timeout", type=float, default=10.0, help="HTTP request timeout in seconds")
     set_view.set_defaults(handler=command_set_view)
 

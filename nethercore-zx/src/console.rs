@@ -21,9 +21,32 @@ use nethercore_core::{
 };
 use zx_common::ZXDataPack;
 
+use crate::graphics::epu::EpuConfig;
 use crate::state::{ZRollbackState, ZXFFIState};
 
 use crate::graphics::ZXGraphics;
+
+const EPU_PARAM_D_MASK: u64 = 0xFF00_0000;
+
+fn merge_live_epu_phase(
+    mut override_config: EpuConfig,
+    live_config: Option<&EpuConfig>,
+) -> EpuConfig {
+    let Some(live_config) = live_config else {
+        return override_config;
+    };
+
+    for (override_layer, live_layer) in override_config
+        .layers
+        .iter_mut()
+        .zip(live_config.layers.iter())
+    {
+        override_layer[1] =
+            (override_layer[1] & !EPU_PARAM_D_MASK) | (live_layer[1] & EPU_PARAM_D_MASK);
+    }
+
+    override_config
+}
 
 /// Get Nethercore ZX console specifications
 pub const fn zx_specs() -> &'static ConsoleSpecs {
@@ -411,7 +434,10 @@ impl Console for NethercoreZX {
 
         // If locked: clear game configs and insert our single override config for env_id 0
         if self.epu_debug_panel.is_locked() {
-            let override_config = self.epu_debug_panel.get_override_config();
+            let override_config = merge_live_epu_phase(
+                self.epu_debug_panel.get_override_config(),
+                state.epu_frame_configs.get(&0),
+            );
             state.epu_frame_configs.clear();
             state.epu_frame_configs.insert(0, override_config);
         }
@@ -569,5 +595,23 @@ mod tests {
         assert_eq!(specs.vram_limit, 4 * 1024 * 1024);
         assert_eq!(specs.rom_limit, 16 * 1024 * 1024);
         assert_eq!(specs.cpu_budget_us, 4000);
+    }
+
+    #[test]
+    fn test_merge_live_epu_phase_preserves_live_param_d() {
+        let mut override_config = EpuConfig::default();
+        let mut live_config = EpuConfig::default();
+
+        override_config.layers[0][1] = 0x0012_3400;
+        override_config.layers[1][1] = 0x0000_5500;
+        live_config.layers[0][1] = 0x5A00_00FF;
+        live_config.layers[1][1] = 0xC300_1234;
+
+        let merged = merge_live_epu_phase(override_config, Some(&live_config));
+
+        assert_eq!(merged.layers[0][1] & EPU_PARAM_D_MASK, 0x5A00_0000);
+        assert_eq!(merged.layers[1][1] & EPU_PARAM_D_MASK, 0xC300_0000);
+        assert_eq!(merged.layers[0][1] & !EPU_PARAM_D_MASK, 0x0012_3400);
+        assert_eq!(merged.layers[1][1] & !EPU_PARAM_D_MASK, 0x0000_5500);
     }
 }

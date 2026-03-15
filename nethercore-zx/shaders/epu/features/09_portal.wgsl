@@ -149,7 +149,7 @@ fn eval_portal(
     let roughness = u8_to_01(instr_c(instr));
 
     // param_d: Phase for VORTEX (0..255 -> 0..1)
-    let phase = u8_to_01(instr_d(instr));
+    let phase = epu_loop_phase01(instr_d(instr));
 
     // Apply VORTEX warp if needed (before SDF evaluation)
     var warped_uv = uv;

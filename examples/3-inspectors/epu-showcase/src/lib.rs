@@ -364,6 +364,7 @@ fn opcode_name(opcode: u8) -> &'static [u8] {
         0x14 => b"MOTTLE",
         0x15 => b"ADVECT",
         0x16 => b"SURFACE",
+        0x17 => b"MASS",
         _ => b"???",
     }
 }

@@ -73,7 +73,9 @@ where
             return;
         }
 
-        self.last_sim_rendered = false;
+        if !self.workbench_needs_target_refresh() {
+            self.last_sim_rendered = false;
+        }
 
         if self.error_state.is_some() {
             return;
@@ -173,6 +175,10 @@ where
 
     fn clear_needs_redraw(&mut self) {
         self.needs_redraw = false;
+    }
+
+    fn on_redraw_completed(&mut self) {
+        self.finish_workbench_redraw();
     }
 
     fn on_runtime_error(&mut self, error: RuntimeError) {

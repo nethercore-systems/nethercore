@@ -88,12 +88,16 @@ fn split_corner(dir: vec3f, n0: vec3f, basis: mat3x3f, bw: f32) -> vec3f {
 }
 
 // BANDS variant (3): Repeating parallel planes creating stripes
-fn split_bands(dir: vec3f, n0: vec3f, band_count: f32, band_offset: f32, bw: f32) -> RegionWeights {
+fn split_bands(dir: vec3f, n0: vec3f, basis: mat3x3f, band_count: f32, band_offset: f32, bw: f32) -> RegionWeights {
     let u = dot(dir, n0) * 0.5 + 0.5 + band_offset;
-    let stripe = fract(u * band_count);
-    // Distance from center of stripe (0.5)
-    let d = stripe - 0.5;  // Ranges -0.5 to 0.5
-    return regions_from_signed_distance(d, bw * band_count);
+    let cross_phase = vec2f(dot(dir, basis[0]), dot(dir, basis[1]));
+    let sweep = dot(cross_phase, vec2f(0.63, -0.77));
+    let relief = epu_relief_wave(cross_phase * vec2f(1.35, 1.05), band_offset + band_count * 0.031);
+    let secondary = epu_relief_wave(cross_phase.yx * vec2f(0.82, 1.41), band_offset + 0.37);
+    let warp = (relief * 0.075 + secondary * 0.04 + sweep * 0.085) / max(band_count, 1.0);
+    let local_bw = bw * band_count * mix(0.84, 1.2, relief * 0.5 + 0.5);
+    let d = epu_periodic_centered(u * band_count + warp);
+    return regions_from_signed_distance(d, local_bw);
 }
 
 // CROSS variant (4): Two perpendicular planes creating quadrants
@@ -122,13 +126,18 @@ fn split_prism(dir: vec3f, n0: vec3f, basis: mat3x3f, side_count: f32, rotation:
 
     // Quantize into sectors based on side_count (clamped to 3..16)
     let sectors = clamp(side_count, 3.0, 16.0);
-    let sector_angle = 1.0 / sectors;
-    let sector_id = floor(angle01 / sector_angle);
-    let sector_fract = fract(angle01 / sector_angle);
-
-    // Distance to sector edge (for AA)
-    let d_sector_edge = min(sector_fract, 1.0 - sector_fract);
-    let sector_blend = smoothstep(0.0, bw * sectors, d_sector_edge);
+    let phase_warp = (
+        sin(dot(vec2f(t_proj, b_proj), vec2f(4.1, -3.7)) + rotation * TAU)
+        + sin(dot(vec2f(t_proj, b_proj), vec2f(2.3, 5.9)) - rotation * PI)
+    ) * (0.04 / sectors);
+    let relief = epu_relief_wave(
+        vec2f(t_proj, b_proj) * vec2f(1.9, 1.35) + vec2f(z_proj * 0.75, 0.0),
+        rotation + sectors * 0.021
+    );
+    let height_shear = z_proj * mix(-0.18, 0.18, epu_hash11(rotation * 97.0 + sectors * 13.0));
+    let sector_phase = angle01 * sectors + phase_warp + height_shear + relief * (0.11 / sectors);
+    let d_sector_edge = epu_periodic_edge_distance(sector_phase);
+    let sector_blend = smoothstep(0.0, bw * sectors * mix(0.88, 1.18, relief * 0.5 + 0.5), d_sector_edge);
 
     // Determine cap vs side based on z projection
     let cap_threshold = 0.95;  // Above this is ceiling cap, below -threshold is floor cap
@@ -256,7 +265,7 @@ fn eval_split(
         }
         case 3u: {
             // BANDS: Repeating parallel planes creating stripes
-            let regions = split_bands(dir, n0, band_count, band_offset, bw);
+            let regions = split_bands(dir, n0, basis, band_count, band_offset, bw);
             w_sky = regions.sky;
             w_wall = regions.wall;
             w_floor = regions.floor;

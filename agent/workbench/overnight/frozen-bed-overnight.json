@@ -1,0 +1,292 @@
+{
+  "manifest_version": 1,
+  "kind": "epu_workbench_batch",
+  "name": "frozen-bed-overnight",
+  "lane": "Frozen Bed",
+  "target": {
+    "mode": "benchmark",
+    "scene_index": 5,
+    "scene_name": "Frozen Bed"
+  },
+  "artifacts_dir_hint": "tmp/epu-workbench-live",
+  "description": "Small overnight discovery batch for the blocked Frozen Bed lane. Every candidate resets the live benchmark scene, restores the review view, captures the triplet, and exports the patched config.",
+  "review_focus": [
+    "icy bed or crusted frozen floor should survive in direct background",
+    "reflective probe should prove frozen material identity instead of generic gloss water",
+    "wall and air support should stay subordinate to the floor read"
+  ],
+  "candidates": [
+    {
+      "id": "baseline-current",
+      "hypothesis": "Capture the current authored Frozen Bed baseline before testing new floor-owned material balances.",
+      "steps": [
+        {
+          "action": "select-scene",
+          "mode": "benchmark",
+          "scene_index": 5,
+          "load_into_editor": true,
+          "lock_editor": true
+        },
+        {
+          "action": "set-view",
+          "view": {
+            "locked": true,
+            "show_benchmarks": true,
+            "scene_index": 5,
+            "show_ui": false,
+            "show_probe": true,
+            "show_background": true,
+            "clear_layer_isolation": true
+          }
+        },
+        {
+          "action": "capture",
+          "label": "frozen-bed-baseline-current"
+        },
+        {
+          "action": "export",
+          "label": "frozen-bed-baseline-current",
+          "rust_const_name": "BENCHMARK_FROZEN_BED_BASELINE_CURRENT",
+          "include_json_text": true,
+          "include_rust_text": true
+        }
+      ]
+    },
+    {
+      "id": "floor-owned-pane-crust",
+      "hypothesis": "Back off the wall bank and sky wash slightly so darker pane-and-crust structure can carry more of the frozen-floor identity.",
+      "steps": [
+        {
+          "action": "select-scene",
+          "mode": "benchmark",
+          "scene_index": 5,
+          "load_into_editor": true,
+          "lock_editor": true
+        },
+        {
+          "action": "set-view",
+          "view": {
+            "locked": true,
+            "show_benchmarks": true,
+            "scene_index": 5,
+            "show_ui": false,
+            "show_probe": true,
+            "show_background": true,
+            "clear_layer_isolation": true
+          }
+        },
+        {
+          "action": "patch-layer",
+          "layer": 2,
+          "patch": {
+            "color_a": [188, 202, 212],
+            "color_b": [43, 58, 70],
+            "alpha_a": 9,
+            "intensity": 188
+          }
+        },
+        {
+          "action": "patch-layer",
+          "layer": 3,
+          "patch": {
+            "color_a": [212, 224, 233],
+            "color_b": [36, 52, 64],
+            "alpha_a": 15,
+            "intensity": 214,
+            "param_b": 212,
+            "param_c": 92
+          }
+        },
+        {
+          "action": "patch-layer",
+          "layer": 4,
+          "patch": {
+            "color_a": [172, 188, 198],
+            "color_b": [20, 29, 37],
+            "alpha_a": 14,
+            "intensity": 208,
+            "param_b": 242,
+            "param_c": 28
+          }
+        },
+        {
+          "action": "patch-layer",
+          "layer": 5,
+          "patch": {
+            "color_a": [224, 236, 244],
+            "color_b": [140, 160, 174],
+            "alpha_a": 6,
+            "intensity": 112
+          }
+        },
+        {
+          "action": "capture",
+          "label": "frozen-bed-floor-owned-pane-crust"
+        },
+        {
+          "action": "export",
+          "label": "frozen-bed-floor-owned-pane-crust",
+          "rust_const_name": "BENCHMARK_FROZEN_BED_FLOOR_OWNED_PANE_CRUST",
+          "include_json_text": true,
+          "include_rust_text": true
+        }
+      ]
+    },
+    {
+      "id": "facet-bed",
+      "hypothesis": "Replace the broad glaze sheet with a faceted floor carrier and keep crust underneath it to test a sharper frozen read in both background and probe.",
+      "steps": [
+        {
+          "action": "select-scene",
+          "mode": "benchmark",
+          "scene_index": 5,
+          "load_into_editor": true,
+          "lock_editor": true
+        },
+        {
+          "action": "set-view",
+          "view": {
+            "locked": true,
+            "show_benchmarks": true,
+            "scene_index": 5,
+            "show_ui": false,
+            "show_probe": true,
+            "show_background": true,
+            "clear_layer_isolation": true
+          }
+        },
+        {
+          "action": "patch-layer",
+          "layer": 2,
+          "patch": {
+            "color_a": [190, 204, 214],
+            "color_b": [45, 60, 72],
+            "alpha_a": 9,
+            "intensity": 196
+          }
+        },
+        {
+          "action": "patch-layer",
+          "layer": 3,
+          "patch": {
+            "variant_id": 2,
+            "color_a": [214, 226, 236],
+            "color_b": [34, 48, 60],
+            "alpha_a": 14,
+            "intensity": 204,
+            "param_a": 84,
+            "param_b": 176,
+            "param_c": 96
+          }
+        },
+        {
+          "action": "patch-layer",
+          "layer": 4,
+          "patch": {
+            "alpha_a": 13,
+            "intensity": 204,
+            "param_b": 240,
+            "param_c": 28
+          }
+        },
+        {
+          "action": "patch-layer",
+          "layer": 5,
+          "patch": {
+            "alpha_a": 5,
+            "intensity": 96
+          }
+        },
+        {
+          "action": "capture",
+          "label": "frozen-bed-facet-bed"
+        },
+        {
+          "action": "export",
+          "label": "frozen-bed-facet-bed",
+          "rust_const_name": "BENCHMARK_FROZEN_BED_FACET_BED",
+          "include_json_text": true,
+          "include_rust_text": true
+        }
+      ]
+    },
+    {
+      "id": "probe-sheen-panels",
+      "hypothesis": "Keep the pane-like glaze path but bias it toward stronger cold sheen while the crust and support layers stay restrained enough not to blur the frozen-floor proof.",
+      "steps": [
+        {
+          "action": "select-scene",
+          "mode": "benchmark",
+          "scene_index": 5,
+          "load_into_editor": true,
+          "lock_editor": true
+        },
+        {
+          "action": "set-view",
+          "view": {
+            "locked": true,
+            "show_benchmarks": true,
+            "scene_index": 5,
+            "show_ui": false,
+            "show_probe": true,
+            "show_background": true,
+            "clear_layer_isolation": true
+          }
+        },
+        {
+          "action": "patch-layer",
+          "layer": 2,
+          "patch": {
+            "color_a": [190, 204, 214],
+            "color_b": [45, 60, 72],
+            "alpha_a": 9,
+            "intensity": 192
+          }
+        },
+        {
+          "action": "patch-layer",
+          "layer": 3,
+          "patch": {
+            "color_a": [220, 230, 238],
+            "color_b": [42, 56, 68],
+            "alpha_a": 14,
+            "intensity": 220,
+            "param_b": 208,
+            "param_c": 128
+          }
+        },
+        {
+          "action": "patch-layer",
+          "layer": 4,
+          "patch": {
+            "color_a": [168, 182, 192],
+            "color_b": [22, 31, 39],
+            "alpha_a": 12,
+            "intensity": 196,
+            "param_b": 238,
+            "param_c": 24
+          }
+        },
+        {
+          "action": "patch-layer",
+          "layer": 5,
+          "patch": {
+            "alpha_a": 5,
+            "intensity": 96
+          }
+        },
+        {
+          "action": "capture",
+          "label": "frozen-bed-probe-sheen-panels"
+        },
+        {
+          "action": "export",
+          "label": "frozen-bed-probe-sheen-panels",
+          "rust_const_name": "BENCHMARK_FROZEN_BED_PROBE_SHEEN_PANELS",
+          "include_json_text": true,
+          "include_rust_text": true
+        }
+      ]
+    }
+  ]
+}

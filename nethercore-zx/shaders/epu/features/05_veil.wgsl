@@ -140,16 +140,17 @@ fn eval_veil_curtains(
     ribbon_count: u32,
     base_thickness: f32,
     curvature: f32,
+    phase: f32,
 ) -> vec3f {
     // Returns (min_dist, ribbon_mask_contribution, glow_factor)
     var min_dist = 1000.0;
-    var best_hash_x = 0.0;
+    var best_thickness = base_thickness;
 
     let u_scrolled = fract(u);
 
     for (var i = 0u; i < ribbon_count; i++) {
         let fi = f32(i);
-        let center_u = (fi + 0.5) / f32(ribbon_count);
+        let center_u = epu_staggered_lattice_phase(fi, f32(ribbon_count), phase + curvature * 0.13, 0.82);
         let h = veil_hash23(vec2f(fi * 7.3, 13.7));
 
         // Variable thickness per ribbon (0.7x to 1.3x base)
@@ -162,20 +163,19 @@ fn eval_veil_curtains(
 
         if d < min_dist {
             min_dist = d;
-            best_hash_x = h.x;
+            best_thickness = thickness_var;
         }
     }
 
     // Soft edges using larger smoothstep range
     let aa_width = 0.005;
-    let thickness = base_thickness;
-    let ribbon_mask = 1.0 - smoothstep(thickness * 0.5 - aa_width, thickness + aa_width, min_dist);
+    let ribbon_mask = 1.0 - smoothstep(best_thickness * 0.5 - aa_width, best_thickness + aa_width, min_dist);
 
     // Transparency gradient along v (slightly more transparent at top and bottom)
     let v_fade = 1.0 - 0.3 * pow(abs(v), 2.0);
 
     // Glow extends beyond ribbon
-    let glow = smoothstep(thickness * 3.0, thickness * 0.8, min_dist) * (1.0 - ribbon_mask);
+    let glow = smoothstep(best_thickness * 3.0, best_thickness * 0.8, min_dist) * (1.0 - ribbon_mask);
 
     return vec3f(min_dist, ribbon_mask * v_fade, glow);
 }
@@ -186,24 +186,37 @@ fn eval_veil_pillars(
     v: f32,
     ribbon_count: u32,
     thickness: f32,
-    curvature: f32
+    curvature: f32,
+    phase: f32
 ) -> vec3f {
     var min_dist = 1000.0;
+    var best_thickness = thickness;
+    var best_gate = 1.0;
 
     let u_scrolled = fract(u);
 
     for (var i = 0u; i < ribbon_count; i++) {
         let fi = f32(i);
-        let center_u = (fi + 0.5) / f32(ribbon_count);
+        let h = veil_hash23(vec2f(fi * 9.7, 21.1));
+        var center_u = epu_staggered_lattice_phase(fi, f32(ribbon_count), phase + 0.11, 0.38);
+        let lane_wave = epu_relief_wave(vec2f(v * 1.15 + h.z * 0.41, fi * 0.37), phase + h.y * 0.29);
+        let lane_envelope = epu_relief_envelope(abs(v), 0.0, 0.12, 0.76, 1.0);
+        let width_var = thickness * mix(0.76, 1.08, h.x);
+        center_u = fract(center_u + lane_wave * lane_envelope * (0.11 / max(f32(ribbon_count), 1.0)));
+        let lane_gate = mix(0.66, 1.0, smoothstep(-0.22, 0.72, lane_wave));
 
         // No curvature for pillars (rigid vertical)
         let d = ribbon_dist_wrapped(u_scrolled, center_u);
-        min_dist = min(min_dist, d);
+        if d < min_dist {
+            min_dist = d;
+            best_thickness = width_var;
+            best_gate = lane_gate;
+        }
     }
 
     // Hard edges with minimal AA
     let aa_width = 0.002;
-    let ribbon_mask = 1.0 - smoothstep(thickness - aa_width, thickness + aa_width, min_dist);
+    let ribbon_mask = (1.0 - smoothstep(best_thickness - aa_width, best_thickness + aa_width, min_dist)) * best_gate;
 
     // No glow for pillars (architectural, solid appearance)
     let glow = 0.0;
@@ -217,9 +230,12 @@ fn eval_veil_laser_bars(
     v: f32,
     ribbon_count: u32,
     thickness: f32,
-    curvature: f32
+    curvature: f32,
+    phase: f32
 ) -> vec3f {
     var min_dist = 1000.0;
+    var best_core_thickness = thickness * 0.33;
+    var best_gate = 1.0;
 
     let u_scrolled = fract(u);
 
@@ -228,20 +244,30 @@ fn eval_veil_laser_bars(
 
     for (var i = 0u; i < ribbon_count; i++) {
         let fi = f32(i);
-        let center_u = (fi + 0.5) / f32(ribbon_count);
+        let h = veil_hash23(vec2f(fi * 11.9, 27.3));
+        var center_u = epu_staggered_lattice_phase(fi, f32(ribbon_count), phase + 0.19, 0.34);
+        let lane_wave = epu_relief_wave(vec2f(v * 1.33 + h.x * 0.47, fi * 0.43), phase + h.z * 0.23);
+        let lane_envelope = epu_relief_envelope(abs(v), 0.0, 0.1, 0.82, 1.0);
+        let core_var = core_thickness * mix(0.7, 1.12, h.y);
+        center_u = fract(center_u + lane_wave * lane_envelope * (0.08 / max(f32(ribbon_count), 1.0)));
+        let lane_gate = mix(0.58, 1.0, smoothstep(-0.18, 0.74, lane_wave));
 
         // No curvature for laser bars (straight lines)
         let d = ribbon_dist_wrapped(u_scrolled, center_u);
-        min_dist = min(min_dist, d);
+        if d < min_dist {
+            min_dist = d;
+            best_core_thickness = core_var;
+            best_gate = lane_gate;
+        }
     }
 
     // Very sharp core
     let aa_width = 0.001;
-    let core_mask = 1.0 - smoothstep(core_thickness - aa_width, core_thickness + aa_width, min_dist);
+    let core_mask = (1.0 - smoothstep(best_core_thickness - aa_width, best_core_thickness + aa_width, min_dist)) * best_gate;
 
     // Wide glow around the core (extends to 5x core thickness)
-    let glow_radius = core_thickness * 5.0;
-    let glow = smoothstep(glow_radius, core_thickness, min_dist) * (1.0 - core_mask);
+    let glow_radius = best_core_thickness * 5.0;
+    let glow = smoothstep(glow_radius, best_core_thickness, min_dist) * (1.0 - clamp(core_mask, 0.0, 1.0)) * mix(0.7, 1.0, best_gate);
 
     // Bright core (intensity boost)
     let ribbon_mask = core_mask * 1.5;
@@ -274,15 +300,15 @@ fn eval_veil_rain_wall(
 
     for (var i = 0u; i < actual_count; i++) {
         let fi = f32(i);
-        let center_u = (fi + 0.5) / f32(actual_count);
+        let center_u = epu_staggered_lattice_phase(fi, f32(actual_count), phase + curvature * 0.23, 0.56);
         let h = veil_hash23(vec2f(fi * 11.3, 17.7));
 
         // Per-bar v-position using deterministic phase offset
         let v01 = v * 0.5 + 0.5;
 
         // Each bar has different fall speed and starting offset
-        let fall_speed = 0.3 + h.x * 1.4;
-        let drop_pos = fract(h.y + phase * fall_speed);
+        let fall_cycles = 1.0 + floor(h.x * 3.0);
+        let drop_pos = fract(h.y + phase * fall_cycles);
 
         // Short streak segments
         let half_len = 0.02 + h.z * 0.06;
@@ -378,11 +404,13 @@ fn eval_veil(
     // param_c: Curvature/sway (0..255 -> 0..1)
     let curvature = u8_to_01(instr_c(instr));
     // param_d: Phase (0..255 -> 0..1, used by RAIN_WALL)
-    let phase = u8_to_01(instr_d(instr));
+    let phase = epu_loop_phase01(instr_d(instr));
 
     // Decode axis direction
     let axis16 = instr_dir16(instr);
     let axis = select(vec3f(0.0, 1.0, 0.0), decode_dir16(axis16), axis16 != 0u);
+    let phase_seed = fract(phase + f32(variant_id) * 0.17 + f32(domain_id) * 0.11);
+    let axis_cyl_pillars = domain_id == VEIL_DOMAIN_AXIS_CYL && variant_id == VEIL_VARIANT_PILLARS;
 
     // Map to 2D chart based on domain
     var uv = vec2f(0.0);
@@ -394,17 +422,26 @@ fn eval_veil(
         }
         case VEIL_DOMAIN_AXIS_CYL: {
             uv = veil_cyl_uv(dir, axis);
+            uv = epu_wrapped_relief_uv(uv, phase_seed, 0.045, 0.055);
             // Pole fade at v near -1 or 1 (poles of cylinder)
             domain_w = smoothstep(0.95, 0.8, abs(uv.y));
+            if axis_cyl_pillars {
+                let seam_dist = epu_periodic_edge_distance(uv.x);
+                let seam_fade = smoothstep(0.02, 0.1, seam_dist);
+                domain_w *= seam_fade;
+            }
         }
         case VEIL_DOMAIN_AXIS_POLAR: {
             uv = veil_polar_uv(dir, axis);
+            uv = epu_wrapped_relief_uv(uv, phase_seed + 0.29, 0.035, 0.028);
             // Axis fade near center (rad near 0)
             domain_w = smoothstep(0.05, 0.2, uv.y);
         }
         case VEIL_DOMAIN_TANGENT_LOCAL: {
             let result = veil_tangent_uv(dir, axis);
             uv = vec2f(result.x * 0.5 + 0.5, clamp(result.y, -1.0, 1.0));
+            // Tangent-local sheets need a stable centered chart; wrapped relief here
+            // breaks local tracery owners into diffuse chamber haze.
             domain_w = result.z;
         }
         default: {
@@ -421,13 +458,13 @@ fn eval_veil(
 
     switch variant_id {
         case VEIL_VARIANT_CURTAINS: {
-            result = eval_veil_curtains(u, v, ribbon_count, thickness, curvature);
+            result = eval_veil_curtains(u, v, ribbon_count, thickness, curvature, phase);
         }
         case VEIL_VARIANT_PILLARS: {
-            result = eval_veil_pillars(u, v, ribbon_count, thickness, curvature);
+            result = eval_veil_pillars(u, v, ribbon_count, thickness, curvature, phase);
         }
         case VEIL_VARIANT_LASER_BARS: {
-            result = eval_veil_laser_bars(u, v, ribbon_count, thickness, curvature);
+            result = eval_veil_laser_bars(u, v, ribbon_count, thickness, curvature, phase);
         }
         case VEIL_VARIANT_RAIN_WALL: {
             result = eval_veil_rain_wall(u, v, ribbon_count, thickness, curvature, phase);
@@ -437,7 +474,7 @@ fn eval_veil(
         }
         default: {
             // Default to curtains
-            result = eval_veil_curtains(u, v, ribbon_count, thickness, curvature);
+            result = eval_veil_curtains(u, v, ribbon_count, thickness, curvature, phase);
         }
     }
 

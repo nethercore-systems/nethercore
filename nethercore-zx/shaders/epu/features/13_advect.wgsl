@@ -58,47 +58,12 @@ const ADVECT_VARIANT_MIST: u32 = 3u;
 const ADVECT_VARIANT_BANK: u32 = 4u;
 const ADVECT_VARIANT_FRONT: u32 = 5u;
 
-fn advect_hash31(p: vec3f) -> f32 {
-    let h = dot(p, vec3f(157.1, 311.7, 73.7));
-    return fract(sin(h) * 43758.5453123);
-}
-
 fn advect_value_noise3(p: vec3f) -> f32 {
-    let i = floor(p);
-    let f = fract(p);
-    let u = f * f * (3.0 - 2.0 * f);
-
-    let a = advect_hash31(i + vec3f(0.0, 0.0, 0.0));
-    let b = advect_hash31(i + vec3f(1.0, 0.0, 0.0));
-    let c = advect_hash31(i + vec3f(0.0, 1.0, 0.0));
-    let d = advect_hash31(i + vec3f(1.0, 1.0, 0.0));
-    let e = advect_hash31(i + vec3f(0.0, 0.0, 1.0));
-    let f1 = advect_hash31(i + vec3f(1.0, 0.0, 1.0));
-    let g = advect_hash31(i + vec3f(0.0, 1.0, 1.0));
-    let h = advect_hash31(i + vec3f(1.0, 1.0, 1.0));
-
-    let ab = mix(a, b, u.x);
-    let cd = mix(c, d, u.x);
-    let ef = mix(e, f1, u.x);
-    let gh = mix(g, h, u.x);
-    let abcd = mix(ab, cd, u.y);
-    let efgh = mix(ef, gh, u.y);
-
-    return mix(abcd, efgh, u.z) * 2.0 - 1.0;
+    return epu_value_noise3(p);
 }
 
 fn advect_fbm3(p: vec3f, octaves: u32) -> f32 {
-    var value = 0.0;
-    var amplitude = 0.5;
-    var frequency = 1.0;
-
-    for (var i = 0u; i < octaves; i++) {
-        value += amplitude * advect_value_noise3(p * frequency);
-        amplitude *= 0.5;
-        frequency *= 2.0;
-    }
-
-    return value;
+    return epu_fbm3(p, octaves);
 }
 
 fn advect_build_basis(axis: vec3f) -> mat3x3f {
@@ -108,9 +73,12 @@ fn advect_build_basis(axis: vec3f) -> mat3x3f {
     return mat3x3f(t, axis, b);
 }
 
-fn advect_coords_direct3d(dir: vec3f, axis: vec3f) -> vec3f {
+fn advect_coords_direct3d(dir: vec3f, axis: vec3f) -> vec4f {
     let basis = advect_build_basis(axis);
-    return vec3f(dot(dir, basis[0]), dot(dir, basis[1]), dot(dir, basis[2]));
+    let facing = dot(dir, axis);
+    let coords = vec3f(dot(dir, basis[0]), dot(dir, basis[1]), dot(dir, basis[2]));
+    let facing_gate = smoothstep(0.02, 0.18, facing);
+    return vec4f(coords, facing_gate);
 }
 
 fn advect_coords_cyl(dir: vec3f, axis: vec3f) -> vec3f {
@@ -147,13 +115,17 @@ fn eval_advect(
     let scale = mix(0.5, 12.0, u8_to_01(instr_a(instr)));
     let coverage = u8_to_01(instr_b(instr));
     let breakup = u8_to_01(instr_c(instr));
-    let phase01 = u8_to_01(instr_d(instr));
-    let travel = phase01 * mix(0.6, 2.4, breakup);
+    let phase01 = epu_loop_phase01(instr_d(instr));
+    let phase_circle = epu_phase_circle(phase01);
+    let travel = phase_circle.x * mix(0.6, 2.4, breakup) + phase_circle.y * mix(0.18, 0.72, breakup);
 
-    var coords = advect_coords_direct3d(dir, axis);
+    var coords = vec3f(0.0);
+    var domain_gate = 1.0;
     switch domain {
         case ADVECT_DOMAIN_DIRECT3D: {
-            coords = advect_coords_direct3d(dir, axis);
+            let projected = advect_coords_direct3d(dir, axis);
+            coords = projected.xyz;
+            domain_gate = projected.w;
         }
         case ADVECT_DOMAIN_AXIS_CYL: {
             coords = advect_coords_cyl(dir, axis);
@@ -162,23 +134,40 @@ fn eval_advect(
             coords = advect_coords_polar(dir, axis);
         }
         default: {
-            coords = advect_coords_direct3d(dir, axis);
+            let projected = advect_coords_direct3d(dir, axis);
+            coords = projected.xyz;
+            domain_gate = projected.w;
         }
     }
 
-    let q = coords * scale;
+    let coords_shaped = epu_body_curve_coords(coords, breakup, phase01 + 0.19);
+    let q = coords_shaped * scale;
     let body_noise = advect_fbm3(q * 0.85 + axis * travel * 0.7, 3u) * 0.5 + 0.5;
     let breakup_noise = advect_fbm3(q * 1.7 - axis * travel * 1.3 + vec3f(13.0, 7.0, 19.0), 2u) * 0.5 + 0.5;
     let sheet_noise = advect_fbm3(
         vec3f(q.y * 0.75 + travel * 0.2, q.z * 0.75 - travel * 0.15, q.x * 0.35 + 9.0),
         3u
     ) * 0.5 + 0.5;
+    let guide_relief = epu_relief_wave(vec2f(q.y * 0.31, q.z * 0.23), phase01 + travel * 0.11);
+    let front_axis = q.x
+        + q.y * mix(-0.1, 0.2, breakup)
+        + q.z * mix(0.04, 0.16, breakup)
+        + guide_relief * mix(0.03, 0.22, breakup);
+    let depth_axis = q.z
+        + q.x * mix(0.05, 0.22, breakup)
+        + q.y * mix(-0.02, 0.1, breakup)
+        + guide_relief * mix(0.02, 0.14, breakup);
+    let depth_coord = coords_shaped.z
+        + coords_shaped.x * mix(0.05, 0.22, breakup)
+        + coords_shaped.y * mix(-0.02, 0.08, breakup)
+        + guide_relief * mix(0.01, 0.09, breakup);
+    let horizon_coord = dir.y + coords_shaped.x * 0.04 * breakup + guide_relief * 0.05 * breakup;
 
     let half_width = mix(0.12, 1.1, coverage);
     let soft_width = mix(0.08, 0.32, breakup);
     let slab_warp = mix(0.04, 0.45, breakup) * (body_noise * 2.0 - 1.0);
     let edge_warp = (sheet_noise * 2.0 - 1.0) * mix(0.06, 0.7, breakup);
-    let slab_coord = q.x + travel * mix(0.35, 1.1, breakup) + slab_warp + edge_warp;
+    let slab_coord = front_axis + travel * mix(0.35, 1.1, breakup) + slab_warp + edge_warp;
     let slab = 1.0 - smoothstep(half_width, half_width + soft_width, abs(slab_coord));
     let front = 1.0 - smoothstep(
         -half_width * 0.25 - soft_width,
@@ -203,13 +192,13 @@ fn eval_advect(
         }
         case ADVECT_VARIANT_SPINDRIFT: {
             let streaks = advect_value_noise3(vec3f(q.y * 2.6 - travel * 2.4, q.z * 1.7, q.x * 0.8)) * 0.5 + 0.5;
-            let horizon_band = 1.0 - smoothstep(0.04, 0.56, abs(dir.y + 0.03));
+            let horizon_band = 1.0 - smoothstep(0.04, 0.56, abs(horizon_coord + 0.03));
             let lift = smoothstep(0.28, 0.82, body_noise * 0.7 + breakup_noise * 0.3);
             density = front * lift * mix(0.3, 1.0, streaks) * horizon_band;
         }
         case ADVECT_VARIANT_SQUALL: {
             let streaks = advect_value_noise3(vec3f(q.y * 3.4 - travel * 3.0, q.z * 0.7 + travel, q.x * 1.1)) * 0.5 + 0.5;
-            let horizon_band = 1.0 - smoothstep(0.16, 0.96, abs(dir.y + 0.02));
+            let horizon_band = 1.0 - smoothstep(0.16, 0.96, abs(horizon_coord + 0.02));
             let belly = smoothstep(0.16, 0.72, body_noise * 0.6 + breakup_noise * 0.4);
             let erosion = smoothstep(
                 0.2,
@@ -221,7 +210,7 @@ fn eval_advect(
                 0.82,
                 advect_fbm3(q * vec3f(0.55, 1.35, 0.85) + vec3f(17.0, -9.0, travel * 0.4), 3u) * 0.5 + 0.5
             );
-            let depth_fade = smoothstep(0.1, 0.86, 1.0 - abs(q.z + (sheet_noise * 2.0 - 1.0) * 0.45));
+            let depth_fade = smoothstep(0.1, 0.86, 1.0 - abs(depth_axis + (sheet_noise * 2.0 - 1.0) * 0.45));
             let storm_body = front * mix(0.42, 1.0, belly) * horizon_band * depth_fade;
             let detail = mix(0.68, 1.0, streaks) * mix(0.72, 1.0, erosion) * mix(0.76, 1.0, curtain);
             density = storm_body * detail;
@@ -231,11 +220,10 @@ fn eval_advect(
             density = mix(fog, slab * fog, 0.45 + coverage * 0.35);
         }
         case ADVECT_VARIANT_BANK: {
-            let horizon_band = 1.0 - smoothstep(0.12, 0.82, abs(dir.y + 0.01));
+            let horizon_band = 1.0 - smoothstep(0.12, 0.82, abs(horizon_coord + 0.01));
             let mass = smoothstep(0.18, 0.8, body_noise * 0.78 + breakup_noise * 0.22);
             let wall_front = max(front, slab * 0.82);
-            let depth_coord = coords.z * 0.7 + (sheet_noise * 2.0 - 1.0) * 0.12;
-            let wall_depth = smoothstep(0.02, 0.98, 1.0 - abs(depth_coord));
+            let wall_depth = smoothstep(0.02, 0.98, 1.0 - abs(depth_coord * 0.7 + (sheet_noise * 2.0 - 1.0) * 0.12));
             let veining = advect_value_noise3(vec3f(q.y * 2.8 - travel * 2.2, q.z * 0.55, q.x * 0.7 + 11.0)) * 0.5 + 0.5;
             bank_core = wall_front
                 * mix(0.68, 1.0, mass)
@@ -250,7 +238,7 @@ fn eval_advect(
         }
         case ADVECT_VARIANT_FRONT: {
             let front_shift = travel * mix(2.8, 6.4, breakup);
-            let horizon_band = 1.0 - smoothstep(0.18, 0.92, abs(dir.y + 0.02));
+            let horizon_band = 1.0 - smoothstep(0.18, 0.92, abs(horizon_coord + 0.02));
             let shelf_shape = smoothstep(
                 -half_width * 0.22 - soft_width * 0.8,
                 half_width + soft_width * 2.2,
@@ -269,7 +257,7 @@ fn eval_advect(
             let wall_depth = smoothstep(
                 0.02,
                 0.96,
-                1.0 - abs(coords.z * 0.46 + (sheet_noise * 2.0 - 1.0) * mix(0.06, 0.28, breakup))
+                1.0 - abs(depth_coord * 0.46 + (sheet_noise * 2.0 - 1.0) * mix(0.06, 0.28, breakup))
             );
             let ribbing = advect_value_noise3(vec3f(q.y * 2.2 - front_shift * 2.6, q.z * 0.42, q.x * 0.55 + 21.0)) * 0.5 + 0.5;
             let erosion = smoothstep(
@@ -359,7 +347,7 @@ fn eval_advect(
         }
     }
 
-    density = epu_saturate(density);
+    density = epu_saturate(density) * domain_gate;
 
     var mix_w = epu_saturate(density * (0.65 + 0.35 * body_noise));
     var alpha_scale = 1.0;

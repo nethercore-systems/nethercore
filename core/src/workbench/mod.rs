@@ -69,7 +69,7 @@ pub struct EpuWorkbenchLayerPatch {
 }
 
 /// Editor/workbench view state that affects live rendering.
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct EpuWorkbenchViewState {
     pub selected_layer: Option<usize>,
     pub isolated_layer: Option<usize>,
@@ -80,6 +80,8 @@ pub struct EpuWorkbenchViewState {
     pub show_ui: Option<bool>,
     pub show_probe: Option<bool>,
     pub show_background: Option<bool>,
+    pub camera_angle: Option<f32>,
+    pub camera_elevation: Option<f32>,
 }
 
 /// Scene selection in the showcase ROM.
@@ -138,7 +140,7 @@ pub struct EpuWorkbenchMetadata {
 }
 
 /// Snapshot returned by the server for the current session.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct EpuWorkbenchSnapshot {
     pub protocol_version: u32,
     pub game_id: String,

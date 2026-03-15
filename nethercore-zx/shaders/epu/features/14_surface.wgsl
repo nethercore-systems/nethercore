@@ -122,10 +122,20 @@ fn eval_surface(
     let scale = mix(0.5, 16.0, u8_to_01(instr_a(instr)));
     let fracture = u8_to_01(instr_b(instr));
     let sheen = u8_to_01(instr_c(instr));
-    let phase = u8_to_01(instr_d(instr)) * TAU;
+    let phase01 = epu_loop_phase01(instr_d(instr));
+    let phase = phase01 * TAU;
+    let phase_circle = epu_phase_circle(phase01);
 
-    let drift = vec2f(cos(phase), sin(phase)) * mix(0.015, 0.12, sheen);
-    let base_uv = vec2f(dot(dir, basis[0]), dot(dir, basis[2])) * scale + drift;
+    let d = dot(dir, axis);
+    if d <= 0.05 {
+        return LayerSample(vec3f(0.0), 0.0);
+    }
+
+    let hit = dir / d;
+    let projected_uv = vec2f(dot(hit, basis[0]), dot(hit, basis[2]));
+    let projected_radius = length(projected_uv);
+    let drift = phase_circle * mix(0.015, 0.12, sheen);
+    let base_uv = projected_uv * scale + drift;
     let warp = vec2f(
         surface_noise(base_uv * 0.85 + vec2f(7.0, 13.0)) - 0.5,
         surface_noise(base_uv * 0.85 + vec2f(19.0, -5.0)) - 0.5
@@ -198,7 +208,7 @@ fn eval_surface(
         }
         case SURFACE_VARIANT_DUSTED: {
             let frost = surface_fbm(uv * 0.6 + vec2f(3.0, -7.0), 3u);
-            let streak = surface_noise(uv * 2.2 + vec2f(-phase * 0.08, phase * 0.06));
+            let streak = surface_noise(uv * 2.2 + vec2f(-phase_circle.x * 0.08, phase_circle.y * 0.06));
             base = mix(frost, streak, fracture * 0.2);
             highlight = smoothstep(0.78, 0.98, graze) * sheen * 0.22;
             coverage = smoothstep(0.16, 0.82, frost);
@@ -219,6 +229,7 @@ fn eval_surface(
     let highlight_tint = mix(base_rgb, instr_color_a(instr), 0.55);
     let highlight_rgb = mix(base_rgb, highlight_tint, 0.12 + sheen * 0.24);
     let rgb = mix(base_rgb, highlight_rgb, highlight);
-    let alpha = instr_alpha_a_f32(instr) * region_w * mix(0.35, 1.0, coverage);
+    let projection_gate = smoothstep(0.18, 0.56, projected_radius);
+    let alpha = instr_alpha_a_f32(instr) * region_w * projection_gate * mix(0.35, 1.0, coverage);
     return LayerSample(rgb, alpha);
 }

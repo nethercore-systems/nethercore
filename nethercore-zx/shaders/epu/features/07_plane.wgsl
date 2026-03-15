@@ -367,7 +367,7 @@ fn eval_plane(
     // param_c: Roughness (0..255 -> 0..1)
     let roughness = u8_to_01(instr_c(instr));
     // param_d: Phase (0..255 -> 0..TAU)
-    let anim_t = u8_to_01(instr_d(instr)) * TAU;
+    let anim_t = epu_loop_phase01(instr_d(instr)) * TAU;
 
     // Decode plane normal
     let plane_normal = decode_dir16(instr_dir16(instr));
@@ -402,6 +402,7 @@ fn eval_plane(
 
     // Compute grazing fade to prevent aliasing at shallow angles
     let grazing_w = smoothstep(0.05, 0.2, d);
+    let projected_radius = length(vec2f(dot(hit, plane_right), dot(hit, plane_forward)));
 
     // Evaluate pattern by variant
     var pattern_mask = 1.0;
@@ -473,7 +474,11 @@ fn eval_plane(
     let final_color = surface_color + vec3f(specular_term);
 
     // Compute final weight
-    let w = intensity * grazing_w * alpha_a * region_w;
+    var projection_gate = 1.0;
+    if variant_id == PLANE_VARIANT_STONE {
+        projection_gate = smoothstep(0.18, 0.62, projected_radius);
+    }
+    let w = intensity * grazing_w * projection_gate * alpha_a * region_w;
 
     return LayerSample(final_color, w);
 }

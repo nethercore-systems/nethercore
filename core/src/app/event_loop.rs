@@ -97,6 +97,9 @@ pub trait ConsoleApp<C: Console>: Sized {
     /// Clear the redraw flag after rendering.
     fn clear_needs_redraw(&mut self);
 
+    /// Called after a redraw has completed.
+    fn on_redraw_completed(&mut self) {}
+
     // === Application lifecycle ===
 
     /// Handle a critical runtime error.
@@ -185,6 +188,7 @@ impl<C: Console, A: ConsoleApp<C>> ApplicationHandler for AppEventHandler<C, A> 
                     // ONLY render here - simulation already happened in about_to_wait
                     app.render();
                     app.clear_needs_redraw();
+                    app.on_redraw_completed();
 
                     // Check if app wants to exit
                     if app.should_exit() {

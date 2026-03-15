@@ -30,6 +30,7 @@ pub(super) struct WorkbenchBridge {
     request_rx: mpsc::Receiver<WorkbenchEnvelope>,
     artifacts_dir: PathBuf,
     pending_capture: Option<PendingCapture>,
+    force_target_refresh: bool,
     port: u16,
 }
 
@@ -106,12 +107,25 @@ impl WorkbenchBridge {
             request_rx,
             artifacts_dir,
             pending_capture: None,
+            force_target_refresh: false,
             port: actual_port,
         })
     }
 
     pub(super) fn port(&self) -> u16 {
         self.port
+    }
+
+    fn request_target_refresh(&mut self) {
+        self.force_target_refresh = true;
+    }
+
+    fn needs_target_refresh(&self) -> bool {
+        self.force_target_refresh
+    }
+
+    fn complete_target_refresh(&mut self) {
+        self.force_target_refresh = false;
     }
 }
 
@@ -237,6 +251,18 @@ where
                 Err(error) => HttpResponse::error(500, error.to_string()),
             };
             let _ = envelope.response_tx.send(response);
+        }
+    }
+
+    pub(super) fn workbench_needs_target_refresh(&self) -> bool {
+        self.workbench
+            .as_ref()
+            .is_some_and(WorkbenchBridge::needs_target_refresh)
+    }
+
+    pub(super) fn finish_workbench_redraw(&mut self) {
+        if let Some(workbench) = &mut self.workbench {
+            workbench.complete_target_refresh();
         }
     }
 
@@ -373,10 +399,19 @@ where
                     .and_then(|value| value.as_str())
                     .unwrap_or("capture")
                     .to_string();
-                let workbench = self.workbench.as_mut().context("workbench unavailable")?;
-                if workbench.pending_capture.is_some() {
+                if self
+                    .workbench
+                    .as_ref()
+                    .context("workbench unavailable")?
+                    .pending_capture
+                    .is_some()
+                {
                     return Ok(Some(HttpResponse::error(409, "capture already pending")));
                 }
+                // Refresh the current render state before queuing the capture so the next
+                // redraw snapshots the latest live EPU state rather than a stale target.
+                self.refresh_render_state()?;
+                let workbench = self.workbench.as_mut().context("workbench unavailable")?;
                 workbench.pending_capture = Some(PendingCapture { label, response_tx });
                 self.needs_redraw = true;
                 Ok(None)
@@ -403,7 +438,7 @@ where
     fn workbench_snapshot(&mut self) -> Result<EpuWorkbenchSnapshot> {
         self.sync_console_debug_state();
         let config = self.current_workbench_config()?;
-        let view = self
+        let mut view = self
             .runner
             .as_ref()
             .and_then(|runner| {
@@ -412,6 +447,8 @@ where
                     .and_then(|session| session.runtime.console().epu_workbench_view())
             })
             .unwrap_or_default();
+        view.camera_angle = self.read_debug_value_f32("camera/angle")?;
+        view.camera_elevation = self.read_debug_value_f32("camera/elevation")?;
         let metadata = self
             .runner
             .as_ref()
@@ -507,6 +544,12 @@ where
         if let Some(show_background) = view.show_background {
             self.write_debug_value("scene/show_background", json!(show_background))?;
         }
+        if let Some(camera_angle) = view.camera_angle {
+            self.write_debug_value("camera/angle", json!(camera_angle))?;
+        }
+        if let Some(camera_elevation) = view.camera_elevation {
+            self.write_debug_value("camera/elevation", json!(camera_elevation))?;
+        }
 
         let runner = self.runner.as_mut().context("runner not initialized")?;
         runner
@@ -592,14 +635,23 @@ where
     fn refresh_render_state(&mut self) -> Result<()> {
         let runner = self.runner.as_mut().context("runner not initialized")?;
         let session = runner.session_mut().context("session not initialized")?;
-        if let Some(game) = session.runtime.game_mut() {
-            C::clear_frame_state(game.console_state_mut());
+        if session.runtime.game_mut().is_some() {
+            let (console, state_opt) = session.runtime.console_and_state_mut();
+            if let Some(state) = state_opt {
+                C::clear_frame_state(state);
+                // Workbench edits live in the debug/editor layer until they are merged back
+                // into console state. Do that before rebuilding the current render commands.
+                console.sync_debug_ui_state(state);
+            }
         }
         session
             .runtime
             .render()
             .context("refreshing live render state failed")?;
         self.execute_draw_commands();
+        if let Some(workbench) = &mut self.workbench {
+            workbench.request_target_refresh();
+        }
         self.last_sim_rendered = true;
         self.needs_redraw = true;
         Ok(())
@@ -686,6 +738,40 @@ where
         })
     }
 
+    fn read_debug_value_f32(&self, full_path: &str) -> Result<Option<f32>> {
+        let Some(runner) = &self.runner else {
+            return Ok(None);
+        };
+        let Some(session) = runner.session() else {
+            return Ok(None);
+        };
+        let Some(game) = session.runtime.game() else {
+            return Ok(None);
+        };
+        let registry = game.store().data().debug_registry.clone();
+        let Some(value) = registry
+            .values
+            .iter()
+            .find(|value| value.full_path == full_path)
+        else {
+            return Ok(None);
+        };
+        let Some(memory) = game.store().data().game.memory else {
+            return Ok(None);
+        };
+        let data = memory.data(game.store());
+        let ptr = value.wasm_ptr as usize;
+        let size = value.value_type.byte_size();
+        if ptr + size > data.len() {
+            return Ok(None);
+        }
+        let debug_value = registry.read_value_from_slice(&data[ptr..ptr + size], value.value_type);
+        Ok(match debug_value {
+            crate::debug::types::DebugValue::F32(value) => Some(value),
+            _ => None,
+        })
+    }
+
     fn write_debug_value(&mut self, full_path: &str, value: serde_json::Value) -> Result<()> {
         let runner = self.runner.as_mut().context("runner not initialized")?;
         let session = runner.session_mut().context("session not initialized")?;
@@ -710,6 +796,9 @@ where
             ),
             crate::debug::types::ValueType::I32 => crate::debug::types::DebugValue::I32(
                 value.as_i64().context("expected i32 debug value")? as i32,
+            ),
+            crate::debug::types::ValueType::F32 => crate::debug::types::DebugValue::F32(
+                value.as_f64().context("expected f32 debug value")? as f32,
             ),
             _ => anyhow::bail!("unsupported debug write type for {full_path}"),
         };
@@ -827,5 +916,30 @@ fn default_capture_crops(width: u32, height: u32) -> crate::workbench::EpuWorkbe
             width: width / 3,
             height: height * 2 / 3,
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn workbench_target_refresh_flag_clears_after_redraw() {
+        let (_tx, request_rx) = mpsc::channel();
+        let mut workbench = WorkbenchBridge {
+            request_rx,
+            artifacts_dir: PathBuf::from("tmp"),
+            pending_capture: None,
+            force_target_refresh: false,
+            port: 4581,
+        };
+
+        assert!(!workbench.needs_target_refresh());
+
+        workbench.request_target_refresh();
+        assert!(workbench.needs_target_refresh());
+
+        workbench.complete_target_refresh();
+        assert!(!workbench.needs_target_refresh());
     }
 }

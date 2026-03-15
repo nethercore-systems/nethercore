@@ -26,6 +26,7 @@ The unattended loop is for:
 - benchmark-first engine/surface work
 - routine benchmark/showcase capture bundles after a benchmark direction is healthy enough to run
 - overnight queue supervision and state preservation
+- coordinating restartable live-workbench sidecars before replay promotion when one lane needs rapid local iteration
 
 It is not for:
 
@@ -45,9 +46,11 @@ Each queue item should declare:
 - `job_id`
 - `status`
 - `mode`
+- `lane`
 - `target`
 - `replay`
 - `batch_size`
+- `capture_strategy`
 - `build_steps`
 - `promotion_gate`
 - `notes`
@@ -55,10 +58,31 @@ Each queue item should declare:
 - `attempts`
 - `last_run_dir`
 
+Each queue item may also declare:
+
+- `capture_strategy`
+
+If `capture_strategy` is omitted, the queue runner resolves it from `mode`:
+
+- `showcase` -> `single`
+- `benchmark` -> `pair`
+
 Allowed `mode` values:
 
 - `benchmark`
 - `showcase`
+
+Allowed `capture_strategy` values:
+
+- `single`
+- `pair`
+
+Queue default:
+
+- `showcase` jobs default to `single`
+- `benchmark` jobs default to `pair`
+
+Use `pair` only when benchmark work, capture-path diagnostics, replay-drift suspicion, or explicit milestone proof justifies the extra cost.
 
 Allowed `status` values:
 
@@ -91,16 +115,22 @@ The pair helper:
 - fails if a run does not append the expected screenshot count
 - fails if the two batches overlap
 
-Keep this available for capture-path diagnostics, but do not make paired comparison the center of every beauty wave now that determinism is considered solved.
+Keep this available for benchmark work, capture-path diagnostics, engine/shader/replay changes, and milestone proof. Do not make paired comparison the center of every beauty wave now that determinism is considered solved.
+
+The single-capture helper:
+
+- `tools/tmp/run_epu_replay_once.py`
+
+Use this as the default unattended capture path for routine showcase beauty waves.
 
 The queue runner:
 
 - selects the next runnable queue item
 - runs the listed build steps
-- invokes the pair runner with the local player / ROM / screenshot defaults
+- invokes either the single-capture helper or the pair helper with the local player / ROM / screenshot defaults
 - writes durable artifacts under `agent/runs/<timestamp>-<job_id>/`
-- copies the exact compared screenshot windows into the run bundle
-- updates queue status to `awaiting_review` on a clean pair or `blocked` on infrastructure failure
+- copies the exact captured screenshot windows into the run bundle
+- updates queue status to `awaiting_review` on a clean capture or `blocked` on infrastructure failure
 - can run one targeted job by `--job-id` or drain multiple runnable jobs with `--until-idle` / `--max-jobs`
 
 The overnight supervisor:
@@ -143,14 +173,16 @@ Recommended contents:
 - `summary.md`
 - `commands.txt`
 - `build.log`
-- `pair-output.txt`
+- `capture-output.txt` for `capture_strategy: single`
+- `pair-output.txt` for `capture_strategy: pair`
 - `notes.md`
 - `error.txt` when the run fails before review
 
 If future automation copies PNGs out of `%APPDATA%`, store them under:
 
+- `screenshots/single/` for `capture_strategy: single`
 - `screenshots/a/`
-- `screenshots/b/`
+- `screenshots/b/` for `capture_strategy: pair`
 
 Each overnight supervisor session should leave a repo-local bundle under:
 
@@ -178,7 +210,10 @@ Use the unattended loop for routine benchmark/showcase capture progression.
 Meaning:
 
 - the runner may build, replay, and create durable `agent/runs/*` bundles
-- paired comparison remains available and may run automatically, but it is infrastructure rather than the main review goal
+- single capture is the default for routine showcase beauty work
+- paired comparison remains available and may run automatically for diagnostics and milestone proof, but it is infrastructure rather than the main review goal
+- when a lane is in live local discovery, keep one persistent workbench session for that lane and reuse it instead of spawning one HTTP server per worker
+- record the live lane's artifacts dir and port in queue notes or worker output so the next worker attaches instead of relaunching blindly
 - a fresh reviewer agent must still inspect screenshots directly
 - only after review should the durable markdown logs be updated
 - benchmark review may reuse one shared benchmark-sweep artifact for multiple targets when the replay and content state are identical
@@ -206,8 +241,9 @@ Do not present it as a fully autonomous creative agent. It can only execute the 
 On any restart:
 
 1. Read `agent/start-here.md`
-2. Read `agent/shared/10-program-runbook.md`
-3. Read this file
-4. Read `agent/queue/epu-loop.yaml`
-5. Inspect the newest `agent/runs/*` or `agent/runs/overnight/*` artifacts
-6. Resume the oldest meaningful `queued` job that still matches current `06-open-gaps.md`
+2. Read `agent/shared/06-open-gaps.md`
+3. Read `agent/shared/10-program-runbook.md`
+4. Read this file
+5. Read `agent/queue/epu-loop.yaml`
+6. Inspect the newest `agent/runs/*` or `agent/runs/overnight/*` artifacts
+7. Resume the oldest meaningful `queued` job that still matches current `06-open-gaps.md`

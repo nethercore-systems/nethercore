@@ -104,15 +104,45 @@ fn aperture_sdf_bars(uv: vec2f, half_w: f32, half_h: f32, bar_count: u32) -> f32
         let count = max(bar_count, 1u);
         let bar_spacing = (half_w * 2.0) / f32(count + 1u);
         let bar_width = bar_spacing * 0.15;
+        let bar_phase = (uv.x + half_w) / bar_spacing;
+        let edge_taper = 1.0 - smoothstep(0.72, 1.0, abs(uv.x) / max(half_w, 0.001));
+        let cap_taper = 1.0 - smoothstep(0.68, 1.0, abs(uv.y) / max(half_h, 0.001));
+        let nearest_index = floor(bar_phase + 0.5);
+        var bar_dist = 1e6;
 
-        // Find distance to nearest bar center
-        let x_offset = uv.x + half_w;
-        let bar_index = floor(x_offset / bar_spacing + 0.5);
-        let bar_center_x = bar_index * bar_spacing - half_w;
-        let bar_dist = abs(uv.x - bar_center_x) - bar_width;
+        // Search nearby nominal bars and give each a small deterministic center
+        // offset. This preserves the barred aperture read while preventing full-
+        // height ruler-straight repeats.
+        for (var offset = -1.0; offset <= 1.0; offset += 1.0) {
+            let bar_index = nearest_index + offset;
+            if bar_index >= 1.0 && bar_index <= f32(count) {
+                let bar_seed = aperture_hash21(vec2f(bar_index, f32(count) + 13.0));
+                let center_phase = bar_index + (bar_seed - 0.5) * 0.24 * edge_taper;
+                let bar_bow = aperture_value_noise(
+                    vec2f(bar_index * 0.31 + 17.0, (uv.y / max(half_h, 0.001)) * 1.7),
+                    1.0
+                ) * 0.08 * cap_taper;
+                let local = (bar_phase - center_phase - bar_bow) * bar_spacing;
+                let bar_profile = mix(0.8, 1.08, bar_seed);
+                let tapered_half_width = bar_width * mix(0.45, 1.0, edge_taper * cap_taper) * bar_profile;
+                let y01 = uv.y / max(half_h, 0.001);
+                let segment_wave = epu_relief_wave(
+                    vec2f(bar_index * 0.29 + y01 * 1.23, y01 * 0.81 + bar_seed * 0.47),
+                    f32(count) * 0.071 + bar_seed * 0.83
+                );
+                let segment_gate = smoothstep(-0.18, 0.72, segment_wave);
+                let segment_lane = epu_relief_envelope(abs(y01), 0.0, 0.12, 0.84, 1.0);
+                // Break bar continuity before compositing by locally widening the
+                // bar SDF where the low-frequency gate closes. This keeps a bar
+                // family, but stops any one bar from surviving as a full-height
+                // chart-space rail.
+                let closure = (1.0 - segment_gate) * segment_lane * bar_width * mix(1.7, 2.4, bar_seed);
+                bar_dist = min(bar_dist, abs(local) - tapered_half_width + closure);
+            }
+        }
 
         // Bar occludes the opening (makes it wall)
-        if bar_dist < 0.0 && bar_index >= 1.0 && bar_index <= f32(count) {
+        if bar_dist < 0.0 {
             return -bar_dist; // Inside bar = positive SDF (outside opening)
         }
     }
@@ -126,16 +156,32 @@ fn aperture_sdf_multi(uv: vec2f, half_w: f32, half_h: f32, cell_count: u32) -> f
     let cell_w = (half_w * 2.0) / f32(count);
     let cell_h = (half_h * 2.0) / f32(count);
     let gap = min(cell_w, cell_h) * 0.1;
+    let cell_phase = vec2f((uv.x + half_w) / cell_w, (uv.y + half_h) / cell_h);
+    let cell_id = floor(cell_phase);
+    let border_margin = min(half_w - abs(uv.x), half_h - abs(uv.y));
+    let border_taper = smoothstep(0.0, min(cell_w, cell_h) * 0.75, border_margin);
 
     // Transform uv into cell-local coordinates
+    let cell_seed_x = aperture_hash21(cell_id + vec2f(13.0, 37.0));
+    let cell_seed_y = aperture_hash21(cell_id.yx + vec2f(29.0, 11.0));
+    let row_sign = select(-1.0, 1.0, fract(cell_id.y * 0.5) >= 0.25);
+    let col_sign = select(-1.0, 1.0, fract(cell_id.x * 0.5) >= 0.25);
+    let stagger = vec2f(
+        row_sign * (cell_seed_x - 0.5) * 0.18 * border_taper,
+        col_sign * (cell_seed_y - 0.5) * 0.14 * border_taper
+    );
+    let shear = vec2f(
+        (fract(cell_phase.y) - 0.5) * mix(-0.12, 0.12, cell_seed_y) * border_taper,
+        (fract(cell_phase.x) - 0.5) * mix(-0.09, 0.09, cell_seed_x) * border_taper
+    );
     let cell_uv = vec2f(
-        ((uv.x + half_w) % cell_w) - cell_w * 0.5,
-        ((uv.y + half_h) % cell_h) - cell_h * 0.5
+        epu_periodic_centered(cell_phase.x + stagger.x + shear.x + (cell_seed_x - 0.5) * 0.06) * cell_w,
+        epu_periodic_centered(cell_phase.y + stagger.y + shear.y + (cell_seed_y - 0.5) * 0.06) * cell_h
     );
 
     // Cell-local opening SDF
-    let cell_half_w = (cell_w - gap) * 0.5;
-    let cell_half_h = (cell_h - gap) * 0.5;
+    let cell_half_w = (cell_w - gap) * 0.5 * mix(0.82, 1.0, border_taper) * mix(0.9, 1.04, cell_seed_x);
+    let cell_half_h = (cell_h - gap) * 0.5 * mix(0.82, 1.0, border_taper) * mix(0.9, 1.04, cell_seed_y);
     let cell_sdf = aperture_sdf_rect(cell_uv, cell_half_w, cell_half_h);
 
     // Combine with outer boundary
@@ -169,6 +215,10 @@ fn eval_aperture(
     // Decode aperture center direction
     let center_dir = decode_dir16(instr_dir16(instr));
 
+    let up = select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(center_dir.y) > 0.9);
+    let right = normalize(cross(up, center_dir));
+    let tangent_up = normalize(cross(center_dir, right));
+
     // Extract parameters
     let half_w = mix(0.1, 1.5, u8_to_01(instr_a(instr)));
     let half_h = mix(0.1, 1.5, u8_to_01(instr_b(instr)));
@@ -183,7 +233,13 @@ fn eval_aperture(
     // zero on the back hemisphere to prevent great-circle seams.
     let d_raw = dot(dir, center_dir);
     let horizon_fade = 0.06;
-    let front_w = smoothstep(0.0, horizon_fade, d_raw);
+    let horizon_relief = aperture_value_noise(
+        vec2f(dot(dir, right), dot(dir, tangent_up)) * 1.7
+            + vec2f(f32(variant) * 0.37, u8_to_01(param_d_raw) * 4.0),
+        1.0
+    ) * 0.012 * epu_relief_envelope(abs(d_raw), 0.0, 0.18, 0.22, 0.42);
+    let front_gate = d_raw + horizon_relief;
+    let front_w = smoothstep(0.0, horizon_fade, front_gate);
 
     // On back hemisphere, return all-sky (aperture only affects front)
     if front_w <= 0.0 {
@@ -191,14 +247,11 @@ fn eval_aperture(
     }
 
     // Clamp for projection stability (prevents division blow-ups near the horizon).
-    let d_proj = max(d_raw, horizon_fade);
+    let d_proj = max(max(d_raw, front_gate), horizon_fade);
 
     // Build view-centered tangent chart projection
     // Project direction onto the tangent plane at center_dir
     // We need to extract 2D coordinates (tangent plane basis)
-    let up = select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(center_dir.y) > 0.9);
-    let right = normalize(cross(up, center_dir));
-    let tangent_up = normalize(cross(center_dir, right));
     let proj = (dir - center_dir * d_raw) / d_proj;
     let uv = vec2f(dot(proj, right), dot(proj, tangent_up));
 

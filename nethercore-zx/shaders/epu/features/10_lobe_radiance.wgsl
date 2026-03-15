@@ -74,7 +74,7 @@ fn eval_lobe_radiance(
     let rgb = mix(core_color, edge_color, edge_factor);
 
     let waveform = instr_c(instr);
-    let phase = u8_to_01(instr_d(instr));
+    let phase = epu_loop_phase01(instr_d(instr));
     var anim = 1.0;
     switch waveform {
         case 0u: { anim = 1.0; }
@@ -90,8 +90,12 @@ fn eval_lobe_radiance(
     // Extract alpha_a: bits 7..4 (0..15 -> 0.0..1.0)
     let alpha_a = instr_alpha_a_f32(instr);
 
+    // Keep LOBE directional, but taper its strongest weight right at the cap
+    // so it favors a surrounding tangent ring instead of a broad rosette.
+    let cap_gate = 1.0 - 0.75 * smoothstep(0.84, 0.99, d);
+
     // Compute final weight: w = base * intensity * anim * alpha_a * region_w
-    let w = base * intensity * anim * alpha_a * region_w;
+    let w = base * cap_gate * intensity * anim * alpha_a * region_w;
 
     return LayerSample(rgb, w);
 }

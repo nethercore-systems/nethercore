@@ -2,27 +2,310 @@
 # Update statuses instead of inventing new chat-only state.
 
 jobs:
+  - job_id: neon-metropolis-quick-fix
+    status: blocked
+    mode: showcase
+    lane: quick-fix
+    target: Neon Metropolis
+    replay: examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    batch_size: 60
+    promotion_gate: ready_for_targeted_showcase_fix
+    depends_on: 
+    attempts: 0
+    last_run_dir: 
+    build_steps:
+      - cargo run -p nether-cli -- build --project examples/3-inspectors/epu-showcase
+      - cargo run -p nether-cli -- replay validate examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    notes:
+      - current category: quick-fix
+      - Wave 52 reopened this lane on a clean validated pair, and Waves 53-55 all validated cleanly at 0/60
+      - exact-image review still says fail; park this branch again
+      - target failure class: recover city alley silhouette, hero neon sign, and wet pavement read
+      - current queue state: parked fail; do not spend the next active wave here
+      - latest live follow-up: `neon-metropolis-orchestrator-alley-owner-pass-a` made a large saved change but still only recolored the same neon fog/chamber failure, with no readable alley corridor, hero sign, or wet-pavement owner
+      - latest source rewrite: `set_01_02.rs` now carries a skyline-and-avenue reset with polluted-night `RAMP`, `SECTOR_TUNNEL`, dominant `SILHOUETTE_CITY`, one hero `DECAL` sign, grounded `PLANE_PAVEMENT`, and subordinate window/rain support
+      - latest live validation: the rewritten authored baseline still hard-fails immediately; it reads as a central patterned orb in a blotchy field rather than a skyline-and-avenue composition with a dominant tower and urban depth, so no live branches or replay promotion were justified
+
+  - job_id: sakura-shrine-quick-fix
+    status: blocked
+    mode: showcase
+    lane: quick-fix
+    target: Sakura Shrine
+    replay: examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    batch_size: 60
+    promotion_gate: ready_for_targeted_showcase_fix
+    depends_on: 
+    attempts: 0
+    last_run_dir: 
+    build_steps:
+      - cargo run -p nether-cli -- build --project examples/3-inspectors/epu-showcase
+      - cargo run -p nether-cli -- replay validate examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    notes:
+      - current category: quick-fix
+      - Waves 56-59 all validated cleanly at 0/60, but exact-image review still says fail
+      - current queue state: parked fail; do not spend the next active wave here
+      - target failure class: recover shrine silhouette, mossy path, and controlled petal accent
+      - latest live follow-up: `sakura-shrine-orchestrator-shrine-owner-pass-a` made a large saved change but still left the scene as diffuse blossom field first, with no unmistakable shrine silhouette or approach, so the lane stays parked
+      - latest source rewrite: `set_01_02.rs` now carries a shrine-and-approach reset with dusk garden bed, `SILHOUETTE_SPIRES` shrine owner, `APERTURE_ARCH` openings, strong `PLANE_STONE` path, restrained blossom accent, and rooted `LOBE`
+      - latest live validation: the rewritten authored baseline still hard-fails immediately; it reads as a capped orb in a brown particle field rather than a shrine-and-approach scene with a readable shrine owner and path cue, so no live branches or replay promotion were justified
+
+  - job_id: ocean-depths-quick-fix
+    status: blocked
+    mode: showcase
+    lane: quick-fix
+    target: Ocean Depths
+    replay: examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    batch_size: 60
+    promotion_gate: ready_for_targeted_showcase_fix
+    depends_on: 
+    attempts: 0
+    last_run_dir: 
+    build_steps:
+      - cargo run -p nether-cli -- build --project examples/3-inspectors/epu-showcase
+      - cargo run -p nether-cli -- replay validate examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    notes:
+      - current category: quick-fix
+      - Wave 45 review: still fail; pale shafts and haze still beat any trench-basin owner
+      - target failure class: darker trench-basin anchor, clearer lower-scene seabed ownership, and a focal that beats the water column
+      - current queue state: parked fail until a real trench-floor owner reset is ready
+      - latest source rewrite: `set_03_04.rs` now carries a basin-first trench reset with `SECTOR_CAVE`, dark `PLANE_STONE` seabed ownership, `MOTTLE_RIDGE` contour support, `SILHOUETTE_SPIRES` vent chimneys, one `PORTAL_VORTEX` abyssal focal, and restrained trench-current `FLOW`
+      - latest live validation: the rewritten authored baseline still hard-fails immediately; it reads as a centered orb with a ring marker in a flat teal field rather than a trench-basin with vent/chimney structure and abyssal focal, so no live branches or replay promotion were justified
+
+  - job_id: void-station-quick-fix
+    status: blocked
+    mode: showcase
+    lane: quick-fix
+    target: Void Station
+    replay: examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    batch_size: 60
+    promotion_gate: ready_for_targeted_showcase_fix
+    depends_on: 
+    attempts: 0
+    last_run_dir: 
+    build_steps:
+      - cargo run -p nether-cli -- build --project examples/3-inspectors/epu-showcase
+      - cargo run -p nether-cli -- replay validate examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    notes:
+      - current category: quick-fix
+      - reopened in Wave 60 on a clean validated pair, and Waves 61-62 also validated cleanly at 0/60
+      - exact-image review still says near-pass; Wave 62 is now the best state of the seam branch
+      - current queue state: banked again after the patched-binary final-polish check; low-risk seam/readability tweaks did not materially beat the Wave 62 stop state
+      - latest live staging: `void-station-orchestrator-structure-pass-a` is now exported under `tmp/epu-workbench-live/exports/20260315-102611-void-station-orchestrator-structure-pass-a.json`; it strengthens `L1 GRID` and deepens/widens `L6 DECAL/RECT`, but the follow-up pass closed it as not review-worthy
+      - latest live follow-up: `void-station-orchestrator-structure-pass-b` also stayed in the same solution class, so `Void Station` remains banked and should not be reopened for more micro-churn right now
+      - latest post-artifact3 result: the rebuilt third-pass shader binary changes saved pixels slightly, but `void-station-postfix-baseline` remains the same banked near-pass class and the rebuilt structural recheck still does not improve chamber/deck ownership enough to reopen promotion
+      - target failure class: no new active fix target; keep the banked Wave 62 state unless a later final shipping decision explicitly reopens it
+      - latest source rewrite: `set_03_04.rs` now carries a colder industrial chamber reset with `SECTOR_TUNNEL`, lower `DECAL/RECT` deck framing, `PLANE_GRATING`, and a far `APERTURE_ROUNDED_RECT` bulkhead opening
+      - latest live validation: the rewritten authored baseline still hard-fails immediately; the scene remains a dark glossy orb/vault rather than an industrial chamber with a readable lower deck/frame, so no live branches or replay promotion were justified
+      - latest live iteration: `void-station-liveiter-pass5` confirmed the new authored maintenance-bay direction is still a hard fail on the reused `4581` lane; reducing `VEIL/PILLARS` and then reducing `TRACE/LEAD_LINES` did not escape the rounded dark chamber plus bright square insert failure family, so no export or replay happened
+      - latest source rewrite 2: `set_03_04.rs` now also carries a sector-box maintenance-bay reset with rear hatch `DECAL`, `PLANE/GRATING` deck, wall `CELL/GRID`, debris `PATCHES`, conduit `TRACE/LEAD_LINES`, and one striplight `BAND`; both the example build and replay validation passed
+      - latest live iteration 2: `void-station-liveiter-pass6` still hard-failed on the reused `4581` lane; scene select on the existing session did not pick up the new source reset, so the worker mirrored the authored baseline directly into the live session and the saved frame still read as a centered dark orb with internal ring bands and trace glyphs. No export happened
+      - latest source rewrite 3: `set_03_04.rs` now carries a split-face rear bulkhead, hard rear hatch, grounded grating deck, side industrial framing, and floor-only grid support; both the example build and replay validation passed
+      - latest live iteration 3: `void-station-liveiter-pass7` is a truthful banked near-pass, not replay-worthy. It beats the recent centered orb / ring-band collapse but still stops short of a clean rear-hatch maintenance-bay owner; three meaningful live turns did not cross it, no export happened, and the lane was relaunched in place because `4581` was still serving stale content, moving the final live PID from `25700` to `41880`. Evidence is recorded in `tmp/epu-workbench-live/void-station-liveiter-pass7-assessment.md` and `.json`
+      - latest source rewrite 4: `set_03_04.rs` changed again and both the example build and replay validation passed
+      - latest live iteration 4: `void-station-liveiter-pass8` truthfully hard-failed on the relaunched `tmp/epu-workbench-live` `4581` lane; the new source change regressed the prior banked near-pass into a static-speckled field with a dark dome and the rear hatch stopped being the clear owner, two honest rescue branches including a full strip of the new panel/grid/wear carriers stayed in the same failure class, no export happened, and the final PID changed from `45596` to `61892`. Evidence is recorded in `tmp/epu-workbench-live/void-station-liveiter-pass8-assessment.md` and `.json`
+      - latest source rewrite 5: `set_03_04.rs` changed again, recovering toward the earlier bulkhead/deck direction, and both the example build and replay validation passed
+      - latest live iteration 5: `void-station-liveiter-pass9` truthfully hard-failed on the relaunched `tmp/epu-workbench-live` `4581` lane; the authored baseline still collapses into a glossy dark dome with a bright hatch sticker instead of a readable rear-hatch maintenance bay, two structural live branches moved it only trivially, no export happened, and the final PID changed from `48028` to `51032`. Evidence is recorded in `tmp/epu-workbench-live/void-station-liveiter-pass9-assessment.md` and `.json`
+      - latest source rewrite 6: `set_03_04.rs` changed again and both the example build and replay validation passed
+      - latest live iteration 6: `void-station-liveiter-pass10` truthfully banked as a near-pass, not replay-worthy, on the relaunched `tmp/epu-workbench-live` `4581` lane; this wave recovers out of the pass8 static-speckle and pass9 glossy dark-dome failures back to the older rear-hatch maintenance-bay class with readable rear partition, lower deck, and side machine framing, but the direct frame remains too evenly bright and glossy through the shell, the probe still reads as a technical orb/shell around the hatch rather than a believable service room, no export happened, and the final PID is `77664`. Evidence is recorded in `tmp/epu-workbench-live/void-station-liveiter-pass10-assessment.md` and `.json`
+      - latest source rewrite 7: `set_03_04.rs` changed again; the first authored reset regressed, but the live recovery branch `degloss-b` restored the stronger maintenance-bay family and was codified back into source. Both the example build and replay validation passed
+      - latest live iteration 7: `void-station-liveiter-pass11` truthfully banked as a near-pass, not replay-worthy, on the relaunched `tmp/epu-workbench-live` `4581` lane; it still stops short because the frame remains too shell-led and the probe still reads as a technical orb/panel shell around the hatch, no export happened, and the final PID is `55380`. Evidence is recorded in `tmp/epu-workbench-live/void-station-liveiter-pass11-assessment.md` and `.json`
+      - latest source rewrite 8: `set_03_04.rs` changed again and both the example build and replay validation passed
+      - latest live iteration 8: `void-station-liveiter-pass12` truthfully banked as a near-pass, not replay-worthy, on the relaunched `tmp/epu-workbench-live` `4581` lane; this wave made the authored baseline materially darker and less washed than pass11, but it still reads as a technical shell around the hatch more than a believable maintenance bay, `quiet-shell-a` only dimmed the same shell-led class, `bay-frame-b` only nudged the hardware framing without fixing the probe shell, no export happened, and the final PID is `72216`. Evidence is recorded in `tmp/epu-workbench-live/void-station-liveiter-pass12-assessment.md` and `.json`
+      - latest source rewrite 9: `set_03_04.rs` changed again to a darker hull/bulkhead, tighter hatch inset, stronger side hardware, and less grid-fed shell pressure; both the example build and replay validation passed
+      - latest live iteration 9: `void-station-liveiter-pass13` truthfully banked as a near-pass, not replay-worthy, on the relaunched `tmp/epu-workbench-live` `4581` lane; the authored baseline stays out of the old dark-dome, speckle, and washed-shell failures, but the saved direct frame is still shell-led around the hatch and the probe still reads as the same technical shell, three live branches changed the image truthfully but none changed the class, no replay-worthy export happened, and the final PID is `70512`. Evidence is recorded in `tmp/epu-workbench-live/void-station-liveiter-pass13-assessment.md` and `.json`
+      - latest source rewrite 10: `set_03_04.rs` changed again, and both the example build and replay validation passed
+      - latest live iteration 10: `void-station-liveiter-pass14` truthfully banked as a near-pass, not replay-worthy, on the relaunched `tmp/epu-workbench-live` `4581` lane; this move is a real improvement over pass13 with darker, more local hatch ownership, and it stays clear of the old dark-dome, speckle, and washed-shell failures, but the saved direct frame is still shell-led around the hatch and the probe is still a technical shell, the three live turns were all too small to change class, no replay-worthy export happened, and the final PID is `6616`. Evidence is recorded in `tmp/epu-workbench-live/void-station-liveiter-pass14-assessment.md` and `.json`, and the non-promoted baseline snapshot is stored under `tmp/epu-workbench-live/exports/20260315-200451-void-station-liveiter-pass14-baseline.json`
+      - latest source rewrite 11: `set_03_04.rs` first regressed into a speckled shell/dome class, then was restored away from that bad branch; both the example build and replay validation passed
+      - latest live iteration 11: `void-station-liveiter-pass15` truthfully hard-failed on the restored authored baseline under the current shader stack; even after the recovery out of the speckled shell/dome branch, the saved direct frame still reads as a hatch-centered technical shell rather than a believable maintenance bay, no replay-worthy export happened, and the final PID is `67116` on `127.0.0.1:4581`. Evidence is recorded in `tmp/epu-workbench-live/void-station-liveiter-pass15-assessment.md` and `.json`, and the non-promoted final authored baseline snapshot is stored under `tmp/epu-workbench-live/exports/20260315-202815-void-station-liveiter-pass15-final-authored-baseline.json`
+      - latest source rewrite 13: the newest authored reset also stayed in the same hatch-centered shell class and was not left in source; the prior authored Void Station baseline remains the source state, and both the example build and replay validation passed
+      - latest live iteration 12: `void-station-liveiter-pass16` truthfully hard-failed on the restored authored baseline; the saved direct frame stayed in the same shell-led class, the probe stayed a technical segmented shell, `quiet-shell-a` and `frame-over-floor-b` did not change that, no replay-worthy export happened, and the final PID is `7412` on `127.0.0.1:4581`. Evidence is recorded in `tmp/epu-workbench-live/void-station-liveiter-pass16-assessment.md` and `.json`, and the final restored authored baseline snapshot is stored under `tmp/epu-workbench-live/exports/20260315-205017-void-station-liveiter-pass16-final-authored-baseline.json`
+      - latest source rewrite 13: `set_03_04.rs` had a targeted authored move, but it hard-failed and was backed out; the file was rebuilt, replay-validated, and restored to the prior authored baseline
+      - latest live iteration 13: `void-station-liveiter-pass17` truthfully hard-failed on the restored authored baseline; the saved frame stayed in the same hatch-centered technical shell class, `quiet-shell-c`, `frame-over-floor-c`, and `hull-dark-d` did not break that class, no replay-worthy export happened, and the final PID is `57020`. Evidence is recorded in `tmp/epu-workbench-live/void-station-liveiter-pass17-assessment.md` and `.json`, and the final restored authored baseline snapshot is stored under `tmp/epu-workbench-live/exports/20260315-211034-void-station-liveiter-pass17-final-authored-baseline.json`
+      - latest source rewrite 14: `set_03_04.rs` had a new authored move, but it regressed into a washed shell / sphere collapse and was not left in source. The source was restored to the prior authored baseline, rebuilt, replay-validated, and the persistent lane was relaunched in place on that restored state
+      - latest live iteration 14: `void-station-liveiter-pass18` truthfully hard-failed on the restored authored baseline; three live rescue branches only moved pixels inside the same failed class, no replay-worthy export happened, and the final live PID is `62772` on `127.0.0.1:4581`. Evidence is recorded in `tmp/epu-workbench-live/void-station-liveiter-pass18-assessment.md` and `.json`, and the final restored baseline snapshot is stored under `tmp/epu-workbench-live/exports/20260315-213535-void-station-liveiter-pass18-final-authored-baseline.json`
+      - latest source rewrite 24: `set_03_04.rs` tested a second darker `SILHOUETTE/INDUSTRIAL` rear-gantry move, but it regressed into a darker uniform shell around the same capped technical-shell probe and was backed out. The stronger preserved baseline was restored, the example build and replay validation passed after restore, and no durable new Void Station source direction was kept from this pass
+      - latest live iteration 25: `void-station-liveiter-pass29` truthfully hard-failed; the reset regressed into the same capped technical-shell class, no replay-worthy export happened, and the final live PID is `31320` on `127.0.0.1:4581`. Evidence is recorded in `tmp/epu-workbench-live/void-station-liveiter-pass29-assessment.md` and `.json`
+
+  - job_id: desert-mirage-rebuild
+    status: blocked
+    mode: showcase
+    lane: rebuild
+    target: Desert Mirage
+    replay: examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    batch_size: 60
+    promotion_gate: ready_for_named_scene_rebuild
+    depends_on: 
+    attempts: 0
+    last_run_dir: 
+    build_steps:
+      - cargo run -p nether-cli -- build --project examples/3-inspectors/epu-showcase
+      - cargo run -p nether-cli -- replay validate examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    notes:
+      - current category: rebuild
+      - target failure class: dune horizon, textured sand floor, and mirage identity
+      - Waves 65-69 progressed honestly from fail toward a near-pass survivor on the dune-horizon plus dust-suppression branch
+      - current queue state: banked again after the twice-patched final-polish check; low-risk trims did not materially beat the Wave 69 dune-horizon branch
+      - latest post-fix result: `desert-mirage-postfix2-baseline` remained the best state; trimming `L2 BAND` and `L3 FLOW` did not materially reduce the right-side wash or generic softness
+      - latest live follow-up: `desert-mirage-orchestrator-horizon-pass-a` changed the frame strongly, but only by darkening/desaturating the same wash rather than improving dune horizon, floor ownership, or mirage identity, so the lane stays banked
+      - latest live iteration: `desert-mirage-liveiter-pass4` reconfirmed the same banked near-pass survivor class on the rebuilt `4581` lane; reducing `LOBE`, reducing `PORTAL`, and combining both did not materially improve the saved frame or escape the same side-wash softness
+      - latest live iteration 2: `desert-mirage-liveiter-pass5` reconfirmed the banked near-pass survivor again on the reused `4581` lane; confining glare to sky, sharpening the horizon by cutting softening carriers, and zeroing the mirage carrier all left the saved frame effectively unchanged, so no export happened
+      - latest source rewrite: [set_05_06.rs](D:/Development/nethercore-project/nethercore/examples/3-inspectors/epu-showcase/src/presets/set_05_06.rs) was rewritten again and both the example build and replay validation passed
+      - latest live iteration 3: `desert-mirage-liveiter-pass6` truthfully hard-failed on the relaunched `tmp/epu-workbench-live` `4581` lane after three live branches; the new direction was genuinely different from the older banked survivor, but it regressed into a brighter, flatter brown wash, none of the branches recovered a clearer basin/horizon mirage owner, the probe kept the same capped-disc instability, no export happened, and the final PID changed from `38704` to `58480`. Evidence is recorded in `tmp/epu-workbench-live/desert-mirage-liveiter-pass6-assessment.md` and `.json`
+
+  - job_id: enchanted-grove-rebuild
+    status: blocked
+    mode: showcase
+    lane: rebuild
+    target: Enchanted Grove
+    replay: examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    batch_size: 60
+    promotion_gate: ready_for_named_scene_rebuild
+    depends_on: 
+    attempts: 1
+    last_run_dir: agent\runs\20260315-043247-enchanted-grove-rebuild
+    build_steps:
+      - cargo run -p nether-cli -- build --project examples/3-inspectors/epu-showcase
+      - cargo run -p nether-cli -- replay validate examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    notes:
+      - current category: rebuild
+      - current queue state: Wave 70 shared-artifact review failed; rotate the next active rebuild lane to `Sky Ruins` instead of spending another immediate wave in `set_05_06.rs`
+      - target failure class: recover canopy framing, mossy clearing floor, and readable sunlight shafts
+      - latest shared-artifact review: warm green mood and motes survive, but the scene still reads as generic green fog with no authoritative canopy / clearing layout or readable shaft structure
+      - next truthful lever: add one unmistakable clearing layout with dark canopy silhouettes, a grounded moss floor owner, and a few strong diagonal shafts while cutting mote density
+      - latest live follow-up: `enchanted-grove-orchestrator-structure-pass-a` darkened canopy framing but still failed to establish a grounded moss/clearing floor owner or readable sunlight shafts, so the lane stays blocked
+      - latest source-reset validation: the rewritten source state materially improves canopy enclosure, but it is still not review-worthy because the clearing floor still does not separate, the light still reads as broad haze instead of shafts, and seam/facet artifacts remain visible
+      - latest source rewrite: `set_05_06.rs` now carries a bounds-first reset built around `SILHOUETTE/FOREST`, `APERTURE/ARCH`, `PLANE/GRASS`, `VEIL/PILLARS`, grounded `LOBE`, floor-only `FLOW`, and wall `MOTTLE/DAPPLE`
+      - latest live validation: the new authored baseline is materially cleaner and more bounds-first than the prior reset, but it still stays too abstract; there is no convincing canopy arch, no grounded clearing floor, and only one oversized shaft rather than a believable shaft family
+      - latest live iteration: `enchanted-grove-liveiter-pass6` closed this source base as a hard fail on the reused `4581` lane; cutting `APERTURE`, cutting `VEIL/PILLARS`, reducing the `PLANE` floor, and one combined rescue branch still left a dark green graphic field with one diagonal wedge and no readable canopy arch, clearing floor, or shaft family
+      - latest source rewrite 2: `set_05_06.rs` now carries a structure-first clearing-bowl direction with `SPLIT/TIER`, darker `SILHOUETTE/FOREST`, stronger `PLANE/GRASS`, localized `VEIL/CURTAINS`, and floor-only dapple/shimmer support instead of haze or mote churn
+      - latest live iteration 2: `enchanted-grove-liveiter-pass7` still hard-fails on the rebuilt `4581` lane; baseline and all three live turns remained a murky dark green field with no owned clearing bowl, no readable canopy arch, and no believable shaft family, so no export or replay happened
+      - latest source rewrite 3: a more sheltered `SECTOR/CAVE` plus sparse-firefly reset was tested, but it hard-failed on a dedicated `4584` lane as a starry green dome with no clearing owner and was backed out immediately
+      - latest live iteration 3: `enchanted-grove-wave1-baseline` on `tmp/epu-workbench-grove` proved the reset was weaker than the prior structure-first base, so no export or replay happened and the file was restored to the earlier clearing-bowl direction
+      - latest source rewrite 3: a post-seam `SECTOR/CAVE` clearing-envelope reset with sparse firefly support was tested locally, but it hard-failed and was backed out; no durable source change was kept
+      - latest live iteration 3: the separate `tmp/epu-workbench-grove` lane on `4584` produced a truthful clean capture at `20260316-040434-enchanted-grove-reset-clean-background.png`, and it still collapsed into a dotted dark-green field with almost no canopy arch, floor owner, or believable shaft family. Keep the current structure-first base and do not promote that reset
+
+  - job_id: astral-void-quick-fix
+    status: blocked
+    mode: showcase
+    lane: quick-fix
+    target: Astral Void
+    replay: examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    batch_size: 60
+    promotion_gate: ready_for_targeted_showcase_fix
+    depends_on: 
+    attempts: 1
+    last_run_dir: 
+    build_steps:
+      - cargo run -p nether-cli -- build --project examples/3-inspectors/epu-showcase
+      - cargo run -p nether-cli -- replay validate examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    notes:
+      - current category: quick-fix
+      - current state: stable banked near-pass after Waves 41-52
+      - current queue state: banked again after fresh rebuilt-lane validation on PID 27440; `LOBE 132->104`, `SCATTER 84->68`, and an 8-second motion pair all exported real saved deltas, but the direct-background change stayed too weak to materially beat the current bank point
+      - latest source rewrite: [set_07_08.rs](D:/Development/nethercore-project/nethercore/examples/3-inspectors/epu-showcase/src/presets/set_07_08.rs) was rewritten again and both the example build and replay validation passed
+      - latest live iteration: `astral-void-liveiter-pass4` truthfully hard-failed after two honest rescue branches on the relaunched `tmp/epu-workbench-live` `4581` lane; the new source reset regressed badly into a bright ringed cellular shell with obvious guide/ring ownership and a faceted probe instead of a structured void field, `degloss-a` and `partition-b` stayed in the same failure class, no export happened, and the final PID changed from `58480` to `45596`. Evidence is recorded in `tmp/epu-workbench-live/astral-void-liveiter-pass4-assessment.md` and `.json`
+      - latest source rewrite 2: [set_07_08.rs](D:/Development/nethercore-project/nethercore/examples/3-inspectors/epu-showcase/src/presets/set_07_08.rs) changed again and both the example build and replay validation passed
+      - latest live iteration 2: `astral-void-liveiter-pass5` truthfully hard-failed on the relaunched `tmp/epu-workbench-live` `4581` lane; the reset recovered out of the bright cellular-shell regression, but the authored baseline and both live branches still read as a single dark orb with a ring/shaft event rather than a structured void field, `no-orb-b` was the strongest branch but still did not reach near-pass, no export happened, and the final PID changed from `24364` to `48028`. Evidence is recorded in `tmp/epu-workbench-live/astral-void-liveiter-pass5-assessment.md` and `.json`
+      - latest source rewrite 3: [set_07_08.rs](D:/Development/nethercore-project/nethercore/examples/3-inspectors/epu-showcase/src/presets/set_07_08.rs) changed again and both the example build and replay validation passed
+      - latest live iteration 3: `astral-void-liveiter-pass6` truthfully hard-failed on the relaunched `tmp/epu-workbench-live` `4581` lane; the reset improved background openness versus pass5, but the saved direct frame is still owned by one dark orb with a ring edge and shaft rather than a structured void field, two live probes moved the frame but neither broke that class, this pass remains weaker than the older banked survivor, no export happened, and the final PID changed from `63204` to `37100`. Evidence is recorded in `tmp/epu-workbench-live/astral-void-liveiter-pass6-assessment.md` and `.json`
+      - latest authoritative replay review: the rebuilt third-pass shader binary leaves this lane materially unchanged; saved capture truth is still good, but the scene remains a banked near-pass rather than a promotion-ready celestial hierarchy
+      - latest source rewrite: `set_07_08.rs` now carries a stricter celestial hierarchy with `MASS_VEIL`, dominant `CELESTIAL_RINGED`, subordinate `CELESTIAL_MOON`, ring-plane `BAND`, animated `FLOW`, sparse stars, and `LOBE` keyed from the hero body
+      - latest live validation: the rewritten authored baseline still hard-fails immediately; it reads as one glossy hero orb with no subordinate body or meaningful support motion carrier, so no live branches or replay promotion were justified
+      - target failure class: keep the banked survivor state for now; if reopened, treat it as normal content-polish work rather than a capture-path debug lane
+
+  - job_id: hell-core-quick-fix
+    status: done
+    mode: showcase
+    lane: quick-fix
+    target: Hell Core
+    replay: examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    batch_size: 60
+    promotion_gate: ready_for_targeted_showcase_fix
+    depends_on: 
+    attempts: 1
+    last_run_dir: agent\runs\20260315-hell-core-pass-state
+    build_steps:
+      - cargo run -p nether-cli -- build --project examples/3-inspectors/epu-showcase
+      - cargo run -p nether-cli -- replay validate examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    notes:
+      - current category: quick-fix
+      - current state: protected pass
+      - Waves 72+ moved this lane over the finish line and it is no longer an active quick-fix target
+      - do not reopen unless validating regression or deliberate final shipping polish
+
+  - job_id: sky-ruins-rebuild
+    status: blocked
+    mode: showcase
+    lane: rebuild
+    target: Sky Ruins
+    replay: examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    batch_size: 60
+    promotion_gate: ready_for_named_scene_rebuild
+    depends_on: 
+    attempts: 2
+    last_run_dir: agent\runs\20260315-114532-sky-ruins-rebuild
+    build_steps:
+      - cargo run -p nether-cli -- build --project examples/3-inspectors/epu-showcase
+      - cargo run -p nether-cli -- replay validate examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    notes:
+      - current category: rebuild
+      - target failure class: recover ruin skyline, marble floor, and open-air cloud grandeur
+      - current queue state: Wave 71 shared-artifact review failed, but `Crystal Cavern` has since been parked; after the new Enchanted Grove dome-reset backout, this lane is the next truthful active rebuild candidate
+      - latest shared-artifact review: warm stone palette survives, but there is still no readable ruined skyline, marble platform floor, or layered cloud-depth ownership
+      - next truthful lever: recompose around one obvious colonnade / ruin silhouette, a readable marble floor plane, layered cloud banks, and visible cloud-light drift
+      - latest live follow-up: `sky-ruins-orchestrator-composition-pass-a` changed the frame materially but still read as giant warm stone columns with no convincing marble/platform floor or cloud-depth grandeur, so the lane stays blocked
+      - latest authoritative replay review: run `20260315-114532-sky-ruins-rebuild` still hard-fails on the new shader binary; soft beige slab/column masses dominate and no readable ruined skyline, marble platform floor, or layered cloud-bank depth emerges
+      - latest source-reset validation: the rewritten source state is still not materially improved; it remains a pale warm stone wash with oversized vertical ruin bars, weak cloud-bank depth, and no readable floor owner
+      - latest source rewrite: `set_09_10.rs` now carries an open-air terrace reset built around a cool sky bed, distant tier, one `SILHOUETTE/RUINS` owner, `APERTURE/ARCH` cutouts, a lower `PLANE/STONE` terrace, and `MASS/ADVECT` cloud banks
+      - latest live validation: the scene switch loaded a distinct authored config on the reused lane, but the saved baseline capture stayed effectively indistinguishable from the immediately preceding Frozen Bed baseline; no truthful composition judgment or branch follow-up was possible from that output
+      - latest scene-switch diagnostic: explicit unlocked-vs-locked Sky Ruins captures on the same lane both differ strongly from Frozen Bed, so the stale locked-editor hypothesis is not currently supported on the healthy reused lane
+      - latest live validation 2: with a clean scene-distinct capture path, the authored Sky Ruins rewrite still hard-fails; the frame is owned by a central orb/disc with a generic gray vault rather than an open-air terrace with colonnade, floor plane, and layered cloud banks
+      - latest source rewrite 3: `set_09_10.rs` now carries a masonry/court/cloud-depth direction with `SECTOR_BOX`, `CELL_BRICK`, `VEIL_PILLARS`, `PLANE_STONE`, `MASS_SHELF`, `ADVECT_FRONT`, and `BAND` replacing the older split/silhouette/aperture stack
+      - latest live iteration: `sky-ruins-liveiter-pass3` still hard-fails on the rebuilt `4581` lane; the new baseline collapses into a centered orb with radial vault/panel arcs rather than a readable ruin silhouette, marble terrace floor, and layered cloud depth, so no export or replay happened
+      - latest source rewrite 4: a post-seam horizon-terrace reset with `SPLIT_TIER`, `SILHOUETTE_RUINS`, stronger terrace `PLANE_STONE`, and warmer cloud banks was tested locally, but it hard-failed and was backed out; no durable source change was kept
+      - latest live iteration 4: the separate `tmp/epu-workbench-skyruins` lane on `4585` produced a truthful clean capture at `20260316-041259-sky-ruins-postseam-baseline.png`, and it collapsed into beige empty field with a probe shell instead of any readable ruin line, terrace floor, or cloud-bank depth. Keep the prior masonry/court base and do not promote that reset
+
+  - job_id: combat-lab-guard
+    status: done
+    mode: showcase
+    lane: guard
+    target: Combat Lab
+    replay: examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    batch_size: 60
+    promotion_gate: protect_pass_state
+    depends_on: 
+    attempts: 1
+    last_run_dir: agent\runs\20260311-combat-lab-pass-state
+    build_steps:
+      - cargo run -p nether-cli -- build --project examples/3-inspectors/epu-showcase
+      - cargo run -p nether-cli -- replay validate examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    notes:
+      - current category: guard
+      - run29 is the current indoor proof-of-life pass
+      - do not reopen unless validating regression or deliberate polish
+
   - job_id: front-mass-body-ownership
     status: blocked
     mode: benchmark
+    lane: benchmark-blocked
     target: Front Mass
     replay: examples/3-inspectors/epu-showcase/screenshot-benchmarks-anim3.ncrs
     batch_size: 18
     promotion_gate: blocked_until_front_mass_improves
     depends_on: 
-    attempts: 12
-    last_run_dir: agent\runs\20260313-061721-front-mass-body-ownership
+    attempts: 14
+    last_run_dir: agent\runs\20260315-150518-front-mass-storm-owner
     build_steps:
       - cargo test -p nethercore-zx --lib epu_capabilities
       - cargo dev
       - cargo run -p nether-cli -- build --project examples/3-inspectors/epu-showcase
       - cargo run -p nether-cli -- replay validate examples/3-inspectors/epu-showcase/screenshot-benchmarks-anim3.ncrs
     notes:
-      - active weather-body benchmark lane
+      - parked weather-body benchmark lane
       - current closed levers: density-only MASS tightening and darker core-bias on MASS_SHELF
       - current benchmark cleanup: lightning accent is removed so the body must own the frame by itself
       - current closed branches: density-only MASS tightening, darker core-bias, and MASS_BANK profile all failed under the old shared rig
-      - current queue reason: rerun under the new outdoor benchmark rig profile before declaring a deeper surface-only blocker
+      - current queue reason: parked after the patched-binary re-test; artifact seams softened slightly, but the actual probe/body contract did not materially improve
       - latest rerun result: framing improved slightly but the front still fails and remains blocked
       - latest shared-artifact result: bounds-authority split made the wall belt darker and more centered, but the front still does not own the scene
       - latest wave-3 result: MASS_SHELF local-body hold darkened and densified the front, but it still reads as a broad shelf/wall with weak motion and a generic hemispheric probe split
@@ -30,17 +313,42 @@ jobs:
       - latest wave-5 result: authored Front Mass stack changes produced the first recent localized dark event in direct background, but probe ownership and total motion still fail
       - latest wave-6 result: embedding ADVECT_FRONT under MASS_SHELF preserved the localized background event but still did not materially improve probe ownership
       - latest wave-7 result: the MASS_SHELF probe-side pass regressed the localized event and still did not improve probe ownership, so it is a closed branch
+      - latest live-workbench discovery: `front-mass-embedded-sky-support` is the strongest overnight candidate so far, but it is still not replay-promotion-worthy because probe ownership remains too generic
+      - latest live-workbench sidecar: `front-mass-stormfront-borrow`, `front-mass-region-split-shelf-veil`, and `front-mass-dual-body-plume` were the strongest new candidates, but none materially beat the probe-side generic hemispheric split without introducing new synthetic floor/water noise or collapsing back to a gray wall
+      - current live-workbench lane: reuse `tmp/epu-workbench-live` on port `4581`; prioritize one coherent front/body owner before any weather support polish or replay
+      - latest live-workbench result: `front-mass-wall-core-event-post-fix` is now the strongest direct-view branch on the repaired binary; it avoids the worst ring-like breakup from `ridge-led-body`, but the probe still collapses into a generic hemispheric split and the body still reads as a synthetic wall band rather than one decisive front owner
+      - current live proof: saved A/B captures now differ and amplified diffs show transport in the wall band, but the ordinary review frames still do not read as honestly visibly animated
+      - current engine status: a first-pass shared shader artifact mitigation now exists in `epu_common`, `SPLIT`, `CELL`, `APERTURE`, and `MASS`; re-test this lane on the rebuilt binary before deciding whether the same wall-band branch or a new owner family is stronger
+      - latest post-fix result: the patched shader binary softened panel/facet seams slightly, but `front-mass-wall-core-event-post-fix` still fails because the probe remains a generic hemispheric split and the body still reads as a synthetic wall band
+      - current live proof: motion exists on the patched binary, but it is still not honestly visibly provable in ordinary saved review frames
+      - latest live follow-up: `front-mass-orchestrator-localized-body-pass-a` only darkened/localized the same old wall-core family and still left the generic horizon-wall plus hemispheric probe split, so no benchmark promotion happened
+      - latest post-artifact3 result: the rebuilt third-pass shader binary changes saved pixels, but `front-mass-wall-core-event-post-fix` still reads as the same generic hemispheric split and synthetic wall band; reapplying the harder localized-body branch did not escape that class either
+      - latest post-artifact5 result: even after the curved-body / staggered-lattice shader pass and a clean rebuilt-lane validation, `front-mass-wall-core-event-post-fix` still reads as the same generic hemispheric split with synthetic wall/panel shelving; only mild redistribution/softening changed
+      - latest source reset: `benchmarks.rs` now carries a storm-body-first rewrite with `MASS_PLUME` as the decisive owner plus subordinate `VEIL_RAIN_WALL`, `ADVECT_SQUALL`, localized `TRACE_LIGHTNING`, and minimal atmosphere support
+      - latest source-reset live result: the new authored benchmark baseline is materially different from the old wall-core family and directionally better, but it is still too washed out and low-contrast to become a decisive front owner; flat slab/panel artifacts remain visible and both live follow-up branches were worse or effectively no-ops
+      - latest source refinement: the authored storm-body benchmark was tightened again with denser/darker `MASS_PLUME`, subordinate `MOTTLE_RIDGE` breakup instead of washier rain-sheet support, reduced `ADVECT_SQUALL` / `ATMO_FULL`, and stronger `TRACE_LIGHTNING`
+      - latest live result: the revised authored baseline became replay-worthy on the reused lane and exported as `20260315-133622-front-mass-rewrite-authored-baseline.json`; both live follow-up branches were truthful but lateral
+      - latest authoritative replay result: the fresh benchmark run at `agent/runs/20260315-134149-front-mass-body-ownership` still failed under fresh reviewer judgment because the reviewed frames stay almost entirely a flat blue-gray field with no convincing storm body owning the frame, probe read remains weak, and motion is effectively absent
+      - next truthful lever: keep iterating on the new storm-body concept, but only if the direct frame can stop collapsing into washed slab/hemispheric split at authoritative review
+      - latest source rewrite: `benchmarks.rs` now also carries a darker squall-shelf storm-owner direction organized around a hard horizon split, one dominant `MASS_SHELF` body, subordinate ridge breakup, in-world `TRACE/LIGHTNING`, floor `FLOW`, and support `ADVECT_FRONT`
+      - latest live result: the new authored baseline immediately cleared the replay-worthiness bar on the reused `4581` lane and exported as `tmp/epu-workbench-live/exports/20260315-150003-front-mass-liveiter-pass8-authored-baseline.json`
+      - latest authoritative replay result 2: the fresh benchmark pair at `agent/runs/20260315-150518-front-mass-storm-owner` completed with `0` mismatches, but a fresh reviewer still failed it because direct view remains a generic pale split wall with a thin dark plume, the probe stays a hemispheric waterline split, motion remains negligible, and visible seams / vertical panel guides still survive
+      - latest source rewrite 3: `benchmarks.rs` now also carries a dark coast-under-squall benchmark built around one dominant `MASS/BANK` storm body, a low mountain horizon anchor, stone ground instead of a waterline split, and narrow support layers for lightning, squall, and runoff; both the example build and replay validation passed
+      - latest live iteration: `front-mass-liveiter-pass10` still hard-failed on the reused `4581` lane; the authored baseline and follow-ups kept collapsing into a pale curved split with panelized sky and dark lower hemisphere, `branch-c-sky-only-owner` was the least-bad branch, and no export happened
+      - latest source rewrite 6: `benchmarks.rs` tested a downburst-cell reset explicitly outside the old split/shelf/plume family, but it was backed out after live validation moved off that old family and still collapsed into the same capped hemisphere/probe class. No durable source change was kept
+      - latest live iteration 4: `front-mass-liveiter-pass13` truthfully hard-failed; no replay-worthy state emerged, and the final live PID is `38992` on `tmp/epu-workbench-live` / `4581`. Evidence is recorded in `tmp/epu-workbench-live/front-mass-liveiter-pass13-assessment.md` and `.json`
 
   - job_id: frozen-bed-identity
     status: blocked
     mode: benchmark
+    lane: benchmark-blocked
     target: Frozen Bed
     replay: examples/3-inspectors/epu-showcase/screenshot-benchmarks-anim3.ncrs
     batch_size: 18
     promotion_gate: blocked_until_frozen_bed_improves
     depends_on: 
-    attempts: 5
-    last_run_dir: agent\runs\20260313-063533-frozen-bed-identity
+    attempts: 7
+    last_run_dir: agent\runs\20260315-132701-frozen-bed-identity
     build_steps:
       - cargo test -p nethercore-zx --lib epu_capabilities
       - cargo dev
@@ -49,19 +357,37 @@ jobs:
     notes:
       - second benchmark-gated outdoor lane
       - current closed branch: added MASS_BANK structural wall-body support but Frozen Bed still failed under the old shared rig
+      - latest live follow-up: `frozen-bed-orchestrator-pane-crust-pass-a` mostly restyled the same failed capped-surface class; the direct background barely moved and the probe still read as waterline/refraction split, so no benchmark promotion happened
+      - latest post-artifact3 result: the rebuilt third-pass shader binary only changes `frozen-bed-facet-bed` slightly in the direct background, and reapplying the harder pane/crust concept still reads as crust over slush rather than a convincing frozen-floor owner
       - current queue reason: rerun under the new outdoor benchmark rig profile before declaring a deeper surface-only blocker
       - latest rerun result: framing improved slightly but the frozen-place read still fails and remains blocked
       - latest shared-artifact result: reused the bounds-authority split benchmark bundle; broad cold ridge improved, but frozen-surface identity still fails
       - latest wave-2 result: calmer SURFACE_GLAZE sheet continuity still failed; the benchmark remains a pale soft berm with weak icy ownership
       - latest wave-8 result: pane/crust material tuning and stronger floor composition still collapse toward the same generic cold shelf split, so this branch is closed
+      - latest live-workbench discovery: `frozen-bed-facet-bed` was the first overnight candidate worth replay-promotion testing
+      - latest replay-promotion result: the promoted `frozen-bed-facet-bed` benchmark still hard-fails because it reads as dark reflective water with a horizontal waterline, visible seam, and refraction-like shimmer rather than a frozen bed
+      - latest live-workbench sidecar: `candidate-matte-bank`, `candidate-crust-over-sheet`, and `candidate-ridge-ownership` softened streak/refraction cues slightly, but none broke the horizontal waterline / capped-surface water read well enough to justify replay promotion
+      - latest live-workbench continuation: `frozen-bed-facedusted` is the least-bad recent branch because `FACE + DUSTED` weakens the worst hard cap slightly, but it still reads as capped water/slush first and the probe keeps the same rounded watery cap with vertical side streaking
+      - current live proof: direct, background, and probe hashes now change after a six-second gap, but the ordinary saved frames still do not improve the frozen-surface ownership read
+      - latest source reset: `benchmarks.rs` now carries a floor-owner rewrite built around `CELL_SHATTER` plus subordinate `SURFACE_GLAZE`, `SURFACE_CRUST`, `TRACE_CRACKS`, `MOTTLE_GRAIN`, and sky-only `ADVECT_SPINDRIFT`
+      - latest live result: the authored rewritten baseline became replay-worthy on the reused lane and exported as `20260315-132413-frozen-bed-rewrite-authored-baseline.json`; it broke the old capped-water/slush class in live assessment
+      - latest authoritative replay result: the fresh benchmark run at `agent/runs/20260315-132701-frozen-bed-identity` still failed under fresh reviewer judgment because the direct view now reads as bright cracked glass or polished pane ice on a white void, the probe stays glossy/refractive, and motion is effectively absent
+      - latest source rewrite 2: `benchmarks.rs` was retuned again toward a grounded matte/crusted bed with `MASS_BANK`, `PLANE_STONE`, `SURFACE_DUSTED`, `SURFACE_CRUST`, and `MOTTLE_GRAIN`
+      - latest live result 2: the rewritten authored baseline regressed from the earlier replay-worthy branch into a pale capped/suspended mound family; both matte-only live follow-ups stayed in the same failed class, so no replay promotion happened
+      - current queue reason: keep this lane blocked; the new authored concept is directionally better than the old waterline class, but it still does not pass as a grounded frozen bed and still cannot unblock Frozen Tundra
       - do not reopen Frozen Tundra showcase churn first
+      - latest source rewrite 3: `benchmarks.rs` now carries a grounded outdoor frozen-floor concept with a mountain horizon, narrow far seam, heavy `PLANE_STONE` floor owner, `SURFACE_CRUST` plus `SURFACE_DUSTED` material weight, one sky `ADVECT/SPINDRIFT` mover, and light atmospheric depth
+      - latest live result 3: `frozen-bed-liveiter-pass9` is still a hard fail on the rebuilt `4581` lane; even after spending all three live turns on floor weight and horizon separation, the saved direct evidence still collapses into a pale low-ownership field with no convincing grounded outdoor frozen-floor read, so no export or replay happened
+      - latest source rewrite 4: `benchmarks.rs` now carries a face-cut horizon, darker bed, crust-led floor owner, subordinate grain breakup, restrained dust, and a sky band instead of white atmospheric wash; both the example build and replay validation passed
+      - latest live result 4: `frozen-bed-liveiter-pass10` still hard-failed after three meaningful live branches; it regressed into a glossy suspended mound with a cracked underside rather than a grounded frozen bed, `branch-b-horizon-owner` moved the frame most but stayed in the same failed class, the lane was relaunched in place, and the final live PID is `10624` on `tmp/epu-workbench-live` / `4581`. No export happened
 
   - job_id: storm-front-promotion
     status: blocked
     mode: showcase
+    lane: promotion-blocked
     target: Storm Front
     replay: examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
-    batch_size: 36
+    batch_size: 60
     promotion_gate: only_after_front_mass_health
     depends_on: front-mass-body-ownership
     attempts: 0
@@ -74,3 +400,314 @@ jobs:
     notes:
       - blocked by Front Mass benchmark
       - do not burn full showcase sweeps until benchmark ownership materially improves
+
+  - job_id: frozen-tundra-promotion
+    status: blocked
+    mode: showcase
+    lane: promotion-blocked
+    target: Frozen Tundra
+    replay: examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    batch_size: 60
+    promotion_gate: only_after_frozen_bed_health
+    depends_on: frozen-bed-identity
+    attempts: 0
+    last_run_dir: 
+    build_steps:
+      - cargo test -p nethercore-zx --lib epu_capabilities
+      - cargo dev
+      - cargo run -p nether-cli -- build --project examples/3-inspectors/epu-showcase
+      - cargo run -p nether-cli -- replay validate examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    notes:
+      - blocked by Frozen Bed benchmark
+      - do not reopen full Frozen Tundra showcase churn before benchmark health improves
+
+  - job_id: crystal-cavern-implementation
+    status: blocked
+    mode: showcase
+    lane: rebuild
+    target: Crystal Cavern
+    replay: examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    batch_size: 60
+    promotion_gate: ready_for_first_pass_rebuild
+    depends_on: 
+    attempts: 3
+    last_run_dir: agent\runs\20260315-052122-crystal-cavern-implementation
+    build_steps:
+      - cargo run -p nether-cli -- build --project examples/3-inspectors/epu-showcase
+      - cargo run -p nether-cli -- replay validate examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    notes:
+      - implemented in code and covered by the authoritative 20-scene sweep
+      - Wave 70 shared-artifact review reused `agent/runs/20260315-043247-enchanted-grove-rebuild`
+      - latest review: the final Crystal pass at `agent/runs/20260315-052122-crystal-cavern-implementation` still fails; crystal identity and motion improved, but the direct view remains an abstract faceted dome/open room rather than an enclosed cavern
+      - current queue state: rotate this lane by stop-loss after three validated waves; do not spend another immediate wave in `set_13_14.rs` on Crystal Cavern
+      - latest source reset: `set_13_14.rs` now carries a shell-first cavern rewrite with `SPLIT/TIER` basin organization and darker stone shoulders around `CELL/SHATTER`
+      - latest live-workbench validation: on the rebuilt `4581` lane, authored baseline plus `crystal-cavern-postreset-shell-pass-a` and `crystal-cavern-postreset-basin-pass-b` all stayed in the same open radial petal/slab failure family; none became replay-worthy
+      - latest live blocker: even after the source reset, the chamber never closes into one dark ceiling/shoulder owner, the lower basin still reads as a broad wedge accent instead of a cavern floor, and the crystal read remains trapped in faceted probe/orb language
+      - next truthful lever: none active on this lane until a genuinely different cavern-envelope idea exists that can beat the persistent white-wedge / dome failure class
+
+  - job_id: moonlit-graveyard-implementation
+    status: blocked
+    mode: showcase
+    lane: rebuild
+    target: Moonlit Graveyard
+    replay: examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    batch_size: 60
+    promotion_gate: ready_for_first_pass_rebuild
+    depends_on: 
+    attempts: 1
+    last_run_dir: agent\runs\20260315-043247-enchanted-grove-rebuild
+    build_steps:
+      - cargo run -p nether-cli -- build --project examples/3-inspectors/epu-showcase
+      - cargo run -p nether-cli -- replay validate examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    notes:
+      - implemented in code and covered by the authoritative 20-scene sweep
+      - Wave 70 shared-artifact review reused `agent/runs/20260315-043247-enchanted-grove-rebuild`
+      - latest review: still fail; nocturnal palette and recession survive, but there is still no graveyard read and the spectral event remains too abstract
+      - current queue state: parked after the reused `4581` live pass failed to establish grave markers or saved-capture mist; rotate active rebuild work to Gothic Cathedral
+      - current live-workbench lane: reused `tmp/epu-workbench-live` on port `4581`; no relaunch was needed
+      - latest live-workbench result: `moonlit-graveyard-best-directional-sky-cave` is the least-bad structural branch, but it still reads as an abstract radial/tunnel frame rather than a graveyard
+      - latest live follow-up: `moonlit-graveyard-orchestrator-grave-owner-pass-a` made the slab/spoke geometry louder without creating an unmistakable grave-marker owner, so the lane stays parked
+      - latest live-workbench blocker: increasing `CELL/BRICK`, swapping the silhouette to `RUINS`, and moving the brick layer onto the floor all made the image more synthetic or heavier without creating unmistakable crooked headstones
+      - current live blocker: the least-bad branch remained effectively static in saved captures and still did not establish a visible ground-hugging mist carrier, so motion is not honestly provable in the graveyard read
+      - do not spend replay on Moonlit Graveyard until a genuinely different grave-marker structure and visible mist carrier exist
+      - latest source rewrite: `set_13_14.rs` now carries a cemetery-first exterior reset with `SILHOUETTE_SPIRES` grave-marker envelope, darker `PLANE_STONE` path/earth owner, `CELL_BRICK` marker density, clear `CELESTIAL_MOON`, localized `PORTAL_RIFT`, and low-support `ADVECT_MIST`
+      - latest live validation: the rewritten authored baseline still hard-fails immediately; it reads as a radial orb-and-beam composition rather than a cemetery exterior with grave-marker envelope and path recession, so no live branches or replay promotion were justified
+
+  - job_id: alien-jungle-implementation
+    status: blocked
+    mode: showcase
+    lane: rebuild
+    target: Alien Jungle
+    replay: examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    batch_size: 60
+    promotion_gate: ready_for_first_pass_rebuild
+    depends_on: 
+    attempts: 0
+    last_run_dir: 
+    build_steps:
+      - cargo run -p nether-cli -- build --project examples/3-inspectors/epu-showcase
+      - cargo run -p nether-cli -- replay validate examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    notes:
+      - implemented in code and covered by the authoritative 20-scene sweep
+      - first-pass review: blown-out shard canopy; needs stronger alien-organic separation from Grove
+      - current queue state: parked after the repaired-lane live stop; rotate active rebuild work to Moonlit Graveyard
+      - current live-workbench lane: `tmp/epu-workbench-live` was reused in place on port `4581`
+      - latest live-workbench result: `alien-jungle-toxic-contrast`, `alien-jungle-ultraviolet-understory`, and `alien-jungle-xenocanopy-drift` are not replay-promotion-worthy; the lane either stays too close to `Enchanted Grove` or overcorrects into an abstract pastel shard chamber
+      - latest live-workbench result: `alien-jungle-vine-canopy` pushes farther away from Grove on structure, but still cannot promote because the live background captures remained pixel-identical across both short and long gaps
+      - latest live-workbench result: `alien-jungle-direct-k3-silhouette-green` is the strongest truthful direct-view cleanup so far; lowering `LOBE`, shifting `FLOW` green, and brightening the silhouette pushed the lane away from the older lilac vapor read, but the scene still does not hold a clearly owned alien canopy and the best direct/background frames remained hash-identical after an ~8s gap
+      - latest live-workbench diagnostic: isolated `FLOW`, a stronger `SKY|WALLS` wall-canopy plus `VEIL/RAIN_WALL`, and isolated `VEIL/RAIN_WALL` all still remained byte-identical after ~8s on the reused `4581` lane; the strongest truthful state is still `alien-jungle-direct-k3-silhouette-green`
+      - latest live follow-up: `alien-jungle-orchestrator-frond-owner-pass-a` did not beat `alien-jungle-direct-k3-silhouette-green`; it changed the frame materially but still failed to create a clearly owned alien-organic canopy/understory structure, so the lane stays parked
+      - latest live-workbench result: `alien-jungle-k4-wallcanopy-rainflow` still stayed byte-identical across long-gap captures on the repaired lane and did not establish a clearly owned jungle canopy
+      - latest live-workbench result: `alien-jungle-k5-advect-canopy` also stayed byte-identical, and the branch added obvious seam / tiling / faceting artifacts, so it is closed as strictly worse
+      - current live-workbench trap: for Alien Jungle, `set-view` churn can snap the render back toward an older brighter state; the reliable loop is to set the view, immediately reapply the candidate config with `set-config`, then patch and capture without extra view churn
+      - current live-path status: the reused workbench lane is now proven capable of capturing animation again after the lock-phase fix in `nethercore-zx/src/console.rs`; a `Combat Lab` control scene produced non-identical unlocked and locked capture pairs on the same `4581` lane
+      - current live blocker: `Alien Jungle` itself still saves byte-identical time-separated frames even on the repaired lane, so the blocker has narrowed back down to this scene's authored motion/read rather than a globally dead capture path
+      - stop condition hit: after repeated truthful live passes on the repaired lane, this scene is now parked until a genuinely different authored motion/structure idea exists that can beat both the static-read and visible-artifact failure classes
+      - latest post-seam recheck: the current source baseline was rechecked on a fresh `tmp/epu-workbench-alien` lane on `4584` after the 2026-03-16 seam fixes landed, and the clean captures still collapsed into a pale mint faceted field with obvious panel/faceting structure and no owned alien-organic canopy read
+      - do not spend replay on Alien Jungle until the live lane proves both alien-organic separation and visible motion
+
+  - job_id: gothic-cathedral-implementation
+    status: blocked
+    mode: showcase
+    lane: rebuild
+    target: Gothic Cathedral
+    replay: examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    batch_size: 60
+    promotion_gate: ready_for_first_pass_rebuild
+    depends_on: 
+    attempts: 0
+    last_run_dir: 
+    build_steps:
+      - cargo run -p nether-cli -- build --project examples/3-inspectors/epu-showcase
+      - cargo run -p nether-cli -- replay validate examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    notes:
+      - implemented in code and covered by the authoritative 20-scene sweep
+      - first-pass review: solemn gray chamber exists, but arch/nave/stained-light identity is too weak
+      - current queue state: parked again after the patched-binary validation; the artifact family softened slightly but did not materially improve the lane
+      - current live-workbench lane: reuse `tmp/epu-workbench-live` on port `4581`; prioritize one cathedral arch/nave owner and one readable stained-light event before replay
+      - latest live-workbench result: `gothic-cathedral-candidate-dark-tunnel` reduced washout and improved enclosure, but it still reads as a generic tunnel/light wedge rather than a cathedral nave
+      - latest live-workbench result: `gothic-cathedral-candidate-tracery-owner` is the first branch with unmistakable cathedral-like tracery / arch ownership in saved captures
+      - current live blocker: the tracery-owner branch also introduces visible seam / ring / guide-line artifacts and oversized bright bars, while the stained-light event still does not read as an authored support layer
+      - current live proof: saved captures on the best cathedral branch are no longer byte-identical; subtle background drift is now truthfully visible even though it is not yet the intended stained-light motion
+      - latest live-workbench follow-up: clearing editor focus state did not remove the saved-capture guide/ring pattern, dimmer/finer `CELL/BRICK` retunes did not materially reduce the oversized bars, and `CELL/GRID` was strictly worse
+      - latest live-workbench owner-family pass: non-`CELL` alternatives also failed to beat the current winner; `APERTURE/BARS` recreated the synthetic close-up bars, `APERTURE/MULTI` was too weak, `APERTURE/ARCH` collapsed into the generic wedge class, and `SILHOUETTE/SPIRES` lost cathedral specificity
+      - current engine status: a first-pass shared shader artifact mitigation is now landed in `epu_common`, `SPLIT`, `CELL`, `APERTURE`, and `MASS`
+      - latest post-fix result: `gothic-cathedral-candidate-tracery-owner` remains the best candidate, but the seam/ring/bar surface is only slightly softer and the lane is still blocked by the same close-up bright bars, visible guide/seam/ring structure, and missing stained-light event
+      - latest post-artifact3 result: even on the rebuilt third-pass shader binary, `gothic-cathedral-candidate-tracery-owner` is still blocked by bright tracery bars, visible seam/ring/guide geometry, missing stained-light support, and an overly synthetic close-up composition
+      - latest post-artifact4 result: after the deeper relief-based shader pass and a clean relaunch of the reused `4581` lane, `gothic-cathedral-candidate-tracery-owner` still shows the same bright tracery bars, dotted/ring guide structure, and seam-like probe paneling; the saved deltas are real but not materially better
+      - latest post-artifact5 result: after the curved-body / staggered-lattice shader pass and another clean relaunch of the reused `4581` lane, `gothic-cathedral-candidate-tracery-owner` still shows the same bright-bar / guide-rail / ring family; the rebuilt capture changes truthfully but not materially
+      - next truthful lever: park this lane again until either a deeper engine change or a genuinely different cathedral-owner concept exists
+      - latest source rewrite: `set_15_16.rs` now carries a nave-first interior reset with `SECTOR_TUNNEL`, lower `DECAL/RECT` nave/altar mass, `APERTURE_ARCH`, `PLANE_STONE`, one `PORTAL_RECT` clerestory event, rooted `LOBE` spill, and `MOTTLE_RIDGE` stone breakup
+      - latest live validation: the rewritten authored baseline still hard-fails immediately; it reads as a capped orb in a washed interior field rather than a nave-first cathedral with altar ownership and arch language, so no live branches or replay promotion were justified
+      - latest artifact validation: after the focused wrapped-relief artifact patch and another clean relaunch of the reused `4581` lane, reloading `gothic-cathedral-candidate-tracery-owner` regressed into a pale chamber with a centered sphere instead of reproducing the old tracery/bar blocker class, so this pass is logged as a shader-regression / truth-blocking failure rather than an artifact win
+      - latest runtime audit: the pale unlocked result is now understood as a workbench authority trap, not a truthful live render of the loaded candidate; unlocked `set-config` updates editor/session state, while `locked=true` is the render-authoritative path for editor-loaded candidates
+      - latest artifact validation 2: after the narrow `VEIL_DOMAIN_TANGENT_LOCAL` rollback and an authoritative locked-path recheck, `gothic-cathedral-candidate-tracery-owner` materially returned to the old bright tracery / guide-line / panel-ring blocker family; the regression is closed, but there is still no meaningful artifact cleanup
+      - latest artifact validation 3: `gothic-cathedral-artifactpass9` on the authoritative locked path still leaves the scene materially unchanged; the same bright tracery / guide-line / ring blocker family persists, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass9-assessment.md` and `.json`, so the deeper artifact pass remains unproven as a real visual-artifact improvement for this blocker class
+      - latest artifact validation 4: after rebuilding and relaunching the persistent `tmp/epu-workbench-live` lane onto PID `27504`, `gothic-cathedral-artifactpass10` validated the narrow `04_cell` `BRICK` discontinuity pass on the authoritative locked path and remained materially unchanged; it alters the image locally but still does not clear the bright tracery / guide-line / ring blocker family, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass10-assessment.md` and `.json`
+      - latest artifact validation 5: `gothic-cathedral-artifactpass11` validated the narrow `06_aperture` `BARS` segmentation pass on the authoritative locked path and remained materially unchanged; the locked image is almost identical to pass10 with only `297061` RGB bytes differing across the full frame, and the same bright tracery bars, guide/seam structure, and probe-side ring segmentation persist, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass11-assessment.md` and `.json`. The final lane PID remained `40824`
+      - latest artifact validation 6: `gothic-cathedral-artifactpass12` validated the `04_cell` seam/horizon attenuation pass on the authoritative locked path and remained materially unchanged; it moved the locked image more than pass11, especially in the background crop (`511321` RGB bytes versus pass11), but the scene still stays in the same bright tracery / guide-line / ring blocker family, background seams remain plainly visible, and the probe still shows the same panel-ring segmentation, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass12-assessment.md` and `.json`. The lane was rebuilt/relaunched in place and the final PID is `25700`
+      - latest artifact validation 7: `gothic-cathedral-artifactpass13` validated the `04_cell` pre-quantization `BRICK` warp pass on the authoritative locked path and regressed; relative to pass12 the locked image changed a lot, but in the wrong direction. Bright tracery became chunkier and harsher, guide-line/seam visibility stayed obvious in the background crop, and the probe still carried the same ring/segment artifact family, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass13-assessment.md` and `.json`. The lane was rebuilt/relaunched in place and the final PID is `43916`
+      - latest artifact validation 8: `gothic-cathedral-artifactpass14` validated the post-quantization `04_cell` `BRICK` compositing pass on the authoritative locked path and remained materially unchanged; it mostly backs out the harsher pass13 regression, but relative to pass12 lands very close again, with visible background seam lines and the same probe ring segmentation still present, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass14-assessment.md` and `.json`. The final lane PID remained `58480`
+      - latest artifact validation 9: `gothic-cathedral-artifactpass15` validated the `04_cell` seam-band `BRICK`-to-`SHATTER` fallback pass on the authoritative locked path and regressed; relative to pass14, bright tracery bars became chunkier, guide/seam lines remained visible in the background crop, and probe segmentation became harsher and more fractured, so it still did not improve the bright tracery / guide-line / ring blocker family, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass15-assessment.md` and `.json`. The final lane PID remained `61892`
+      - latest artifact validation 10: `gothic-cathedral-artifactpass16` validated the ownership-only `04_cell` `BRICK` stress-gating pass on the authoritative locked path and remained materially unchanged; it backs out some of the harsher pass15 fracture, but bright tracery remains dominant, background seam lines are still visible, and the probe still shows the same segmented ring/panel read, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass16-assessment.md` and `.json`. The final lane PID remained `48028`
+      - latest artifact validation 11: `gothic-cathedral-artifactpass17` validated the `04_cell` `BRICK` stress-band bandwidth-softening pass on the authoritative locked path and remained materially unchanged; it modestly softens the locked image relative to pass16, but bright tracery wedges still dominate, background seam lines remain visible, and the probe still shows the same segmented ring/panel structure, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass17-assessment.md` and `.json`. The lane was rebuilt/relaunched in place because the prior binary was stale and the final PID is `23036`
+      - latest artifact validation 12: `gothic-cathedral-artifactpass18` validated the `04_cell` `BRICK` radiance-compression pass on the authoritative locked path and regressed; bright tracery wedges broadened into heavier white slabs, the probe rosette became more assertive, and the same guide-line / seam / ring blocker family remained, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass18-assessment.md` and `.json`. The lane was rebuilt/relaunched in place because the prior binary was stale and the final PID is `63204`
+      - latest artifact validation 13: `gothic-cathedral-artifactpass19` validated the `01_sector` base-region modulation pass on the authoritative locked path and remained materially unchanged; the same white tracery slabs still dominate, seam lines remain visible in the background crop, and the probe still carries the same segmented ring/panel shell, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass19-assessment.md` and `.json`. No relaunch was needed and the final lane PID remained `37100`
+      - latest artifact validation 14: `gothic-cathedral-artifactpass20` validated the narrow `00_ramp` wall-paint de-emphasis pass on the authoritative locked path and remained materially unchanged; the direct frame is a touch less pale than pass19, but the same bright tracery slabs still dominate, background seam/guide lines remain visible, and the probe still reads as the same segmented ring/panel shell, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass20-assessment.md` and `.json`. `cargo test -p nethercore-zx --lib` passed for this pass, `nethercore-zx/shaders/epu/bounds/00_ramp.wgsl` changed, and the lane was relaunched in place to pick up the new `00_ramp` change with final PID `20576`
+      - latest artifact validation 15: `gothic-cathedral-artifactpass21` validated the `11_band_radiance` tangent-cap gating pass on the authoritative locked path and remained materially unchanged; the same bright tracery slabs still dominate, the same seam/guide traces remain visible in the background crop, and the probe still reads as the same segmented shell, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass21-assessment.md` and `.json`. No relaunch was needed and the final lane PID remained `55380`
+      - latest artifact validation 16: `gothic-cathedral-artifactpass22` validated the `10_lobe_radiance` cap-suppression pass on the authoritative locked path and remained materially unchanged; the same bright tracery slabs still dominate, the same seam/guide traces remain visible in the background crop, and the probe still reads as the same segmented shell, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass22-assessment.md` and `.json`. No relaunch was needed and the final lane PID remained `74292`
+      - latest artifact validation 17: `gothic-cathedral-artifactpass23` validated the `05_veil` `AXIS_CYL` seam-fade pass on the authoritative locked path and remained materially unchanged; it only caused a narrow cosmetic shuffle, while bright tracery slabs still dominate, faint seam/guide traces remain visible in the background crop, and the probe still reads as the same segmented shell, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass23-assessment.md` and `.json`. The lane had to be rebuilt/relaunched in place because the running binary was stale versus `05_veil.wgsl`, and the final PID is `77464`
+      - latest artifact validation 18: `gothic-cathedral-artifactpass24` validated the `01_grid` seam-and-cap attenuation pass on the authoritative locked path and remained materially unchanged; it only caused a small cosmetic reshuffle, while bright tracery slabs still dominate, background seam traces remain visible, and the probe still reads as the same segmented shell, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass24-assessment.md` and `.json`. No relaunch was needed and the final lane PID remained `67164`
+      - latest artifact validation 19: `gothic-cathedral-artifactpass25` validated the `07_plane` projected-radius gate pass on the authoritative locked path and remained materially unchanged; the direct frame still carries the same bright tracery slabs, the background crop still shows the same seam/guide traces, and the probe remains the same segmented shell class despite a changed top-cap pattern, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass25-assessment.md` and `.json`. The lane was rebuilt/relaunched in place because `07_plane.wgsl` was newer than the running binary, and the final PID is `54568`
+      - latest artifact validation 20: `gothic-cathedral-artifactpass26` validated the `03_flow` `CAUSTIC` crest-threshold pass on the authoritative locked path and remained materially unchanged; it moved the locked frame more than the recent narrow passes, but bright tracery slabs still dominate, background seam/guide traces remain visible, and the probe remains the same segmented shell/ring class, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass26-assessment.md` and `.json`. The lane had to be rebuilt/relaunched in place because the running binary was stale versus `03_flow.wgsl`, and the final PID is `77356`
+      - latest artifact validation 21: `gothic-cathedral-artifactpass27` validated the shared `epu_common` headroom-gated `BLEND_ADD` / `BLEND_SCREEN` pass on the authoritative locked path and remained materially unchanged; it slightly softens the background seam trace, but not enough to count as real cleanup, because bright tracery slabs still dominate, the guide/seam trace is still visible, and the probe is still the same segmented shell/ring class, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass27-assessment.md` and `.json`. The lane was rebuilt/relaunched in place because the running binary was stale versus `epu_common.wgsl`, and the final PID is `64984`
+      - latest artifact validation 22: `gothic-cathedral-artifactpass28` validated the shared `epu_common` single-region authority compression pass on the authoritative locked path and remained materially unchanged; it only caused a modest tonal reshuffle, while bright tracery slabs still dominate, guide/seam traces remain visible in the background crop, and the probe remains the same segmented shell/ring class, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass28-assessment.md` and `.json`. The lane was rebuilt/relaunched in place because the running binary was stale versus `epu_common.wgsl`, and the final PID is `74668`
+      - latest artifact validation 23: `gothic-cathedral-artifactpass30` validated the octahedral fold/corner stress-softening pass in `epu_compute_env.wgsl` on the authoritative locked path and remained materially unchanged; it only caused a small tonal reshuffle, while bright tracery slabs still dominate, seam traces remain visible in the background crop, and the probe still reads as the same segmented shell, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass30-assessment.md` and `.json`. No relaunch was needed and the final lane PID remained `7412`
+      - latest artifact validation 24: `gothic-cathedral-artifactpass31` validated the shared wrapped-relief taper pass in `epu_common.wgsl` on the authoritative locked path and remained materially unchanged; bright tracery still dominates, seam/guide traces remain visible in the background crop, and the probe remains the same segmented shell class, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass31-assessment.md` and `.json`. No relaunch was needed and the final lane PID remained `57020`
+      - latest artifact validation 25: `gothic-cathedral-artifactpass32` validated the shared `regions_from_signed_distance` wall-band reduction pass in `epu_common.wgsl` on the authoritative locked path and remained materially unchanged; bright tracery still dominates, seam/guide traces remain visible in the background crop, and the probe is still the same segmented shell class, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass32-assessment.md` and `.json`. The lane was rebuilt/relaunched in place to pick up the shader change, and the final PID is `77476`
+      - latest artifact validation 26: `gothic-cathedral-artifactpass33` validated the secondary-bounds paint attenuation pass in `epu_compute_env.wgsl` on the authoritative locked path and remained materially unchanged; the probe cap reshuffles a bit, but the same bright wall-band tracery still dominates and the same seam traces remain visible in the background crop, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass33-assessment.md` and `.json`. No relaunch was needed and the final lane PID remained `62772`
+      - latest artifact validation 27: `gothic-cathedral-artifactpass34` validated the partial retagging authority pass in `epu_compute_env.wgsl` on the authoritative locked path and remained materially unchanged; it moved the probe cap and behaves more like a partial rollback toward pass32 than a real cleanup, while the same bright tracery / guide-line / ring blocker family still stands, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass34-assessment.md` and `.json`. No relaunch was needed and the final lane PID remained `31212`
+      - latest artifact validation 28: `gothic-cathedral-artifactpass35` validated the shared bounds-axis handoff pass in `nethercore-zx/shaders/epu/epu_compute_env.wgsl` on the authoritative locked path and remained materially unchanged; the direct frame still has the same bright tracery slabs, the background crop still shows faint seam/guide traces, and the probe is still the same segmented shell/ring class. Concrete deltas versus pass34 were small: `136543` RGB-byte difference on the full frame, `46760` on the background crop, and `6627` on the probe, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass35-assessment.md` and `.json`. No relaunch was needed and the final lane PID remained `63228`
+      - latest artifact validation 29: `gothic-cathedral-artifactpass36` validated the render-side multi-bounds sampler-sync pass in `shaders/common/20_environment/90_sampling.wgsl` on the authoritative locked path and remained materially unchanged; it moved the locked Gothic image more than most recent attempts, but the same bright tracery / guide-line / ring blocker family still persists. Concrete deltas versus pass35 were `1748265` RGB bytes across `74073` frame pixels, `321272` RGB bytes across `13305` background pixels, and `80700` RGB bytes across `12477` probe pixels, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass36-assessment.md` and `.json`. No relaunch was needed and the final lane PID remained `28864`
+      - latest artifact validation 30: `gothic-cathedral-artifactpass37` validated the fold-aware cached blur pass in `epu_compute_blur.wgsl` on the authoritative locked path and remained materially unchanged; it only made a small tonal shift, with the left-wall seam scribble softening slightly while the same bright tracery slabs still dominate and the probe remains the same segmented ring/panel shell, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass37-assessment.md` and `.json`. The lane was rebuilt/relaunched in place because the shader was newer than the running binary, and the final PID is `75884`
+      - latest artifact validation 31: `gothic-cathedral-artifactpass38` validated the render-side `l_hi` directional low-pass in `shaders/common/20_environment/90_sampling.wgsl` on the authoritative locked path and regressed; it materially changed the image, but in the wrong direction, broadening wall bands into softer pale slabs instead of removing the bright tracery / guide-line / ring blocker family, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass38-assessment.md` and `.json`. The lane was rebuilt/relaunched in place so the running binary picked up the shader change, and the final PID is `64892`
+      - latest artifact validation 32: `gothic-cathedral-artifactpass39` validated the reflection-residual clamp / fade pass in `shaders/common/20_environment/90_sampling.wgsl` on the authoritative locked path and remained materially unchanged; it materially changed tone and residuals relative to pass38, especially on the probe cap, but did not materially improve the blocker family: broad bright wall slabs still dominate the direct frame, the same faint left-side guide/seam traces remain, and the probe remains the same segmented shell/ring class. Concrete deltas versus pass38 were `36387` changed frame pixels with `2065610` RGB-byte difference, `5400` changed background pixels with `214016` RGB-byte difference, and `18287` changed probe pixels with `1553084` RGB-byte difference, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass39-assessment.md` and `.json`. No relaunch beyond the in-place rebuild/relaunch was needed and the final lane PID is `75544`
+      - latest artifact validation 33: `gothic-cathedral-artifactpass40` validated the background-source switch to cached `EnvRadiance` mip0 instead of procedural `epu_eval_hi` in `nethercore-zx/shaders/common/20_environment/90_sampling.wgsl` on the authoritative locked path and regressed; the locked Gothic frame became much blurrier and blockier in the background while leaving the probe in essentially the same segmented shell/ring class, so it still did not improve the bright tracery / guide-line / ring blocker family, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass40-assessment.md` and `.json`. The final lane PID is `66888`
+      - latest artifact validation 34: `gothic-cathedral-artifactpass41` validated the modest mid/high-roughness reflection LOD-bias pass inside `sample_epu_reflection(...)` in `nethercore-zx/shaders/common/20_environment/90_sampling.wgsl` on the authoritative locked path and remained materially unchanged; the locked Gothic frame changed slightly and the probe shell softened a bit, but the same blocker family remains: broad bright wall slabs, faint left-side seam traces, and the same segmented shell/ring probe read, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass41-assessment.md` and `.json`. The source stayed changed durably and the final lane PID is `32856`
+      - latest artifact validation 35: `gothic-cathedral-artifactpass42` validated the narrowed `env_brdf_approx(...)` gain-compression pass for mid/high-roughness grazing reflections in `nethercore-zx/shaders/blinnphong_common.wgsl` on the authoritative locked path and remained materially unchanged; the locked Gothic frame moved slightly and the metallic probe shell softened a bit, but the blocker family did not change: broad bright tracery slabs remain, faint seam/guide traces remain in the background crop, and the probe is still the same segmented ring/panel shell, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass42-assessment.md` and `.json`. The source stayed changed durably and the final lane PID is `32856`
+      - latest artifact validation 36: `gothic-cathedral-artifactpass43` validated the env-specular-only Fresnel-compression pass in `nethercore-zx/shaders/blinnphong_common.wgsl` on the authoritative locked path and remained materially unchanged; the probe rim softened a little, but the probe remains the same segmented ring/panel shell, the direct frame still shows the same broad bright tracery slabs, and the faint left-side seam/guide-line family is still visible, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass43-assessment.md` and `.json`. The source stayed changed durably and the final lane PID is `57440`
+      - latest artifact validation 37: `gothic-cathedral-artifactpass44` validated the ambient-only SH L2 attenuation pass in `nethercore-zx/shaders/epu/epu_compute_irrad.wgsl` on the authoritative locked path and remained materially unchanged; the frame and probe moved slightly, but the probe remains the same segmented ring/panel shell, the direct frame still shows the same broad bright tracery slabs, and the faint left-side seam/guide-line family is still visible, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass44-assessment.md` and `.json`. The source stayed changed durably and the final lane PID is `23788`
+      - latest artifact validation 38: `gothic-cathedral-artifactpass45` validated the local-lighting-only rim-light compression pass in `nethercore-zx/shaders/blinnphong_common.wgsl` on the authoritative locked path and remained materially unchanged; the frame and probe moved slightly, but the probe remains the same segmented ring/panel shell, the direct frame still shows the same broad bright tracery slabs, and the faint left-side seam/guide-line family is still visible, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass45-assessment.md` and `.json`. The source stayed changed durably and the final lane PID is `51256`
+      - latest artifact validation 43: `gothic-cathedral-artifactpass50` validated the full normal-map opt-out A/B pass in `nethercore-zx/shaders/common/10_unpacking.wgsl` on the authoritative locked path; `sample_normal_map(...)` fully bypasses sampled BC5 normal perturbation and returns the vertex/TBN normal directly, but the result remained materially unchanged. The locked Gothic frame moved only slightly versus pass49 and the probe barely changed: the same segmented ring/panel shell remains on the probe, the same broad bright tracery slabs remain in the direct frame, and the same faint seam/guide-line family remains in the background crop, as recorded in `tmp/epu-workbench-live/gothic-cathedral-artifactpass50-assessment.md` and `.json`. The source stayed changed durably and the final lane PID is `51848`
+
+  - job_id: toxic-wasteland-implementation
+    status: blocked
+    mode: showcase
+    lane: rebuild
+    target: Toxic Wasteland
+    replay: examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    batch_size: 60
+    promotion_gate: ready_for_first_pass_rebuild
+    depends_on: 
+    attempts: 0
+    last_run_dir: 
+    build_steps:
+      - cargo run -p nether-cli -- build --project examples/3-inspectors/epu-showcase
+      - cargo run -p nether-cli -- replay validate examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    notes:
+      - implemented in code and covered by the authoritative 20-scene sweep
+      - latest exact-image review: still fail; toxic palette survives, but shell/exterior confusion keeps the scene from reading as a ruined toxic industrial exterior
+      - current queue state: parked after the live `MASS` envelope pass still failed to establish a coherent ruined exterior; rotate active rebuild work to Neon Arcade
+      - latest live follow-up: `toxic-wasteland-orchestrator-exterior-owner-pass-a` did not beat `toxic-wasteland-mass-envelope`; it still failed to create one coherent ruined-exterior owner, so the lane stays parked
+      - current live-workbench lane: reuse `tmp/epu-workbench-live` on port `4581`; prioritize one coherent ruined-exterior envelope or skyline owner before any toxic support polish
+      - latest live-workbench result: `toxic-wasteland-mass-envelope` is the only branch that materially suppresses the giant shell/chamber arc failure, but it still reads as vague toxic walling instead of a coherent ruined industrial exterior
+      - current live proof: full-frame saved captures differ after a six-second gap, but the background crops stayed hash-identical, so motion is not surviving as a meaningful exterior-owner read
+      - next truthful lever: promote one coherent exterior envelope or skyline owner instead of adding more toxic support effects
+      - latest source rewrite: `set_17_18.rs` now carries a ruined-industrial exterior reset with `SILHOUETTE_INDUSTRIAL` skyline, blasted `PLANE_STONE` apron, `MASS_BANK` yard framing, explicit `PORTAL_RIFT` waste breach, `TRACE_LEAD_LINES` piping, and subordinate `MASS_PLUME` exhaust
+      - latest live validation: the rewritten authored baseline still hard-fails immediately; it reads as a capped orb with a vertical glyph/event rather than a ruined-industrial exterior envelope with toxic breach/exhaust support, so no live branches or replay promotion were justified
+
+  - job_id: neon-arcade-implementation
+    status: blocked
+    mode: showcase
+    lane: rebuild
+    target: Neon Arcade
+    replay: examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    batch_size: 60
+    promotion_gate: ready_for_first_pass_rebuild
+    depends_on: neon-metropolis-quick-fix
+    attempts: 0
+    last_run_dir: 
+    build_steps:
+      - cargo run -p nether-cli -- build --project examples/3-inspectors/epu-showcase
+      - cargo run -p nether-cli -- replay validate examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    notes:
+      - implemented in code and covered by the authoritative 20-scene sweep
+      - Wave 44 review: still fail; the lane remains a radial chamber instead of an arcade/cabinet-row interior
+      - current queue state: parked after the `MASS/SHELF` live stop still failed to produce a cabinet-row owner; rotate active rebuild work to War Zone
+      - latest live follow-up: `neon-arcade-orchestrator-fixture-owner-pass-a` did not beat `neon-arcade-mass-shelf-owner`; it still failed to create a readable cabinet-row / repeated-fixture owner, so the lane stays parked
+      - current live-workbench lane: reuse `tmp/epu-workbench-live` on port `4581`; prioritize one coherent cabinet-row / repeated-fixture owner before any neon support polish
+      - next truthful lever: replace one broad wall-energy carrier with tighter cabinet-row / fixture ownership
+      - latest live-workbench result: `neon-arcade-mass-shelf-owner` is the only branch that materially suppresses the giant spoke/radial-chamber failure, but it still reads as vague curved walling rather than a cabinet row or repeated-fixture cluster
+      - current live blocker: the least-bad `MASS/SHELF` branch stayed byte-identical across both full-frame and background-crop motion checks after a six-second gap, so motion is not surviving into the read
+
+  - job_id: war-zone-implementation
+    status: blocked
+    mode: showcase
+    lane: rebuild
+    target: War Zone
+    replay: examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    batch_size: 60
+    promotion_gate: ready_for_first_pass_rebuild
+    depends_on: 
+    attempts: 0
+    last_run_dir: 
+    build_steps:
+      - cargo run -p nether-cli -- build --project examples/3-inspectors/epu-showcase
+      - cargo run -p nether-cli -- replay validate examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    notes:
+      - implemented in code and covered by the authoritative 20-scene sweep
+      - latest exact-image review: still fail; smoke and tracer accents survive, but the direct background still lacks one coherent battle-line silhouette
+      - current queue state: parked after the live stop; no stronger battle-line owner beat the checked-in baseline in this workbench sweep
+      - current live-workbench lane: reuse `tmp/epu-workbench-live` on port `4581`; prioritize one coherent ruined front or trench-line owner before any haze, smoke, or tracer polish
+      - next truthful lever: promote a ruined-front or trench-line owner ahead of the haze instead of polishing smoke or tracer support
+      - latest live-workbench result: no branch beat baseline; `SILHOUETTE/INDUSTRIAL` is effectively dead in saved captures, `PATCHES/DEBRIS` collapses into muddy patch noise, `war-zone-l2-mass-shelf` collapsed toward black, and `war-zone-l1-industrial-reset` only turned the haze beige
+      - current live blocker: restored baseline motion stayed byte-identical across both full-frame and background-crop captures after a six-second gap, so there is still no provable battle-line owner or meaningful motion carrier
+      - latest live follow-up: `war-zone-orchestrator-battleline-pass-a` made a real saved change, but it still only produced brown murk with scattered highlights and motion too weak to count as a scene-owning carrier, so the lane remains parked
+      - latest source rewrite: `set_19_20.rs` now carries a battle-line-first reset with ruined rear-front silhouette, darker trench cut, continuous `PATCHES_DEBRIS` wreckage belt, darker `PLANE_STONE` ground, `MOTTLE_RIDGE` breakup, and one main `TRACE_LEAD_LINES` fireline plus sided `LOBE` flare
+      - latest live validation: the rewritten authored baseline still hard-fails immediately; it reads as a reflective orb in a mottled field rather than a ruined front or trench line with a main fireline event, so no live branches or replay promotion were justified
+
+  - job_id: digital-matrix-implementation
+    status: blocked
+    mode: showcase
+    lane: rebuild
+    target: Digital Matrix
+    replay: examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    batch_size: 60
+    promotion_gate: ready_for_first_pass_rebuild
+    depends_on: 
+    attempts: 0
+    last_run_dir: 
+    build_steps:
+      - cargo run -p nether-cli -- build --project examples/3-inspectors/epu-showcase
+      - cargo run -p nether-cli -- replay validate examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs
+    notes:
+      - implemented in code and covered by the authoritative 20-scene sweep
+      - banked strong near-pass through Wave 64 on the recovered split-first branch
+      - Wave 64 did not materially overtake the same radial-fan ownership limit
+      - current queue state: banked again after the twice-patched final-polish check; low-risk probes did not materially beat the Wave 64 bank point
+      - latest post-fix result: `digital-matrix-candidate-split216` is the least-bad low-risk probe, but `L1 SPLIT/PRISM` still drives the same radial-fan ownership limit and motion is not visibly provable in ordinary saved captures
+      - latest live follow-up: `digital-matrix-orchestrator-partition-pass-a` increased full/probe activity, but the direct-background diff stayed too small to escape the same radial-fan solution class, so no promotion happened
+      - latest live-iteration result: `digital-matrix-liveiter-branch-a-partition-wall` is the strongest branch from the rebuilt-lane pass, but it only escapes the spoke chamber by flattening the scene into a blunt cyan split wall; the gate-balance branch mostly changed the probe and the radial-reduction branch washed out matrix identity
+      - latest source rewrite: `set_19_20.rs` now carries a partition-led cyberspace reset with `SECTOR_TUNNEL`, a dominant `SPLIT/PRISM` partition cut, `CELL/GRID` wall-code structure, `PLANE/GRATING`, floor `GRID`, support `BAND`, and `TRACE/LEAD_LINES`
+      - latest live validation: the rewritten authored baseline still hard-fails immediately; it collapses into the same radial cage with a bright upper disc and central orb/probe-like globe rather than a partition-led cyberspace scene, so no live branches, export, or replay promotion were justified
+      - latest source rewrite 2: `set_19_20.rs` now also carries a box-chamber reset with one dominant wall slab, face-cut, and subordinate code-panel stack; both the example build and replay validation passed
+      - latest live iteration: `digital-matrix-liveiter-pass6` still hard-failed after two truthful rebalances; the reused `4581` lane had to be relaunched because it was still serving stale pre-reset Digital Matrix content, moving the live PID from `67108` to `37808` on the same `tmp/epu-workbench-live` lane, and no replay-worthy export was produced
+      - latest source rewrite 3: `set_19_20.rs` is now rewritten away from the box-chamber plus seam-trace family and into a half-space partition with `APERTURE/BARS` as the wall owner, an embedded gate slab, floor-only grid support, and no wall traces; both the example build and replay validation passed
+      - latest live iteration 2: `digital-matrix-liveiter-pass7` is a truthful banked near-pass, not replay-worthy. It escapes the probe-centric globe / seam-scribble collapse and becomes partition-led in direct view, but still reads more like an over-bright partition graphic than a believable cyberspace chamber; the probe still carries dense synthetic starburst/lattice behavior. Three live probes did not cross it, no export happened, and the lane was relaunched in place to load the new WASM, moving the final live PID from `43916` to `38704`. Evidence is recorded in `tmp/epu-workbench-live/digital-matrix-liveiter-pass7-assessment.md` and `.json`
+      - latest source rewrite 4: `set_19_20.rs` changed again and both the example build and replay validation passed
+      - latest live iteration 3: `digital-matrix-liveiter-pass8` truthfully hard-failed on the relaunched `tmp/epu-workbench-live` `4581` lane; the source edit regressed the banked near-pass into a noisy globe / static-storm class with a bright center slab, two honest rescue branches including directly lowering the bars and gate while zeroing the new wall support stayed in the same reopened failure class, no export happened, and the final PID changed from `61892` to `24364`. Evidence is recorded in `tmp/epu-workbench-live/digital-matrix-liveiter-pass8-assessment.md` and `.json`
+      - latest source rewrite 5: `set_19_20.rs` changed again, first toward darker machine-bay support and then with a corrective pass back toward a dimmer partition/gate/panel-bay structure; both the example build and replay validation passed
+      - latest live iteration 4: `digital-matrix-liveiter-pass9` truthfully hard-failed on the relaunched `tmp/epu-workbench-live` `4581` lane; the authored baseline still collapses into the same noisy globe / static-storm class with a bright center slab, two live branches did not recover chamber ownership, no export happened, and the final PID changed from `23036` to `77356`. Evidence is recorded in `tmp/epu-workbench-live/digital-matrix-liveiter-pass9-assessment.md` and `.json`
+      - latest source rewrite 6: `set_19_20.rs` changed again and both the example build and replay validation passed
+      - latest live iteration 5: `digital-matrix-liveiter-pass10` truthfully banked as a near-pass, not replay-worthy, on the relaunched `tmp/epu-workbench-live` `4581` lane; this wave recovers out of the pass8/pass9 noisy globe / static-storm class and back to a partition-led chamber with one rectilinear wall owner and darker chamber recession, but the direct frame remains too bright and too graphic, the probe still reads as a ringed technical shell rather than a believable room, no export happened, and the final PID is `58240`. Evidence is recorded in `tmp/epu-workbench-live/digital-matrix-liveiter-pass10-assessment.md` and `.json`
+      - latest source rewrite 7: `set_19_20.rs` changed again and both the example build and replay validation passed
+      - latest live iteration 6: `digital-matrix-liveiter-pass11` truthfully banked as a near-pass, not replay-worthy, on the relaunched `tmp/epu-workbench-live` `4581` lane; this wave is a real improvement over pass10 because the direct frame is darker, less poster-like, and stays firmly out of the old noisy globe/static-storm class, but the probe remains a ringed technical shell with visible lattice structure and the overall chamber still reads as synthetic partition art more than a believable room, no export happened, and the final PID is `64440`. Evidence is recorded in `tmp/epu-workbench-live/digital-matrix-liveiter-pass11-assessment.md` and `.json`
+      - latest source rewrite 8: `set_19_20.rs` changed again; the first authored reset regressed into a murky globe/shell class, but the honest recovery branch `partition-recovery-b` was codified back into source. Both the example build and replay validation passed
+      - latest live iteration 7: `digital-matrix-liveiter-pass12` truthfully banked as a near-pass, not replay-worthy, on the relaunched `tmp/epu-workbench-live` `4581` lane; it still does not cross because the direct frame remains too synthetic/graphic and the probe still reads as a ringed technical shell, no export happened, and the final PID is `74292`. Evidence is recorded in `tmp/epu-workbench-live/digital-matrix-liveiter-pass12-assessment.md` and `.json`
+      - latest source rewrite 9: `set_19_20.rs` changed again to swap the old bright bar-wall owner for a harder planar partition plus inset gate slab, and both the example build and replay validation passed
+      - latest live iteration 8: `digital-matrix-liveiter-pass13` truthfully banked as a near-pass, not replay-worthy, on the relaunched `tmp/epu-workbench-live` `4581` lane; the authored baseline stays out of the old noisy globe/static-storm failure, but the saved direct frame is still too synthetic/sector-graphic and the probe still reads as a ringed technical shell, three live branches changed the image truthfully but none changed the class, no replay-worthy export happened, and the final PID is `67164`. Evidence is recorded in `tmp/epu-workbench-live/digital-matrix-liveiter-pass13-assessment.md` and `.json`, and the non-promoted baseline snapshot is stored under `tmp/epu-workbench-live/exports/20260315-193048-digital-matrix-liveiter-pass13-baseline.json`
+      - latest source rewrite 10: `set_19_20.rs` changed again; the first source reset regressed into the noisy globe/static-storm class, and the only honest recovery was to restore the older partition-led chamber family and codify that back into source. Both the example build and replay validation passed after the final codified recovery
+      - latest live iteration 9: `digital-matrix-liveiter-pass14` truthfully banked as a near-pass, not replay-worthy, on the relaunched `tmp/epu-workbench-live` `4581` lane; no replay-worthy export happened, and the final PID is `76364`. Evidence is recorded in `tmp/epu-workbench-live/digital-matrix-liveiter-pass14-assessment.md` and `.json`
+      - latest source rewrite 11: `set_19_20.rs` changed again and both the example build and replay validation passed
+      - latest live iteration 10: `digital-matrix-liveiter-pass15` truthfully banked as a near-pass, not replay-worthy, on the relaunched `tmp/epu-workbench-live` `4581` lane; the source move is real because the partition is now wall-owned, the frame is darker and less poster-like, and it stays out of the old noisy globe/static-storm failure, but the room still reads as a synthetic partition graphic more than a believable chamber and the probe is still the same ringed technical shell, none of the three live turns changed that class, no replay-worthy export happened, and the final PID is `46472`. Evidence is recorded in `tmp/epu-workbench-live/digital-matrix-liveiter-pass15-assessment.md` and `.json`, and the non-promoted baseline snapshot is stored under `tmp/epu-workbench-live/exports/20260315-201431-digital-matrix-liveiter-pass15-baseline.json`
+      - latest source rewrite 12: `set_19_20.rs` changed again, but the new authored reset hard-regressed into a pale noisy field/static-storm class and was not left in source. The prior banked authored direction was restored in source, rebuilt, replay-validated, relaunched, and confirmed again on scene `19`
+      - latest live iteration 11: `digital-matrix-liveiter-pass16` truthfully banked as a near-pass, not replay-worthy, on the relaunched `tmp/epu-workbench-live` `4581` lane; the recovered state still holds the darker partition-led chamber family, but the room remains a synthetic partition graphic more than a believable chamber and the probe is still the same ringed technical shell, the stronger live turns `deshell-b` and `machine-bank-c` did not change that class, no replay-worthy export happened, and the final PID is `59768` on `127.0.0.1:4581`. Evidence is recorded in `tmp/epu-workbench-live/digital-matrix-liveiter-pass16-assessment.md` and `.json`, and the final authored baseline snapshot is stored under `tmp/epu-workbench-live/exports/20260315-204222-digital-matrix-liveiter-pass16-final-authored-baseline.json`
+      - latest source rewrite 13: `set_19_20.rs` changed again, but the new authored reset reopened a probe-centric orb / washed-field failure and was not left in source. The prior banked authored state was restored in source, rebuilt, replay-validated, and relaunched on the same `4581` lane
+      - latest live iteration 12: `digital-matrix-liveiter-pass17` truthfully banked as a near-pass, not replay-worthy, on the restored baseline; `deshell-d`, `machine-bank-d`, and `recession-e` only produced cosmetic movement inside the same class, the direct frame still reads as synthetic partition art more than a believable chamber, the probe is still a ringed technical shell, no replay-worthy export happened, and the final PID is `59268`. Evidence is recorded in `tmp/epu-workbench-live/digital-matrix-liveiter-pass17-assessment.md` and `.json`, and the restored authored baseline snapshot is stored under `tmp/epu-workbench-live/exports/20260315-205953-digital-matrix-liveiter-pass17-final-authored-baseline.json`
+      - latest source rewrite 14: `set_19_20.rs` had a combined de-shell move, but it stayed in the same synthetic partition-graphic class and was backed out. The file was rebuilt, replay-validated, and restored to the prior authored baseline
+      - latest live iteration 13: `digital-matrix-liveiter-pass18` truthfully banked as a near-pass, not replay-worthy, on the restored authored baseline; `deshell-f` and `machine-bank-e` also failed to change class, no replay-worthy export happened, and the final PID is `58100`. Evidence is recorded in `tmp/epu-workbench-live/digital-matrix-liveiter-pass18-assessment.md` and `.json`, and the restored authored baseline snapshot is stored under `tmp/epu-workbench-live/exports/20260315-212153-digital-matrix-liveiter-pass18-final-authored-baseline.json`
+      - latest source rewrite 15: `set_19_20.rs` had a new authored reset, but it immediately regressed into the old washed field / globe class and was not left in source. The prior banked authored baseline was restored, rebuilt, replay-validated, and relaunched on the same `4581` lane
+      - latest live iteration 14: `digital-matrix-liveiter-pass19` truthfully banked as a near-pass, not replay-worthy, on the restored authored baseline; two live recovery probes did not recover a believable partition-led chamber, no replay-worthy export happened, and the final live PID is `58220` on `127.0.0.1:4581`. Evidence is recorded in `tmp/epu-workbench-live/digital-matrix-liveiter-pass19-assessment.md` and `.json`, and the final restored baseline snapshot is stored under `tmp/epu-workbench-live/exports/20260315-214619-digital-matrix-liveiter-pass19-final-authored-baseline.json`
+      - latest source rewrite 28: `set_19_20.rs` tested a stronger `APERTURE/RECT` gate-owner move, but it was a no-gain result that kept the same chamber class with the same ringed technical-shell probe and did not change the source durably. `set_19_20.rs` remains on the stronger banked baseline
+      - latest live iteration 27: `digital-matrix-liveiter-pass31` truthfully banked as a near-pass, not replay-worthy; the reset stayed in the same chamber class with the same ringed technical-shell probe, no replay-worthy export happened, and the final lane PID is `52564`. Evidence is recorded in `tmp/epu-workbench-live/digital-matrix-liveiter-pass31-assessment.md` and `.json`
+      - next truthful lever: bank this lane again until a later shipping decision is willing to pursue a less safe ownership reset

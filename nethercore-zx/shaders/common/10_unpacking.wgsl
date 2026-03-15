@@ -119,9 +119,11 @@ fn unpack_tangent(packed: u32) -> vec4<f32> {
 // handedness: sign for bitangent direction (+1 or -1)
 // Returns 3x3 matrix where columns are [T, B, N]
 fn build_tbn(tangent: vec3<f32>, normal: vec3<f32>, handedness: f32) -> mat3x3<f32> {
-    let T = normalize(tangent);
     let N = normalize(normal);
-    let B = cross(N, T) * handedness;
+    // Re-orthogonalize tangent against normal so small tangent/normal drift
+    // does not tilt the shading basis into persistent panel/ring structure.
+    let T = normalize(tangent - N * dot(N, tangent));
+    let B = normalize(cross(N, T)) * handedness;
     // Column-major: mat3x3 columns are T, B, N
     return mat3x3<f32>(T, B, N);
 }
@@ -141,17 +143,9 @@ fn sample_normal_map(tex: texture_2d<f32>, uv: vec2<f32>, tbn: mat3x3<f32>, flag
         return tbn[2];
     }
 
-    // Sample BC5 texture (RG channels contain XY of normal)
-    let normal_sample = textureSample(tex, sampler_linear, uv).rg;
-
-    // Convert from [0,1] to [-1,1] range
-    let xy = normal_sample * 2.0 - 1.0;
-
-    // Reconstruct Z component (always positive for tangent-space normals)
-    let z = sqrt(max(0.0, 1.0 - dot(xy, xy)));
-
-    // Transform from tangent space to world space
-    let tangent_normal = vec3<f32>(xy, z);
-    return normalize(tbn * tangent_normal);
+    // A/B pass: bypass sampled BC5 perturbation entirely so we can isolate whether
+    // the persistent shell survives with no sampled normal-map detail at all.
+    _ = tex;
+    _ = uv;
+    return tbn[2];
 }
-

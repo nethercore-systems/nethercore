@@ -62,7 +62,7 @@ fn eval_band_radiance(
     // param_c: Edge softness (0..255 -> 0.0..1.0)
     let softness = u8_to_01(instr_c(instr));
     // param_d: Modulation phase offset (0..255 -> 0.0..1.0)
-    let phase_offset = u8_to_01(instr_d(instr));
+    let phase_offset = epu_loop_phase01(instr_d(instr));
 
     // 3. Compute distance from band center
     let dist = abs(u - offset);
@@ -104,8 +104,14 @@ fn eval_band_radiance(
     // Extract alpha_a (0..15 -> 0.0..1.0)
     let alpha_a = instr_alpha_a_f32(instr);
 
+    // Keep BAND as a ring feature, but suppress it near the axis caps so it
+    // concentrates around the intended tangent/horizon zone instead of
+    // forming a full probe shell.
+    let tangent_mag = sqrt(max(0.0, 1.0 - u * u));
+    let tangent_gate = smoothstep(0.1 + width * 0.25, 0.38 + width * 0.65, tangent_mag);
+
     // 8. Compute final weight
-    let w = modulated * intensity * alpha_a * region_w;
+    let w = modulated * tangent_gate * intensity * alpha_a * region_w;
 
     return LayerSample(rgb, w);
 }

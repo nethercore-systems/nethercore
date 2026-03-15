@@ -82,7 +82,7 @@ fn eval_decal(
     let glow_softness = max(u8_to_01(instr_c(instr)) * 0.2, 0.0005);
     let glow = smoothstep(glow_softness + softness, softness, sdf) * (1.0 - edge);
 
-    let phase = u8_to_01(instr_d(instr));
+    let phase = epu_loop_phase01(instr_d(instr));
     let anim = 1.0 + 0.25 * sin(phase * TAU);
 
     // color_a = shape/fill color, color_b = glow/outline color

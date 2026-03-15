@@ -22,8 +22,8 @@ fn epu_octahedral_encode(dir: vec3<f32>) -> vec2<f32> {
     return n.xy;
 }
 
-// Sample background from EPU EnvRadiance texture (LOD 0)
-fn epu_eval_hi(env_index: u32, direction: vec3<f32>) -> vec3f {
+// Sample background from the procedural EPU state.
+fn epu_eval_hi_raw(env_index: u32, direction: vec3<f32>) -> vec3f {
     let dir = normalize(direction);
     let st = epu_states[env_index];
 
@@ -37,6 +37,8 @@ fn epu_eval_hi(env_index: u32, direction: vec3<f32>) -> vec3f {
     var bounds_dir = vec3f(0.0, 1.0, 0.0);
     // Default regions: all-sky (bounds layers will compute their own regions)
     var regions = RegionWeights(1.0, 0.0, 0.0);
+    var bounds_count = 0u;
+    var shared_bounds_dir_set = false;
 
     var radiance = vec3f(0.0);
     for (var i = 0u; i < 8u; i++) {
@@ -48,12 +50,28 @@ fn epu_eval_hi(env_index: u32, direction: vec3<f32>) -> vec3f {
         let blend = instr_blend(instr);
 
         if is_bounds {
-            // Bounds opcode: update bounds_dir, evaluate bounds, and feed its output regions
-            // into subsequent feature layers.
-            bounds_dir = bounds_dir_from_layer(instr, opcode, bounds_dir);
-            let bounds_result = evaluate_bounds_layer(dir, instr, opcode, bounds_dir, regions);
-            regions = bounds_result.regions;
+            // Keep the direct background path in lockstep with the compute
+            // evaluation semantics so background, reflection, and debug views
+            // do not drift apart when bounds composition changes.
+            let eval_bounds_dir = bounds_dir_from_layer(instr, opcode, bounds_dir);
+            if !shared_bounds_dir_set {
+                bounds_dir = eval_bounds_dir;
+                shared_bounds_dir_set = true;
+            }
+            let bounds_result = evaluate_bounds_layer(dir, instr, opcode, eval_bounds_dir, regions);
+            var region_mix = bounds_result.region_mix;
+            if bounds_count > 0u {
+                let organizer_bounds =
+                    opcode == OP_SECTOR
+                    || opcode == OP_SPLIT
+                    || opcode == OP_CELL
+                    || opcode == OP_APERTURE;
+                let retag_scale = select(0.72, 0.38, organizer_bounds);
+                region_mix *= retag_scale;
+            }
+            regions = compose_bounds_regions(regions, bounds_result.regions, region_mix);
             radiance = apply_blend(radiance, bounds_result.sample, blend);
+            bounds_count += 1u;
         } else {
             // Feature opcode: evaluate using the current bounds_dir + region weights.
             let sample = evaluate_layer(dir, instr, bounds_dir, regions);
@@ -64,8 +82,23 @@ fn epu_eval_hi(env_index: u32, direction: vec3<f32>) -> vec3f {
     return radiance;
 }
 
+fn epu_eval_hi(env_index: u32, direction: vec3<f32>) -> vec3f {
+    let dir = normalize(direction);
+    let hint = select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(dir.y) > 0.9);
+    let tangent = normalize(cross(hint, dir));
+    let filter_radius = 0.02;
+    let dir_a = normalize(dir + tangent * filter_radius);
+    let dir_b = normalize(dir - tangent * filter_radius);
+
+    return (
+        epu_eval_hi_raw(env_index, dir)
+        + epu_eval_hi_raw(env_index, dir_a)
+        + epu_eval_hi_raw(env_index, dir_b)
+    ) / 3.0;
+}
+
 fn sample_epu_background(env_index: u32, direction: vec3<f32>) -> vec4<f32> {
-    return vec4f(epu_eval_hi(env_index, direction), 1.0);
+    return vec4f(epu_eval_hi_raw(env_index, direction), 1.0);
 }
 
 // ============================================================================
@@ -77,10 +110,13 @@ fn sample_epu_background(env_index: u32, direction: vec3<f32>) -> vec4<f32> {
 fn sample_epu_reflection(env_id: u32, refl_dir: vec3f, roughness: f32) -> vec3f {
     let uv = epu_octahedral_encode(normalize(refl_dir)) * 0.5 + 0.5;
 
-    // Use roughness^2 for a more perceptually linear blur ramp.
+    // Use roughness^2 for a perceptually linear blur ramp, then add a modest
+    // mid/high-roughness bias so metallic probes stop reprojecting such crisp
+    // shell structure in the middle of the roughness range.
     let r = epu_saturate(roughness);
     let max_lod = max(0.0, f32(textureNumLevels(epu_env_radiance) - 1));
-    let lod = (r * r) * max_lod;
+    let lod_bias = 0.75 * smoothstep(0.28, 0.75, r);
+    let lod = min((r * r) * max_lod + lod_bias, max_lod);
 
     // Manual mip lerp (keeps results smooth even if sampler mipmap_filter is Nearest).
     let lod0 = floor(lod);
@@ -91,18 +127,22 @@ fn sample_epu_reflection(env_id: u32, refl_dir: vec3f, roughness: f32) -> vec3f 
     let c1 = textureSampleLevel(epu_env_radiance, epu_sampler, uv, i32(env_id), lod1).rgb;
     let l_lp = mix(c0, c1, t);
 
-    // Residual blend: add back high-frequency energy that the low-pass cache cannot represent,
-    // fading out continuously with roughness (no thresholds).
+    // Residual blend: add back a small amount of high-frequency energy that the
+    // low-pass cache cannot represent. Keep this correction confined to the
+    // very-smooth band so it does not rebuild broad probe-shell structure.
     let l0 = textureSampleLevel(epu_env_radiance, epu_sampler, uv, i32(env_id), 0.0).rgb;
     let l_hi = epu_eval_hi(env_id, refl_dir);
     let alpha = r * r;
+    let residual_fade = 1.0 - smoothstep(0.04, 0.18, r);
 
     // NOTE: In practice `l0` can slightly overshoot `l_hi` due to finite EnvRadiance resolution
     // and sampler filtering, producing negative residuals. On fully metallic materials this can
     // manifest as "peppered" black pixels at mid roughness when the residual is clamped.
     // Treat the residual as additive energy only.
-    let residual = max(l_hi - l0, vec3f(0.0));
-    let l_spec = l_lp + (1.0 - alpha) * residual;
+    let residual_raw = max(l_hi - l0, vec3f(0.0));
+    let residual_cap = l_lp * 0.35;
+    let residual = min(residual_raw, residual_cap);
+    let l_spec = l_lp + (1.0 - alpha) * residual_fade * residual;
 
     return max(l_spec, vec3f(0.0));
 }

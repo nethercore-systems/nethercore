@@ -26,8 +26,8 @@ pub static BENCHMARK_ANIM_SPEEDS: [[u8; 8]; BENCHMARK_COUNT] = [
     [0, 0, 0, 3, 0, 0, 0, 0], // Region Isolation
     [0, 0, 4, 3, 4, 2, 0, 0], // Projection Bay
     [0, 0, 4, 0, 0, 0, 0, 0], // Transport Sweep
-    [0, 0, 6, 2, 0, 0, 0, 0], // Front Mass
-    [0, 0, 0, 1, 4, 0, 0, 0], // Frozen Bed
+    [0, 0, 0, 0, 0, 0, 4, 2], // Front Mass
+    [0, 0, 0, 0, 0, 0, 4, 0], // Frozen Bed
 ];
 
 pub static BENCHMARK_RIGS: [SceneRig; BENCHMARK_COUNT] = [
@@ -143,14 +143,7 @@ pub(super) const BENCHMARK_OPEN_HORIZON: Benchmark = [
 // -----------------------------------------------------------------------------
 pub(super) const BENCHMARK_REGION_ISOLATION: Benchmark = [
     [
-        hi(
-            OP_RAMP,
-            REGION_ALL,
-            BLEND_LERP,
-            0,
-            0xc9d5dd,
-            0x2f3d49,
-        ),
+        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0xc9d5dd, 0x2f3d49),
         lo(0, 0xB0, 0x38, 0x74, 0x10, DIR_UP, 8, 15),
     ],
     [
@@ -178,14 +171,7 @@ pub(super) const BENCHMARK_REGION_ISOLATION: Benchmark = [
         lo(176, 54, 0, 0, 0, DIR_UP, 12, 0),
     ],
     [
-        hi(
-            OP_FLOW,
-            REGION_FLOOR,
-            BLEND_SCREEN,
-            0,
-            0xe7eff6,
-            0x748594,
-        ),
+        hi(OP_FLOW, REGION_FLOOR, BLEND_SCREEN, 0, 0xe7eff6, 0x748594),
         lo(118, 18, 22, 0x21, 0, DIR_RIGHT, 7, 0),
     ],
     [
@@ -258,25 +244,11 @@ pub(super) const BENCHMARK_PROJECTION_BAY: Benchmark = [
         lo(184, 20, 144, 68, 0, DIR_DOWN, 7, 0),
     ],
     [
-        hi(
-            OP_LOBE,
-            REGION_WALLS,
-            BLEND_SCREEN,
-            0,
-            0x8ddfff,
-            0x264257,
-        ),
+        hi(OP_LOBE, REGION_WALLS, BLEND_SCREEN, 0, 0x8ddfff, 0x264257),
         lo(164, 84, 102, 0, 0, DIR_FORWARD, 9, 0),
     ],
     [
-        hi(
-            OP_FLOW,
-            REGION_FLOOR,
-            BLEND_SCREEN,
-            0,
-            0xa3d7f0,
-            0x375163,
-        ),
+        hi(OP_FLOW, REGION_FLOOR, BLEND_SCREEN, 0, 0xa3d7f0, 0x375163),
         lo(92, 18, 20, 0x21, 0, DIR_RIGHT, 6, 0),
     ],
     [0, 0],
@@ -288,14 +260,7 @@ pub(super) const BENCHMARK_PROJECTION_BAY: Benchmark = [
 // -----------------------------------------------------------------------------
 pub(super) const BENCHMARK_TRANSPORT_SWEEP: Benchmark = [
     [
-        hi(
-            OP_RAMP,
-            REGION_ALL,
-            BLEND_LERP,
-            0,
-            0xd8e2e8,
-            0x435361,
-        ),
+        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0xd8e2e8, 0x435361),
         lo(0, 0xB0, 0x46, 0x86, 0x10, DIR_UP, 8, 15),
     ],
     [
@@ -340,10 +305,22 @@ pub(super) const BENCHMARK_FRONT_MASS: Benchmark = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             SPLIT_TIER,
-            0x8a96a3,
-            0x18222c,
+            0xa5b0ba,
+            0x0d141b,
         ),
-        lo(0, 26, 132, 62, 116, DIR_UP, 6, 15),
+        lo(0, 28, 136, 70, 114, DIR_UP, 15, 15),
+    ],
+    [
+        hi_meta(
+            OP_SILHOUETTE,
+            REGION_SKY,
+            BLEND_LERP,
+            DOMAIN_DIRECT3D,
+            SILHOUETTE_MOUNTAINS,
+            0x202b33,
+            0x6d7780,
+        ),
+        lo(180, 76, 156, 0x46, 0, DIR_UP, 12, 10),
     ],
     [
         hi_meta(
@@ -351,51 +328,61 @@ pub(super) const BENCHMARK_FRONT_MASS: Benchmark = [
             REGION_FLOOR,
             BLEND_LERP,
             DOMAIN_DIRECT3D,
-            PLANE_WATER,
-            0x324755,
-            0x081017,
+            PLANE_STONE,
+            0x364149,
+            0x0d141b,
         ),
-        lo(255, 54, 0, 0, 0, DIR_UP, 15, 0),
-    ],
-    [
-        hi_meta(
-            OP_ADVECT,
-            REGION_WALLS,
-            BLEND_LERP,
-            DOMAIN_DIRECT3D,
-            ADVECT_FRONT,
-            0x93a4af,
-            0x22303a,
-        ),
-        lo(220, 52, 176, 136, 0, DIR_LEFT, 13, 0),
+        lo(246, 94, 24, 164, 0, DIR_UP, 15, 13),
     ],
     [
         hi_meta(
             OP_MASS,
-            REGION_SKY | REGION_WALLS,
-            BLEND_MULTIPLY,
+            REGION_SKY,
+            BLEND_LERP,
             DOMAIN_DIRECT3D,
             MASS_SHELF,
-            0x596a75,
-            0x04080c,
+            0x73818d,
+            0x070b10,
         ),
-        lo(255, 96, 228, 64, 0, DIR_LEFT, 15, 0),
+        lo(244, 112, 214, 80, 0, DIR_LEFT, 15, 0),
     ],
     [
         hi_meta(
             OP_MOTTLE,
-            REGION_WALLS,
+            REGION_SKY,
             BLEND_MULTIPLY,
             DOMAIN_DIRECT3D,
-            MOTTLE_RIDGE,
-            0x74838e,
-            0x121b23,
+            MOTTLE_SOFT,
+            0xa4b1bc,
+            0x26323b,
         ),
-        lo(72, 54, 172, 96, 18, DIR_LEFT, 5, 0),
+        lo(200, 56, 170, 58, 12, DIR_LEFT, 11, 0),
     ],
-    [0, 0],
-    [0, 0],
-    [0, 0],
+    [
+        hi_meta(
+            OP_MOTTLE,
+            REGION_FLOOR,
+            BLEND_MULTIPLY,
+            DOMAIN_DIRECT3D,
+            MOTTLE_GRAIN,
+            0x74818b,
+            0x182027,
+        ),
+        lo(172, 40, 180, 126, 10, DIR_RIGHT, 10, 0),
+    ],
+    [
+        hi_meta(
+            OP_ADVECT,
+            REGION_SKY,
+            BLEND_SCREEN,
+            DOMAIN_DIRECT3D,
+            ADVECT_FRONT,
+            0xd7e3eb,
+            0x4a5965,
+        ),
+        lo(176, 54, 124, 98, 0, DIR_LEFT, 10, 0),
+    ],
+    [hi(OP_FLOW, REGION_FLOOR, BLEND_SCREEN, 0, 0xafbfcc, 0x3b4a56), lo(84, 14, 20, 0x21, 0, DIR_RIGHT, 5, 0)],
 ];
 
 // -----------------------------------------------------------------------------
@@ -409,10 +396,10 @@ pub(super) const BENCHMARK_FROZEN_BED: Benchmark = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             SILHOUETTE_MOUNTAINS,
-            0x6e8290,
-            0xd9e2e8,
+            0x60707d,
+            0xcfd9df,
         ),
-        lo(116, 70, 150, 0x62, 0, DIR_UP, 15, 15),
+        lo(148, 76, 142, 0x54, 0, DIR_UP, 15, 15),
     ],
     [
         hi_meta(
@@ -420,45 +407,57 @@ pub(super) const BENCHMARK_FROZEN_BED: Benchmark = [
             REGION_ALL,
             BLEND_LERP,
             DOMAIN_DIRECT3D,
-            SPLIT_TIER,
-            0xc1ccd4,
-            0x33424f,
+            SPLIT_FACE,
+            0xb1bec8,
+            0x182028,
         ),
-        lo(18, 78, 26, 96, 0, DIR_UP, 6, 0),
+        lo(32, 92, 28, 112, 0, DIR_UP, 14, 0),
     ],
     [
         hi_meta(
-            OP_MASS,
-            REGION_WALLS,
+            OP_PLANE,
+            REGION_FLOOR,
             BLEND_LERP,
             DOMAIN_DIRECT3D,
-            MASS_BANK,
-            0xc4d2da,
-            0x334450,
+            PLANE_STONE,
+            0x54616a,
+            0x131a21,
         ),
-        lo(212, 84, 188, 72, 0, DIR_UP, 11, 0),
+        lo(248, 104, 20, 168, 0, DIR_UP, 15, 14),
     ],
     [
         hi(
             OP_SURFACE,
             REGION_FLOOR,
             BLEND_LERP,
-            SURFACE_GLAZE,
-            0xd1dde6,
-            0x324452,
+            SURFACE_CRUST,
+            0xc0cdd4,
+            0x2d3942,
         ),
-        lo(200, 72, 198, 76, 0, DIR_UP, 14, 0),
+        lo(196, 62, 206, 32, 10, DIR_UP, 13, 0),
+    ],
+    [
+        hi_meta(
+            OP_MOTTLE,
+            REGION_FLOOR,
+            BLEND_MULTIPLY,
+            DOMAIN_DIRECT3D,
+            MOTTLE_GRAIN,
+            0xa8b6bf,
+            0x29343c,
+        ),
+        lo(214, 46, 196, 132, 12, DIR_RIGHT, 12, 0),
     ],
     [
         hi(
             OP_SURFACE,
             REGION_FLOOR,
-            BLEND_MULTIPLY,
-            SURFACE_CRUST,
-            0xb2c1cb,
-            0x1f2b35,
+            BLEND_SCREEN,
+            SURFACE_DUSTED,
+            0xe1e7ec,
+            0x8a97a3,
         ),
-        lo(188, 54, 236, 22, 18, DIR_UP, 12, 0),
+        lo(92, 34, 150, 58, 18, DIR_UP, 4, 0),
     ],
     [
         hi_meta(
@@ -467,11 +466,20 @@ pub(super) const BENCHMARK_FROZEN_BED: Benchmark = [
             BLEND_SCREEN,
             DOMAIN_DIRECT3D,
             ADVECT_SPINDRIFT,
-            0xe8f1f7,
-            0x9db0bc,
+            0xf2f7fb,
+            0xb8c7d2,
         ),
-        lo(148, 34, 86, 144, 0, DIR_RIGHT, 8, 0),
+        lo(164, 32, 84, 134, 0, DIR_RIGHT, 8, 0),
     ],
-    [0, 0],
-    [0, 0],
+    [
+        hi(
+            OP_BAND,
+            REGION_SKY | REGION_WALLS,
+            BLEND_SCREEN,
+            0,
+            0xd7e2ea,
+            0x7f93a4,
+        ),
+        lo(22, 82, 118, 94, 0, DIR_FORWARD, 4, 0),
+    ],
 ];

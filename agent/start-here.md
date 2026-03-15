@@ -12,7 +12,7 @@ Drive the EPU system and the EPU showcase to S+ quality with a benchmark-first w
 
 - improve the underlying EPU surface when the current vocabulary is insufficient
 - validate those improvements in small benchmark scenes first
-- only then promote healthy changes into the 12-preset showcase loop
+- only then promote healthy changes into the full 20-scene showcase loop
 - keep the prompt pack, logs, and docs aligned so future agents do not re-derive stale assumptions
 
 Judge success against EPU's real product role:
@@ -45,6 +45,24 @@ This is not just a showcase-art task. It is a combined:
 - Validation history: `agent/shared/04-capture-log.md` and `agent/shared/05-review-log.md`
 - Runtime truth lives in code, replay scripts, and screenshots, not planning prose
 - If code/docs/prompts drift, fix the drift immediately before continuing broad loops
+- Do not pair every showcase capture by default. Use one authoritative replay capture for routine showcase polish; reserve paired replay for benchmark work, engine/shader/runtime changes, replay-script changes, suspicious capture drift, or milestone proof.
+
+## Hard Gate Order
+
+Do not treat these as optional review notes. The program-level build and validation flow must clear them in this order:
+
+1. screenshot determinism for the current capture path
+2. seamless looping around 3D positions and full spatial wrap
+3. seamless looping around animation value or phase
+4. opcode quality through the benchmark gate
+5. full 20-scene showcase pass quality
+
+Operational meaning:
+
+- Treat screenshot determinism as currently solved, but reopen it immediately if a fresh regression appears.
+- Do not spend benchmark or showcase waves while a known spatial seam or phase-loop flash still exists in shared runtime behavior.
+- Spatial seam sign-off requires a full 360-degree direct-background orbit, not one hero view.
+- Animation-loop sign-off requires phase-cycle wrap checks, not just "motion exists" on a few nearby frames.
 
 ## Subagent Mode
 
@@ -52,10 +70,35 @@ When the current worker owns the loop end to end, operate with this default work
 
 - Work in subagent orchestration mode.
 - Split the task into parallel workers with disjoint file ownership.
-- Do not implement locally unless integration or emergency repair is required.
+- Do not implement, capture, or review locally unless integration or emergency repair is required.
+- Treat the current worker as the orchestrator only:
+  - implementation belongs to implement/fix workers
+  - capture belongs to capture workers or unattended queue machinery
+  - visual judgment belongs to fresh-context review workers
 - Keep a live worker roster in every progress update: active workers, scope, completed slices, next queued lane.
 - Run work in waves and validate after each wave.
 - If a worker stalls, rescope it rather than silently waiting forever.
+- When using the live workbench, audit existing `nethercore-zx` workbench sessions first and attach/reuse a healthy session before launching another HTTP server.
+- Do not spawn a fresh workbench instance per worker by default. Keep one persistent session per active lane, or serialize workers through one shared session when that is sufficient.
+
+## Stop-Loss Rules
+
+Do not let one lane consume the whole program.
+
+- Cap active polishing at `3` validated waves per lane before a mandatory decision.
+- After `3` waves, classify the lane as exactly one of:
+  - `pass`
+  - `banked near-pass`
+  - `parked fail`
+  - `benchmark-blocked`
+- Treat `banked near-pass` as done for now. Do not reopen it immediately just because one more micro-lever exists.
+- Do not spend more than `2` consecutive active waves in the same source preset file unless the second wave already produced a material review gain.
+- Do not mix `engine/surface R&D` and `showcase finishing` in the same active batch. If the blocker is capability-bound, move it to benchmarks and unblock other showcase lanes in parallel.
+- Always keep at least `3` live showcase lanes in motion:
+  - one active survivor lane
+  - one active rebuild lane
+  - one parked-or-banked lane being protected from unnecessary churn
+- If review indexing, screenshot mapping, or artifact selection is suspect, stop and repair that immediately before spending another authoring wave.
 
 ## Cold-Start Read Order
 
@@ -108,7 +151,7 @@ These files carry long-term program state and must stay current:
 - `examples/3-inspectors/epu-showcase/screenshot-benchmarks-anim3.ncrs`
   Benchmark replay gate.
 - `examples/3-inspectors/epu-showcase/screenshot-all-anim3.ncrs`
-  Full 12-preset showcase replay.
+  Full 20-scene showcase replay.
 - `agent/queue/epu-loop.yaml`
   Restartable unattended queue for benchmark/showcase jobs.
 - `tools/tmp/run_epu_loop_queue.py`
@@ -123,13 +166,16 @@ These files carry long-term program state and must stay current:
 The long-term plan is:
 
 1. Keep process/docs/prompts coherent so agents restart cleanly.
-2. Build and maintain benchmark-first capability gates.
-3. Expand or correct the EPU surface only when benchmarks prove a real gap.
-4. Promote healthy capability changes into the showcase.
-5. Push the current 12 presets to pass quality.
-6. Only after proof-of-life across the current set, expand toward the full 20-preset roster.
-7. Finish with clean docs, accurate logs, and a showcase that can usually pass in 1 to 2 focused loops.
-8. Keep unattended queue artifacts current so future agents can resume overnight-style loops from disk rather than chat memory.
+2. Keep screenshot determinism closed for the active capture path.
+3. Keep spatial wrap and 3D-position looping seam-free.
+4. Keep animation/phase looping seam-free.
+5. Build and maintain benchmark-first capability gates.
+6. Expand or correct the EPU surface only when benchmarks prove a real gap.
+7. Promote healthy capability changes into the showcase.
+8. Push the current 20-scene roster to pass quality.
+9. Expand or reopen the roster only when the current 20-scene set is either passing or explicitly banked/parked with honest blocker classification.
+10. Finish with clean docs, accurate logs, and a showcase that can usually pass in 1 to 2 focused loops.
+11. Keep unattended queue artifacts current so future agents can resume overnight-style loops from disk rather than chat memory.
 
 ## Work Selection Decision Tree
 

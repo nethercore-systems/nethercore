@@ -1,9 +1,23 @@
 # Live EPU Workbench
 
-Restart entrypoint:
+Reuse-first restart path:
+
+Before launching anything new, audit the existing lane and attach if it is healthy:
 
 ```powershell
-python tools/epu_workbench.py launch --rom examples/3-inspectors/epu-showcase/target/wasm32-unknown-unknown/release/epu_showcase.wasm
+Get-Process nethercore-zx -ErrorAction SilentlyContinue
+Get-NetTCPConnection -State Listen | Where-Object { $_.LocalPort -ge 4580 -and $_.LocalPort -le 4690 }
+python tools/epu_workbench.py status --artifacts-dir tmp/epu-workbench-live
+python tools/epu_workbench.py health --artifacts-dir tmp/epu-workbench-live
+python tools/epu_workbench.py session --artifacts-dir tmp/epu-workbench-live
+```
+
+If that session is healthy, reuse it. Do not spin up another HTTP workbench instance for the same lane.
+
+Only relaunch when there is no healthy session for the lane, or when the existing session is stale and needs to be replaced in place:
+
+```powershell
+python tools/epu_workbench.py launch --rom examples/3-inspectors/epu-showcase/target/wasm32-unknown-unknown/release/epu_showcase.wasm --port 4581 --artifacts-dir tmp/epu-workbench-live
 ```
 
 That starts the showcase ROM with the local workbench HTTP service enabled and writes the session record under the selected artifacts directory.
@@ -18,15 +32,26 @@ If you do pass a custom `--artifacts-dir`, follow-up commands can use `--artifac
 
 ## Fast Path
 
-Launch or reconnect:
+Attach to the current lane or relaunch it in place:
 
 ```powershell
-python tools/epu_workbench.py launch --rom examples/3-inspectors/epu-showcase/target/wasm32-unknown-unknown/release/epu_showcase.wasm
-python tools/epu_workbench.py health
-python tools/epu_workbench.py session
-python tools/epu_workbench.py status
-python tools/epu_workbench.py list-scenes
+python tools/epu_workbench.py status --artifacts-dir tmp/epu-workbench-live
+python tools/epu_workbench.py health --artifacts-dir tmp/epu-workbench-live
+python tools/epu_workbench.py session --artifacts-dir tmp/epu-workbench-live
+python tools/epu_workbench.py list-scenes --artifacts-dir tmp/epu-workbench-live
+python tools/epu_workbench.py launch --rom examples/3-inspectors/epu-showcase/target/wasm32-unknown-unknown/release/epu_showcase.wasm --port 4581 --artifacts-dir tmp/epu-workbench-live
 ```
+
+Operational rule:
+
+- Keep one persistent workbench HTTP session per active lane.
+- Reuse the same artifacts dir and port while iterating on that lane.
+- If workers would contend for one live session, serialize them or give them clearly separate ports and artifacts dirs on purpose.
+- The live worker is expected to inspect its own captures and iterate in place.
+- Turn one meaningful knob at a time, recapture, and keep going until the candidate is clearly strong or clearly blocked.
+- Reserve fresh adversarial review for exported or replay-promoted candidates, not every micro-iteration.
+- Loading JSON into the editor while unlocked does not make that JSON the active live render source.
+- For truthful evaluation of an editor-loaded candidate, lock the editor override before capture or judgment.
 
 Load a benchmark or showcase scene into the live editor and lock it for authoring:
 
@@ -46,6 +71,12 @@ python tools/epu_workbench.py set-view --show-probe false
 python tools/epu_workbench.py set-view --show-probe true
 python tools/epu_workbench.py set-view --show-ui false
 ```
+
+Authority note:
+
+- `set-config --file ...` and other editor loads update editor/session state immediately.
+- In unlocked mode, the frame can still be owned by the scene's live runtime config.
+- Use `python tools/epu_workbench.py set-view --locked true` when you need the loaded editor config to become the rendered truth.
 
 Capture review images from the live session:
 
@@ -83,16 +114,18 @@ The sweep client is intentionally thin. For multi-parameter sweeps, script repea
 ## Promotion Workflow
 
 1. Author live in the workbench until the background read and probe read both hold up.
-2. Export the winning candidate with `python tools/epu_workbench.py export ...`.
-3. Promote the Rust snippet into the showcase source by hand.
-4. Run the existing replay validation path unchanged:
+   For editor-loaded JSON candidates, that live judgment must happen in locked mode.
+2. Inspect your own live captures as you iterate. The point of the lane is fast local knob-turning with immediate visual feedback.
+3. Export the winning candidate with `python tools/epu_workbench.py export ...`.
+4. Promote the Rust snippet into the showcase source by hand.
+5. Run the existing replay validation path unchanged:
 
 ```powershell
 cargo run -p nether-cli -- replay validate examples/3-inspectors/epu-showcase/screenshot-benchmarks-anim3.ncrs
 target\debug\nethercore-zx.exe examples\3-inspectors\epu-showcase\epu-showcase.nczx --replay examples\3-inspectors\epu-showcase\screenshot-benchmarks-anim3.ncrs
 ```
 
-5. Review the authoritative screenshots before promotion.
+6. Review the authoritative screenshots before promotion.
 
 ## Notes
 

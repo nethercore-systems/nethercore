@@ -14,8 +14,15 @@ The live workbench is for:
 - capturing fresh full/probe/background review images
 - exporting a winning candidate to durable JSON and Rust snippet form
 - running scripted parameter sweeps with durable manifests
+- seeing the result immediately and iterating knob-by-knob in the same lane until the direction is strong enough to hand off
 
 The authoritative promotion path is still replay-based validation. The live workbench is the fast local discovery loop before promotion.
+
+Critical authority rule:
+
+- Loading or setting a workbench JSON config while unlocked updates the editor and exported/session state, but it does not make that config render-authoritative in the live frame.
+- Unlocked live rendering still comes from the game-owned runtime `epu_frame_configs`.
+- If you need truthful live validation of an editor-loaded candidate, lock the editor override first.
 
 ## Core Files
 
@@ -29,6 +36,36 @@ The authoritative promotion path is still replay-based validation. The live work
   ZX console bridge into the existing EPU panel/editor.
 - `examples/3-inspectors/epu-showcase/src/lib.rs`
   Benchmark/showcase scene selection and probe/background debug toggles.
+
+## Reuse Before Launch
+
+For orchestration runs, treat the workbench as a persistent lane resource, not a disposable per-worker process.
+
+Before launching a new HTTP server:
+
+1. Audit existing player processes and listening workbench ports.
+2. Check for existing `tmp/epu-workbench*` artifacts dirs and `session.json` files.
+3. Attach to a healthy existing session first.
+4. Only launch a new session if no healthy one fits the lane.
+
+Useful checks from the repo root:
+
+```powershell
+Get-Process nethercore-zx -ErrorAction SilentlyContinue
+Get-NetTCPConnection -State Listen | Where-Object { $_.LocalPort -ge 4580 -and $_.LocalPort -le 4690 }
+Get-ChildItem tmp -Directory -Filter 'epu-workbench*'
+```
+
+Operational rules:
+
+- Do not spawn one fresh workbench server per worker by default.
+- Prefer one persistent session per active lane.
+- If two workers must not contend for the same live session, serialize them or give them explicitly different ports and artifacts dirs.
+- When a session is stale, either relaunch in the same artifacts dir or shut it down before creating another.
+- Record the artifacts dir and port in the worker result so later workers can reuse the same session instead of relaunching blindly.
+- The live worker should inspect its own captures and keep iterating in-lane. Do not wait for a separate reviewer after every small knob turn.
+- Change one meaningful lever at a time when possible so the cause of improvement or regression stays legible.
+- Hand off only when the candidate is strong enough to export or when the lane has hit a concrete blocker.
 
 ## Start A Session
 
@@ -96,6 +133,12 @@ python tools/epu_workbench.py select-scene --mode showcase --scene-index 3 --no-
 
 By default `select-scene` locks the editor override after loading the scene into the workbench. That is correct for machine-driven authoring, but if you then cycle scenes manually in the window, the render will stay pinned to the locked override. Use `--no-lock-editor` or `set-view --locked false` when you want manual scene cycling to drive the live output.
 
+Current lock behavior note:
+
+- Locked workbench editing now preserves the live scene's current `param_d` phase bytes when replacing `env_id 0` with the editor override, so motion proof is valid in locked mode when the selected scene actually animates.
+- If a scene still saves byte-identical captures after that fix, treat it as a scene-specific authored-motion/read blocker, not immediate proof that the whole live capture path is dead.
+- When validating live captures, compare decoded pixels for the full frame, probe crop, and background crop separately. One weak or near-static crop is not proof that the whole saved capture path is stale.
+
 Scene ids are array indices in:
 
 - `examples/3-inspectors/epu-showcase/src/benchmarks.rs`
@@ -121,6 +164,12 @@ Replace the full config from JSON:
 python tools/epu_workbench.py set-config --file tmp/epu-workbench/candidate.json
 ```
 
+Important:
+
+- `set-config` in unlocked mode is an editor-state load, not a live render takeover.
+- Do not judge a loaded candidate from the unlocked frame and assume the JSON failed to apply.
+- For truthful candidate validation after `set-config`, use `set-view --locked true` before capture or review.
+
 Change editor-facing view state:
 
 ```powershell
@@ -129,6 +178,7 @@ python tools/epu_workbench.py set-view --clear-layer-isolation
 python tools/epu_workbench.py set-view --show-probe false
 python tools/epu_workbench.py set-view --show-background false
 python tools/epu_workbench.py set-view --show-background true --show-probe true
+python tools/epu_workbench.py set-view --camera-angle 330 --camera-elevation 18
 ```
 
 Review guidance:
@@ -136,6 +186,50 @@ Review guidance:
 - `show-probe false` gives a background-only direct place read.
 - `show-background false` gives a probe-first read against the clear background.
 - Keep both reads healthy before promotion.
+- Use those reads during live iteration yourself. Fresh adversarial review comes later, after export or replay promotion.
+
+Camera note:
+
+- `set-view` now also accepts `--camera-angle` and `--camera-elevation`.
+- `session` / `capture` summaries now report those camera values, so a saved seam check can be reproduced exactly.
+
+## Orbit Seam Validation
+
+When the suspected defect is a seam, guide line, pane edge, or wrap artifact, do not rely on a single hero angle.
+
+Recommended lane setup:
+
+```powershell
+python tools/epu_workbench.py select-scene --mode benchmark --scene-index 4
+python tools/epu_workbench.py set-view --show-ui false --show-probe false --show-background true --locked true
+python tools/epu_workbench.py set-view --camera-angle 0 --camera-elevation 18
+```
+
+Recommended method:
+
+- Sweep one full orbit at fixed elevation, for example `0..345` degrees in `15` degree steps.
+- Capture each stop, then build a contact sheet from the background crops.
+- If a seam survives, repeat the same orbit with `--isolated-layer` set to the suspected layer until the offending opcode family is isolated.
+- Only call the seam class closed when the full orbit no longer shows the old hard seam family in the direct background.
+
+## Animation Loop Validation
+
+When the suspected defect is a phase wrap, end-of-loop flash, or animation snap, do not rely on three nearby replay frames.
+
+Recommended lane setup:
+
+```powershell
+python tools/epu_workbench.py select-scene --mode benchmark --scene-index 3
+python tools/epu_workbench.py set-view --show-ui false --show-probe false --show-background true --locked true
+python tools/epu_workbench.py set-view --camera-angle 0 --camera-elevation 18
+```
+
+Recommended method:
+
+- Capture one full authored loop cycle, including frames immediately before and after the phase wraps back to the loop start.
+- Repeat that same wrap check from a full fixed-elevation camera orbit, or at minimum from enough orbit stops to prove the flash is not view-specific.
+- If the wrap flash survives, rerun the same check with `--isolated-layer` set until the offending opcode family is isolated.
+- Only call the animation-loop class closed when the loop boundary no longer flashes in the direct background around the orbit.
 
 ## Troubleshooting
 

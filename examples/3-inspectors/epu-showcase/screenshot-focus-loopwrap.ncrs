@@ -1,0 +1,81 @@
+console = "zx"
+seed = 0
+players = 1
+
+# Focus loop-wrap template: capture one scene across the exact phase-wrap boundary.
+#
+# How to use:
+# - Default target is Showcase preset 1 (index 0).
+# - Uncomment the Start press below if you want the benchmark set instead.
+# - Add A press/release pairs to reach the target scene.
+# - Keep the UI-off Y press before the capture window.
+# - Retarget the capture window so it straddles the real loop boundary for the
+#   scene you are auditing. Example:
+#     speed 1 -> around frame 256
+#     speed 2 -> around frame 128
+#     speed 4 -> around frame 64
+# - Capture consecutive frames immediately before and after wrap; a clean loop
+#   must not flash, pop, or teleport across that boundary.
+
+# [[frames]]
+# f = 1
+# p1 = "start"
+#
+# [[frames]]
+# f = 2
+# p1 = ""
+
+[[frames]]
+f = 1
+p1 = "y"
+
+[[frames]]
+f = 2
+p1 = ""
+
+# Example target: preset 1 / benchmark 1 - no A presses needed.
+# Add A press/release pairs below to reach a later scene.
+
+# [[frames]]
+# f = 10
+# p1 = "a"
+#
+# [[frames]]
+# f = 11
+# p1 = ""
+
+[[frames]]
+f = 252
+screenshot = true
+
+[[frames]]
+f = 253
+screenshot = true
+
+[[frames]]
+f = 254
+screenshot = true
+
+[[frames]]
+f = 255
+screenshot = true
+
+[[frames]]
+f = 256
+screenshot = true
+
+[[frames]]
+f = 257
+screenshot = true
+
+[[frames]]
+f = 258
+screenshot = true
+
+[[frames]]
+f = 259
+screenshot = true
+
+[[frames]]
+f = 260
+screenshot = true

@@ -14,6 +14,22 @@ fn lambert_diffuse(
     return albedo * light_color * n_dot_l;
 }
 
+fn lambert_diffuse_probe_tamed(
+    normal: vec3<f32>,
+    light_dir: vec3<f32>,
+    albedo: vec3<f32>,
+    roughness: f32,
+    specular_color: vec3<f32>,
+    light_color: vec3<f32>,
+) -> vec3<f32> {
+    let base = lambert_diffuse(normal, light_dir, albedo, light_color);
+    // Metallic, mid/high-roughness materials can still pick up a shell read
+    // through direct diffuse. Compress only that regime here.
+    let metallic_diffuse_gate = smoothstep(0.5, 0.9, max(max(specular_color.r, specular_color.g), specular_color.b));
+    let diffuse_shell_compress = 1.0 - 0.18 * metallic_diffuse_gate * smoothstep(0.28, 0.8, roughness);
+    return base * diffuse_shell_compress;
+}
+
 // Smooth distance attenuation for point lights
 // Returns 1.0 at distance=0, 0.0 at distance>=range
 fn point_light_attenuation(distance: f32, range: f32) -> f32 {
@@ -104,4 +120,3 @@ fn compute_light(light: LightData, world_position: vec3<f32>) -> ComputedLight {
 
     return result;
 }
-

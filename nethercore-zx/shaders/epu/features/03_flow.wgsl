@@ -103,7 +103,9 @@ fn eval_flow(
     // Use a 3D domain based on the direction vector instead. This is continuous on the sphere,
     // so it eliminates hard seams for animated environments.
     var p = dir * scale;
-    let t = u8_to_01(instr_d(instr)) * TAU;
+    let phase01 = epu_loop_phase01(instr_d(instr));
+    let t = phase01 * TAU;
+    let phase_circle = epu_phase_circle(phase01);
 
     // Optional turbulence: add a small vector-valued distortion.
     if turbulence > 0.001 {
@@ -122,7 +124,10 @@ fn eval_flow(
     switch pattern_type {
         case 0u: { // NOISE
             // Animate by scrolling the 3D sample position along the flow direction.
-            let p_anim = p + flow_dir * t * (1.0 / TAU);
+            let flow_basis = epu_axis_basis(flow_dir);
+            let p_anim = p
+                + flow_basis[1] * (phase_circle.x * 0.22)
+                + flow_basis[0] * (phase_circle.y * 0.1);
             var amp = 1.0;
             var freq = 1.0;
             var sum = 0.0;
@@ -191,7 +196,8 @@ fn eval_flow(
             // Periodic droplet modulation along the projected flow axis. Use a cosine bump so
             // the wrap boundary is always zero (no visible "cut off" points).
             let seg_freq_lane = seg_freq * mix(0.65, 1.35, h1);
-            let along = floor_uv.y * seg_freq_lane - (t * (1.0 / TAU)) * mix(1.2, 2.6, h0) + h1;
+            let seg_cycles = 1.0 + floor(h0 * 3.0);
+            let along = floor_uv.y * seg_freq_lane - phase01 * seg_cycles + h1;
             let phase = fract(along);
             let bump = 0.5 - 0.5 * cos(phase * TAU);
             // Wider bumps read as streaks instead of pinpoint dots.
@@ -199,7 +205,7 @@ fn eval_flow(
 
             // Slight lateral wobble so streaks aren't perfectly rigid.
             let wobble = floor_uv.x * (1.5 + h1 * 4.0) + floor_uv.y * 0.35;
-            pat = line * seg * (0.88 + 0.12 * sin(wobble + t * 1.5)) * floor_fade;
+            pat = line * seg * (0.88 + 0.12 * sin(wobble + t * 2.0)) * floor_fade;
             color_mix = h0;
         }
         case 2u: { // CAUSTIC
@@ -209,10 +215,12 @@ fn eval_flow(
             let t_axis = normalize(cross(up, flow_dir));
             let b_axis = normalize(cross(flow_dir, t_axis));
             let q = vec3f(dot(p, t_axis), dot(p, b_axis), dot(p, flow_dir)) * 2.0;
-            let p1 = sin(q.x * 1.7 + t) * cos(q.z * 1.9 + t * 0.7);
-            let p2 = sin(q.x * 2.3 - t * 0.8) * cos(q.y * 2.0 + t * 0.5);
+            let p1 = sin(q.x * 1.7 + t) * cos(q.z * 1.9 + t * 2.0);
+            let p2 = sin(q.x * 2.3 - t * 3.0) * cos(q.y * 2.0 + t);
             pat = (p1 + p2) * 0.25 + 0.5;
-            pat = smoothstep(0.45, 0.65, pat);
+            // Keep only higher-energy crest events so CAUSTIC doesn't collapse
+            // into a broad midtone slab or shell.
+            pat = smoothstep(0.62, 0.82, pat);
             color_mix = p1 * 0.5 + 0.5;
         }
         default: {

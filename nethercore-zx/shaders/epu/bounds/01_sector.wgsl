@@ -33,7 +33,7 @@
 fn eval_sector(
     dir: vec3f,
     instr: vec4u,
-    base_regions: RegionWeights,  // Kept for interface compatibility, but unused
+    base_regions: RegionWeights,
 ) -> BoundsResult {
     // Decode up axis from direction field
     let up = decode_dir16(instr_dir16(instr));
@@ -112,6 +112,27 @@ fn eval_sector(
         }
         default: {}
     }
+
+    let sector_bias = RegionWeights(
+        base_regions.sky * mix(0.35, 1.0, output_regions.sky),
+        base_regions.wall * mix(0.35, 1.0, output_regions.wall),
+        base_regions.floor * mix(0.35, 1.0, output_regions.floor)
+    );
+    let sector_bias_sum = max(
+        sector_bias.sky + sector_bias.wall + sector_bias.floor,
+        1e-5
+    );
+    let modulated_regions = RegionWeights(
+        sector_bias.sky / sector_bias_sum,
+        sector_bias.wall / sector_bias_sum,
+        sector_bias.floor / sector_bias_sum
+    );
+    let sector_mix = intensity * 0.8;
+    output_regions = RegionWeights(
+        mix(base_regions.sky, modulated_regions.sky, sector_mix),
+        mix(base_regions.wall, modulated_regions.wall, sector_mix),
+        mix(base_regions.floor, modulated_regions.floor, sector_mix)
+    );
 
     // Get colors and render with 3-band split
     let sky_color = instr_color_a(instr);

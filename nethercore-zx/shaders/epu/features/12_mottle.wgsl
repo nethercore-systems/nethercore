@@ -44,47 +44,12 @@ const MOTTLE_VARIANT_GRAIN: u32 = 1u;
 const MOTTLE_VARIANT_RIDGE: u32 = 2u;
 const MOTTLE_VARIANT_DAPPLE: u32 = 3u;
 
-fn mottle_hash31(p: vec3f) -> f32 {
-    let h = dot(p, vec3f(157.1, 311.7, 73.7));
-    return fract(sin(h) * 43758.5453123);
-}
-
 fn mottle_value_noise3(p: vec3f) -> f32 {
-    let i = floor(p);
-    let f = fract(p);
-    let u = f * f * (3.0 - 2.0 * f);
-
-    let a = mottle_hash31(i + vec3f(0.0, 0.0, 0.0));
-    let b = mottle_hash31(i + vec3f(1.0, 0.0, 0.0));
-    let c = mottle_hash31(i + vec3f(0.0, 1.0, 0.0));
-    let d = mottle_hash31(i + vec3f(1.0, 1.0, 0.0));
-    let e = mottle_hash31(i + vec3f(0.0, 0.0, 1.0));
-    let f1 = mottle_hash31(i + vec3f(1.0, 0.0, 1.0));
-    let g = mottle_hash31(i + vec3f(0.0, 1.0, 1.0));
-    let h = mottle_hash31(i + vec3f(1.0, 1.0, 1.0));
-
-    let ab = mix(a, b, u.x);
-    let cd = mix(c, d, u.x);
-    let ef = mix(e, f1, u.x);
-    let gh = mix(g, h, u.x);
-    let abcd = mix(ab, cd, u.y);
-    let efgh = mix(ef, gh, u.y);
-
-    return mix(abcd, efgh, u.z) * 2.0 - 1.0;
+    return epu_value_noise3(p);
 }
 
 fn mottle_fbm3(p: vec3f, octaves: u32) -> f32 {
-    var value = 0.0;
-    var amplitude = 0.5;
-    var frequency = 1.0;
-
-    for (var i = 0u; i < octaves; i++) {
-        value += amplitude * mottle_value_noise3(p * frequency);
-        amplitude *= 0.5;
-        frequency *= 2.0;
-    }
-
-    return value;
+    return epu_fbm3(p, octaves);
 }
 
 fn mottle_apply_contrast(x: f32, contrast: f32) -> f32 {
@@ -105,10 +70,12 @@ fn eval_mottle(
     let scale = mix(0.5, 20.0, u8_to_01(instr_a(instr)));
     let contrast = u8_to_01(instr_b(instr));
     let detail = u8_to_01(instr_c(instr));
-    let phase = u8_to_01(instr_d(instr)) * TAU;
+    let phase01 = epu_loop_phase01(instr_d(instr));
+    let phase = phase01 * TAU;
+    let drift_amount = mix(0.05, 0.35, detail);
 
     // Gentle drift only. This is a texture-breakup carrier, not a hero mover.
-    let drift = axis * (phase / TAU) * mix(0.05, 0.35, detail);
+    let drift = epu_phase_orbit3(axis, phase01, drift_amount, drift_amount * 0.73);
     var p = dir * scale + drift;
 
     let warp = vec3f(

@@ -6,26 +6,41 @@ use crate::constants::*;
 // -----------------------------------------------------------------------------
 // Preset 3: "Ocean Depths" - Deep sea trench
 // -----------------------------------------------------------------------------
-// Visual: BOUNDLESS deep water column - RAMP creates infinite depth gradient.
-// Dark overall with bright surface glow above fading to abyssal black below.
-// Feature layers add brighter surface caustics, readable god-rays, and a more
-// direct abyssal bioluminescent accent while keeping the seabed legible.
-// L0: RAMP                 ALL            LERP   deep water column gradient (dark base)
-// L1: PLANE/STONE          FLOOR          LERP   darker basalt trench floor
-// L2: FLOW (caustic)       SKY            ADD    caustic shimmer drifting through upper water (animated)
-// L3: VEIL/PILLARS         ALL            ADD    readable god-rays / depth shafts
-// L4: LOBE                 SKY            ADD    bright surface glow above
-// L5: PORTAL/VORTEX        SKY            ADD    deeper bioluminescent vent glow (animated)
-// L6: SCATTER/DUST         ALL            ADD    restrained marine snow particles
-// L7: SCATTER/BUBBLES      ALL            ADD    brighter rising bubbles
+// Goal: one dark trench basin and seabed owner that beats the pale water-column
+// read, with a grounded lower frame and one clear abyssal focal that gives the
+// depth somewhere to fall toward.
+//
+// Cadence: WATER BED -> BASIN SHELL -> SEABED OWNER -> CONTOUR SUPPORT ->
+// FOCAL STRUCTURE -> BIOLUM FOCAL -> MOTION SUPPORT -> SPARSE SNOW
+//
+// L0: RAMP                 ALL            LERP   dark water-bed gradient
+// L1: SECTOR/CAVE          ALL            LERP   enclosing trench basin shell
+// L2: PLANE/STONE          FLOOR          LERP   basalt seabed owner
+// L3: MOTTLE/RIDGE         FLOOR          MULTIPLY floor contour breakup
+// L4: SILHOUETTE/SPIRES    WALLS          LERP   vent-chimney / trench structure focal
+// L5: PORTAL/VORTEX        FLOOR          ADD    biolum vent at the basin floor
+// L6: FLOW                 WALLS|FLOOR    SCREEN restrained trench-current drift
+// L7: SCATTER/DUST         SKY|WALLS      ADD    sparse marine snow kept off the floor
 pub(super) const PRESET_OCEAN_DEPTHS: [[u64; 2]; 8] = [
-    // L0: RAMP - deep water column gradient (boundless depth)
+    // L0: RAMP - keep only a dim upper-water lift so the scene starts from dark depth instead of a pale cap.
     [
-        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x0a3040, 0x010408),
-        // Dark teal surface fading to near-black abyss
-        lo(255, 0x08, 0x18, 0x28, THRESH_VAST, DIR_UP, 15, 15),
+        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x1d5562, 0x010205),
+        lo(244, 0x10, 0x28, 0x54, THRESH_VAST, DIR_UP, 15, 15),
     ],
-    // L1: PLANE/STONE - darker basalt trench floor with bigger, more readable slabs
+    // L1: SECTOR/CAVE - make the whole space read as an enclosing trench basin rather than a flat water column.
+    [
+        hi_meta(
+            OP_SECTOR,
+            REGION_ALL,
+            BLEND_LERP,
+            DOMAIN_DIRECT3D,
+            SECTOR_CAVE,
+            0x08141c,
+            0x010205,
+        ),
+        lo(224, 82, 176, 0x44, 0, DIR_FORWARD, 15, 10),
+    ],
+    // L2: PLANE/STONE - give the lower frame one dark basalt floor owner so the seabed beats the water-column read.
     [
         hi_meta(
             OP_PLANE,
@@ -33,119 +48,128 @@ pub(super) const PRESET_OCEAN_DEPTHS: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             PLANE_STONE,
-            0x142a33,
-            0x04090d,
+            0x061016,
+            0x000102,
         ),
-        lo(236, 96, 92, 196, 0, DIR_UP, 15, 14),
+        lo(255, 132, 36, 202, 0, DIR_UP, 15, 14),
     ],
-    // L2: FLOW - brighter surface caustics without filling the whole frame with teal fog
-    [
-        hi(OP_FLOW, REGION_SKY, BLEND_ADD, 0, 0x74d1d8, 0x1d4757),
-        lo(136, 92, 150, 0x1c, 15, DIR_DOWN, 10, 1),
-    ],
-    // L3: VEIL/PILLARS - readable shafts of overhead water light to re-establish depth
+    // L3: MOTTLE/RIDGE - carve floor contours and side-basin breakup so the trench has a darker basin shape around the focal.
     [
         hi_meta(
-            OP_VEIL,
-            REGION_ALL,
-            BLEND_ADD,
-            DOMAIN_AXIS_CYL,
-            VEIL_PILLARS,
-            0x2d6a74,
-            0x0a1824,
+            OP_MOTTLE,
+            REGION_FLOOR,
+            BLEND_MULTIPLY,
+            DOMAIN_DIRECT3D,
+            MOTTLE_RIDGE,
+            0x1c2a30,
+            0x041017,
         ),
-        lo(96, 52, 88, 44, 5, DIR_DOWN, 10, 1),
+        lo(192, 34, 188, 112, 16, DIR_RIGHT, 13, 0),
     ],
-    // L4: LOBE - stronger surface glow to hold the top-to-bottom depth gradient
+    // L4: SILHOUETTE/SPIRES - add one vent-chimney family so the basin has a readable structure dropping into depth.
     [
-        hi(OP_LOBE, REGION_SKY, BLEND_ADD, 0, 0x88d7dc, 0x163847),
-        lo(180, 184, 92, 0, 0, DIR_UP, 11, 0),
+        hi_meta(
+            OP_SILHOUETTE,
+            REGION_WALLS,
+            BLEND_LERP,
+            DOMAIN_DIRECT3D,
+            SILHOUETTE_SPIRES,
+            0x02080c,
+            0x1d4c57,
+        ),
+        lo(164, 46, 168, 92, 0, DIR_UP, 11, 7),
     ],
-    // L5: PORTAL/VORTEX - brighter abyssal glow that stays underwater instead of reading as central debris
+    // L5: PORTAL/VORTEX - keep one bright abyssal vent at the basin floor as the depth focal.
     [
         hi_meta(
             OP_PORTAL,
-            REGION_SKY,
+            REGION_FLOOR,
             BLEND_ADD,
             DOMAIN_TANGENT_LOCAL,
             PORTAL_VORTEX,
-            0x164146,
-            0x8fffe8,
+            0x031216,
+            0xb8fff2,
         ),
-        lo(148, 132, 148, 156, 8, DIR_UP, 10, 1),
+        lo(228, 220, 156, 214, 8, 0x80bc, 14, 8),
     ],
-    // L6: SCATTER/DUST - marine snow stays present but no longer overwhelms the trench structure
+    // L6: FLOW - keep motion low in the trench body so the lower scene moves without reintroducing a pale full-column shimmer.
+    [
+        hi(
+            OP_FLOW,
+            REGION_WALLS | REGION_FLOOR,
+            BLEND_SCREEN,
+            0,
+            0x4ba6b0,
+            0x08202a,
+        ),
+        lo(144, 76, 148, 0x18, 14, DIR_RIGHT, 9, 1),
+    ],
+    // L7: SCATTER/DUST - keep only sparse marine snow in the upper water and walls so the floor stays owned.
     [
         hi_meta(
             OP_SCATTER,
-            REGION_ALL,
+            REGION_SKY | REGION_WALLS,
             BLEND_ADD,
             DOMAIN_DIRECT3D,
             SCATTER_DUST,
-            0x86a6b3,
-            0x234253,
+            0x7698a3,
+            0x15313e,
         ),
-        lo(24, 14, 12, 0x10, 22, DIR_DOWN, 5, 1),
-    ],
-    // L7: SCATTER/BUBBLES - fewer but brighter bubbles to read as underwater support, not static grain
-    [
-        hi_meta(
-            OP_SCATTER,
-            REGION_ALL,
-            BLEND_ADD,
-            DOMAIN_DIRECT3D,
-            SCATTER_BUBBLES,
-            0x88c8d6,
-            0x1d3644,
-        ),
-        lo(42, 10, 12, 0x20, 18, DIR_UP, 7, 1),
+        lo(10, 10, 10, 0x0d, 18, DIR_DOWN, 3, 1),
     ],
 ];
 
 // -----------------------------------------------------------------------------
 // Preset 4: "Void Station" - Derelict space station
 // -----------------------------------------------------------------------------
-// Goal: clear interior bounds with a single viewport to deep space.
-// Visual: a cold, metallic room with a single rounded viewport cut into the far
-// wall. Outside the window is starfield plus a bold eclipse disk; inside, a pale
-// light spill washes the floor and panels, keeping the sphere reflection readable.
+// Goal: keep the recovered maintenance-bay direction, but localize the hatch
+// and bulkhead further so the room stops reading as one bright shell wrapped
+// around a cap. Let side machinery and the lower deck carry more of the bay.
+// Avoid reopening the dark-dome, speckle, or washed-shell failures.
 //
-// L0: SECTOR/BOX           ALL        LERP  hard room bounds
-// L1: GRID                 WALLS|FLOOR ADD  subtle panel lines (animated)
-// L2: PLANE/GRATING        FLOOR      LERP  deck grating
-// L3: APERTURE/RND_RECT    ALL        LERP  viewport frame + region tag
-// L4: SCATTER/STARS        SKY        ADD   stars only in the viewport
-// L5: CELESTIAL/ECLIPSE    SKY        ADD   eclipse body in the viewport
-// L6: DECAL/RECT           WALLS|FLOOR ADD  viewport light card spill
-// L7: LOBE                 WALLS|FLOOR ADD  cool spill from viewport (animated)
+// Cadence: HULL BED -> BULKHEAD CUT -> REAR HATCH -> DECK OWNER ->
+// SIDE MACHINES -> WALL PANELS -> DECK RAILS -> SIDE/FLOOR RECESSION
+//
+// L0: RAMP                  ALL         LERP      darker hull bed and bay shell
+// L1: SPLIT/FACE            WALLS       LERP      narrower rear bulkhead cut
+// L2: DECAL/RECT            WALLS       LERP      dimmer inset rear hatch owner
+// L3: PLANE/GRATING         FLOOR       LERP      darker grounded maintenance deck wedge
+// L4: SILHOUETTE/INDUSTRIAL WALLS       LERP      stronger side machine-bank framing
+// L5: CELL/BRICK            WALLS       LERP      minimal wall panel breakup
+// L6: GRID                  FLOOR       ADD       almost-zero deck rails
+// L7: MOTTLE/GRAIN          WALLS|FLOOR MULTIPLY  stronger shell recession around hatch
 pub(super) const PRESET_VOID_STATION: [[u64; 2]; 8] = [
-    // L0: SECTOR/BOX - room bounds colors
+    // L0: RAMP - darken the hull bed so the shell stops blooming across the whole bay.
+    [
+        hi(OP_RAMP, REGION_ALL, BLEND_LERP, 0, 0x434f5d, 0x010205),
+        lo(104, 0x18, 0x14, 0x30, THRESH_INTERIOR, DIR_UP, 15, 15),
+    ],
+    // L1: SPLIT/FACE - tighten the rear bulkhead cut so it reads as a local wall insert, not a shell cap.
     [
         hi_meta(
-            OP_SECTOR,
-            REGION_ALL,
+            OP_SPLIT,
+            REGION_WALLS,
             BLEND_LERP,
             DOMAIN_DIRECT3D,
-            SECTOR_BOX,
-            0x0e1622,
-            0x0a0c12,
+            SPLIT_FACE,
+            0x4b5762,
+            0x05080d,
         ),
-        lo(230, 145, 0, 0, 0, DIR_UP, 15, 15),
+        lo(136, 170, 18, 126, 0, DIR_FORWARD, 14, 8),
     ],
-    // L1: GRID - panel lines (slightly more visible)
+    // L2: DECAL/RECT - keep the hatch readable, but dimmer and smaller so it stays local hardware.
     [
         hi(
-            OP_GRID,
-            REGION_WALLS | REGION_FLOOR,
-            BLEND_ADD,
+            OP_DECAL,
+            REGION_WALLS,
+            BLEND_LERP,
             0,
-            0x3a4858, // brighter panel lines
-            0x000000,
+            0x6a7787,
+            0x0f161d,
         ),
-        // scale, thickness, pattern=GRID, slow scroll; phase animates via ANIM_SPEEDS
-        lo(22, 110, 16, 0x14, 0, 0, 10, 0),
+        lo(104, 0x18, 176, 18, 0, DIR_FORWARD, 12, 8),
     ],
-    // L2: PLANE/GRATING - deck plating
+    // L3: PLANE/GRATING - keep the lower deck grounded, but darker so it supports rather than flares.
     [
         hi_meta(
             OP_PLANE,
@@ -153,76 +177,53 @@ pub(super) const PRESET_VOID_STATION: [[u64; 2]; 8] = [
             BLEND_LERP,
             DOMAIN_DIRECT3D,
             PLANE_GRATING,
-            0x111821,
-            0x070a10,
+            0x313946,
+            0x04070b,
         ),
-        lo(170, 100, 85, 55, 20, DIR_UP, 15, 12),
+        lo(208, 96, 20, 166, 0, DIR_UP, 15, 14),
     ],
-    // L3: APERTURE/ROUNDED_RECT - viewport frame + region tag
+    // L4: SILHOUETTE/INDUSTRIAL - push the side machine banks harder so the room reads as machinery around a hatch.
     [
         hi_meta(
-            OP_APERTURE,
-            REGION_ALL,
+            OP_SILHOUETTE,
+            REGION_WALLS,
             BLEND_LERP,
             DOMAIN_DIRECT3D,
-            APERTURE_ROUNDED_RECT,
-            // interior (space) / exterior (wall)
-            0x050b1f,
-            0x080b14,
+            SILHOUETTE_INDUSTRIAL,
+            0x070b10,
+            0x698093,
         ),
-        lo(100, 78, 56, 30, 96, DIR_BACK, 0, 0),
+        lo(248, 154, 210, 84, 0, DIR_UP, 12, 7),
     ],
-    // L4: SCATTER/STARS - stars only in the viewport opening (SKY)
+    // L5: CELL/BRICK - keep only a whisper of wall panel breakup so the probe inherits fewer technical rings.
     [
         hi_meta(
-            OP_SCATTER,
-            REGION_SKY,
-            BLEND_ADD,
+            OP_CELL,
+            REGION_WALLS,
+            BLEND_LERP,
             DOMAIN_DIRECT3D,
-            SCATTER_STARS,
-            0xffffff, // bright white stars
-            0x88b8ff, // blue-tinted secondary stars
+            CELL_BRICK,
+            0x465361,
+            0x091017,
         ),
-        // Higher intensity, good density for starfield
-        lo(90, 24, 14, 0x50, 10, 0, 12, 6),
+        lo(8, 16, 184, 20, 0, DIR_UP, 6, 2),
     ],
-    // L5: CELESTIAL/ECLIPSE - hero celestial body in the viewport
+    // L6: GRID - almost-zero deck rails, only enough to hint at service flooring.
+    [
+        hi(OP_GRID, REGION_FLOOR, BLEND_ADD, 0, 0xbfd8ee, 0x000000),
+        lo(2, 20, 24, 0x0a, 0, 0, 2, 0),
+    ],
+    // L7: MOTTLE/GRAIN - deepen side and floor recession around the hatch so the shell falls back behind the bay.
     [
         hi_meta(
-            OP_CELESTIAL,
-            REGION_SKY,
-            BLEND_ADD,
+            OP_MOTTLE,
+            REGION_WALLS | REGION_FLOOR,
+            BLEND_MULTIPLY,
             DOMAIN_DIRECT3D,
-            CELESTIAL_ECLIPSE,
-            0xd0f0ff, // brighter corona/halo
-            0x010206, // very dark body (eclipsed)
+            MOTTLE_GRAIN,
+            0x333d48,
+            0x10161d,
         ),
-        // Larger size, stronger halo for dramatic eclipse
-        lo(220, 85, 180, 0, 0, DIR_BACK, 15, 13),
-    ],
-    // L6: DECAL/RECT - viewport light card spill (helps reflection readability)
-    [
-        hi(
-            OP_DECAL,
-            REGION_WALLS | REGION_FLOOR,
-            BLEND_ADD,
-            0,
-            0x90c8ff, // slightly brighter spill
-            0x0c1828,
-        ),
-        lo(160, 0x28, 165, 210, 0x12, DIR_BACK, 14, 10),
-    ],
-    // L7: LOBE - cold spill from the viewport onto the room (animated)
-    [
-        hi(
-            OP_LOBE,
-            REGION_WALLS | REGION_FLOOR,
-            BLEND_ADD,
-            0,
-            0x86c0ff,
-            0x0a1220,
-        ),
-        // waveform=1 (sine), phase animated via ANIM_SPEEDS
-        lo(220, 130, 80, 1, 0, DIR_BACK, 12, 0),
+        lo(112, 20, 148, 64, 10, DIR_RIGHT, 8, 0),
     ],
 ];

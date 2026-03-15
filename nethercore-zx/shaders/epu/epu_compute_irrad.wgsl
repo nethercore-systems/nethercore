@@ -125,6 +125,16 @@ fn epu_extract_sh9(@builtin(global_invocation_id) gid: vec3u) {
     c7 *= w * a2;
     c8 *= w * a2;
 
+    // The L2 band carries most of the panel/ring re-projection in the diffuse
+    // ambient path on curved surfaces. Keep the low-order ambient structure and
+    // only modestly attenuate the highest band.
+    let l2_scale = 0.78;
+    c4 *= l2_scale;
+    c5 *= l2_scale;
+    c6 *= l2_scale;
+    c7 *= l2_scale;
+    c8 *= l2_scale;
+
     var out: EpuSh9;
     out.c0 = c0;
     out.c1 = c1;
