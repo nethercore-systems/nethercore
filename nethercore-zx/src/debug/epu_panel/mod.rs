@@ -438,7 +438,9 @@ impl EpuDebugPanel {
             ui.label("No active EPU configs this frame");
             ui.label("");
             ui.label("EPU configs are created via epu_set() FFI calls.");
-            ui.label("Use environment_index() to select which env_id to configure.");
+            ui.label(
+                "Use epu_set() or epu_textures() during render() to switch the current source.",
+            );
 
             ui.separator();
             if ui.button("Create New in Editor").clicked() {

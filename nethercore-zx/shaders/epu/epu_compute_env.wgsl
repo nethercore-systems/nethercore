@@ -29,8 +29,6 @@ fn evaluate_env_radiance(dir: vec3f, st: PackedEnvironmentState) -> vec3f {
     var bounds_dir = vec3f(0.0, 1.0, 0.0);
     // Default regions: all-sky (bounds layers will compute their own regions)
     var regions = RegionWeights(1.0, 0.0, 0.0);
-    var bounds_count = 0u;
-    var shared_bounds_dir_set = false;
 
     var radiance = vec3f(0.0);
 
@@ -44,28 +42,11 @@ fn evaluate_env_radiance(dir: vec3f, st: PackedEnvironmentState) -> vec3f {
         let blend = instr_blend(instr);
 
         if is_bounds {
-            // Bounds opcodes may evaluate against their own decoded axis, but
-            // only the first structural organizer should redefine the shared
-            // downstream axis used by later layers.
-            let eval_bounds_dir = bounds_dir_from_layer(instr, opcode, bounds_dir);
-            if !shared_bounds_dir_set {
-                bounds_dir = eval_bounds_dir;
-                shared_bounds_dir_set = true;
-            }
-            let bounds_result = evaluate_bounds_layer(dir, instr, opcode, eval_bounds_dir, regions);
-            var region_mix = bounds_result.region_mix;
-            if bounds_count > 0u {
-                let organizer_bounds =
-                    opcode == OP_SECTOR
-                    || opcode == OP_SPLIT
-                    || opcode == OP_CELL
-                    || opcode == OP_APERTURE;
-                let retag_scale = select(0.72, 0.38, organizer_bounds);
-                region_mix *= retag_scale;
-            }
-            regions = compose_bounds_regions(regions, bounds_result.regions, region_mix);
+            // Bounds opcode: update bounds_dir, get sample + output regions.
+            bounds_dir = bounds_dir_from_layer(instr, opcode, bounds_dir);
+            let bounds_result = evaluate_bounds_layer(dir, instr, opcode, bounds_dir, regions);
+            regions = compose_bounds_regions(regions, bounds_result.regions, bounds_result.region_mix);
             radiance = apply_blend(radiance, bounds_result.sample, blend);
-            bounds_count += 1u;
         } else {
             // Feature opcode: just get sample using current regions
             let sample = evaluate_layer(dir, instr, bounds_dir, regions);

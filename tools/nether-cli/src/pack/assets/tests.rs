@@ -8,6 +8,7 @@ mod tests {
         animation::load_keyframes,
         audio::load_sound,
         data::load_data,
+        environment::load_epu_environment,
         mesh::load_mesh,
         texture::load_texture,
         utils::{hash_sample_data, sanitize_name},
@@ -57,6 +58,15 @@ path = "assets/player.png"
 id = "enemy"
 path = "assets/enemy.png"
 
+[[assets.epu_environments]]
+id = "studio"
+px = "env/px.png"
+nx = "env/nx.png"
+py = "env/py.png"
+ny = "env/ny.png"
+pz = "env/pz.png"
+nz = "env/nz.png"
+
 [[assets.sounds]]
 id = "jump"
 path = "assets/jump.wav"
@@ -69,6 +79,8 @@ path = "assets/level1.bin"
         assert_eq!(manifest.assets.textures.len(), 2);
         assert_eq!(manifest.assets.textures[0].id, Some("player".to_string()));
         assert_eq!(manifest.assets.textures[1].id, Some("enemy".to_string()));
+        assert_eq!(manifest.assets.epu_environments.len(), 1);
+        assert_eq!(manifest.assets.epu_environments[0].id, "studio");
         assert_eq!(manifest.assets.sounds.len(), 1);
         assert_eq!(manifest.assets.sounds[0].id, Some("jump".to_string()));
         assert_eq!(manifest.assets.data.len(), 1);
@@ -153,6 +165,41 @@ version = "1.0.0"
         assert_eq!(packed.format, TextureFormat::Bc7);
         // BC7: 4x4 blocks = 16 blocks x 16 bytes = 256 bytes
         assert_eq!(packed.data.len(), 4 * 4 * 16);
+    }
+
+    #[test]
+    fn test_load_epu_environment_rgba8() {
+        let dir = tempdir().unwrap();
+        let env_dir = dir.path().join("env");
+        std::fs::create_dir_all(&env_dir).unwrap();
+
+        for (name, color) in [
+            ("px.png", [255, 0, 0, 255]),
+            ("nx.png", [0, 255, 0, 255]),
+            ("py.png", [0, 0, 255, 255]),
+            ("ny.png", [255, 255, 0, 255]),
+            ("pz.png", [255, 0, 255, 255]),
+            ("nz.png", [0, 255, 255, 255]),
+        ] {
+            let img = image::RgbaImage::from_pixel(4, 4, image::Rgba(color));
+            img.save(env_dir.join(name)).unwrap();
+        }
+
+        let entry = crate::manifest::EpuEnvironmentEntry {
+            id: "axis_room".to_string(),
+            px: "env/px.png".to_string(),
+            nx: "env/nx.png".to_string(),
+            py: "env/py.png".to_string(),
+            ny: "env/ny.png".to_string(),
+            pz: "env/pz.png".to_string(),
+            nz: "env/nz.png".to_string(),
+        };
+
+        let packed = load_epu_environment("axis_room", dir.path(), &entry).unwrap();
+        assert_eq!(packed.id, "axis_room");
+        assert_eq!(packed.width, 4);
+        assert_eq!(packed.height, 4);
+        assert!(packed.validate());
     }
 
     #[test]

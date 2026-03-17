@@ -3,11 +3,12 @@
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "env")]
 extern "C" {
-    /// Store an EPU configuration (128-byte) for the current `environment_index(...)`.
+    /// Store an EPU configuration (128-byte) as the current immediate-mode EPU source.
     ///
     /// Reads a 128-byte (8 x 128-bit = 16 x u64) environment configuration from WASM memory
     /// and stores it for the current render frame. The EPU compute pass runs automatically before
-    /// rendering to build environment textures (EnvRadiance + SH9) for any referenced `env_id`.
+    /// rendering to build environment textures (EnvRadiance + SH9) for the internal slots
+    /// referenced by the current frame's draws.
     ///
     /// # Arguments
     /// * `config_ptr` — Pointer to 16 u64 values (128 bytes total) in WASM memory
@@ -63,9 +64,7 @@ extern "C" {
     /// - 6: MIN (min(dst, src * a))
     /// - 7: OVERLAY (Photoshop-style overlay)
     ///
-    /// Store the environment configuration for the current `environment_index(...)`.
-    ///
-    /// Use this to set the active environment config for this frame without
+    /// Use this to set the current procedural EPU source for this frame without
     /// doing a fullscreen background draw.
     ///
     /// # Usage
@@ -85,14 +84,23 @@ extern "C" {
     ///
     /// # Notes
     /// - The EPU compute pass runs automatically before rendering
-    /// - To set up multiple environments in a frame: call `environment_index(env_id)`, then `epu_set(config_ptr)`
+    /// - To switch environments in a frame: call `epu_set(...)`, `epu_textures(...)`, or `epu_asset(...)`
+    ///   before the draws that should use that source
     /// - Determinism: the EPU has no host-managed time; animate by changing instruction parameters from the game
     pub fn epu_set(config_ptr: *const u64);
 
+    /// Set the current EPU source from six already-loaded cube face textures.
+    ///
+    /// Face order is `px, nx, py, ny, pz, nz`.
+    pub fn epu_textures(px: u32, nx: u32, py: u32, ny: u32, pz: u32, nz: u32);
+
+    /// Set the current EPU source from a packed ROM cubemap-face asset.
+    pub fn epu_asset(id_ptr: *const u8, id_len: u32);
+
     /// Draw the environment background for the current viewport/pass.
     ///
-    /// This draws a fullscreen background using the config selected by
-    /// `environment_index(...)` (and previously provided via `epu_set(...)`).
+    /// This draws a fullscreen background using the current EPU source selected by
+    /// `epu_set(...)`, `epu_textures(...)`, or `epu_asset(...)`.
     ///
     /// For split-screen / multi-pass, set `viewport(...)` and call `draw_epu()`
     /// once per viewport/pass where you want an environment background.

@@ -444,11 +444,11 @@ NCZX_IMPORT uint32_t load_zskeleton(const uint8_t* data_ptr, uint32_t data_len);
 // Environment Processing Unit (EPU) — Instruction-Based API
 // =============================================================================
 
-/** Store an EPU configuration (128-byte) for the current `environment_index(...)`. */
+/** Store an EPU configuration (128-byte) as the current immediate-mode EPU source. */
 /**  */
 /** Reads a 128-byte (8 x 128-bit = 16 x u64) environment configuration from WASM memory */
 /** and stores it for the current render frame. The EPU compute pass runs automatically before */
-/** rendering to build environment textures (EnvRadiance + SH9) for any referenced `env_id`. */
+/** rendering to build environment textures (EnvRadiance + SH9) for the internal slots referenced by the current frame's draws. */
 /**  */
 /** # Arguments */
 /** * `config_ptr` — Pointer to 16 u64 values (128 bytes total) in WASM memory */
@@ -504,9 +504,7 @@ NCZX_IMPORT uint32_t load_zskeleton(const uint8_t* data_ptr, uint32_t data_len);
 /** - 6: MIN (min(dst, src * a)) */
 /** - 7: OVERLAY (Photoshop-style overlay) */
 /**  */
-/** Store the environment configuration for the current `environment_index(...)`. */
-/**  */
-/** Use this to set the active environment config for this frame without */
+/** Use this to set the current procedural EPU source for this frame without */
 /** doing a fullscreen background draw. */
 /**  */
 /** # Usage */
@@ -526,14 +524,21 @@ NCZX_IMPORT uint32_t load_zskeleton(const uint8_t* data_ptr, uint32_t data_len);
 /**  */
 /** # Notes */
 /** - The EPU compute pass runs automatically before rendering */
-/** - To set up multiple environments in a frame: call `environment_index(env_id)`, then `epu_set(config_ptr)` */
+/** - To switch environments in a frame: call `epu_set(...)`, `epu_textures(...)`, or `epu_asset(...)` before the draws that should use that source */
 /** - Determinism: the EPU has no host-managed time; animate by changing instruction parameters from the game */
 NCZX_IMPORT void epu_set(const uint64_t* config_ptr);
 
+/** Set the current EPU source from six already-loaded cube face textures. */
+/** Face order is `px, nx, py, ny, pz, nz`. */
+NCZX_IMPORT void epu_textures(uint32_t px, uint32_t nx, uint32_t py, uint32_t ny, uint32_t pz, uint32_t nz);
+
+/** Set the current EPU source from a packed ROM cubemap-face asset. */
+NCZX_IMPORT void epu_asset(const uint8_t* id_ptr, uint32_t id_len);
+
 /** Draw the environment background for the current viewport/pass. */
 /**  */
-/** This draws a fullscreen background using the config selected by */
-/** `environment_index(...)` (and previously provided via `epu_set(...)`). */
+/** This draws a fullscreen background using the current EPU source selected by */
+/** `epu_set(...)`, `epu_textures(...)`, or `epu_asset(...)`. */
 /**  */
 /** For split-screen / multi-pass, set `viewport(...)` and call `draw_epu()` */
 /** once per viewport/pass where you want an environment background. */
@@ -1116,17 +1121,11 @@ NCZX_IMPORT uint32_t torus_tangent(float major_radius, float minor_radius, uint3
 /** * `color` — Color in 0xRRGGBBAA format */
 NCZX_IMPORT void set_color(uint32_t color);
 
-/** Set the EPU environment index (`env_id`) used for subsequent draw calls. */
+/** Select the current immediate-mode EPU source for subsequent draw calls. */
 /**  */
-/** This selects which EPU environment textures are sampled for: */
-/** - `draw_epu()` background rendering */
-/** - Ambient lighting in lit render modes (0/2/3) */
-/** - Reflections in lit render modes (1/2/3) */
-/**  */
-/** Notes: */
-/** - `env_id` is clamped to the supported range (0..255). */
-/** - Default is 0. */
-NCZX_IMPORT void environment_index(uint32_t env_id);
+/** Use `epu_set(...)` for procedural configs, `epu_textures(...)` for six */
+/** ordinary texture handles interpreted as cubemap faces, or `epu_asset(...)` */
+/** for a packed face set from the ROM data pack. */
 
 /** Set the face culling mode. */
 /**  */

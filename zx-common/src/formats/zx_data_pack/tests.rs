@@ -15,6 +15,18 @@ fn test_data_pack_with_assets() {
     let mut pack = ZXDataPack::new();
     pack.textures
         .push(PackedTexture::new("test", 2, 2, vec![0; 16]));
+    pack.epu_environments.push(PackedEpuEnvironmentFaces {
+        id: "axis_room".to_string(),
+        width: 2,
+        height: 2,
+        format: TextureFormat::Rgba8,
+        px: vec![0; 16],
+        nx: vec![0; 16],
+        py: vec![0; 16],
+        ny: vec![0; 16],
+        pz: vec![0; 16],
+        nz: vec![0; 16],
+    });
     pack.meshes.push(PackedMesh {
         id: "mesh".to_string(),
         format: 0,
@@ -25,7 +37,7 @@ fn test_data_pack_with_assets() {
     });
 
     assert!(!pack.is_empty());
-    assert_eq!(pack.asset_count(), 2);
+    assert_eq!(pack.asset_count(), 3);
 }
 
 #[test]
@@ -39,6 +51,26 @@ fn test_find_texture() {
     assert!(pack.find_texture("player").is_some());
     assert!(pack.find_texture("enemy").is_some());
     assert!(pack.find_texture("missing").is_none());
+}
+
+#[test]
+fn test_find_epu_environment() {
+    let mut pack = ZXDataPack::new();
+    pack.epu_environments.push(PackedEpuEnvironmentFaces {
+        id: "studio".to_string(),
+        width: 4,
+        height: 4,
+        format: TextureFormat::Rgba8,
+        px: vec![0; 64],
+        nx: vec![0; 64],
+        py: vec![0; 64],
+        ny: vec![0; 64],
+        pz: vec![0; 64],
+        nz: vec![0; 64],
+    });
+
+    assert!(pack.find_epu_environment("studio").is_some());
+    assert!(pack.find_epu_environment("missing").is_none());
 }
 
 #[test]

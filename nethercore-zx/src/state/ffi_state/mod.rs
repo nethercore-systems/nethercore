@@ -13,7 +13,9 @@ use super::{
     SkeletonData, SkeletonGpuInfo, StatePool, ZXInitConfig,
 };
 
-use crate::graphics::epu::EpuConfig;
+use crate::graphics::epu::{EpuConfig, MAX_ENV_STATES};
+
+pub type EpuTextureFaces = [u32; 6];
 
 // Re-export submodules
 mod material;
@@ -159,13 +161,25 @@ pub struct ZXFFIState {
     // EPU (Environment Processing Unit) state - instruction-based API (push-only)
     /// EPU configs pushed for this frame, keyed by `env_id`.
     ///
-    /// - `epu_set(...)` stores a config for the **currently selected** `environment_index(...)`.
+    /// - `epu_set(...)` stores a config for the current immediate-mode EPU source.
     /// - `draw_epu()` records a background draw request for the current viewport/pass.
     ///
     /// Any `env_id` that does not have an explicit config falls back to:
     /// 1) `env_id = 0` if present, else
     /// 2) the built-in default environment config.
     pub epu_frame_configs: HashMap<u32, EpuConfig>,
+    /// Frame-local deduplication of procedural EPU configs to internal slots.
+    pub epu_frame_config_slots: HashMap<EpuConfig, u32>,
+    /// Persistent imported EPU face sets resolved to internal slots.
+    pub epu_imported_slots: HashMap<EpuTextureFaces, u32>,
+    /// Internal imported slot -> source face handles.
+    pub epu_imported_faces_by_slot: HashMap<u32, EpuTextureFaces>,
+    /// Cached ROM EPU assets expanded into ordinary texture handles.
+    pub epu_asset_faces: HashMap<String, EpuTextureFaces>,
+    /// Next frame-local procedural slot (slot 0 reserved for default env).
+    pub next_epu_frame_slot: u32,
+    /// Next persistent imported slot (allocated downward from MAX_ENV_STATES-1).
+    pub next_epu_imported_slot: u32,
     /// EPU draw requests for this frame.
     ///
     /// Keyed by (viewport, pass_id) so split-screen and multi-pass rendering can
@@ -259,6 +273,12 @@ impl Default for ZXFFIState {
             mvp_shading_overflow_count: 0,
             // EPU (instruction-based) state (push-only)
             epu_frame_configs: HashMap::new(),
+            epu_frame_config_slots: HashMap::new(),
+            epu_imported_slots: HashMap::new(),
+            epu_imported_faces_by_slot: HashMap::new(),
+            epu_asset_faces: HashMap::new(),
+            next_epu_frame_slot: 1,
+            next_epu_imported_slot: MAX_ENV_STATES.saturating_sub(1),
             epu_frame_draws: HashMap::new(),
         }
     }
@@ -273,5 +293,59 @@ impl ZXFFIState {
     #[cfg(test)]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    fn allocate_epu_frame_slot(&mut self) -> u32 {
+        if self.next_epu_frame_slot >= self.next_epu_imported_slot {
+            tracing::warn!(
+                "EPU internal slot budget exhausted for procedural sources; using slot 0 fallback"
+            );
+            0
+        } else {
+            let slot = self.next_epu_frame_slot;
+            self.next_epu_frame_slot += 1;
+            slot
+        }
+    }
+
+    fn allocate_epu_imported_slot(&mut self) -> u32 {
+        if self.next_epu_imported_slot <= self.next_epu_frame_slot {
+            tracing::warn!(
+                "EPU internal slot budget exhausted for imported sources; using slot 0 fallback"
+            );
+            0
+        } else {
+            let slot = self.next_epu_imported_slot;
+            self.next_epu_imported_slot = self.next_epu_imported_slot.saturating_sub(1);
+            slot
+        }
+    }
+
+    pub fn bind_epu_config(&mut self, config: EpuConfig) -> u32 {
+        let slot = if let Some(&slot) = self.epu_frame_config_slots.get(&config) {
+            slot
+        } else {
+            let slot = self.allocate_epu_frame_slot();
+            self.epu_frame_config_slots.insert(config, slot);
+            slot
+        };
+
+        self.epu_frame_configs.insert(slot, config);
+        self.update_environment_index(slot);
+        slot
+    }
+
+    pub fn bind_epu_textures(&mut self, faces: EpuTextureFaces) -> u32 {
+        let slot = if let Some(&slot) = self.epu_imported_slots.get(&faces) {
+            slot
+        } else {
+            let slot = self.allocate_epu_imported_slot();
+            self.epu_imported_slots.insert(faces, slot);
+            self.epu_imported_faces_by_slot.insert(slot, faces);
+            slot
+        };
+
+        self.update_environment_index(slot);
+        slot
     }
 }

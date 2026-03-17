@@ -94,6 +94,51 @@ pub struct PackedTexture {
     pub data: Vec<u8>,
 }
 
+/// Packed EPU environment cubemap faces.
+///
+/// These are source images only. The runtime converts them into the internal
+/// octahedral EnvRadiance + SH9 representation on the host/GPU side.
+#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+pub struct PackedEpuEnvironmentFaces {
+    /// Asset ID (e.g. "studio_warm")
+    pub id: String,
+    /// Face width in pixels (all faces are square and equal sized)
+    pub width: u16,
+    /// Face height in pixels
+    pub height: u16,
+    /// Source face format
+    #[serde(default)]
+    pub format: TextureFormat,
+    /// +X face pixels
+    pub px: Vec<u8>,
+    /// -X face pixels
+    pub nx: Vec<u8>,
+    /// +Y face pixels
+    pub py: Vec<u8>,
+    /// -Y face pixels
+    pub ny: Vec<u8>,
+    /// +Z face pixels
+    pub pz: Vec<u8>,
+    /// -Z face pixels
+    pub nz: Vec<u8>,
+}
+
+impl PackedEpuEnvironmentFaces {
+    /// Validate that each face has the expected byte size for the shared dimensions/format.
+    pub fn validate(&self) -> bool {
+        let expected = self.format.data_size(self.width, self.height);
+        self.width > 0
+            && self.height > 0
+            && self.width == self.height
+            && self.px.len() == expected
+            && self.nx.len() == expected
+            && self.py.len() == expected
+            && self.ny.len() == expected
+            && self.pz.len() == expected
+            && self.nz.len() == expected
+    }
+}
+
 impl PackedTexture {
     /// Create a new RGBA8 packed texture
     pub fn new(id: impl Into<String>, width: u32, height: u32, data: Vec<u8>) -> Self {

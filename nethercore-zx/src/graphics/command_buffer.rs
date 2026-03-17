@@ -22,7 +22,7 @@ const NO_Z_INDEX: u32 = 0;
 /// Determines rendering order and which pipeline to use:
 /// - Quad: Screen-space 2D UI (renders first for early-z optimization)
 /// - Mesh: 3D geometry (renders second, culled behind UI)
-/// - Environment: Procedural background (renders last, fills gaps)
+/// - Environment: Procedural/imported background (renders last, fills gaps)
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RenderType {
@@ -39,11 +39,11 @@ pub enum RenderType {
     /// early depth testing.
     Mesh = 1,
 
-    /// Procedural environment background
+    /// Procedural/imported environment background
     ///
     /// Renders last with depth test enabled (LessEqual). Only fragments where
-    /// depth == 1.0 (clear value) pass, avoiding expensive environment shader invocations
-    /// for pixels already covered by geometry.
+    /// depth == 1.0 (cleared, nothing drew) pass, avoiding expensive environment
+    /// shader invocations for pixels already covered by geometry.
     Environment = 2,
 }
 
@@ -476,5 +476,29 @@ impl VirtualRenderPass {
 impl Default for VirtualRenderPass {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn environment_sorts_after_quads_and_meshes() {
+        let viewport = Viewport::FULLSCREEN;
+
+        let quad = CommandSortKey::quad(0, viewport, 0, [1, 2, 3, 4]);
+        let mesh = CommandSortKey::mesh(0, viewport, 0, CullMode::None, [0; 4]);
+        let environment = CommandSortKey::environment(0, viewport);
+
+        assert!(quad < mesh);
+        assert!(mesh < environment);
+    }
+
+    #[test]
+    fn environment_render_type_remains_background_last() {
+        assert_eq!(RenderType::Quad as u8, 0);
+        assert_eq!(RenderType::Mesh as u8, 1);
+        assert_eq!(RenderType::Environment as u8, 2);
     }
 }

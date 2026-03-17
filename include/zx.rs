@@ -155,6 +155,18 @@ pub unsafe fn sphere(_radius: f32, _segments: u32, _rings: u32) -> u32 {
 pub unsafe fn matcap_set(_slot: u32, _texture: u32) {}
 
 #[cfg(not(target_arch = "wasm32"))]
+pub unsafe fn epu_set(_config_ptr: *const u64) {}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub unsafe fn epu_textures(_px: u32, _nx: u32, _py: u32, _ny: u32, _pz: u32, _nz: u32) {}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub unsafe fn epu_asset(_id_ptr: *const u8, _id_len: u32) {}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub unsafe fn draw_epu() {}
+
+#[cfg(not(target_arch = "wasm32"))]
 pub unsafe fn skeleton_bind(_skeleton: u32) {}
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -548,18 +560,6 @@ extern "C" {
     /// # Arguments
     /// * `color` — Color in 0xRRGGBBAA format
     pub fn set_color(color: u32);
-
-    /// Set the EPU environment index (`env_id`) used for subsequent draw calls.
-    ///
-    /// This selects which EPU environment textures are sampled for:
-    /// - `draw_epu()` background rendering
-    /// - Ambient lighting in lit render modes (0/2/3)
-    /// - Reflections in lit render modes (1/2/3)
-    ///
-    /// Notes:
-    /// - `env_id` is clamped to the supported range (0..255).
-    /// - Default is 0.
-    pub fn environment_index(env_id: u32);
 
     /// Set the face culling mode.
     ///
@@ -1120,11 +1120,12 @@ extern "C" {
     // Environment Processing Unit (EPU) — Instruction-Based API
     // =========================================================================
 
-    /// Store an EPU configuration (128-byte) for the current `environment_index(...)`.
+    /// Store an EPU configuration (128-byte) as the current immediate-mode EPU source.
     ///
     /// Reads a 128-byte (8 x 128-bit = 16 x u64) environment configuration from WASM memory
     /// and stores it for the current render frame. The EPU compute pass runs automatically before
-    /// rendering to build environment textures (EnvRadiance + SH9) for any referenced `env_id`.
+    /// rendering to build environment textures (EnvRadiance + SH9) for the internal slots
+    /// referenced by the current frame's draws.
     ///
     /// # Arguments
     /// * `config_ptr` — Pointer to 16 u64 values (128 bytes total) in WASM memory
@@ -1195,9 +1196,7 @@ extern "C" {
     /// - 6: MIN (min(dst, src * a))
     /// - 7: OVERLAY (Photoshop-style overlay)
     ///
-    /// Store the environment configuration for the current `environment_index(...)`.
-    ///
-    /// Use this to set the active environment config for this frame without
+    /// Use this to set the current procedural EPU source for this frame without
     /// doing a fullscreen background draw.
     ///
     /// # Usage
@@ -1217,15 +1216,29 @@ extern "C" {
     ///
     /// # Notes
     /// - The EPU compute pass runs automatically before rendering
-    /// - To set up multiple environments in a frame: call `environment_index(env_id)`, then `epu_set(config_ptr)`
+    /// - To switch environments in a frame: call `epu_set(...)`, `epu_textures(...)`, or `epu_asset(...)`
+    ///   before the draws that should use that source
     /// - Determinism: the EPU has no host-managed time; animate by changing only
     ///   parameters the authored opcode/variant actually uses for motion
     pub fn epu_set(config_ptr: *const u64);
 
+    /// Set the current EPU source from six already-loaded cube face textures.
+    ///
+    /// The face order is fixed: `px, nx, py, ny, pz, nz`.
+    ///
+    /// These use the same texture loading workflow as ordinary textures. The runtime converts
+    /// the six 2D faces into the internal octahedral EPU representation before sampling.
+    pub fn epu_textures(px: u32, nx: u32, py: u32, ny: u32, pz: u32, nz: u32);
+
+    /// Set the current EPU source from a packed ROM cubemap-face asset.
+    ///
+    /// Asset IDs come from `[[assets.epu_environments]]` in `nether.toml`.
+    pub fn epu_asset(id_ptr: *const u8, id_len: u32);
+
     /// Draw the environment background for the current viewport/pass.
     ///
-    /// This draws a fullscreen background using the config selected by
-    /// `environment_index(...)` (and previously provided via `epu_set(...)`).
+    /// This draws a fullscreen background using the current EPU source selected by
+    /// `epu_set(...)`, `epu_textures(...)`, or `epu_asset(...)`.
     ///
     /// For split-screen / multi-pass, set `viewport(...)` and call `draw_epu()`
     /// once per viewport/pass where you want an environment background.
@@ -2158,6 +2171,12 @@ pub fn rom_texture_str(id: &str) -> u32 {
 #[inline]
 pub fn rom_mesh_str(id: &str) -> u32 {
     unsafe { rom_mesh(id.as_ptr(), id.len() as u32) }
+}
+
+/// Helper to select a packed EPU cubemap-face asset by string literal.
+#[inline]
+pub fn epu_asset_str(id: &str) {
+    unsafe { epu_asset(id.as_ptr(), id.len() as u32) }
 }
 
 /// Helper to load a ROM sound by string literal.

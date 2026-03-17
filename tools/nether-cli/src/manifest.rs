@@ -97,6 +97,8 @@ pub struct AssetsSection {
     #[serde(default)]
     pub textures: Vec<AssetEntry>,
     #[serde(default)]
+    pub epu_environments: Vec<EpuEnvironmentEntry>,
+    #[serde(default)]
     pub meshes: Vec<AssetEntry>,
     #[serde(default)]
     pub skeletons: Vec<AssetEntry>,
@@ -147,6 +149,25 @@ pub struct AssetEntry {
     /// registering it as a playable tracker.
     #[serde(default)]
     pub patterns: Option<bool>,
+}
+
+/// Cubemap-face EPU environment asset entry
+#[derive(Debug, Deserialize)]
+pub struct EpuEnvironmentEntry {
+    /// Asset ID used by `epu_asset(...)`
+    pub id: String,
+    /// +X face
+    pub px: String,
+    /// -X face
+    pub nx: String,
+    /// +Y face
+    pub py: String,
+    /// -Y face
+    pub ny: String,
+    /// +Z face
+    pub pz: String,
+    /// -Z face
+    pub nz: String,
 }
 
 impl NetherManifest {
@@ -391,6 +412,15 @@ path = "assets/player.png"
 [[assets.meshes]]
 id = "level"
 path = "assets/level.nczxmesh"
+
+[[assets.epu_environments]]
+id = "studio"
+px = "env/px.png"
+nx = "env/nx.png"
+py = "env/py.png"
+ny = "env/ny.png"
+pz = "env/pz.png"
+nz = "env/nz.png"
 "#,
         )
         .unwrap();
@@ -399,6 +429,8 @@ path = "assets/level.nczxmesh"
         assert_eq!(manifest.assets.textures[0].id, Some("player".to_string()));
         assert_eq!(manifest.assets.meshes.len(), 1);
         assert_eq!(manifest.assets.meshes[0].id, Some("level".to_string()));
+        assert_eq!(manifest.assets.epu_environments.len(), 1);
+        assert_eq!(manifest.assets.epu_environments[0].id, "studio");
     }
 
     #[test]

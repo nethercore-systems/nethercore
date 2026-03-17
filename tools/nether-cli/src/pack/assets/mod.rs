@@ -10,6 +10,7 @@ use crate::manifest::AssetsSection;
 pub mod animation;
 pub mod audio;
 pub mod data;
+pub mod environment;
 pub mod mesh;
 pub mod skeleton;
 pub mod texture;
@@ -22,6 +23,7 @@ mod tests;
 pub use animation::load_keyframes;
 pub use audio::{load_sound, load_tracker};
 pub use data::load_data;
+pub use environment::load_epu_environment;
 pub use mesh::load_mesh;
 pub use skeleton::load_skeleton;
 pub use texture::load_texture;
@@ -57,6 +59,13 @@ pub fn load_assets(
         })
         .collect();
     let textures = textures?;
+
+    let epu_environments: Result<Vec<_>> = assets
+        .epu_environments
+        .par_iter()
+        .map(|entry| load_epu_environment(&entry.id, project_dir, entry))
+        .collect();
+    let epu_environments = epu_environments?;
 
     // Load meshes in parallel
     let meshes: Result<Vec<_>> = assets
@@ -454,6 +463,7 @@ pub fn load_assets(
 
     Ok(ZXDataPack::with_assets(
         textures,
+        epu_environments,
         meshes,
         skeletons,
         keyframes,

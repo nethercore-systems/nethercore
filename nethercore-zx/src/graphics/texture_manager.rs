@@ -384,6 +384,11 @@ impl TextureManager {
         self.textures.get(&handle.0).map(|t| &t.view)
     }
 
+    /// Get source dimensions for a texture handle.
+    pub fn get_texture_dimensions(&self, handle: TextureHandle) -> Option<(u32, u32)> {
+        self.textures.get(&handle.0).map(|t| (t._width, t._height))
+    }
+
     /// Get fallback checkerboard texture view
     pub fn get_fallback_checkerboard_view(&self) -> &wgpu::TextureView {
         &self.textures[&self.fallback_checkerboard.0].view

@@ -65,7 +65,7 @@ fn bone_transform_to_matrix(t: &BoneTransform) -> BoneMatrix3x4 {
 /// Default environment configuration for the resource manager.
 ///
 /// A simple cyan sky with gray walls and dark floor. This is used as a fallback
-/// when games don't specify their own environment configuration via `environment_index(...)` + `epu_set()`.
+/// when games don't specify their own environment configuration via `epu_set()`.
 ///
 /// Format: Layer 0 is a RAMP bounds, layers 1-7 are empty.
 /// For preset examples showing full EPU capabilities, see the epu-showcase example.
@@ -411,28 +411,33 @@ impl ConsoleResourceManager for ZResourceManager {
         let active = crate::graphics::epu::collect_active_envs(&env_ids);
 
         if !active.unique_ids.is_empty() {
-            // Push-only API: set `environment_index(...)` then call `epu_set(...)` to provide configs for
-            // one or more env_ids.
-            // If no config is provided, fall back to the built-in default environment.
-            let default_config: EpuConfig = state
-                .epu_frame_configs
-                .get(&0)
-                .copied()
-                .unwrap_or_else(default_environment);
-
-            // Build all active env_ids with their own config when present, falling back to env_id=0.
-            let mut config_refs: Vec<(u32, &EpuConfig)> =
+            let default_config: EpuConfig = default_environment();
+            let mut procedural_refs: Vec<(u32, &EpuConfig)> =
                 Vec::with_capacity(active.unique_ids.len());
+            let mut imported_refs = Vec::new();
+
             for &env_id in &active.unique_ids {
+                if let Some(faces) = state.epu_imported_faces_by_slot.get(&env_id) {
+                    imported_refs.push((
+                        env_id,
+                        faces.map(|handle| self.texture_table.resolve(handle)),
+                    ));
+                    continue;
+                }
+
                 let config = state
                     .epu_frame_configs
                     .get(&env_id)
                     .unwrap_or(&default_config);
-                config_refs.push((env_id, config));
+                procedural_refs.push((env_id, config));
             }
 
-            // Dispatch EPU compute shaders
-            graphics.build_epu_environments(encoder, &config_refs);
+            if !procedural_refs.is_empty() {
+                graphics.build_epu_environments(encoder, &procedural_refs);
+            }
+            if !imported_refs.is_empty() {
+                graphics.build_imported_epu_environments(encoder, &imported_refs);
+            }
         }
 
         // =====================================================================

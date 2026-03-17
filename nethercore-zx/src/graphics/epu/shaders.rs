@@ -121,6 +121,24 @@ pub(super) const EPU_COMPUTE_ENV: &str = include_str!(concat!(
     "/shaders/epu/epu_compute_env.wgsl"
 ));
 
+/// Compute shader for imported cube-face -> octahedral radiance generation (mip 0).
+pub(super) const EPU_COMPUTE_IMPORT_CUBE: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/shaders/epu/epu_compute_import_cube.wgsl"
+));
+
+/// Compute shader for copying imported cube faces into the active-frame face array.
+pub(super) const EPU_COMPUTE_COPY_CUBE_FACES: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/shaders/epu/epu_compute_copy_cube_faces.wgsl"
+));
+
+/// Compute shader for mip pyramid downsampling of imported face-array layers.
+pub(super) const EPU_COMPUTE_IMPORTED_FACE_MIP: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/shaders/epu/epu_compute_imported_face_mip.wgsl"
+));
+
 /// Compute shader for mip pyramid downsampling (blur pass).
 pub(super) const EPU_COMPUTE_BLUR: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -132,3 +150,17 @@ pub(super) const EPU_COMPUTE_IRRAD: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/shaders/epu/epu_compute_irrad.wgsl"
 ));
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn compute_env_shader_avoids_shared_bounds_retag_path() {
+        assert!(!EPU_COMPUTE_ENV.contains("shared_bounds_dir_set"));
+        assert!(!EPU_COMPUTE_ENV.contains("retag_scale"));
+        assert!(EPU_COMPUTE_ENV.contains(
+            "regions = compose_bounds_regions(regions, bounds_result.regions, bounds_result.region_mix);"
+        ));
+    }
+}

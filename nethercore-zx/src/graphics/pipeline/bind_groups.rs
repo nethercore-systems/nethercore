@@ -10,8 +10,9 @@
 /// - Binding 3: Animation (unified_animation)
 /// - Binding 5: Quad rendering (quad_instances)
 /// - Binding 6-7: EPU textures (env_radiance, sampler)
-/// - Binding 8-9: EPU state + frame uniforms
+/// - Binding 8-10: EPU state + frame uniforms + source kinds
 /// - Binding 11: EPU SH9 (diffuse irradiance)
+/// - Binding 12-13: imported EPU face cache
 ///
 /// CPU pre-computes absolute indices into unified_transforms (no frame_offsets needed).
 /// Screen dimensions eliminated - resolution_index packed into QuadInstance.mode.
@@ -118,7 +119,7 @@ pub(crate) fn create_frame_bind_group_layout(
             count: None,
         },
         // =====================================================================
-        // EPU STATE + FRAME UNIFORMS (bindings 8-9)
+        // EPU STATE + FRAME UNIFORMS (bindings 8-10)
         // =====================================================================
 
         // Binding 8: Packed EPU environment states (storage, read-only)
@@ -144,6 +145,17 @@ pub(crate) fn create_frame_bind_group_layout(
             },
             count: None,
         },
+        // Binding 10: per-slot source kind metadata (procedural vs imported faces)
+        wgpu::BindGroupLayoutEntry {
+            binding: 10,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        },
         // =====================================================================
         // EPU SH9 (binding 11)
         // =====================================================================
@@ -152,6 +164,32 @@ pub(crate) fn create_frame_bind_group_layout(
         // Pre-computed L2 (9 coefficient) diffuse irradiance extracted from a coarse radiance mip.
         wgpu::BindGroupLayoutEntry {
             binding: 11,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        },
+        // =====================================================================
+        // IMPORTED EPU FACE CACHE (bindings 12-13)
+        // =====================================================================
+
+        // Binding 12: imported cube faces packed into a private 2D array texture.
+        wgpu::BindGroupLayoutEntry {
+            binding: 12,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                view_dimension: wgpu::TextureViewDimension::D2Array,
+                multisampled: false,
+            },
+            count: None,
+        },
+        // Binding 13: per-env slot -> first imported face layer in the private face cache.
+        wgpu::BindGroupLayoutEntry {
+            binding: 13,
             visibility: wgpu::ShaderStages::FRAGMENT,
             ty: wgpu::BindingType::Buffer {
                 ty: wgpu::BufferBindingType::Storage { read_only: true },

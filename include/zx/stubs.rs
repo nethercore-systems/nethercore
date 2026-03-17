@@ -108,6 +108,18 @@ pub unsafe fn sphere(_radius: f32, _segments: u32, _rings: u32) -> u32 {
 pub unsafe fn matcap_set(_slot: u32, _texture: u32) {}
 
 #[cfg(not(target_arch = "wasm32"))]
+pub unsafe fn epu_set(_config_ptr: *const u64) {}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub unsafe fn epu_textures(_px: u32, _nx: u32, _py: u32, _ny: u32, _pz: u32, _nz: u32) {}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub unsafe fn epu_asset(_id_ptr: *const u8, _id_len: u32) {}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub unsafe fn draw_epu() {}
+
+#[cfg(not(target_arch = "wasm32"))]
 pub unsafe fn skeleton_bind(_skeleton: u32) {}
 
 #[cfg(not(target_arch = "wasm32"))]

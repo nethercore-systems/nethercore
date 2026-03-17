@@ -53,21 +53,15 @@ fn fs(in: EnvVertexOut) -> @location(0) vec4<f32> {
     let view_matrix = unified_transforms[in.view_idx];
     let proj_matrix = unified_transforms[in.proj_idx];
 
-    // Extract camera basis vectors (rows of view matrix rotation part)
+    // Reconstruct the ray from the actual projection matrix scales instead of
+    // assuming a hard-coded 16:9 FOV relationship.
     let cam_right = vec3<f32>(view_matrix[0].x, view_matrix[1].x, view_matrix[2].x);
     let cam_up = vec3<f32>(view_matrix[0].y, view_matrix[1].y, view_matrix[2].y);
     let cam_back = vec3<f32>(view_matrix[0].z, view_matrix[1].z, view_matrix[2].z);
 
-    // Extract FOV from projection matrix, hardcode 16:9 aspect
-    let tan_half_fov = 1.0 / proj_matrix[1][1];
-    let aspect = 16.0 / 9.0;
-
-    // Compute camera-space ray direction from screen position
-    let view_ray_x = in.screen_pos.x * tan_half_fov * aspect;
-    let view_ray_y = in.screen_pos.y * tan_half_fov;
+    let view_ray_x = in.screen_pos.x / proj_matrix[0][0];
+    let view_ray_y = in.screen_pos.y / proj_matrix[1][1];
     let view_ray_cam = normalize(vec3<f32>(view_ray_x, view_ray_y, -1.0));
-
-    // Transform to world space
     let view_ray = cam_right * view_ray_cam.x + cam_up * view_ray_cam.y + cam_back * view_ray_cam.z;
 
     // Sample background from EPU precomputed octahedral map

@@ -18,6 +18,16 @@ pub(crate) struct PipelineEntry {
 // - PassConfig::color_write_mask()
 // - PassConfig depth_compare and depth_write fields
 
+fn environment_depth_stencil_state(pass_config: &PassConfig) -> wgpu::DepthStencilState {
+    wgpu::DepthStencilState {
+        format: wgpu::TextureFormat::Depth24PlusStencil8,
+        depth_write_enabled: false, // Environment is infinitely far, don't write depth
+        depth_compare: wgpu::CompareFunction::LessEqual, // Only render where depth == 1.0 (cleared, nothing drew)
+        stencil: pass_config.to_wgpu_stencil_state(),
+        bias: wgpu::DepthBiasState::default(),
+    }
+}
+
 /// Create a new pipeline for the given vertex format and render state
 pub(crate) fn create_pipeline(
     device: &wgpu::Device,
@@ -239,13 +249,7 @@ pub(crate) fn create_environment_pipeline(
             polygon_mode: wgpu::PolygonMode::Fill,
             conservative: false,
         },
-        depth_stencil: Some(wgpu::DepthStencilState {
-            format: wgpu::TextureFormat::Depth24PlusStencil8,
-            depth_write_enabled: false, // Environment is infinitely far, don't write depth
-            depth_compare: wgpu::CompareFunction::LessEqual, // Only render where depth == 1.0 (cleared, nothing drew)
-            stencil: pass_config.to_wgpu_stencil_state(),
-            bias: wgpu::DepthBiasState::default(),
-        }),
+        depth_stencil: Some(environment_depth_stencil_state(pass_config)),
         multisample: wgpu::MultisampleState {
             count: 1,
             mask: !0,
@@ -259,5 +263,20 @@ pub(crate) fn create_environment_pipeline(
         pipeline,
         bind_group_layout_frame,
         bind_group_layout_textures,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn environment_pipeline_depth_state_matches_background_fill_contract() {
+        let pass_config = PassConfig::default();
+        let depth = environment_depth_stencil_state(&pass_config);
+
+        assert_eq!(depth.format, wgpu::TextureFormat::Depth24PlusStencil8);
+        assert!(!depth.depth_write_enabled);
+        assert_eq!(depth.depth_compare, wgpu::CompareFunction::LessEqual);
     }
 }

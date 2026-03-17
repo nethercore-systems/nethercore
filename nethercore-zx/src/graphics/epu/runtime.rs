@@ -34,8 +34,20 @@ use super::settings::{
 use super::types::{FrameUniforms, GpuEnvironmentState, IrradUniforms};
 
 use std::sync::atomic::{AtomicU32, Ordering};
+use wgpu::util::DeviceExt;
 
 static EPU_BUILD_DEBUG_COUNT: AtomicU32 = AtomicU32::new(0);
+
+pub const EPU_ENV_SOURCE_PROCEDURAL: u32 = 0;
+pub const EPU_ENV_SOURCE_IMPORTED: u32 = 1;
+const EPU_IMPORTED_FACE_BASE_INVALID: u32 = u32::MAX;
+
+/// Imported cube-face source textures for a single environment slot.
+pub struct ImportedCubeFaces<'a> {
+    pub env_id: u32,
+    pub face_size: u32,
+    pub faces: [&'a wgpu::TextureView; 6],
+}
 
 /// EPU GPU runtime for environment map generation.
 ///
@@ -57,6 +69,8 @@ pub struct EpuRuntime {
     env_states_buffer: wgpu::Buffer,
     active_env_ids_buffer: wgpu::Buffer,
     frame_uniforms_buffer: wgpu::Buffer,
+    env_source_kinds_buffer: wgpu::Buffer,
+    imported_face_base_layers_buffer: wgpu::Buffer,
 
     // Output texture: octahedral radiance map with a true mip-style pyramid.
     // The texture is a 2D array indexed by env_id.
@@ -67,6 +81,14 @@ pub struct EpuRuntime {
 
     // Per-mip views (single mip) for compute passes (build + downsample chain).
     env_radiance_mip_views: Vec<wgpu::TextureView>,
+
+    // Active-frame imported face cache. Layers are arranged as 6 consecutive
+    // faces per imported environment used this frame.
+    _imported_faces_texture: wgpu::Texture,
+    imported_faces_view: wgpu::TextureView,
+    imported_faces_mip_views: Vec<wgpu::TextureView>,
+    imported_face_size: u32,
+    imported_face_mip_sizes: Vec<u32>,
 
     // Cached mip sizes for dispatch (level 0 is base resolution).
     env_mip_sizes: Vec<u32>,
@@ -81,10 +103,17 @@ pub struct EpuRuntime {
     pipeline: wgpu::ComputePipeline,
     bind_group_layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
+    import_pipeline: wgpu::ComputePipeline,
+    import_bind_group_layout: wgpu::BindGroupLayout,
+    copy_faces_pipeline: wgpu::ComputePipeline,
+    copy_faces_bind_group_layout: wgpu::BindGroupLayout,
+    import_sampler: wgpu::Sampler,
 
     // Mip pyramid generation resources (downsample chain).
     mip_pipeline: wgpu::ComputePipeline,
     mip_bind_group_layout: wgpu::BindGroupLayout,
+    imported_face_mip_pipeline: wgpu::ComputePipeline,
+    imported_face_mip_bind_group_layout: wgpu::BindGroupLayout,
 
     // Compute sampler shared by irradiance extraction (and any compute sampling).
     compute_sampler: wgpu::Sampler,
@@ -112,8 +141,13 @@ impl EpuRuntime {
         let settings = settings.sanitized();
 
         // Create GPU buffers
-        let (env_states_buffer, active_env_ids_buffer, frame_uniforms_buffer) =
-            pipelines::create_buffers(device);
+        let (
+            env_states_buffer,
+            active_env_ids_buffer,
+            frame_uniforms_buffer,
+            env_source_kinds_buffer,
+            imported_face_base_layers_buffer,
+        ) = pipelines::create_buffers(device);
 
         // Create radiance texture and views
         let env_mip_sizes = calc_mip_sizes(settings.map_size, settings.min_mip_size);
@@ -127,6 +161,12 @@ impl EpuRuntime {
                 mip_level_count,
                 EPU_INITIAL_LAYERS,
             );
+        let (
+            imported_faces_texture,
+            imported_faces_view,
+            imported_faces_mip_views,
+            imported_face_mip_sizes,
+        ) = pipelines::create_imported_face_texture(device, settings.map_size);
 
         // Create main compute pipeline
         let (pipeline, bind_group_layout, bind_group) = pipelines::create_main_pipeline(
@@ -136,10 +176,16 @@ impl EpuRuntime {
             &frame_uniforms_buffer,
             &env_radiance_mip_views[0],
         );
+        let (import_pipeline, import_bind_group_layout, import_sampler) =
+            pipelines::create_import_pipeline(device);
+        let (copy_faces_pipeline, copy_faces_bind_group_layout) =
+            pipelines::create_copy_faces_pipeline(device);
 
         // Create mip downsample pipeline
         let (mip_pipeline, mip_bind_group_layout, compute_sampler) =
             pipelines::create_mip_pipeline(device);
+        let (imported_face_mip_pipeline, imported_face_mip_bind_group_layout) =
+            pipelines::create_imported_face_mip_pipeline(device);
 
         // Create irradiance extraction pipeline
         let (sh9_buffer, irrad_pipeline, irrad_uniforms_buffer, irrad_bind_group_layout) =
@@ -151,17 +197,31 @@ impl EpuRuntime {
             env_states_buffer,
             active_env_ids_buffer,
             frame_uniforms_buffer,
+            env_source_kinds_buffer,
+            imported_face_base_layers_buffer,
             env_radiance_texture,
             env_radiance_view,
             env_radiance_mip_views,
+            _imported_faces_texture: imported_faces_texture,
+            imported_faces_view,
+            imported_faces_mip_views,
+            imported_face_size: settings.map_size,
+            imported_face_mip_sizes,
             env_mip_sizes,
             irrad_source_mip,
             env_layer_capacity: EPU_INITIAL_LAYERS,
             pipeline,
             bind_group_layout,
             bind_group,
+            import_pipeline,
+            import_bind_group_layout,
+            copy_faces_pipeline,
+            copy_faces_bind_group_layout,
+            import_sampler,
             mip_pipeline,
             mip_bind_group_layout,
+            imported_face_mip_pipeline,
+            imported_face_mip_bind_group_layout,
             compute_sampler,
             sh9_buffer,
             irrad_pipeline,
@@ -282,6 +342,34 @@ impl EpuRuntime {
         true
     }
 
+    /// Ensure the imported face cache can preserve the highest active source-face size.
+    pub fn ensure_imported_face_capacity(
+        &mut self,
+        device: &wgpu::Device,
+        required_size: u32,
+    ) -> bool {
+        if required_size <= self.imported_face_size {
+            return false;
+        }
+
+        let new_size = required_size.max(1).next_power_of_two();
+        let (
+            imported_faces_texture,
+            imported_faces_view,
+            imported_faces_mip_views,
+            imported_face_mip_sizes,
+        ) = pipelines::create_imported_face_texture(device, new_size);
+
+        self._imported_faces_texture = imported_faces_texture;
+        self.imported_faces_view = imported_faces_view;
+        self.imported_faces_mip_views = imported_faces_mip_views;
+        self.imported_face_size = new_size;
+        self.imported_face_mip_sizes = imported_face_mip_sizes;
+        self.resource_version = self.resource_version.wrapping_add(1);
+
+        true
+    }
+
     // =========================================================================
     // Dispatch Helpers
     // =========================================================================
@@ -291,6 +379,7 @@ impl EpuRuntime {
         &self,
         device: &wgpu::Device,
         encoder: &mut wgpu::CommandEncoder,
+        active_ids_buffer: &wgpu::Buffer,
         input_view: &wgpu::TextureView,
         output_view: &wgpu::TextureView,
         output_size: u32,
@@ -302,7 +391,7 @@ impl EpuRuntime {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: self.active_env_ids_buffer.as_entire_binding(),
+                    resource: active_ids_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 4,
@@ -328,12 +417,193 @@ impl EpuRuntime {
         compute_pass.dispatch_workgroups(workgroups_x, workgroups_y, active_count);
     }
 
+    fn dispatch_imported_face_mip_pass(
+        &self,
+        device: &wgpu::Device,
+        encoder: &mut wgpu::CommandEncoder,
+        active_face_layers_buffer: &wgpu::Buffer,
+        input_view: &wgpu::TextureView,
+        output_view: &wgpu::TextureView,
+        output_size: u32,
+        active_count: u32,
+    ) {
+        let mip_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("EPU Imported Face Mip Bind Group"),
+            layout: &self.imported_face_mip_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: active_face_layers_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::TextureView(input_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 5,
+                    resource: wgpu::BindingResource::TextureView(output_view),
+                },
+            ],
+        });
+
+        let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("EPU Imported Face Mip Pass"),
+            timestamp_writes: None,
+        });
+
+        compute_pass.set_pipeline(&self.imported_face_mip_pipeline);
+        compute_pass.set_bind_group(0, &mip_bind_group, &[]);
+
+        let workgroups_x = output_size.div_ceil(8);
+        let workgroups_y = output_size.div_ceil(8);
+        compute_pass.dispatch_workgroups(workgroups_x, workgroups_y, active_count);
+    }
+
+    fn dispatch_import_pass(
+        &self,
+        device: &wgpu::Device,
+        encoder: &mut wgpu::CommandEncoder,
+        import: &ImportedCubeFaces<'_>,
+        active_ids_buffer: &wgpu::Buffer,
+        frame_uniforms_buffer: &wgpu::Buffer,
+    ) {
+        let import_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("EPU Import Bind Group"),
+            layout: &self.import_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(import.faces[0]),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(import.faces[1]),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(import.faces[2]),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(import.faces[3]),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::TextureView(import.faces[4]),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 5,
+                    resource: wgpu::BindingResource::TextureView(import.faces[5]),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 6,
+                    resource: wgpu::BindingResource::Sampler(&self.import_sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 7,
+                    resource: active_ids_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 8,
+                    resource: frame_uniforms_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 9,
+                    resource: wgpu::BindingResource::TextureView(&self.env_radiance_mip_views[0]),
+                },
+            ],
+        });
+
+        let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("EPU Import Cube Pass"),
+            timestamp_writes: None,
+        });
+
+        compute_pass.set_pipeline(&self.import_pipeline);
+        compute_pass.set_bind_group(0, &import_bind_group, &[]);
+        let workgroups_x = self.settings.map_size.div_ceil(8);
+        let workgroups_y = self.settings.map_size.div_ceil(8);
+        compute_pass.dispatch_workgroups(workgroups_x, workgroups_y, 1);
+    }
+
+    fn dispatch_copy_faces_pass(
+        &self,
+        device: &wgpu::Device,
+        encoder: &mut wgpu::CommandEncoder,
+        import: &ImportedCubeFaces<'_>,
+        active_ids_buffer: &wgpu::Buffer,
+        frame_uniforms_buffer: &wgpu::Buffer,
+    ) {
+        let copy_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("EPU Copy Faces Bind Group"),
+            layout: &self.copy_faces_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(import.faces[0]),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(import.faces[1]),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(import.faces[2]),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(import.faces[3]),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::TextureView(import.faces[4]),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 5,
+                    resource: wgpu::BindingResource::TextureView(import.faces[5]),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 6,
+                    resource: wgpu::BindingResource::Sampler(&self.import_sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 7,
+                    resource: active_ids_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 8,
+                    resource: self.imported_face_base_layers_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 9,
+                    resource: frame_uniforms_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 10,
+                    resource: wgpu::BindingResource::TextureView(&self.imported_faces_mip_views[0]),
+                },
+            ],
+        });
+
+        let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("EPU Copy Faces Pass"),
+            timestamp_writes: None,
+        });
+
+        compute_pass.set_pipeline(&self.copy_faces_pipeline);
+        compute_pass.set_bind_group(0, &copy_bind_group, &[]);
+        let workgroups_x = self.imported_face_size.div_ceil(8);
+        let workgroups_y = self.imported_face_size.div_ceil(8);
+        compute_pass.dispatch_workgroups(workgroups_x, workgroups_y, 6);
+    }
+
     /// Dispatch the irradiance extraction pass.
     fn dispatch_irrad_pass(
         &self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
+        active_ids_buffer: &wgpu::Buffer,
         active_count: u32,
     ) {
         // Update irrad uniforms
@@ -357,7 +627,7 @@ impl EpuRuntime {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: self.active_env_ids_buffer.as_entire_binding(),
+                    resource: active_ids_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 4,
@@ -388,6 +658,24 @@ impl EpuRuntime {
         compute_pass.dispatch_workgroups(1, 1, active_count);
     }
 
+    fn write_env_source_kind(&self, queue: &wgpu::Queue, env_id: u32, source_kind: u32) {
+        let offset = (env_id as usize) * std::mem::size_of::<u32>();
+        queue.write_buffer(
+            &self.env_source_kinds_buffer,
+            offset as u64,
+            bytemuck::cast_slice(&[source_kind]),
+        );
+    }
+
+    fn write_imported_face_base_layer(&self, queue: &wgpu::Queue, env_id: u32, base_layer: u32) {
+        let offset = (env_id as usize) * std::mem::size_of::<u32>();
+        queue.write_buffer(
+            &self.imported_face_base_layers_buffer,
+            offset as u64,
+            bytemuck::cast_slice(&[base_layer]),
+        );
+    }
+
     // =========================================================================
     // Build Methods
     // =========================================================================
@@ -416,6 +704,8 @@ impl EpuRuntime {
             0,
             bytemuck::cast_slice(&[gpu_state]),
         );
+        self.write_env_source_kind(queue, 0, EPU_ENV_SOURCE_PROCEDURAL);
+        self.write_imported_face_base_layer(queue, 0, EPU_IMPORTED_FACE_BASE_INVALID);
 
         // Upload frame uniforms
         let frame_uniforms = FrameUniforms {
@@ -460,6 +750,7 @@ impl EpuRuntime {
             self.dispatch_mip_pass(
                 device,
                 encoder,
+                &self.active_env_ids_buffer,
                 &self.env_radiance_mip_views[mip],
                 &self.env_radiance_mip_views[mip + 1],
                 output_size,
@@ -468,7 +759,7 @@ impl EpuRuntime {
         }
 
         // Extract SH9 diffuse irradiance from a coarse radiance mip
-        self.dispatch_irrad_pass(device, queue, encoder, 1);
+        self.dispatch_irrad_pass(device, queue, encoder, &self.active_env_ids_buffer, 1);
     }
 
     /// Build environment maps for multiple environments.
@@ -553,6 +844,11 @@ impl EpuRuntime {
             bytemuck::cast_slice(&[frame_uniforms]),
         );
 
+        for (env_id, _) in configs.iter().take(MAX_ACTIVE_ENVS as usize) {
+            self.write_env_source_kind(queue, *env_id, EPU_ENV_SOURCE_PROCEDURAL);
+            self.write_imported_face_base_layer(queue, *env_id, EPU_IMPORTED_FACE_BASE_INVALID);
+        }
+
         // Early exit if all environments are cached
         if dirty_configs.is_empty() {
             return;
@@ -600,6 +896,7 @@ impl EpuRuntime {
             self.dispatch_mip_pass(
                 device,
                 encoder,
+                &self.active_env_ids_buffer,
                 &self.env_radiance_mip_views[mip],
                 &self.env_radiance_mip_views[mip + 1],
                 output_size,
@@ -608,7 +905,160 @@ impl EpuRuntime {
         }
 
         // Extract SH9 diffuse irradiance from a coarse radiance mip
-        self.dispatch_irrad_pass(device, queue, encoder, active_count);
+        self.dispatch_irrad_pass(
+            device,
+            queue,
+            encoder,
+            &self.active_env_ids_buffer,
+            active_count,
+        );
+    }
+
+    /// Build imported cube-face environments into EnvRadiance + SH9.
+    ///
+    /// Each imported environment is written into mip 0 via the cube->octahedral
+    /// import pass, then the existing mip/SH9 finalize chain runs over all
+    /// imported slots in batch.
+    pub fn build_imported_envs(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        imports: &[ImportedCubeFaces<'_>],
+    ) {
+        if imports.is_empty() {
+            return;
+        }
+
+        let imports = &imports[..imports.len().min(MAX_ACTIVE_ENVS as usize)];
+        let max_env_id = imports
+            .iter()
+            .map(|import| import.env_id)
+            .max()
+            .unwrap_or(0);
+        let max_face_size = imports
+            .iter()
+            .map(|import| import.face_size)
+            .max()
+            .unwrap_or(self.settings.map_size);
+        self.ensure_layer_capacity(device, max_env_id + 1);
+        self.ensure_imported_face_capacity(device, max_face_size);
+        let mut _temp_buffers: Vec<wgpu::Buffer> = Vec::new();
+
+        for (import_index, import) in imports.iter().enumerate() {
+            let face_base_layer = (import_index as u32) * 6;
+            self.write_env_source_kind(queue, import.env_id, EPU_ENV_SOURCE_IMPORTED);
+            self.write_imported_face_base_layer(queue, import.env_id, face_base_layer);
+
+            let copy_uniforms = FrameUniforms {
+                active_count: 1,
+                map_size: self.imported_face_size,
+                _pad0: 0,
+                _pad1: 0,
+            };
+            let copy_active_ids_buffer =
+                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("EPU Imported Copy Active Env IDs"),
+                    contents: bytemuck::cast_slice(&[import.env_id]),
+                    usage: wgpu::BufferUsages::STORAGE,
+                });
+            let copy_uniforms_buffer =
+                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("EPU Imported Copy Frame Uniforms"),
+                    contents: bytemuck::bytes_of(&copy_uniforms),
+                    usage: wgpu::BufferUsages::UNIFORM,
+                });
+            self.dispatch_copy_faces_pass(
+                device,
+                encoder,
+                import,
+                &copy_active_ids_buffer,
+                &copy_uniforms_buffer,
+            );
+            _temp_buffers.push(copy_active_ids_buffer);
+            _temp_buffers.push(copy_uniforms_buffer);
+
+            let import_uniforms = FrameUniforms {
+                active_count: 1,
+                map_size: self.settings.map_size,
+                _pad0: 0,
+                _pad1: 0,
+            };
+            let import_active_ids_buffer =
+                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("EPU Imported Env Active IDs"),
+                    contents: bytemuck::cast_slice(&[import.env_id]),
+                    usage: wgpu::BufferUsages::STORAGE,
+                });
+            let import_uniforms_buffer =
+                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("EPU Imported Env Frame Uniforms"),
+                    contents: bytemuck::bytes_of(&import_uniforms),
+                    usage: wgpu::BufferUsages::UNIFORM,
+                });
+            self.dispatch_import_pass(
+                device,
+                encoder,
+                import,
+                &import_active_ids_buffer,
+                &import_uniforms_buffer,
+            );
+            _temp_buffers.push(import_active_ids_buffer);
+            _temp_buffers.push(import_uniforms_buffer);
+        }
+
+        let active_face_layers: Vec<u32> = imports
+            .iter()
+            .enumerate()
+            .flat_map(|(import_index, _)| {
+                let base = (import_index as u32) * 6;
+                (0..6).map(move |face_index| base + face_index)
+            })
+            .collect();
+        let active_face_layers_buffer =
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("EPU Imported Active Face Layers"),
+                contents: bytemuck::cast_slice(&active_face_layers),
+                usage: wgpu::BufferUsages::STORAGE,
+            });
+        let active_face_count = active_face_layers.len() as u32;
+        for mip in 0..self.imported_faces_mip_views.len().saturating_sub(1) {
+            let output_size = self.imported_face_mip_sizes[mip + 1];
+            self.dispatch_imported_face_mip_pass(
+                device,
+                encoder,
+                &active_face_layers_buffer,
+                &self.imported_faces_mip_views[mip],
+                &self.imported_faces_mip_views[mip + 1],
+                output_size,
+                active_face_count,
+            );
+        }
+        _temp_buffers.push(active_face_layers_buffer);
+
+        let active_ids: Vec<u32> = imports.iter().map(|import| import.env_id).collect();
+        let active_ids_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("EPU Imported Active Env IDs"),
+            contents: bytemuck::cast_slice(&active_ids),
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+
+        let active_count = active_ids.len() as u32;
+        for mip in 0..self.env_mip_sizes.len().saturating_sub(1) {
+            let output_size = self.env_mip_sizes[mip + 1];
+            self.dispatch_mip_pass(
+                device,
+                encoder,
+                &active_ids_buffer,
+                &self.env_radiance_mip_views[mip],
+                &self.env_radiance_mip_views[mip + 1],
+                output_size,
+                active_count,
+            );
+        }
+
+        self.dispatch_irrad_pass(device, queue, encoder, &active_ids_buffer, active_count);
+        _temp_buffers.push(active_ids_buffer);
     }
 
     // =========================================================================
@@ -623,6 +1073,12 @@ impl EpuRuntime {
     /// Get the radiance view for binding to render pipelines (includes all mips).
     pub fn env_radiance_view(&self) -> &wgpu::TextureView {
         &self.env_radiance_view
+    }
+
+    /// Get the direct imported-face array used for imported backgrounds and
+    /// low-roughness high-frequency sampling.
+    pub fn imported_faces_view(&self) -> &wgpu::TextureView {
+        &self.imported_faces_view
     }
 
     /// Get a single-mip radiance view (useful for debug/inspection tooling).
@@ -653,5 +1109,15 @@ impl EpuRuntime {
     /// Get a reference to the frame uniforms buffer (active_count + map sizing).
     pub fn frame_uniforms_buffer(&self) -> &wgpu::Buffer {
         &self.frame_uniforms_buffer
+    }
+
+    /// Get the per-slot source kind buffer used by render shaders.
+    pub fn env_source_kinds_buffer(&self) -> &wgpu::Buffer {
+        &self.env_source_kinds_buffer
+    }
+
+    /// Get the per-slot imported face base-layer buffer used by render shaders.
+    pub fn imported_face_base_layers_buffer(&self) -> &wgpu::Buffer {
+        &self.imported_face_base_layers_buffer
     }
 }

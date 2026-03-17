@@ -1,0 +1,81 @@
+[game]
+id = "epu-textures-demo"
+title = "EPU Textures Demo"
+author = "Nethercore Examples"
+version = "0.1.0"
+description = "Imported cubemap-face environments via rom_texture() + live epu_textures() switching"
+tags = ["epu", "textures", "rom", "ibl", "inspector"]
+render_mode = 2
+compress_textures = true
+
+[[assets.textures]]
+id = "axis_px"
+path = "epu_faces/axis_room/px.png"
+
+[[assets.textures]]
+id = "axis_nx"
+path = "epu_faces/axis_room/nx.png"
+
+[[assets.textures]]
+id = "axis_py"
+path = "epu_faces/axis_room/py.png"
+
+[[assets.textures]]
+id = "axis_ny"
+path = "epu_faces/axis_room/ny.png"
+
+[[assets.textures]]
+id = "axis_pz"
+path = "epu_faces/axis_room/pz.png"
+
+[[assets.textures]]
+id = "axis_nz"
+path = "epu_faces/axis_room/nz.png"
+
+[[assets.textures]]
+id = "studio_px"
+path = "epu_faces/studio_warm/px.png"
+
+[[assets.textures]]
+id = "studio_nx"
+path = "epu_faces/studio_warm/nx.png"
+
+[[assets.textures]]
+id = "studio_py"
+path = "epu_faces/studio_warm/py.png"
+
+[[assets.textures]]
+id = "studio_ny"
+path = "epu_faces/studio_warm/ny.png"
+
+[[assets.textures]]
+id = "studio_pz"
+path = "epu_faces/studio_warm/pz.png"
+
+[[assets.textures]]
+id = "studio_nz"
+path = "epu_faces/studio_warm/nz.png"
+
+[[assets.textures]]
+id = "neon_px"
+path = "epu_faces/neon_night/px.png"
+
+[[assets.textures]]
+id = "neon_nx"
+path = "epu_faces/neon_night/nx.png"
+
+[[assets.textures]]
+id = "neon_py"
+path = "epu_faces/neon_night/py.png"
+
+[[assets.textures]]
+id = "neon_ny"
+path = "epu_faces/neon_night/ny.png"
+
+[[assets.textures]]
+id = "neon_pz"
+path = "epu_faces/neon_night/pz.png"
+
+[[assets.textures]]
+id = "neon_nz"
+path = "epu_faces/neon_night/nz.png"

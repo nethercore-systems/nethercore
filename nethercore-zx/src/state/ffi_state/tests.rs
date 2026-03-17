@@ -171,6 +171,55 @@ fn test_clear_frame_resets_mvp_state() {
 }
 
 #[test]
+fn test_bind_epu_config_deduplicates_within_frame_and_resets_next_frame() {
+    let mut state = ZXFFIState::default();
+    let mut config = EpuConfig::default();
+    config.layers[0] = [0x1111_2222_3333_4444, 0x5555_6666_7777_8888];
+
+    let slot_a = state.bind_epu_config(config);
+    let slot_b = state.bind_epu_config(config);
+
+    assert_eq!(slot_a, 1);
+    assert_eq!(slot_b, slot_a);
+    assert_eq!(state.current_shading_state.environment_index, slot_a);
+    assert_eq!(state.epu_frame_configs.get(&slot_a), Some(&config));
+    assert_eq!(state.epu_frame_config_slots.get(&config), Some(&slot_a));
+
+    state.clear_frame();
+
+    assert!(state.epu_frame_configs.is_empty());
+    assert!(state.epu_frame_config_slots.is_empty());
+    assert_eq!(state.next_epu_frame_slot, 1);
+    assert_eq!(state.current_shading_state.environment_index, 0);
+
+    let slot_c = state.bind_epu_config(config);
+    assert_eq!(slot_c, 1);
+    assert_eq!(state.current_shading_state.environment_index, slot_c);
+}
+
+#[test]
+fn test_bind_epu_textures_reuses_persistent_slot_and_survives_clear_frame() {
+    let mut state = ZXFFIState::default();
+    let faces: EpuTextureFaces = [10, 11, 12, 13, 14, 15];
+
+    let slot_a = state.bind_epu_textures(faces);
+    let slot_b = state.bind_epu_textures(faces);
+
+    assert_eq!(slot_a, slot_b);
+    assert_eq!(state.current_shading_state.environment_index, slot_a);
+    assert_eq!(state.epu_imported_slots.get(&faces), Some(&slot_a));
+    assert_eq!(state.epu_imported_faces_by_slot.get(&slot_a), Some(&faces));
+
+    state.clear_frame();
+
+    assert_eq!(state.current_shading_state.environment_index, 0);
+
+    let slot_c = state.bind_epu_textures(faces);
+    assert_eq!(slot_c, slot_a);
+    assert_eq!(state.current_shading_state.environment_index, slot_a);
+}
+
+#[test]
 fn test_none_uses_last_in_pool() {
     let mut state = ZXFFIState::default();
 

@@ -6,7 +6,7 @@
 //! - Four distinct EPU environment presets (Neon City, Ember Glow, Frozen, Void)
 //! - Orbit camera with right stick + triggers for zoom
 //! - Shape cycling (Sphere, Cube, Torus)
-//! - Environment cycling per object
+//! - Immediate-mode EPU switching per object draw
 //! - Auto-rotation toggle
 //!
 //! Controls:
@@ -308,30 +308,24 @@ pub extern "C" fn render() {
 
         let meshes = MESHES.as_ref().unwrap();
 
-        // Push two environments this frame
-        environment_index(0);
+        // Left object: current EPU source = left preset
         epu_set(get_epu_preset(LEFT_ENV));
-        environment_index(1);
-        epu_set(get_epu_preset(RIGHT_ENV));
-
-        // Left object: env 0
-        environment_index(0);
         set_color(0xFFFFFFFF);
         push_identity();
         push_translate(-1.6, 0.0, 0.0);
         push_rotate_y(ROTATION_Y);
         draw_mesh(meshes.get_by_index(LEFT_SHAPE));
 
-        // Right object: env 1
-        environment_index(1);
+        // Right object: switch current EPU source before the draw
+        epu_set(get_epu_preset(RIGHT_ENV));
         set_color(0xFFFFFFFF);
         push_identity();
         push_translate(1.6, 0.0, 0.0);
         push_rotate_y(-ROTATION_Y); // Opposite rotation for visual interest
         draw_mesh(meshes.get_by_index(RIGHT_SHAPE));
 
-        // Draw environment background (use left env for background)
-        environment_index(0);
+        // Draw environment background using the left preset
+        epu_set(get_epu_preset(LEFT_ENV));
         draw_epu();
 
         // Draw UI

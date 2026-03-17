@@ -253,6 +253,62 @@ The renderer uses a unified buffer layout to minimize binding changes:
 
 ---
 
+## EPU Source Workflow
+
+The Environment Processing Unit now behaves as an **immediate-mode render state**.
+Games do not select a public environment ID. Instead, they set the current EPU
+source and then issue draws:
+
+```rust,ignore
+// Procedural source
+epu_set(config.as_ptr());
+draw_mesh(sphere);
+draw_epu();
+
+// Imported cubemap-face source from six loaded textures
+epu_textures(px, nx, py, ny, pz, nz);
+draw_mesh(cube);
+
+// Imported cubemap-face source from ROM-packed asset
+epu_asset(b"studio_warm".as_ptr(), 11);
+draw_mesh(torus);
+```
+
+### Source types
+
+- `epu_set(...)`: 128-byte procedural EPU config
+- `epu_textures(...)`: six already-loaded 2D texture handles interpreted as cube faces
+- `epu_asset(...)`: six face images bundled in the ROM data pack under `[[assets.epu_environments]]`
+
+### Internal runtime behavior
+
+- Each draw captures the **current** EPU source
+- Procedural sources are resolved frame-locally
+- Imported face sets are cached and converted into the existing octahedral
+  `EnvRadiance` + SH9 representation
+- Roughness-based reflections continue to use the same mipmapped `EnvRadiance`
+  path as procedural EPU environments
+
+### Asset pipeline
+
+Packed EPU face sets are declared in `nether.toml`:
+
+```toml
+[[assets.epu_environments]]
+id = "studio_warm"
+px = "envs/studio/px.png"
+nx = "envs/studio/nx.png"
+py = "envs/studio/py.png"
+ny = "envs/studio/ny.png"
+pz = "envs/studio/pz.png"
+nz = "envs/studio/nz.png"
+```
+
+At pack time these remain ordinary source images. At runtime the host converts
+them into the same EPU runtime products consumed by lighting and reflection shaders.
+
+---
+
 ## Render Modes
 
 Nethercore ZX implements 4 forward rendering modes (0–3). The active mode is a **host-selected init config** (stored in `ZXInitConfig.render_mode` and applied by the resource manager); it is not currently configured via a game-side `render_mode()` FFI call.
@@ -569,15 +625,16 @@ The environment background and ambient/reflection lighting are driven by the Env
 Game-facing API (push-only):
 
 ```rust
-fn environment_index(env_id: u32)
 fn epu_set(config_ptr: *const u64)
+fn epu_textures(px: u32, nx: u32, py: u32, ny: u32, pz: u32, nz: u32)
+fn epu_asset(id_ptr: *const u8, id_len: u32)
 fn draw_epu()
 ```
 
 `config_ptr` points to 16 `u64` values (128 bytes total) representing 8 packed 128-bit instructions as `[hi, lo]` pairs.
 
 Notes:
-- Call `environment_index(env_id)` then `epu_set(...)` to provide a config for that env_id.
+- Call `epu_set(...)`, `epu_textures(...)`, or `epu_asset(...)` to select the current source.
 - Call `draw_epu()` to draw the background (fills only pixels at depth == 1.0).
 - For split-screen / multi-pass, call `viewport(...)` and `draw_epu()` per viewport/pass.
 - Presets and packing helpers live in `examples/3-inspectors/epu-showcase/`.

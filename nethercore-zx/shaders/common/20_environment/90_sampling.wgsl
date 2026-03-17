@@ -22,8 +22,63 @@ fn epu_octahedral_encode(dir: vec3<f32>) -> vec2<f32> {
     return n.xy;
 }
 
+fn epu_source_kind(env_index: u32) -> u32 {
+    return epu_source_kinds[env_index];
+}
+
+fn epu_imported_face_base(env_index: u32) -> u32 {
+    return epu_imported_face_base_layers[env_index];
+}
+
+fn sample_epu_imported_face_layer(face_layer: u32, uv: vec2f) -> vec3f {
+    let uv_clamped = clamp(uv, vec2f(0.0), vec2f(1.0));
+    return textureSampleLevel(epu_imported_faces, epu_sampler, uv_clamped, i32(face_layer), 0.0).rgb;
+}
+
+fn sample_epu_imported_cube(env_index: u32, direction: vec3f) -> vec3f {
+    let base_layer = epu_imported_face_base(env_index);
+    if base_layer == EPU_IMPORTED_FACE_BASE_INVALID {
+        let uv = epu_octahedral_encode(normalize(direction)) * 0.5 + 0.5;
+        return textureSampleLevel(epu_env_radiance, epu_sampler, uv, i32(env_index), 0.0).rgb;
+    }
+
+    let dir = normalize(direction);
+    let abs_dir = abs(dir);
+
+    if abs_dir.x >= abs_dir.y && abs_dir.x >= abs_dir.z {
+        let inv = 1.0 / max(abs_dir.x, 1e-6);
+        if dir.x > 0.0 {
+            let uv = vec2f(dir.z, -dir.y) * inv * 0.5 + 0.5;
+            return sample_epu_imported_face_layer(base_layer + 0u, uv);
+        }
+
+        let uv = vec2f(-dir.z, -dir.y) * inv * 0.5 + 0.5;
+        return sample_epu_imported_face_layer(base_layer + 1u, uv);
+    }
+
+    if abs_dir.y >= abs_dir.z {
+        let inv = 1.0 / max(abs_dir.y, 1e-6);
+        if dir.y > 0.0 {
+            let uv = vec2f(dir.x, -dir.z) * inv * 0.5 + 0.5;
+            return sample_epu_imported_face_layer(base_layer + 2u, uv);
+        }
+
+        let uv = vec2f(dir.x, dir.z) * inv * 0.5 + 0.5;
+        return sample_epu_imported_face_layer(base_layer + 3u, uv);
+    }
+
+    let inv = 1.0 / max(abs_dir.z, 1e-6);
+    if dir.z > 0.0 {
+        let uv = vec2f(-dir.x, -dir.y) * inv * 0.5 + 0.5;
+        return sample_epu_imported_face_layer(base_layer + 4u, uv);
+    }
+
+    let uv = vec2f(dir.x, -dir.y) * inv * 0.5 + 0.5;
+    return sample_epu_imported_face_layer(base_layer + 5u, uv);
+}
+
 // Sample background from the procedural EPU state.
-fn epu_eval_hi_raw(env_index: u32, direction: vec3<f32>) -> vec3f {
+fn epu_eval_hi(env_index: u32, direction: vec3<f32>) -> vec3f {
     let dir = normalize(direction);
     let st = epu_states[env_index];
 
@@ -37,8 +92,6 @@ fn epu_eval_hi_raw(env_index: u32, direction: vec3<f32>) -> vec3f {
     var bounds_dir = vec3f(0.0, 1.0, 0.0);
     // Default regions: all-sky (bounds layers will compute their own regions)
     var regions = RegionWeights(1.0, 0.0, 0.0);
-    var bounds_count = 0u;
-    var shared_bounds_dir_set = false;
 
     var radiance = vec3f(0.0);
     for (var i = 0u; i < 8u; i++) {
@@ -50,28 +103,12 @@ fn epu_eval_hi_raw(env_index: u32, direction: vec3<f32>) -> vec3f {
         let blend = instr_blend(instr);
 
         if is_bounds {
-            // Keep the direct background path in lockstep with the compute
-            // evaluation semantics so background, reflection, and debug views
-            // do not drift apart when bounds composition changes.
-            let eval_bounds_dir = bounds_dir_from_layer(instr, opcode, bounds_dir);
-            if !shared_bounds_dir_set {
-                bounds_dir = eval_bounds_dir;
-                shared_bounds_dir_set = true;
-            }
-            let bounds_result = evaluate_bounds_layer(dir, instr, opcode, eval_bounds_dir, regions);
-            var region_mix = bounds_result.region_mix;
-            if bounds_count > 0u {
-                let organizer_bounds =
-                    opcode == OP_SECTOR
-                    || opcode == OP_SPLIT
-                    || opcode == OP_CELL
-                    || opcode == OP_APERTURE;
-                let retag_scale = select(0.72, 0.38, organizer_bounds);
-                region_mix *= retag_scale;
-            }
-            regions = compose_bounds_regions(regions, bounds_result.regions, region_mix);
+            // Bounds opcode: update bounds_dir, evaluate bounds, and feed its
+            // output regions into subsequent feature layers.
+            bounds_dir = bounds_dir_from_layer(instr, opcode, bounds_dir);
+            let bounds_result = evaluate_bounds_layer(dir, instr, opcode, bounds_dir, regions);
+            regions = bounds_result.regions;
             radiance = apply_blend(radiance, bounds_result.sample, blend);
-            bounds_count += 1u;
         } else {
             // Feature opcode: evaluate using the current bounds_dir + region weights.
             let sample = evaluate_layer(dir, instr, bounds_dir, regions);
@@ -81,24 +118,11 @@ fn epu_eval_hi_raw(env_index: u32, direction: vec3<f32>) -> vec3f {
 
     return radiance;
 }
-
-fn epu_eval_hi(env_index: u32, direction: vec3<f32>) -> vec3f {
-    let dir = normalize(direction);
-    let hint = select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(dir.y) > 0.9);
-    let tangent = normalize(cross(hint, dir));
-    let filter_radius = 0.02;
-    let dir_a = normalize(dir + tangent * filter_radius);
-    let dir_b = normalize(dir - tangent * filter_radius);
-
-    return (
-        epu_eval_hi_raw(env_index, dir)
-        + epu_eval_hi_raw(env_index, dir_a)
-        + epu_eval_hi_raw(env_index, dir_b)
-    ) / 3.0;
-}
-
 fn sample_epu_background(env_index: u32, direction: vec3<f32>) -> vec4<f32> {
-    return vec4f(epu_eval_hi_raw(env_index, direction), 1.0);
+    if epu_source_kind(env_index) == EPU_SOURCE_IMPORTED {
+        return vec4f(sample_epu_imported_cube(env_index, direction), 1.0);
+    }
+    return vec4f(epu_eval_hi(env_index, direction), 1.0);
 }
 
 // ============================================================================
@@ -109,6 +133,7 @@ fn sample_epu_background(env_index: u32, direction: vec3<f32>) -> vec4<f32> {
 
 fn sample_epu_reflection(env_id: u32, refl_dir: vec3f, roughness: f32) -> vec3f {
     let uv = epu_octahedral_encode(normalize(refl_dir)) * 0.5 + 0.5;
+    let imported = epu_source_kind(env_id) == EPU_SOURCE_IMPORTED;
 
     // Use roughness^2 for a perceptually linear blur ramp, then add a modest
     // mid/high-roughness bias so metallic probes stop reprojecting such crisp
@@ -131,9 +156,17 @@ fn sample_epu_reflection(env_id: u32, refl_dir: vec3f, roughness: f32) -> vec3f 
     // low-pass cache cannot represent. Keep this correction confined to the
     // very-smooth band so it does not rebuild broad probe-shell structure.
     let l0 = textureSampleLevel(epu_env_radiance, epu_sampler, uv, i32(env_id), 0.0).rgb;
-    let l_hi = epu_eval_hi(env_id, refl_dir);
+    let l_hi = select(epu_eval_hi(env_id, refl_dir), sample_epu_imported_cube(env_id, refl_dir), imported);
     let alpha = r * r;
     let residual_fade = 1.0 - smoothstep(0.04, 0.18, r);
+
+    if imported {
+        // Imported environments have a true sharp source in the copied face
+        // cache, so very-smooth reflections should blend directly from that
+        // source into the mip chain instead of inheriting octa mip0 artifacts.
+        let direct_weight = (1.0 - alpha) * residual_fade;
+        return max(mix(l_lp, l_hi, direct_weight), vec3f(0.0));
+    }
 
     // NOTE: In practice `l0` can slightly overshoot `l_hi` due to finite EnvRadiance resolution
     // and sampler filtering, producing negative residuals. On fully metallic materials this can

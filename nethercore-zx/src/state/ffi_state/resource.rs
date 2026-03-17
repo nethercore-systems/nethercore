@@ -130,7 +130,13 @@ impl ZXFFIState {
 
         // Clear EPU per-frame requests
         self.epu_frame_configs.clear();
+        self.epu_frame_config_slots.clear();
         self.epu_frame_draws.clear();
+        self.next_epu_frame_slot = 1;
+
+        // Reset current EPU source to internal slot 0 (default env) so procedural
+        // frame-local slot IDs do not leak across frames.
+        self.current_shading_state.environment_index = 0;
 
         // Note: color and shading state already rebuild each frame via add_shading_state()
     }

@@ -285,7 +285,7 @@ impl EpuLayer {
 /// A common cadence is to establish bounds early, then layer features,
 /// then optionally insert more bounds to retag regions for later features.
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct EpuConfig {
     /// 8 packed 128-bit instructions (each as [hi, lo])
     pub layers: [[u64; 2]; 8],

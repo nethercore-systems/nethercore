@@ -9,18 +9,6 @@ extern "C" {
     /// * `color` — Color in 0xRRGGBBAA format
     pub fn set_color(color: u32);
 
-    /// Set the EPU environment index (`env_id`) used for subsequent draw calls.
-    ///
-    /// This selects which EPU environment textures are sampled for:
-    /// - `draw_epu()` background rendering
-    /// - Ambient lighting in lit render modes (0/2/3)
-    /// - Reflections in lit render modes (1/2/3)
-    ///
-    /// Notes:
-    /// - `env_id` is clamped to the supported range (0..255).
-    /// - Default is 0.
-    pub fn environment_index(env_id: u32);
-
     /// Set the face culling mode.
     ///
     /// # Arguments

@@ -7,7 +7,8 @@ use std::time::{Duration, Instant};
 
 use crate::graphics::{
     BufferManager, MeshHandle, MvpShadingIndices, QuadBatchInfo, QuadInstance, RetainedMesh,
-    TextureHandle, VirtualRenderPass, epu::EpuRuntime,
+    TextureHandle, VirtualRenderPass,
+    epu::{EpuRuntime, runtime::ImportedCubeFaces},
 };
 
 use super::init::RenderTarget;
@@ -379,6 +380,7 @@ impl ZXGraphics {
         self.texture_manager.clear_game_textures();
         self.command_buffer.reset();
         self.texture_bind_groups.clear(); // Clear cached bind groups!
+        self.epu_runtime.invalidate_all_caches();
 
         // Reset animation buffer metadata - prevents stale offsets from previous game
         // affecting the new game's animation data layout
@@ -420,6 +422,86 @@ impl ZXGraphics {
     ) {
         self.epu_runtime
             .build_envs(&self.device, &self.queue, encoder, configs);
+    }
+
+    /// Build imported cube-face EPU environments for the given internal slots.
+    pub fn build_imported_epu_environments(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        imports: &[(u32, [TextureHandle; 6])],
+    ) {
+        if imports.is_empty() {
+            return;
+        }
+
+        let device = &self.device;
+        let queue = &self.queue;
+        let texture_manager = &self.texture_manager;
+        let fallback = texture_manager.get_fallback_checkerboard_view();
+        let imported: Vec<ImportedCubeFaces<'_>> = imports
+            .iter()
+            .map(|(env_id, faces)| {
+                let source_dims: Vec<(u32, u32)> = faces
+                    .iter()
+                    .filter_map(|handle| texture_manager.get_texture_dimensions(*handle))
+                    .collect();
+
+                let face_size = source_dims
+                    .iter()
+                    .map(|(width, height)| (*width).max(*height))
+                    .max()
+                    .unwrap_or(1);
+
+                if let Some(&(first_width, first_height)) = source_dims.first() {
+                    let mismatched = source_dims
+                        .iter()
+                        .any(|&(width, height)| width != first_width || height != first_height);
+                    if mismatched {
+                        tracing::warn!(
+                            "Imported EPU faces for slot {} have mismatched dimensions; using max face size {}",
+                            env_id,
+                            face_size
+                        );
+                    } else if first_width != first_height {
+                        tracing::warn!(
+                            "Imported EPU faces for slot {} are not square ({}x{}); using max face size {}",
+                            env_id,
+                            first_width,
+                            first_height,
+                            face_size
+                        );
+                    }
+                }
+
+                ImportedCubeFaces {
+                    env_id: *env_id,
+                    face_size,
+                    faces: [
+                        texture_manager
+                            .get_texture_view(faces[0])
+                            .unwrap_or(fallback),
+                        texture_manager
+                            .get_texture_view(faces[1])
+                            .unwrap_or(fallback),
+                        texture_manager
+                            .get_texture_view(faces[2])
+                            .unwrap_or(fallback),
+                        texture_manager
+                            .get_texture_view(faces[3])
+                            .unwrap_or(fallback),
+                        texture_manager
+                            .get_texture_view(faces[4])
+                            .unwrap_or(fallback),
+                        texture_manager
+                            .get_texture_view(faces[5])
+                            .unwrap_or(fallback),
+                    ],
+                }
+            })
+            .collect();
+
+        self.epu_runtime
+            .build_imported_envs(device, queue, encoder, &imported);
     }
 
     // =================================================================

@@ -39,7 +39,7 @@ The system is designed around these hard constraints:
 ```
 CPU (game)                                         GPU
 ---------                                         ---
-Call environment_index(...)+epu_set(...) during render()   --->   [Compute] EPU_Build(configs)
+Call epu_set(...), epu_textures(...), or epu_asset(...)   --->   [Compute] EPU_Build(configs/imports)
 Call draw_epu() to request a background draw            - Evaluate 8-layer microprogram into EnvRadiance (mip 0)
 Capture (viewport, pass) draw requests                  - Generate mip pyramid from EnvRadiance mip 0
                                                     - Extract SH9 from a coarse mip (e.g. 16x16)
@@ -140,26 +140,27 @@ bits 3..0:     alpha_b    (4)  - color_b alpha (0-15)
 
 ## Compute Pipeline
 
-Implementation note: Internally, the runtime stores outputs in arrays indexed by `env_id`. Games can provide configs for one or more `env_id`s by setting `environment_index(env_id)` then calling `epu_set(config_ptr)`. Any `env_id` without an explicit config falls back to `env_id = 0`, and then to the built-in default config.
+Implementation note: Internally, the runtime still stores outputs in array slots, but those slots are private implementation detail. Games use immediate-mode EPU setters (`epu_set(...)`, `epu_textures(...)`, `epu_asset(...)`), and each draw captures whichever EPU source is current at that moment.
 
-The EPU runtime maintains these outputs per `env_id`:
+The EPU runtime maintains these outputs per internal slot:
 
 | Output | Type | Purpose |
 |--------|------|---------|
-| `EnvRadiance[env_id]` | mip-mapped octahedral 2D array | Background + roughness-based reflections |
-| `SH9[env_id]` | storage buffer | L2 diffuse irradiance (spherical harmonics) |
+| `EnvRadiance[slot]` | mip-mapped octahedral 2D array | Background + roughness-based reflections |
+| `SH9[slot]` | storage buffer | L2 diffuse irradiance (spherical harmonics) |
 
 ### Frame Execution Order
 
-1. Capture EPU draw requests (per viewport/pass) and determine active environment states
-2. Deduplicate `env_id` list, cap to `MAX_ACTIVE_ENVS`
-3. Determine which `env_id`s are dirty (hash)
+1. Capture EPU draw requests (per viewport/pass) and determine active immediate-mode EPU sources
+2. Resolve those sources to internal slots, cap to `MAX_ACTIVE_ENVS`
+3. Determine which internal slots are dirty (hash or imported-face cache miss)
 4. Dispatch compute passes:
    - Environment evaluation (build `EnvRadiance` mip 0)
+   - Imported cube-face conversion when needed
    - Mip pyramid generation (2x2 downsample chain)
    - Irradiance extraction (SH9)
 5. Barrier: compute to render
-6. Render background + objects (sampling by `env_id`)
+6. Render background + objects (sampling by resolved internal slot)
 
 ---
 
@@ -167,9 +168,12 @@ The EPU runtime maintains these outputs per `env_id`:
 
 ### Background Sampling
 
-Render sky/background by evaluating the EPU directly per pixel (`L_hi(dir)`),
-not by sampling `EnvRadiance`. This guarantees the sky is never limited by the
-`EnvRadiance` base resolution.
+Procedural EPU sources render the background by evaluating the EPU directly per
+pixel (`L_hi(dir)`), not by sampling `EnvRadiance`. This guarantees the sky is
+never limited by the `EnvRadiance` base resolution.
+
+Imported face-texture sources render the background from `EnvRadiance` mip 0
+after cube-to-octahedral conversion.
 
 ### Reflection Sampling
 
@@ -189,6 +193,9 @@ high-frequency residual term that fades out with roughness:
   - `L0` is `EnvRadiance` sampled at mip 0
   - `L_lp` is `EnvRadiance` sampled at the roughness-derived LOD
 
+Imported face-texture sources skip the procedural residual and use only the
+octahedral mip chain.
+
 ### Ambient Lighting
 
 Diffuse ambient is evaluated from SH9 coefficients at the shading normal `n`.
@@ -197,10 +204,10 @@ Diffuse ambient is evaluated from SH9 coefficients at the shading normal `n`.
 
 ## Multiple Environments
 
-The EPU supports multiple environments per frame through texture array indexing:
+The EPU supports multiple environments per frame through internal texture-array slot indexing:
 
-- All outputs are stored in array layers indexed by `env_id`
-- Renderers pass `env_id` per draw/instance (internal)
+- All outputs are stored in array layers indexed by an internal resolved slot
+- Renderers pass that resolved slot per draw/instance (internal)
 - No per-draw rebinding required
 
 ### Recommended Caps
@@ -219,8 +226,9 @@ The EPU supports multiple environments per frame through texture array indexing:
 
 For environments, the EPU tracks:
 
-- `state_hash`: Hash of the 128-byte config
+- `state_hash`: Hash of the 128-byte procedural config
 - `valid`: Whether the cached entry has been initialized
+- imported-face cache entries keyed by face-handle tuple or asset ID
 
 Update policy:
 

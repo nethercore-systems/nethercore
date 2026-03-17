@@ -15,7 +15,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use crate::ffi::ZXGameContext;
 use crate::ffi::helpers::get_memory;
-use crate::graphics::epu::{EpuConfig, MAX_ENV_STATES};
+use crate::graphics::epu::EpuConfig;
+use crate::state::PendingTexture;
 
 static EPU_SET_DEBUG_COUNT: AtomicU32 = AtomicU32::new(0);
 
@@ -68,27 +69,34 @@ fn read_epu_config(
     Some(EpuConfig { layers })
 }
 
-/// Store an EPU config for the currently selected environment index without drawing a background.
-///
-/// Reads 128 bytes (8 x 128-bit = 16 x u64) from WASM memory and stores the
-/// config for the **currently selected** env_id (`environment_index(...)`) for
-/// this frame. If called multiple times for the same env_id in a frame, the
-/// last call wins.
-///
-/// # Arguments
-/// * `config_ptr` - Pointer to 16 u64 values (128 bytes) in WASM memory
+fn read_string_id(caller: &Caller<'_, ZXGameContext>, id_ptr: u32, id_len: u32) -> Option<String> {
+    let memory = caller.data().game.memory?;
+    let data = memory.data(caller);
+
+    let start = id_ptr as usize;
+    let len = id_len as usize;
+    let end = start.checked_add(len)?;
+    if end > data.len() {
+        warn!(
+            "epu_asset: string ID access out of bounds ({}-{}, memory size {})",
+            start,
+            end,
+            data.len()
+        );
+        return None;
+    }
+
+    String::from_utf8(data[start..end].to_vec()).ok()
+}
+
+/// Store an EPU config for the current immediate-mode EPU source without drawing a background.
 pub(crate) fn epu_set(mut caller: Caller<'_, ZXGameContext>, config_ptr: u32) {
     let Some(config) = read_epu_config(&caller, config_ptr, "epu_set") else {
         return;
     };
 
     let state = &mut caller.data_mut().ffi;
-
-    // Store config for the current env_id (selected via environment_index()).
-    let env_id = state
-        .current_shading_state
-        .environment_index
-        .min(MAX_ENV_STATES.saturating_sub(1));
+    let env_id = state.bind_epu_config(config);
     let layers = config.layers;
 
     if std::env::var("NETHERCORE_EPU_DEBUG_SET").as_deref() == Ok("1") {
@@ -120,21 +128,83 @@ pub(crate) fn epu_set(mut caller: Caller<'_, ZXGameContext>, config_ptr: u32) {
             );
         }
     }
+}
 
-    if let Some(prev) = state.epu_frame_configs.insert(env_id, config)
-        && prev.layers != layers
-    {
-        warn!(
-            "epu_set: multiple different configs pushed for env_id {} in the same frame; last call wins",
-            env_id
-        );
+/// Use six already-loaded 2D textures as the current imported EPU environment source.
+pub(crate) fn epu_textures(
+    mut caller: Caller<'_, ZXGameContext>,
+    px: u32,
+    nx: u32,
+    py: u32,
+    ny: u32,
+    pz: u32,
+    nz: u32,
+) {
+    let state = &mut caller.data_mut().ffi;
+    state.bind_epu_textures([px, nx, py, ny, pz, nz]);
+}
+
+/// Use a packed ROM cubemap-face asset as the current imported EPU environment source.
+///
+/// On first use, this expands the packed faces into six ordinary texture handles via the
+/// same pending texture pipeline used by normal init-time texture uploads.
+pub(crate) fn epu_asset(mut caller: Caller<'_, ZXGameContext>, id_ptr: u32, id_len: u32) {
+    let Some(id) = read_string_id(&caller, id_ptr, id_len) else {
+        warn!("epu_asset: failed to read asset id");
+        return;
+    };
+
+    let maybe_cached_faces = caller.data().ffi.epu_asset_faces.get(&id).copied();
+    if let Some(faces) = maybe_cached_faces {
+        caller.data_mut().ffi.bind_epu_textures(faces);
+        return;
     }
+
+    let packed = {
+        let state = &caller.data().ffi;
+        let Some(data_pack) = state.data_pack.as_ref() else {
+            warn!("epu_asset: no data pack loaded");
+            return;
+        };
+
+        let Some(packed) = data_pack.find_epu_environment(&id) else {
+            warn!("epu_asset: asset '{}' not found", id);
+            return;
+        };
+
+        packed.clone()
+    };
+
+    let state = &mut caller.data_mut().ffi;
+    let mut alloc_face = |data: Vec<u8>| {
+        let handle = state.next_texture_handle;
+        state.next_texture_handle += 1;
+        state.pending_textures.push(PendingTexture {
+            handle,
+            width: packed.width as u32,
+            height: packed.height as u32,
+            format: packed.format,
+            data,
+        });
+        handle
+    };
+
+    let faces = [
+        alloc_face(packed.px),
+        alloc_face(packed.nx),
+        alloc_face(packed.py),
+        alloc_face(packed.ny),
+        alloc_face(packed.pz),
+        alloc_face(packed.nz),
+    ];
+    state.epu_asset_faces.insert(id, faces);
+    state.bind_epu_textures(faces);
 }
 
 /// Draw the environment background for the current viewport/pass.
 ///
 /// Records a background draw request using the current view/proj + shading state.
-/// The environment selected is the current `environment_index(...)`.
+/// The environment selected is the current immediate-mode EPU source.
 ///
 /// For best results:
 /// - call `epu_set(...)` earlier in `render()`

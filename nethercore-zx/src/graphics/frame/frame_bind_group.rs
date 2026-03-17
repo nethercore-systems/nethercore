@@ -105,8 +105,9 @@ impl ZXGraphics {
         // 3: Animation (unified_animation)
         // 5: Quad rendering (quad_instances)
         // 6-7: EPU textures (env_radiance, sampler)
-        // 8-9: EPU state + frame uniforms
+        // 8-10: EPU state + frame uniforms + source kinds
         // 11: EPU SH9 (diffuse irradiance)
+        // 12-13: imported EPU face cache
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Frame Bind Group (Unified)"),
             layout: &pipeline_entry.bind_group_layout_frame,
@@ -153,8 +154,28 @@ impl ZXGraphics {
                     resource: self.epu_runtime.frame_uniforms_buffer().as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
+                    binding: 10,
+                    resource: self
+                        .epu_runtime
+                        .env_source_kinds_buffer()
+                        .as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
                     binding: 11,
                     resource: self.epu_runtime.sh9_buffer().as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 12,
+                    resource: wgpu::BindingResource::TextureView(
+                        self.epu_runtime.imported_faces_view(),
+                    ),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 13,
+                    resource: self
+                        .epu_runtime
+                        .imported_face_base_layers_buffer()
+                        .as_entire_binding(),
                 },
             ],
         });

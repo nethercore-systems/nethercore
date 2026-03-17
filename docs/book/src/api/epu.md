@@ -1,6 +1,6 @@
 # Environment Processing Unit (EPU)
 
-The Environment Processing Unit (EPU) is ZX's instruction-based procedural environment system. You provide a packed 128-byte configuration (8 x 128-bit instructions) and use `epu_set(config_ptr)` + `draw_epu()` to:
+The Environment Processing Unit (EPU) is ZX's environment system. You can drive it from a packed 128-byte procedural configuration (8 x 128-bit instructions) or from six imported cube-face textures, then use the immediate-mode EPU API to:
 
 - Render the environment background
 - Drive ambient + reflection lighting for lit materials (computed on the GPU)
@@ -11,46 +11,17 @@ For canonical ABI docs, see `nethercore/include/zx.rs`. For the opcode catalog/s
 
 ## FFI
 
-### environment_index
-
-Select which EPU environment (`env_id`) subsequent draw calls will sample for ambient + reflections.
-
-{{#tabs global="lang"}}
-
-{{#tab name="Rust"}}
-```rust,ignore
-/// Select the EPU environment ID for subsequent draws (0..255).
-fn environment_index(env_id: u32);
-```
-{{#endtab}}
-
-{{#tab name="C/C++"}}
-```c
-/// Select the EPU environment ID for subsequent draws (0..255).
-void environment_index(uint32_t env_id);
-```
-{{#endtab}}
-
-{{#tab name="Zig"}}
-```zig
-/// Select the EPU environment ID for subsequent draws (0..255).
-pub extern fn environment_index(env_id: u32) void;
-```
-{{#endtab}}
-
-{{#endtabs}}
-
 ### epu_set
 
-Store the environment config for the currently selected `environment_index(...)` (no background draw).
+Select the current EPU source from a procedural config (no background draw).
 
-To configure multiple environments in the same frame, call `environment_index(env_id)` then `epu_set(config_ptr)` for each `env_id` you use.
+To switch environments in the same frame, call `epu_set(...)`, `epu_textures(...)`, or `epu_asset(...)` before the draws that should use that source.
 
 {{#tabs global="lang"}}
 
 {{#tab name="Rust"}}
 ```rust,ignore
-/// Store the EPU config for the current environment_index(...).
+/// Select the current EPU source from a procedural config.
 ///
 /// config_ptr points to 16 u64 values (128 bytes):
 /// 8 instructions x (hi u64, lo u64)
@@ -60,7 +31,7 @@ fn epu_set(config_ptr: *const u64);
 
 {{#tab name="C/C++"}}
 ```c
-/// Store the EPU config for the current environment_index(...).
+/// Select the current EPU source from a procedural config.
 ///
 /// config_ptr points to 16 u64 values (128 bytes):
 /// 8 instructions x (hi u64, lo u64)
@@ -70,11 +41,72 @@ void epu_set(const uint64_t* config_ptr);
 
 {{#tab name="Zig"}}
 ```zig
-/// Store the EPU config for the current environment_index(...).
+/// Select the current EPU source from a procedural config.
 ///
 /// config_ptr points to 16 u64 values (128 bytes):
 /// 8 instructions x (hi u64, lo u64)
 pub extern fn epu_set(config_ptr: [*]const u64) void;
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+### epu_textures
+
+Select the current EPU source from six already-loaded 2D textures interpreted as cubemap faces.
+
+Face order is fixed: `px, nx, py, ny, pz, nz`.
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust,ignore
+/// Select the current EPU source from six texture handles.
+fn epu_textures(px: u32, nx: u32, py: u32, ny: u32, pz: u32, nz: u32);
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+/// Select the current EPU source from six texture handles.
+void epu_textures(uint32_t px, uint32_t nx, uint32_t py, uint32_t ny,
+                  uint32_t pz, uint32_t nz);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+/// Select the current EPU source from six texture handles.
+pub extern fn epu_textures(px: u32, nx: u32, py: u32, ny: u32, pz: u32, nz: u32) void;
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+### epu_asset
+
+Select the current EPU source from a packed six-face environment asset in the ROM data pack.
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust,ignore
+/// Select the current EPU source from a packed EPU environment asset.
+fn epu_asset(id_ptr: *const u8, id_len: u32);
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+/// Select the current EPU source from a packed EPU environment asset.
+void epu_asset(const uint8_t* id_ptr, uint32_t id_len);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+/// Select the current EPU source from a packed EPU environment asset.
+pub extern fn epu_asset(id_ptr: [*]const u8, id_len: u32) void;
 ```
 {{#endtab}}
 
@@ -115,7 +147,8 @@ Notes:
 - For split-screen, set `viewport(...)` and call `draw_epu()` per viewport.
 - The EPU compute pass runs automatically before rendering.
 - Ambient lighting is computed and applied entirely on the GPU; there is no CPU ambient query.
-- `epu_set(...)` stores a config for the currently selected `environment_index(...)`.
+- `epu_set(...)`, `epu_textures(...)`, and `epu_asset(...)` all select the current EPU source.
+- `draw_epu()` draws the currently selected source.
 
 ---
 

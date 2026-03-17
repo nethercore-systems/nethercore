@@ -31,6 +31,9 @@ pub struct ZXDataPack {
     /// Textures (RGBA8 pixel data)
     pub textures: Vec<PackedTexture>,
 
+    /// EPU environment source cubemap faces
+    pub epu_environments: Vec<PackedEpuEnvironmentFaces>,
+
     /// Meshes (GPU-ready packed vertices + indices)
     pub meshes: Vec<PackedMesh>,
 
@@ -62,6 +65,10 @@ pub struct ZXDataPack {
     #[serde(skip)]
     #[bitcode(skip)]
     mesh_index: OnceLock<HashMap<String, usize>>,
+
+    #[serde(skip)]
+    #[bitcode(skip)]
+    epu_environment_index: OnceLock<HashMap<String, usize>>,
 
     #[serde(skip)]
     #[bitcode(skip)]
@@ -98,6 +105,7 @@ impl ZXDataPack {
     #[allow(clippy::too_many_arguments)]
     pub fn with_assets(
         textures: Vec<PackedTexture>,
+        epu_environments: Vec<PackedEpuEnvironmentFaces>,
         meshes: Vec<PackedMesh>,
         skeletons: Vec<PackedSkeleton>,
         keyframes: Vec<PackedKeyframes>,
@@ -108,6 +116,7 @@ impl ZXDataPack {
     ) -> Self {
         Self {
             textures,
+            epu_environments,
             meshes,
             skeletons,
             keyframes,
@@ -118,6 +127,7 @@ impl ZXDataPack {
             // Index caches will be lazily initialized on first lookup
             texture_index: OnceLock::new(),
             mesh_index: OnceLock::new(),
+            epu_environment_index: OnceLock::new(),
             skeleton_index: OnceLock::new(),
             keyframes_index: OnceLock::new(),
             font_index: OnceLock::new(),
@@ -130,6 +140,7 @@ impl ZXDataPack {
     /// Check if the data pack is empty
     pub fn is_empty(&self) -> bool {
         self.textures.is_empty()
+            && self.epu_environments.is_empty()
             && self.meshes.is_empty()
             && self.skeletons.is_empty()
             && self.keyframes.is_empty()
@@ -142,6 +153,7 @@ impl ZXDataPack {
     /// Get total asset count
     pub fn asset_count(&self) -> usize {
         self.textures.len()
+            + self.epu_environments.len()
             + self.meshes.len()
             + self.skeletons.len()
             + self.keyframes.len()
@@ -157,6 +169,14 @@ impl ZXDataPack {
             .texture_index
             .get_or_init(|| build_index(&self.textures, |t| &t.id));
         index.get(id).map(|&i| &self.textures[i])
+    }
+
+    /// Find a packed EPU cubemap-face asset by ID.
+    pub fn find_epu_environment(&self, id: &str) -> Option<&PackedEpuEnvironmentFaces> {
+        let index = self
+            .epu_environment_index
+            .get_or_init(|| build_index(&self.epu_environments, |e| &e.id));
+        index.get(id).map(|&i| &self.epu_environments[i])
     }
 
     /// Find a mesh by ID (O(1) lookup via lazy-initialized hash index)

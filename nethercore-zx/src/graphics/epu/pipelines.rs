@@ -6,12 +6,22 @@
 use super::settings::MAX_ACTIVE_ENVS;
 use super::settings::MAX_ENV_STATES;
 use super::shaders::{
-    EPU_BOUNDS, EPU_COMMON, EPU_COMPUTE_BLUR, EPU_COMPUTE_ENV, EPU_COMPUTE_IRRAD, EPU_FEATURES,
+    EPU_BOUNDS, EPU_COMMON, EPU_COMPUTE_BLUR, EPU_COMPUTE_COPY_CUBE_FACES, EPU_COMPUTE_ENV,
+    EPU_COMPUTE_IMPORT_CUBE, EPU_COMPUTE_IMPORTED_FACE_MIP, EPU_COMPUTE_IRRAD, EPU_FEATURES,
 };
 use super::types::{EpuSh9, FrameUniforms, GpuEnvironmentState, IrradUniforms};
+use wgpu::util::DeviceExt;
 
 /// Create GPU buffers for environment states, active IDs, and frame uniforms.
-pub(super) fn create_buffers(device: &wgpu::Device) -> (wgpu::Buffer, wgpu::Buffer, wgpu::Buffer) {
+pub(super) fn create_buffers(
+    device: &wgpu::Device,
+) -> (
+    wgpu::Buffer,
+    wgpu::Buffer,
+    wgpu::Buffer,
+    wgpu::Buffer,
+    wgpu::Buffer,
+) {
     // Environment states buffer (256 environments x 128 bytes = 32KB)
     let env_states_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("EPU Environment States"),
@@ -20,10 +30,14 @@ pub(super) fn create_buffers(device: &wgpu::Device) -> (wgpu::Buffer, wgpu::Buff
         mapped_at_creation: false,
     });
 
-    // Active environment IDs buffer (32 u32s)
+    // Active environment IDs buffer.
+    //
+    // The same buffer is reused for:
+    // - active env slots (up to MAX_ACTIVE_ENVS)
+    // - active imported face layers (up to MAX_ACTIVE_ENVS * 6)
     let active_env_ids_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("EPU Active Env IDs"),
-        size: (MAX_ACTIVE_ENVS as usize * std::mem::size_of::<u32>()) as u64,
+        size: ((MAX_ACTIVE_ENVS * 6) as usize * std::mem::size_of::<u32>()) as u64,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
@@ -36,10 +50,27 @@ pub(super) fn create_buffers(device: &wgpu::Device) -> (wgpu::Buffer, wgpu::Buff
         mapped_at_creation: false,
     });
 
+    let env_source_kinds_init = vec![0u32; MAX_ENV_STATES as usize];
+    let env_source_kinds_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("EPU Env Source Kinds"),
+        contents: bytemuck::cast_slice(&env_source_kinds_init),
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+    });
+
+    let imported_face_base_layers_init = vec![u32::MAX; MAX_ENV_STATES as usize];
+    let imported_face_base_layers_buffer =
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("EPU Imported Face Base Layers"),
+            contents: bytemuck::cast_slice(&imported_face_base_layers_init),
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        });
+
     (
         env_states_buffer,
         active_env_ids_buffer,
         frame_uniforms_buffer,
+        env_source_kinds_buffer,
+        imported_face_base_layers_buffer,
     )
 }
 
@@ -85,6 +116,334 @@ pub(super) fn create_radiance_texture(
         .collect();
 
     (texture, full_view, mip_views)
+}
+
+/// Create the active-frame imported face texture array and full sampling view.
+pub(super) fn create_imported_face_texture(
+    device: &wgpu::Device,
+    face_size: u32,
+) -> (
+    wgpu::Texture,
+    wgpu::TextureView,
+    Vec<wgpu::TextureView>,
+    Vec<u32>,
+) {
+    let mip_level_count = super::settings::calc_mip_sizes(
+        face_size,
+        super::settings::EPU_MIN_MIP_SIZE.min(face_size),
+    );
+    let mip_level_count_u32 = mip_level_count.len() as u32;
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("EPU Imported Face Array"),
+        size: wgpu::Extent3d {
+            width: face_size,
+            height: face_size,
+            depth_or_array_layers: MAX_ACTIVE_ENVS * 6,
+        },
+        mip_level_count: mip_level_count_u32,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba16Float,
+        usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
+        view_formats: &[],
+    });
+
+    let view = texture.create_view(&wgpu::TextureViewDescriptor {
+        label: Some("EPU Imported Face Array View"),
+        dimension: Some(wgpu::TextureViewDimension::D2Array),
+        ..Default::default()
+    });
+
+    let mip_views = (0..mip_level_count_u32)
+        .map(|mip| {
+            texture.create_view(&wgpu::TextureViewDescriptor {
+                label: Some("EPU Imported Face Array Mip View"),
+                dimension: Some(wgpu::TextureViewDimension::D2Array),
+                base_mip_level: mip,
+                mip_level_count: Some(1),
+                ..Default::default()
+            })
+        })
+        .collect();
+
+    (texture, view, mip_views, mip_level_count)
+}
+
+pub(super) fn create_import_pipeline(
+    device: &wgpu::Device,
+) -> (wgpu::ComputePipeline, wgpu::BindGroupLayout, wgpu::Sampler) {
+    let import_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        label: Some("EPU Import Sampler"),
+        address_mode_u: wgpu::AddressMode::ClampToEdge,
+        address_mode_v: wgpu::AddressMode::ClampToEdge,
+        address_mode_w: wgpu::AddressMode::ClampToEdge,
+        mag_filter: wgpu::FilterMode::Linear,
+        min_filter: wgpu::FilterMode::Linear,
+        mipmap_filter: wgpu::FilterMode::Nearest,
+        ..Default::default()
+    });
+
+    let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("EPU Import Bind Group Layout"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 3,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 4,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 5,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 6,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 7,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 8,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 9,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::StorageTexture {
+                    access: wgpu::StorageTextureAccess::WriteOnly,
+                    format: wgpu::TextureFormat::Rgba16Float,
+                    view_dimension: wgpu::TextureViewDimension::D2Array,
+                },
+                count: None,
+            },
+        ],
+    });
+
+    let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("EPU Compute Import Cube Shader"),
+        source: wgpu::ShaderSource::Wgsl(EPU_COMPUTE_IMPORT_CUBE.into()),
+    });
+
+    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("EPU Import Pipeline Layout"),
+        bind_group_layouts: &[&bind_group_layout],
+        push_constant_ranges: &[],
+    });
+
+    let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+        label: Some("EPU Compute Import Cube Pipeline"),
+        layout: Some(&pipeline_layout),
+        module: &shader_module,
+        entry_point: Some("epu_import_cube"),
+        compilation_options: Default::default(),
+        cache: None,
+    });
+
+    (pipeline, bind_group_layout, import_sampler)
+}
+
+pub(super) fn create_copy_faces_pipeline(
+    device: &wgpu::Device,
+) -> (wgpu::ComputePipeline, wgpu::BindGroupLayout) {
+    let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("EPU Copy Faces Bind Group Layout"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 3,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 4,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 5,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 6,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 7,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 8,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 9,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 10,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::StorageTexture {
+                    access: wgpu::StorageTextureAccess::WriteOnly,
+                    format: wgpu::TextureFormat::Rgba16Float,
+                    view_dimension: wgpu::TextureViewDimension::D2Array,
+                },
+                count: None,
+            },
+        ],
+    });
+
+    let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("EPU Copy Faces Shader"),
+        source: wgpu::ShaderSource::Wgsl(EPU_COMPUTE_COPY_CUBE_FACES.into()),
+    });
+
+    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("EPU Copy Faces Pipeline Layout"),
+        bind_group_layouts: &[&bind_group_layout],
+        push_constant_ranges: &[],
+    });
+
+    let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+        label: Some("EPU Copy Faces Pipeline"),
+        layout: Some(&pipeline_layout),
+        module: &shader_module,
+        entry_point: Some("epu_copy_cube_faces"),
+        compilation_options: Default::default(),
+        cache: None,
+    });
+
+    (pipeline, bind_group_layout)
 }
 
 pub(super) fn create_main_bind_group(
@@ -293,6 +652,69 @@ pub(super) fn create_mip_pipeline(
     });
 
     (pipeline, bind_group_layout, compute_sampler)
+}
+
+/// Create the imported direct-face mip downsample pipeline.
+pub(super) fn create_imported_face_mip_pipeline(
+    device: &wgpu::Device,
+) -> (wgpu::ComputePipeline, wgpu::BindGroupLayout) {
+    let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("EPU Imported Face Mip Bind Group Layout"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 4,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2Array,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 5,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::StorageTexture {
+                    access: wgpu::StorageTextureAccess::WriteOnly,
+                    format: wgpu::TextureFormat::Rgba16Float,
+                    view_dimension: wgpu::TextureViewDimension::D2Array,
+                },
+                count: None,
+            },
+        ],
+    });
+
+    let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("EPU Imported Face Mip Shader"),
+        source: wgpu::ShaderSource::Wgsl(EPU_COMPUTE_IMPORTED_FACE_MIP.into()),
+    });
+
+    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("EPU Imported Face Mip Pipeline Layout"),
+        bind_group_layouts: &[&bind_group_layout],
+        push_constant_ranges: &[],
+    });
+
+    let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+        label: Some("EPU Imported Face Mip Pipeline"),
+        layout: Some(&pipeline_layout),
+        module: &shader_module,
+        entry_point: Some("epu_downsample_imported_face_mip"),
+        compilation_options: Default::default(),
+        cache: None,
+    });
+
+    (pipeline, bind_group_layout)
 }
 
 /// Create the irradiance extraction pipeline.

@@ -1,6 +1,6 @@
 # Nethercore Examples
 
-**38 working examples** organized into 8 categories to help you learn game development with Nethercore.
+**39 working examples** organized into 8 categories to help you learn game development with Nethercore.
 
 ## 📁 Organization
 
@@ -84,12 +84,14 @@ Learn the basics across multiple languages.
 
 Core rendering techniques and procedural meshes.
 
+`epu-multi-reflections` now demonstrates immediate-mode `epu_set()` switching per draw instead of public environment IDs.
+
 | Example | Description | Difficulty | Key Features |
 |---------|-------------|------------|--------------|
 | **textured-quad** | Texture loading and sprite rendering | 🟢 Beginner | `load_texture()`, `texture_bind()` |
 | **procedural-shapes** | 7 built-in mesh generators with texture toggle | 🟡 Intermediate | B button toggles textured/plain modes |
 | **lighting** | Full PBR lighting with 4 dynamic lights | 🟡 Intermediate | Mode 2 PBR, sky system, metallic/roughness |
-| **epu-multi-reflections** | Two shiny spheres with different EPU reflection env_ids | 🟡 Intermediate | `environment_index()`, `epu_set()`, `draw_epu()` |
+| **epu-multi-reflections** | Two shiny spheres switching immediate-mode EPU sources | 🟡 Intermediate | `epu_set()`, `epu_textures()`, `draw_epu()` |
 | **billboard** | GPU-instanced billboards, camera-facing sprites | 🟡 Intermediate | Instancing, orientation |
 | **dither-demo** | PS1-style ordered dithering effects | 🟡 Intermediate | Retro aesthetic |
 | **material-override** | Per-draw material property overrides | 🟡 Intermediate | Dynamic materials |
@@ -144,9 +146,11 @@ Sound effects and music playback.
 
 ---
 
-### 6. Asset Loading (7 examples)
+### 6. Asset Loading (8 examples)
 
 ROM-based asset workflows and data packs.
+
+`epu-textures-demo` is the face-texture validation example for `rom_texture()` + `epu_textures()`.
 
 | Example | Description | Difficulty | Key Features |
 |---------|-------------|------------|--------------|
@@ -194,7 +198,7 @@ Stencil buffers, viewports, and advanced techniques.
 
 ## 📊 Statistics
 
-- **Total Examples:** 37
+- **Total Examples:** 39
 - **Languages:** Rust, C, Zig
 - **Complete Games:** 2
 

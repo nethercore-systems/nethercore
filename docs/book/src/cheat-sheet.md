@@ -643,24 +643,27 @@ The EPU renders procedural environment backgrounds and provides ambient/reflecti
 
 {{#tab name="Rust"}}
 ```rust
-fn environment_index(env_id: u32);
 fn epu_set(config_ptr: *const u64);
+fn epu_textures(px: u32, nx: u32, py: u32, ny: u32, pz: u32, nz: u32);
+fn epu_asset(id_ptr: *const u8, id_len: u32);
 fn draw_epu();
 ```
 {{#endtab}}
 
 {{#tab name="C/C++"}}
 ```c
-void environment_index(uint32_t env_id);
 void epu_set(const uint64_t* config_ptr);
+void epu_textures(uint32_t px, uint32_t nx, uint32_t py, uint32_t ny, uint32_t pz, uint32_t nz);
+void epu_asset(const uint8_t* id_ptr, uint32_t id_len);
 void draw_epu(void);
 ```
 {{#endtab}}
 
 {{#tab name="Zig"}}
 ```zig
-pub extern fn environment_index(env_id: u32) void;
 pub extern fn epu_set(config_ptr: [*]const u64) void;
+pub extern fn epu_textures(px: u32, nx: u32, py: u32, ny: u32, pz: u32, nz: u32) void;
+pub extern fn epu_asset(id_ptr: [*]const u8, id_len: u32) void;
 pub extern fn draw_epu() void;
 ```
 {{#endtab}}

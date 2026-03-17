@@ -60,3 +60,45 @@ pub(crate) fn generate_quad_shader() -> String {
     shader.push_str(sources::QUAD_TEMPLATE);
     shader
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const GRID_SHADER_SOURCE: &str = include_str!("../shaders/epu/features/01_grid.wgsl");
+    const VEIL_SHADER_SOURCE: &str = include_str!("../shaders/epu/features/05_veil.wgsl");
+
+    #[test]
+    fn generated_environment_shader_uses_projection_matrix_scales() {
+        let shader = generate_environment_shader();
+
+        assert!(shader.contains("let view_ray_x = in.screen_pos.x / proj_matrix[0][0];"));
+        assert!(shader.contains("let view_ray_y = in.screen_pos.y / proj_matrix[1][1];"));
+        assert!(!shader.contains("let aspect = 16.0 / 9.0;"));
+    }
+
+    #[test]
+    fn common_sampling_keeps_procedural_background_on_direct_hi_eval() {
+        assert!(sources::COMMON.contains("return vec4f(epu_eval_hi(env_index, direction), 1.0);"));
+        assert!(
+            !sources::COMMON.contains("return vec4f(epu_eval_hi_raw(env_index, direction), 1.0);")
+        );
+    }
+
+    #[test]
+    fn grid_shader_keeps_axis_aligned_patterns() {
+        assert!(GRID_SHADER_SOURCE.contains("let uv = vec2f(uv0.x + scroll, uv0.y);"));
+        assert!(!GRID_SHADER_SOURCE.contains("epu_wrapped_relief_uv"));
+        assert!(!GRID_SHADER_SOURCE.contains("epu_relief_wave"));
+        assert!(!GRID_SHADER_SOURCE.contains("line_gate_x"));
+    }
+
+    #[test]
+    fn veil_shader_keeps_technical_variants_rigid() {
+        assert!(VEIL_SHADER_SOURCE.contains("let center_u = (fi + 0.5) / f32(ribbon_count);"));
+        assert!(VEIL_SHADER_SOURCE.contains("let center_u = (fi + 0.5) / f32(actual_count);"));
+        assert!(!VEIL_SHADER_SOURCE.contains("epu_staggered_lattice_phase"));
+        assert!(!VEIL_SHADER_SOURCE.contains("epu_wrapped_relief_uv"));
+        assert!(!VEIL_SHADER_SOURCE.contains("lane_wave"));
+    }
+}

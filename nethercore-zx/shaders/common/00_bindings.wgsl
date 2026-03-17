@@ -18,8 +18,9 @@
 // - Binding 3: Animation (unified_animation)
 // - Binding 5: Quad rendering (quad_instances)
 // - Binding 6-7: EPU textures (env_radiance, sampler)
-// - Binding 8-9: EPU state + frame uniforms
+// - Binding 8-10: EPU state + frame uniforms + source kinds
 // - Binding 11: EPU SH9 (diffuse irradiance)
+// - Binding 12-13: Imported EPU face cache
 
 // Binding 0: unified_transforms - all mat4x4 matrices [models | views | projs]
 // Indices are pre-computed on CPU to be absolute offsets into this array
@@ -83,7 +84,7 @@ struct BoneMatrix3x4 {
 @group(0) @binding(7) var epu_sampler: sampler;
 
 // ============================================================================
-// EPU STATE + FRAME UNIFORMS (Bindings 8-9)
+// EPU STATE + FRAME UNIFORMS (Bindings 8-10)
 // ============================================================================
 // These enable procedural evaluation of the EPU per-fragment for sky/background
 // and for specular high-frequency residuals.
@@ -107,6 +108,14 @@ struct EpuFrameUniforms {
 // Binding 9: EPU frame uniforms (active_count + map sizing)
 @group(0) @binding(9) var<uniform> epu_frame: EpuFrameUniforms;
 
+// Binding 10: per-slot source kind metadata.
+// 0 = procedural EPU, 1 = imported cube faces.
+@group(0) @binding(10) var<storage, read> epu_source_kinds: array<u32>;
+
+const EPU_SOURCE_PROCEDURAL: u32 = 0u;
+const EPU_SOURCE_IMPORTED: u32 = 1u;
+const EPU_IMPORTED_FACE_BASE_INVALID: u32 = 0xffffffffu;
+
 // ============================================================================
 // EPU SH9 Buffer - Binding 11
 // ============================================================================
@@ -128,6 +137,18 @@ struct EpuSh9 {
 
 // Binding 11: EPU SH9 storage buffer (256 entries)
 @group(0) @binding(11) var<storage, read> epu_sh9: array<EpuSh9>;
+
+// ============================================================================
+// IMPORTED EPU FACE CACHE - Bindings 12-13
+// ============================================================================
+// Imported cube faces are copied into a private mip-mapped face-array cache for
+// direct background and low-roughness high-frequency sampling.
+
+// Binding 12: imported cube faces packed as [env0_px..env0_nz, env1_px..env1_nz, ...]
+@group(0) @binding(12) var epu_imported_faces: texture_2d_array<f32>;
+
+// Binding 13: env slot -> first imported face layer in `epu_imported_faces`
+@group(0) @binding(13) var<storage, read> epu_imported_face_base_layers: array<u32>;
 
 // Helper to expand 3x4 bone matrix → 4x4 for skinning calculations
 // Input is row-major, output is column-major (WGSL mat4x4 convention)
