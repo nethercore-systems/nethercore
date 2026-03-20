@@ -1013,9 +1013,9 @@ fn get_opcode_hints(
             b"SILHOUETTE",
             b"edge_soft",
             b"height",
-            b"roughness",
+            b"height_span",
             b"octaves",
-            b"-",
+            b"wall_depth",
         ),
         0x04 => (
             b"SPLIT",

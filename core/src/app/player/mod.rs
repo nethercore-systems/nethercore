@@ -85,9 +85,9 @@ where
     _loader_marker: std::marker::PhantomData<L>,
     /// Active replay script executor (when --replay is used)
     replay_executor: Option<ScriptExecutor>,
-    /// Console-specific debug panel visibility (F7)
+    /// Legacy standalone console debug panel visibility.
     ///
-    /// Consoles can use this flag to show their own debug panels (e.g., EPU debug panel for ZX).
+    /// Most console-specific tools should prefer inline rendering inside the F4 debug inspector.
     pub console_debug_panel_visible: bool,
     workbench: Option<workbench::WorkbenchBridge>,
 }

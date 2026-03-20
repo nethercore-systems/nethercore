@@ -21,32 +21,9 @@ use nethercore_core::{
 };
 use zx_common::ZXDataPack;
 
-use crate::graphics::epu::EpuConfig;
 use crate::state::{ZRollbackState, ZXFFIState};
 
 use crate::graphics::ZXGraphics;
-
-const EPU_PARAM_D_MASK: u64 = 0xFF00_0000;
-
-fn merge_live_epu_phase(
-    mut override_config: EpuConfig,
-    live_config: Option<&EpuConfig>,
-) -> EpuConfig {
-    let Some(live_config) = live_config else {
-        return override_config;
-    };
-
-    for (override_layer, live_layer) in override_config
-        .layers
-        .iter_mut()
-        .zip(live_config.layers.iter())
-    {
-        override_layer[1] =
-            (override_layer[1] & !EPU_PARAM_D_MASK) | (live_layer[1] & EPU_PARAM_D_MASK);
-    }
-
-    override_config
-}
 
 /// Get Nethercore ZX console specifications
 pub const fn zx_specs() -> &'static ConsoleSpecs {
@@ -423,6 +400,14 @@ impl Console for NethercoreZX {
         }
     }
 
+    fn render_debug_panel_contents(&mut self, ui: &mut egui::Ui) {
+        let _changed = self.epu_debug_panel.render_inline(ui);
+    }
+
+    fn debug_panel_tab_title(&self) -> Option<&'static str> {
+        Some("ZX EPU")
+    }
+
     fn has_debug_panel(&self) -> bool {
         true
     }
@@ -434,12 +419,17 @@ impl Console for NethercoreZX {
 
         // If locked: clear game configs and insert our single override config for env_id 0
         if self.epu_debug_panel.is_locked() {
-            let override_config = merge_live_epu_phase(
-                self.epu_debug_panel.get_override_config(),
-                state.epu_frame_configs.get(&0),
-            );
+            let override_config = self.epu_debug_panel.get_override_config();
+            state.epu_debug_locked_override = Some(override_config);
             state.epu_frame_configs.clear();
+            state.epu_frame_config_slots.clear();
             state.epu_frame_configs.insert(0, override_config);
+            state.update_environment_index(0);
+            for shading in state.shading_pool.as_mut_slice() {
+                shading.environment_index = 0;
+            }
+        } else {
+            state.epu_debug_locked_override = None;
         }
     }
 
@@ -521,6 +511,7 @@ impl Console for NethercoreZX {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::graphics::PackedUnifiedShadingState;
 
     #[test]
     fn test_button_mask() {
@@ -598,20 +589,29 @@ mod tests {
     }
 
     #[test]
-    fn test_merge_live_epu_phase_preserves_live_param_d() {
-        let mut override_config = EpuConfig::default();
-        let mut live_config = EpuConfig::default();
+    fn test_sync_debug_ui_state_retargets_existing_shading_states_when_locked() {
+        let mut console = NethercoreZX::new();
+        let mut state = ZXFFIState::default();
 
-        override_config.layers[0][1] = 0x0012_3400;
-        override_config.layers[1][1] = 0x0000_5500;
-        live_config.layers[0][1] = 0x5A00_00FF;
-        live_config.layers[1][1] = 0xC300_1234;
+        let mut override_config = crate::graphics::epu::EpuConfig::default();
+        override_config.layers[0] = [0x0F00_6496_DC28_5028, 0x00B4_B4A5_0080_00FF];
+        console.epu_debug_panel.editor.load_config(&override_config);
+        console.epu_debug_panel.locked = true;
 
-        let merged = merge_live_epu_phase(override_config, Some(&live_config));
+        let mut live_shading = PackedUnifiedShadingState::default();
+        live_shading.environment_index = 3;
+        state.shading_pool.add(live_shading);
+        state.current_shading_state.environment_index = 3;
+        state
+            .epu_frame_configs
+            .insert(3, crate::graphics::epu::EpuConfig::default());
 
-        assert_eq!(merged.layers[0][1] & EPU_PARAM_D_MASK, 0x5A00_0000);
-        assert_eq!(merged.layers[1][1] & EPU_PARAM_D_MASK, 0xC300_0000);
-        assert_eq!(merged.layers[0][1] & !EPU_PARAM_D_MASK, 0x0012_3400);
-        assert_eq!(merged.layers[1][1] & !EPU_PARAM_D_MASK, 0x0000_5500);
+        console.sync_debug_ui_state(&mut state);
+
+        assert_eq!(state.current_shading_state.environment_index, 0);
+        assert_eq!(state.shading_pool.as_slice()[0].environment_index, 0);
+        assert_eq!(state.epu_frame_configs.len(), 1);
+        assert_eq!(state.epu_frame_configs.get(&0), Some(&override_config));
+        assert_eq!(state.epu_debug_locked_override, Some(override_config));
     }
 }

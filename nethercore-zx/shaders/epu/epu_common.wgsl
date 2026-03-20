@@ -565,14 +565,14 @@ fn apply_blend(dst: vec3f, s: LayerSample, blend: u32) -> vec3f {
         }
         case BLEND_MULTIPLY: {
             // Absorption/tint: lerp towards multiplying by src.
-            return dst * mix(vec3f(1.0), src, a);
+            return epu_saturate3(dst * mix(vec3f(1.0), src, a));
         }
         case BLEND_MAX: {
-            return max(dst, src * a);
+            return epu_saturate3(max(dst, src * a));
         }
         case BLEND_LERP: {
             // Lerp directly to src (not premultiplied).
-            return mix(dst, src, a);
+            return epu_saturate3(mix(dst, src, a));
         }
         case BLEND_SCREEN: {
             // Screen blend: 1 - (1-dst)*(1-src*a)
@@ -587,7 +587,7 @@ fn apply_blend(dst: vec3f, s: LayerSample, blend: u32) -> vec3f {
             return epu_saturate3(shifted);
         }
         case BLEND_MIN: {
-            return min(dst, mix(vec3f(1.0), src, a));
+            return epu_saturate3(min(dst, mix(vec3f(1.0), src, a)));
         }
         case BLEND_OVERLAY: {
             // Overlay: 2*dst*src if dst<0.5, else 1-2*(1-dst)*(1-src)

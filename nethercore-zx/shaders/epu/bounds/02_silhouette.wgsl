@@ -6,9 +6,9 @@
 // domains = []
 // field intensity = { label="edge_soft", map="u8_lerp", min=0.005, max=0.1 }
 // field param_a = { label="height", map="u8_lerp", min=-0.3, max=0.5 }
-// field param_b = { label="roughness", map="u8_lerp", min=0.1, max=1.0 }
+// field param_b = { label="height_span", map="u8_lerp", min=0.1, max=1.0 }
 // field param_c = { label="octaves", map="u8_01" }
-// field param_d = { label="-", map="u8_01" }
+// field param_d = { label="wall_depth", map="u8_lerp", min=0.05, max=1.2 }
 // @epu_meta_end
 
 // ============================================================================
@@ -19,10 +19,10 @@
 //   color_b: Background/sky color (RGB24)
 //   intensity: Edge softness (0..255 -> 0.005..0.1)
 //   param_a: Horizon height bias (0..255 -> -0.3..0.5)
-//   param_b: Roughness/amplitude (0..255 -> 0.1..1.0)
+//   param_b: Height span / silhouette relief (0..255 -> 0.1..1.0)
 //   param_c[7:4]: Layer count / octaves (0..15 -> 1..8)
 //   param_c[3:0]: Reserved (set to 0)
-//   param_d: Reserved (set to 0)
+//   param_d: Wall depth below the silhouette roofline (0..255 -> 0.05..1.2)
 //   direction: Up axis (oct-u16)
 //   alpha_a: Strength (0..15 -> 0.0..1.0)
 //   variant_id: 0=MOUNTAINS, 1=CITY, 2=FOREST, 3=DUNES, 4=WAVES, 5=RUINS, 6=INDUSTRIAL, 7=SPIRES (from meta5)
@@ -185,7 +185,8 @@ fn eval_silhouette(
     // Extract parameters
     let softness = mix(0.005, 0.1, u8_to_01(instr_intensity(instr)));
     let height_bias = mix(-0.3, 0.5, u8_to_01(instr_a(instr)));
-    let roughness = mix(0.1, 1.0, u8_to_01(instr_b(instr)));
+    let height_span = mix(0.1, 1.0, u8_to_01(instr_b(instr)));
+    let wall_depth = mix(0.05, 1.2, u8_to_01(instr_d(instr)));
 
     let pc = instr_c(instr);
     let octaves = 1u + ((pc >> 4u) & 0xFu) / 2u;  // 1..8 octaves
@@ -200,17 +201,23 @@ fn eval_silhouette(
     // Compute height function
     let raw_height = silhouette_height(u_shifted, variant, octaves, seed);
 
-    // Scale by roughness and apply height bias
-    let h = height_bias + raw_height * roughness * 0.5;
+    // Roofline of the silhouette wall mass.
+    let h_top = clamp(height_bias + raw_height * height_span * 0.5, -1.0, 1.0);
+    // Floor split below the wall body. This creates a real middle wall region
+    // instead of treating "wall" as only the transition band.
+    let h_bottom = clamp(h_top - wall_depth, -1.0, 1.0);
 
     // Convert v01 to y-threshold space
     let y_equiv = v01 * 2.0 - 1.0;
 
-    // Compute signed distance from horizon
-    let d = h - y_equiv;  // negative above horizon (sky), positive below (floor)
-
-    // Compute full regions from signed distance
-    let regions_full = regions_from_signed_distance(d, softness);
+    // Three distinct ownership bands:
+    // - sky above the roofline
+    // - floor below the wall base
+    // - wall in the body between them
+    let sky = smoothstep(h_top - softness, h_top + softness, y_equiv);
+    let floor = 1.0 - smoothstep(h_bottom - softness, h_bottom + softness, y_equiv);
+    let wall = max(0.0, 1.0 - sky - floor);
+    let regions_full = normalize_region_weights(RegionWeights(sky, wall, floor));
 
     // Strength blends from all-sky (strength=0) to full silhouette (strength=1)
     let regions = RegionWeights(
@@ -222,7 +229,7 @@ fn eval_silhouette(
     // Get colors and render all 3 regions
     let silhouette_color = instr_color_a(instr);
     let background_color = instr_color_b(instr);
-    let floor_color = silhouette_color * 0.5;  // Darken silhouette color for floor
+    let floor_color = mix(silhouette_color * 0.35, background_color * 0.18, 0.35);
 
     let rgb = background_color * regions.sky + silhouette_color * regions.wall + floor_color * regions.floor;
 

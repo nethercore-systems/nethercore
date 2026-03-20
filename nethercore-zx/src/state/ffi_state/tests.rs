@@ -220,6 +220,41 @@ fn test_bind_epu_textures_reuses_persistent_slot_and_survives_clear_frame() {
 }
 
 #[test]
+fn test_bind_epu_config_is_ignored_while_debug_lock_is_active() {
+    let mut state = ZXFFIState::default();
+    let mut override_config = EpuConfig::default();
+    override_config.layers[0] = [0xAAAA_BBBB_CCCC_DDDD, 0x1111_2222_3333_4444];
+    state.epu_debug_locked_override = Some(override_config);
+    state.epu_frame_configs.insert(0, override_config);
+
+    let mut game_config = EpuConfig::default();
+    game_config.layers[0] = [0x9999_8888_7777_6666, 0x5555_4444_3333_2222];
+
+    let slot = state.bind_epu_config(game_config);
+
+    assert_eq!(slot, 0);
+    assert_eq!(state.current_shading_state.environment_index, 0);
+    assert_eq!(state.epu_frame_configs.len(), 1);
+    assert_eq!(state.epu_frame_configs.get(&0), Some(&override_config));
+    assert!(!state.epu_frame_config_slots.contains_key(&game_config));
+}
+
+#[test]
+fn test_bind_epu_textures_is_ignored_while_debug_lock_is_active() {
+    let mut state = ZXFFIState::default();
+    state.epu_debug_locked_override = Some(EpuConfig::default());
+    state.current_shading_state.environment_index = 5;
+
+    let faces: EpuTextureFaces = [10, 11, 12, 13, 14, 15];
+    let slot = state.bind_epu_textures(faces);
+
+    assert_eq!(slot, 0);
+    assert_eq!(state.current_shading_state.environment_index, 0);
+    assert!(state.epu_imported_slots.is_empty());
+    assert!(state.epu_imported_faces_by_slot.is_empty());
+}
+
+#[test]
 fn test_none_uses_last_in_pool() {
     let mut state = ZXFFIState::default();
 

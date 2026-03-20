@@ -3,7 +3,7 @@
 //! Provides an egui panel for inspecting and debugging the Environment Processing Unit (EPU).
 //! The EPU handles environmental rendering effects like atmosphere, terrain bounds, and feature layers.
 //!
-//! Toggle with ` (backtick/grave) when running the player.
+//! Available from the main F4 debug inspector when running the player.
 //!
 //! # Features
 //!
@@ -136,6 +136,24 @@ impl EpuDebugPanel {
         self.editing_env_id = Some(0);
     }
 
+    fn seed_editor_from_first_snapshot(&mut self) -> bool {
+        if self.editing_env_id.is_some() || self.editor.dirty || self.snapshot_configs.is_empty() {
+            return false;
+        }
+
+        let Some(env_id) = self.snapshot_configs.keys().copied().min() else {
+            return false;
+        };
+        let Some(config) = self.snapshot_configs.get(&env_id) else {
+            return false;
+        };
+
+        self.editor.load_config(config);
+        self.editing_env_id = Some(env_id);
+        self.view_mode = PanelView::Editor;
+        true
+    }
+
     pub fn workbench_view(&self) -> EpuWorkbenchViewState {
         EpuWorkbenchViewState {
             selected_layer: Some(self.editor.selected_layer),
@@ -246,101 +264,136 @@ impl EpuDebugPanel {
             .resizable(true)
             .collapsible(true)
             .show(ctx, |ui| {
-                // Lock mode banner (prominent when active)
-                if self.locked {
-                    ui.horizontal(|ui| {
-                        ui.add_space(4.0);
-                        let banner = egui::RichText::new(
-                            "LOCKED - Game EPU disabled, using debugger config",
-                        )
+                changed |= self.render_contents(ui, config_count);
+            });
+
+        changed
+    }
+
+    pub fn render_inline(&mut self, ui: &mut egui::Ui) -> bool {
+        let mut changed = false;
+        let config_count = self.snapshot_configs.len();
+
+        ui.horizontal(|ui| {
+            let toggle = ui.checkbox(&mut self.visible, "Enable ZX EPU Tools");
+            if toggle.changed() {
+                if !self.visible {
+                    self.locked = false;
+                } else {
+                    self.seed_editor_from_first_snapshot();
+                }
+                changed = true;
+            }
+
+            ui.label(
+                egui::RichText::new("Opens the custom EPU browser/editor inside F4")
+                    .small()
+                    .weak(),
+            );
+        });
+
+        if !self.visible {
+            return changed;
+        }
+
+        ui.separator();
+        ui.set_min_width(380.0);
+        changed |= self.render_contents(ui, config_count);
+
+        changed
+    }
+
+    fn render_contents(&mut self, ui: &mut egui::Ui, config_count: usize) -> bool {
+        let mut changed = false;
+
+        if self.locked {
+            ui.horizontal(|ui| {
+                ui.add_space(4.0);
+                let banner =
+                    egui::RichText::new("LOCKED - Game EPU disabled, using debugger config")
                         .color(egui::Color32::WHITE)
                         .strong();
-                        ui.colored_label(egui::Color32::from_rgb(200, 80, 40), banner);
-                    });
-                    ui.add_space(2.0);
+                ui.colored_label(egui::Color32::from_rgb(200, 80, 40), banner);
+            });
+            ui.add_space(2.0);
+        }
+
+        ui.horizontal(|ui| {
+            ui.heading("Environment Processing Unit");
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let lock_text = if self.locked {
+                    egui::RichText::new("LOCK")
+                        .color(egui::Color32::from_rgb(255, 120, 60))
+                        .strong()
+                } else {
+                    egui::RichText::new("LOCK").color(egui::Color32::GRAY)
+                };
+                if ui.checkbox(&mut self.locked, lock_text).changed() {
+                    if self.locked {
+                        self.seed_editor_from_first_snapshot();
+                    }
+                    changed = true;
                 }
 
-                // Header with view mode tabs and lock toggle
-                ui.horizontal(|ui| {
-                    ui.heading("Environment Processing Unit");
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        // Lock toggle (prominent)
-                        let lock_text = if self.locked {
-                            egui::RichText::new("LOCK")
-                                .color(egui::Color32::from_rgb(255, 120, 60))
-                                .strong()
-                        } else {
-                            egui::RichText::new("LOCK").color(egui::Color32::GRAY)
-                        };
-                        if ui.checkbox(&mut self.locked, lock_text).changed() {
-                            changed = true;
-                        }
-
-                        ui.separator();
-
-                        if ui
-                            .selectable_label(self.view_mode == PanelView::Editor, "Editor")
-                            .clicked()
-                        {
-                            self.view_mode = PanelView::Editor;
-                        }
-                        if ui
-                            .selectable_label(self.view_mode == PanelView::Browser, "Browser")
-                            .clicked()
-                        {
-                            self.view_mode = PanelView::Browser;
-                        }
-                    });
-                });
-
                 ui.separator();
 
-                // Summary stats
-                ui.horizontal(|ui| {
-                    ui.label(format!("Defined opcodes: {}", OPCODE_COUNT));
-                    ui.separator();
-                    let config_label = if self.locked {
-                        "Game configs (snapshot): ".to_string()
-                    } else {
-                        "Active configs: ".to_string()
-                    };
-                    ui.label(format!("{}{}", config_label, config_count));
-                    if self.editor.dirty {
-                        ui.separator();
-                        ui.colored_label(egui::Color32::YELLOW, "* Modified");
-                    }
-                });
-
-                ui.separator();
-
-                match self.view_mode {
-                    PanelView::Browser => {
-                        // Two-column layout: opcode list on left, details on right
-                        ui.columns(2, |columns| {
-                            // Left column: Opcode list
-                            columns[0].heading("Opcodes");
-                            egui::ScrollArea::vertical()
-                                .id_salt("epu_opcode_list")
-                                .show(&mut columns[0], |ui| {
-                                    self.render_opcode_list(ui);
-                                });
-
-                            // Right column: Selected opcode details or active configs
-                            if let Some(opcode) = self.selected_opcode {
-                                columns[1].heading("Opcode Details");
-                                self.render_opcode_details(&mut columns[1], opcode);
-                            } else {
-                                columns[1].heading("Active Configs");
-                                self.render_active_configs_with_edit(&mut columns[1]);
-                            }
-                        });
-                    }
-                    PanelView::Editor => {
-                        // Semantic editor view
-                        changed |= self.render_editor_view(ui);
-                    }
+                if ui
+                    .selectable_label(self.view_mode == PanelView::Editor, "Editor")
+                    .clicked()
+                {
+                    self.view_mode = PanelView::Editor;
+                }
+                if ui
+                    .selectable_label(self.view_mode == PanelView::Browser, "Browser")
+                    .clicked()
+                {
+                    self.view_mode = PanelView::Browser;
                 }
             });
+        });
+
+        ui.separator();
+
+        ui.horizontal(|ui| {
+            ui.label(format!("Defined opcodes: {}", OPCODE_COUNT));
+            ui.separator();
+            let config_label = if self.locked {
+                "Game configs (snapshot): ".to_string()
+            } else {
+                "Active configs: ".to_string()
+            };
+            ui.label(format!("{}{}", config_label, config_count));
+            if self.editor.dirty {
+                ui.separator();
+                ui.colored_label(egui::Color32::YELLOW, "* Modified");
+            }
+        });
+
+        ui.separator();
+
+        match self.view_mode {
+            PanelView::Browser => {
+                ui.columns(2, |columns| {
+                    columns[0].heading("Opcodes");
+                    egui::ScrollArea::vertical()
+                        .id_salt("epu_opcode_list")
+                        .show(&mut columns[0], |ui| {
+                            self.render_opcode_list(ui);
+                        });
+
+                    if let Some(opcode) = self.selected_opcode {
+                        columns[1].heading("Opcode Details");
+                        self.render_opcode_details(&mut columns[1], opcode);
+                    } else {
+                        columns[1].heading("Active Configs");
+                        self.render_active_configs_with_edit(&mut columns[1]);
+                    }
+                });
+            }
+            PanelView::Editor => {
+                changed |= self.render_editor_view(ui);
+            }
+        }
 
         changed
     }

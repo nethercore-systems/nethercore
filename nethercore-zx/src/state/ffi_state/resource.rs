@@ -130,6 +130,7 @@ impl ZXFFIState {
 
         // Clear EPU per-frame requests
         self.epu_frame_configs.clear();
+        self.epu_debug_locked_override = None;
         self.epu_frame_config_slots.clear();
         self.epu_frame_draws.clear();
         self.next_epu_frame_slot = 1;

@@ -250,6 +250,18 @@ pub trait Console: Send + 'static {
         // Default: no console-specific debug UI
     }
 
+    /// Render console-specific tools inline inside the main F4 debug inspector.
+    ///
+    /// Default implementation does nothing.
+    fn render_debug_panel_contents(&mut self, _ui: &mut egui::Ui) {
+        // Default: no console-specific inline tools
+    }
+
+    /// Optional tab title for console-specific tools inside the main F4 debug inspector.
+    fn debug_panel_tab_title(&self) -> Option<&'static str> {
+        None
+    }
+
     /// Check if the console has a debug panel to render.
     ///
     /// Returns true if the console wants to render debug UI when visible.

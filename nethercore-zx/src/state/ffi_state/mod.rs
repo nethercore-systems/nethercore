@@ -168,6 +168,10 @@ pub struct ZXFFIState {
     /// 1) `env_id = 0` if present, else
     /// 2) the built-in default environment config.
     pub epu_frame_configs: HashMap<u32, EpuConfig>,
+    /// Debug-panel lock override for this frame.
+    ///
+    /// When present, game-driven EPU source changes are ignored and slot 0 stays active.
+    pub epu_debug_locked_override: Option<EpuConfig>,
     /// Frame-local deduplication of procedural EPU configs to internal slots.
     pub epu_frame_config_slots: HashMap<EpuConfig, u32>,
     /// Persistent imported EPU face sets resolved to internal slots.
@@ -273,6 +277,7 @@ impl Default for ZXFFIState {
             mvp_shading_overflow_count: 0,
             // EPU (instruction-based) state (push-only)
             epu_frame_configs: HashMap::new(),
+            epu_debug_locked_override: None,
             epu_frame_config_slots: HashMap::new(),
             epu_imported_slots: HashMap::new(),
             epu_imported_faces_by_slot: HashMap::new(),
@@ -322,6 +327,11 @@ impl ZXFFIState {
     }
 
     pub fn bind_epu_config(&mut self, config: EpuConfig) -> u32 {
+        if self.epu_debug_locked_override.is_some() {
+            self.update_environment_index(0);
+            return 0;
+        }
+
         let slot = if let Some(&slot) = self.epu_frame_config_slots.get(&config) {
             slot
         } else {
@@ -336,6 +346,11 @@ impl ZXFFIState {
     }
 
     pub fn bind_epu_textures(&mut self, faces: EpuTextureFaces) -> u32 {
+        if self.epu_debug_locked_override.is_some() {
+            self.update_environment_index(0);
+            return 0;
+        }
+
         let slot = if let Some(&slot) = self.epu_imported_slots.get(&faces) {
             slot
         } else {

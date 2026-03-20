@@ -98,5 +98,10 @@ fn epu_build(@builtin(global_invocation_id) gid: vec3u) {
         final_radiance = mix(radiance, avg_radiance, oct_stress * 0.35);
     }
 
-    textureStore(epu_out_sharp, vec2u(gid.xy), i32(env_id), vec4f(final_radiance, 1.0));
+    textureStore(
+        epu_out_sharp,
+        vec2u(gid.xy),
+        i32(env_id),
+        vec4f(epu_saturate3(final_radiance), 1.0)
+    );
 }

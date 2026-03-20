@@ -113,26 +113,11 @@ fn eval_sector(
         default: {}
     }
 
-    let sector_bias = RegionWeights(
-        base_regions.sky * mix(0.35, 1.0, output_regions.sky),
-        base_regions.wall * mix(0.35, 1.0, output_regions.wall),
-        base_regions.floor * mix(0.35, 1.0, output_regions.floor)
-    );
-    let sector_bias_sum = max(
-        sector_bias.sky + sector_bias.wall + sector_bias.floor,
-        1e-5
-    );
-    let modulated_regions = RegionWeights(
-        sector_bias.sky / sector_bias_sum,
-        sector_bias.wall / sector_bias_sum,
-        sector_bias.floor / sector_bias_sum
-    );
-    let sector_mix = intensity * 0.8;
-    output_regions = RegionWeights(
-        mix(base_regions.sky, modulated_regions.sky, sector_mix),
-        mix(base_regions.wall, modulated_regions.wall, sector_mix),
-        mix(base_regions.floor, modulated_regions.floor, sector_mix)
-    );
+    // SECTOR is a full bounds source, not just a modulation of prior ownership.
+    // If we try to reshape the previous region set here, the default all-sky
+    // bootstrap collapses the wedge back to sky and makes azimuth/width appear
+    // inert in authoring tools. Emit authored wedge regions directly instead.
+    output_regions = normalize_region_weights(output_regions);
 
     // Get colors and render with 3-band split
     let sky_color = instr_color_a(instr);

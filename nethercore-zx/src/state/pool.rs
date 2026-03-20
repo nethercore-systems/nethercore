@@ -198,6 +198,15 @@ where
         &self.states
     }
 
+    /// Get a mutable slice of all states.
+    ///
+    /// Callers must not rely on the deduplication map after mutating hashed fields.
+    /// This is intended for end-of-frame patching where the pool will be cleared
+    /// before any further `add()` calls.
+    pub fn as_mut_slice(&mut self) -> &mut [T] {
+        &mut self.states
+    }
+
     /// Iterate over all states
     pub fn iter(&self) -> impl Iterator<Item = &T> {
         self.states.iter()

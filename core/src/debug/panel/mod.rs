@@ -24,6 +24,12 @@ pub struct ActionRequest {
     pub args: Vec<ActionParamValue>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DebugPanelTab {
+    Inspector,
+    Extra,
+}
+
 /// Debug inspection panel state
 pub struct DebugPanel {
     /// Whether the panel is visible
@@ -34,6 +40,8 @@ pub struct DebugPanel {
     tree_cache: Option<Vec<TreeNode>>,
     /// Whether tree needs to be rebuilt
     tree_dirty: bool,
+    /// Active top-level tab in the debug inspector window.
+    active_tab: DebugPanelTab,
     /// Action renderer (handles parameter state)
     action_renderer: ActionRenderer,
     /// Value widget renderer
@@ -54,6 +62,7 @@ impl DebugPanel {
             collapsed_groups: HashSet::new(),
             tree_cache: None,
             tree_dirty: true,
+            active_tab: DebugPanelTab::Inspector,
             action_renderer: ActionRenderer::new(),
             value_renderer: ValueWidgetRenderer::new(),
         }
@@ -86,6 +95,8 @@ impl DebugPanel {
         frame_controller: &mut FrameController,
         read_value: impl Fn(&RegisteredValue) -> Option<DebugValue>,
         write_value: impl Fn(&RegisteredValue, &DebugValue) -> bool,
+        extra_tab_title: Option<&str>,
+        mut render_extra: impl FnMut(&mut egui::Ui),
     ) -> (bool, Option<ActionRequest>) {
         if !self.visible || registry.is_empty() {
             return (false, None);
@@ -99,6 +110,9 @@ impl DebugPanel {
 
         let mut any_changed = false;
         let mut action_request: Option<ActionRequest> = None;
+        if extra_tab_title.is_none() {
+            self.active_tab = DebugPanelTab::Inspector;
+        }
 
         egui::Window::new("Debug Inspector")
             .id(egui::Id::new("debug_inspection_window"))
@@ -113,31 +127,50 @@ impl DebugPanel {
                     ui.separator();
                 }
 
-                // Scrollable area for values and actions
-                egui::ScrollArea::vertical()
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| {
-                        // Clone tree to avoid borrow conflict with render_tree(&mut self)
-                        if let Some(tree) = self.tree_cache.clone() {
-                            let (changed, action) = self.render_tree(
-                                ui,
-                                &tree,
-                                registry,
-                                "",
-                                &read_value,
-                                &write_value,
-                            );
-                            any_changed |= changed;
-                            if action.is_some() {
-                                action_request = action;
-                            }
-                        }
+                if let Some(extra_tab_title) = extra_tab_title {
+                    ui.horizontal(|ui| {
+                        ui.selectable_value(
+                            &mut self.active_tab,
+                            DebugPanelTab::Inspector,
+                            "Inspector",
+                        );
+                        ui.selectable_value(
+                            &mut self.active_tab,
+                            DebugPanelTab::Extra,
+                            extra_tab_title,
+                        );
                     });
+                    ui.separator();
+                }
 
-                ui.separator();
+                match self.active_tab {
+                    DebugPanelTab::Inspector => {
+                        egui::ScrollArea::vertical()
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| {
+                                if let Some(tree) = self.tree_cache.clone() {
+                                    let (changed, action) = self.render_tree(
+                                        ui,
+                                        &tree,
+                                        registry,
+                                        "",
+                                        &read_value,
+                                        &write_value,
+                                    );
+                                    any_changed |= changed;
+                                    if action.is_some() {
+                                        action_request = action;
+                                    }
+                                }
+                            });
 
-                // Export buttons
-                self.render_export_buttons(ui, registry, &read_value);
+                        ui.separator();
+                        self.render_export_buttons(ui, registry, &read_value);
+                    }
+                    DebugPanelTab::Extra => {
+                        render_extra(ui);
+                    }
+                }
             });
 
         (any_changed, action_request)
