@@ -70,6 +70,8 @@ pub struct SessionConfig {
     pub disconnect_notify_start: u64,
     /// Frame rate for time sync
     pub fps: usize,
+    /// Sync-test checksum distance in frames
+    pub check_distance: usize,
 }
 
 impl Default for SessionConfig {
@@ -81,6 +83,7 @@ impl Default for SessionConfig {
             disconnect_timeout: 5000,
             disconnect_notify_start: 3000,
             fps: 60,
+            check_distance: 2,
         }
     }
 }
@@ -135,6 +138,12 @@ impl SessionConfig {
         self.num_players = num_players;
         self
     }
+
+    /// Set sync-test checksum distance (builder pattern)
+    pub fn with_check_distance(mut self, check_distance: usize) -> Self {
+        self.check_distance = check_distance.max(1);
+        self
+    }
 }
 
 #[cfg(test)]
@@ -169,6 +178,7 @@ mod tests {
         assert_eq!(config.num_players, 1);
         assert_eq!(config.input_delay, 0);
         assert_eq!(config.max_prediction_frames, MAX_ROLLBACK_FRAMES);
+        assert_eq!(config.check_distance, 2);
     }
 
     #[test]
@@ -176,6 +186,7 @@ mod tests {
         let config = SessionConfig::sync_test_with_params(3, 5);
         assert_eq!(config.num_players, 3);
         assert_eq!(config.input_delay, 5);
+        assert_eq!(config.check_distance, 2);
         assert_eq!(config.max_prediction_frames, MAX_ROLLBACK_FRAMES);
     }
 
@@ -203,5 +214,14 @@ mod tests {
         let config = SessionConfig::default().with_players(3).with_input_delay(2);
         assert_eq!(config.num_players, 3);
         assert_eq!(config.input_delay, 2);
+    }
+
+    #[test]
+    fn test_session_config_with_check_distance() {
+        let config = SessionConfig::default().with_check_distance(7);
+        assert_eq!(config.check_distance, 7);
+
+        let config = SessionConfig::default().with_check_distance(0);
+        assert_eq!(config.check_distance, 1);
     }
 }

@@ -1,5 +1,7 @@
 //! Tests for tracker channel state and NNA system
 
+#![allow(clippy::field_reassign_with_default)]
+
 use super::*;
 
 fn create_playing_channel() -> TrackerChannel {

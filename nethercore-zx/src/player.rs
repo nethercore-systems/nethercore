@@ -128,17 +128,16 @@ fn raw_wasm_metadata_from_path(path: &Path, fallback_name: &str) -> RawWasmMetad
 
     // Prefer manifest.json next to the ROM.
     let manifest_path = parent.join("manifest.json");
-    if manifest_path.is_file() {
-        if let Ok(bytes) = read_file_with_limit(&manifest_path, MAX_MANIFEST_BYTES)
-            && let Ok(manifest) = serde_json::from_slice::<LocalGameManifest>(&bytes)
-        {
-            if !manifest.title.is_empty() {
-                metadata.game_name = manifest.title;
-            }
-            if !manifest.id.is_empty() && is_safe_game_id(&manifest.id) {
-                metadata.game_id = manifest.id;
-                resolved_game_id = true;
-            }
+    if manifest_path.is_file()
+        && let Ok(bytes) = read_file_with_limit(&manifest_path, MAX_MANIFEST_BYTES)
+        && let Ok(manifest) = serde_json::from_slice::<LocalGameManifest>(&bytes)
+    {
+        if !manifest.title.is_empty() {
+            metadata.game_name = manifest.title;
+        }
+        if !manifest.id.is_empty() && is_safe_game_id(&manifest.id) {
+            metadata.game_id = manifest.id;
+            resolved_game_id = true;
         }
     }
 

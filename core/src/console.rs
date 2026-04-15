@@ -334,7 +334,7 @@ pub trait Console: Send + 'static {
 
     /// Suggested default crops for background vs probe review.
     fn epu_workbench_capture_crops(&self, width: u32, height: u32) -> EpuWorkbenchCaptureCrops {
-        let probe = EpuWorkbenchCaptureCrops {
+        EpuWorkbenchCaptureCrops {
             background: crate::workbench::EpuWorkbenchCrop {
                 x: 0,
                 y: 0,
@@ -347,8 +347,7 @@ pub trait Console: Send + 'static {
                 width: width / 3,
                 height: height * 2 / 3,
             },
-        };
-        probe
+        }
     }
 }
 

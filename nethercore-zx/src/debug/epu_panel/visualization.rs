@@ -350,34 +350,34 @@ impl DirectionGizmo {
     ) -> bool {
         let mut changed = false;
 
-        if response.dragged() || response.clicked() {
-            if let Some(pos) = response.interact_pointer_pos() {
-                // Convert screen position to normalized coordinates relative to center
-                // X maps to X, screen-Y maps to -Y (inverted)
-                let dx = (pos.x - center.x) / radius;
-                let dy = -(pos.y - center.y) / radius; // Invert Y for screen coords
+        if (response.dragged() || response.clicked())
+            && let Some(pos) = response.interact_pointer_pos()
+        {
+            // Convert screen position to normalized coordinates relative to center
+            // X maps to X, screen-Y maps to -Y (inverted)
+            let dx = (pos.x - center.x) / radius;
+            let dy = -(pos.y - center.y) / radius; // Invert Y for screen coords
 
-                // Clamp to unit circle
-                let dist = (dx * dx + dy * dy).sqrt();
-                let (nx, ny) = if dist > 1.0 {
-                    (dx / dist, dy / dist)
-                } else {
-                    (dx, dy)
-                };
+            // Clamp to unit circle
+            let dist = (dx * dx + dy * dy).sqrt();
+            let (nx, ny) = if dist > 1.0 {
+                (dx / dist, dy / dist)
+            } else {
+                (dx, dy)
+            };
 
-                // Calculate Z from hemisphere equation: x^2 + y^2 + z^2 = 1
-                // Since we're showing the front hemisphere (+Z), Z is positive
-                let z_sq = 1.0 - nx * nx - ny * ny;
-                let nz = if z_sq > 0.0 { z_sq.sqrt() } else { 0.0 };
+            // Calculate Z from hemisphere equation: x^2 + y^2 + z^2 = 1
+            // Since we're showing the front hemisphere (+Z), Z is positive
+            let z_sq = 1.0 - nx * nx - ny * ny;
+            let nz = if z_sq > 0.0 { z_sq.sqrt() } else { 0.0 };
 
-                // Encode the new direction
-                let new_dir = [nx, ny, nz];
-                let new_encoded = encode_direction_u16(new_dir);
+            // Encode the new direction
+            let new_dir = [nx, ny, nz];
+            let new_encoded = encode_direction_u16(new_dir);
 
-                if new_encoded != *direction {
-                    *direction = new_encoded;
-                    changed = true;
-                }
+            if new_encoded != *direction {
+                *direction = new_encoded;
+                changed = true;
             }
         }
 

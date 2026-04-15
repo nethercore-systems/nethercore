@@ -598,8 +598,10 @@ mod tests {
         console.epu_debug_panel.editor.load_config(&override_config);
         console.epu_debug_panel.locked = true;
 
-        let mut live_shading = PackedUnifiedShadingState::default();
-        live_shading.environment_index = 3;
+        let live_shading = PackedUnifiedShadingState {
+            environment_index: 3,
+            ..Default::default()
+        };
         state.shading_pool.add(live_shading);
         state.current_shading_state.environment_index = 3;
         state

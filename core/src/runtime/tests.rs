@@ -6,7 +6,7 @@ use crate::console::{Console, RawInput};
 use crate::test_utils::{TestAudio, TestConsole, TestInput};
 use crate::wasm::{GameInstance, WasmEngine};
 
-use super::{Runtime, RuntimeConfig};
+use super::{Runtime, RuntimeConfig, ScriptedSyncTestConfig};
 
 fn test_ram_limit() -> usize {
     TestConsole::specs().ram_limit
@@ -252,6 +252,107 @@ fn test_runtime_replay_step_ignores_wall_clock_catchup() {
     assert_eq!(alpha, 0.0);
     assert_eq!(runtime.game().unwrap().state().tick_count, 1);
     assert_eq!(runtime.accumulator, std::time::Duration::ZERO);
+}
+
+#[test]
+fn test_runtime_sync_test_advances_once_per_input_sample() {
+    let console = TestConsole;
+    let mut runtime = Runtime::<TestConsole>::new(console);
+
+    let engine = WasmEngine::new().unwrap();
+    let wasm = wat::parse_str(
+        r#"
+            (module
+                (memory (export "memory") 1)
+                (func (export "update"))
+            )
+        "#,
+    )
+    .unwrap();
+    let module = engine.load_module(&wasm).unwrap();
+    let linker = Linker::new(engine.engine());
+    let game =
+        GameInstance::<TestInput, ()>::with_ram_limit(&engine, &module, &linker, test_ram_limit())
+            .unwrap();
+
+    let config = crate::rollback::SessionConfig::sync_test_with_params(2, 0);
+    let session =
+        crate::rollback::RollbackSession::<TestInput, ()>::new_sync_test(config, test_ram_limit())
+            .unwrap();
+
+    runtime.load_game(game);
+    runtime.set_session(session);
+
+    runtime.add_local_input(0, TestInput::default()).unwrap();
+    runtime.add_local_input(1, TestInput::default()).unwrap();
+    runtime.accumulator = runtime.tick_duration() * 5;
+    runtime.last_update = Some(std::time::Instant::now());
+
+    let (ticks, _alpha) = runtime.frame_with_time_scale(1.0).unwrap();
+
+    assert_eq!(ticks, 1);
+    assert_eq!(runtime.game().unwrap().state().tick_count, 1);
+}
+
+#[test]
+fn test_runtime_scripted_sync_test_gate_runs_long_input_sequence() {
+    let console = TestConsole;
+    let mut runtime = Runtime::<TestConsole>::new(console);
+
+    let engine = WasmEngine::new().unwrap();
+    let wasm = wat::parse_str(
+        r#"
+            (module
+                (memory (export "memory") 1)
+                (func (export "init")
+                    (i32.store (i32.const 0) (i32.const 0))
+                )
+                (func (export "update")
+                    (i32.store
+                        (i32.const 0)
+                        (i32.add (i32.load (i32.const 0)) (i32.const 1))
+                    )
+                )
+            )
+        "#,
+    )
+    .unwrap();
+    let module = engine.load_module(&wasm).unwrap();
+    let linker = Linker::new(engine.engine());
+    let mut game =
+        GameInstance::<TestInput, ()>::with_ram_limit(&engine, &module, &linker, test_ram_limit())
+            .unwrap();
+    game.init().unwrap();
+
+    runtime.load_game(game);
+
+    let report = runtime
+        .run_scripted_sync_test(
+            ScriptedSyncTestConfig {
+                frames: 300,
+                players: 2,
+                input_delay: 0,
+                check_distance: 2,
+            },
+            |frame, player| TestInput {
+                buttons: ((frame.rotate_left(player as u32) ^ (player as u32 * 0x11)) & 0x0f)
+                    as u16,
+                x: ((frame as i32 * 3 + player as i32 * 17) % 127) as i8,
+                y: ((frame as i32 * 5 - player as i32 * 11) % 127) as i8,
+            },
+        )
+        .unwrap();
+
+    assert_eq!(report.input_frames, 300);
+    assert!(
+        report.simulated_frames >= report.input_frames,
+        "sync-test should execute at least one simulation frame per input sample"
+    );
+    assert!(
+        report.rollback_frames > 0,
+        "sync-test should force rollback replays over a long scripted run"
+    );
+    assert!(report.final_session_frame > 0);
 }
 
 // ============================================================================

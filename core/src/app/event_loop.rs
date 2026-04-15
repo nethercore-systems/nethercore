@@ -202,10 +202,19 @@ impl<C: Console, A: ConsoleApp<C>> ApplicationHandler for AppEventHandler<C, A> 
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         if let Some(app) = &mut self.app {
+            if app.should_exit() {
+                event_loop.exit();
+                return;
+            }
+
             // Check if tick is due
             let now = Instant::now();
             if now >= app.next_tick() {
                 app.advance_simulation();
+                if app.should_exit() {
+                    event_loop.exit();
+                    return;
+                }
                 app.update_next_tick();
                 app.mark_needs_redraw();
             }

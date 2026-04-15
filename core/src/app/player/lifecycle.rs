@@ -84,8 +84,8 @@ where
 
     /// Runs a single game frame: processes input, advances simulation, renders
     ///
-    /// Returns (game_running, did_render) or RuntimeError
-    pub(super) fn run_game_frame(&mut self) -> Result<(bool, bool), RuntimeError> {
+    /// Returns (game_running, did_render, ticks) or RuntimeError
+    pub(super) fn run_game_frame(&mut self) -> Result<(bool, bool, u32), RuntimeError> {
         let runner = self
             .runner
             .as_mut()
@@ -249,7 +249,7 @@ where
             .map(|g| g.state().quit_requested)
             .unwrap_or(false);
 
-        Ok((!quit_requested, did_render))
+        Ok((!quit_requested, did_render, ticks))
     }
 
     /// Executes pending draw commands from the console state

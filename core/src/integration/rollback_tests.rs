@@ -180,6 +180,115 @@ fn test_rollback_checksum_detection() {
     assert_ne!(snapshot1.data, snapshot2.data);
 }
 
+/// Regression test for GGRS sync-test snapshots.
+///
+/// StandaloneApp used to pre-seed `input_curr` before GGRS emitted
+/// `SaveGameState`. During rollback replay, GGRS applies frame inputs at
+/// `AdvanceFrame`, so a pre-frame snapshot must not depend on the current
+/// frame's pre-seeded input. Only the previous input is needed to make
+/// button_pressed/button_released deterministic when the frame is replayed.
+#[test]
+fn test_pre_frame_snapshot_canonicalizes_current_input() {
+    let (engine, linker) = create_test_engine();
+
+    let wat = r#"
+        (module
+            (memory (export "memory") 1)
+            (func (export "init"))
+            (func (export "update"))
+            (func (export "render"))
+        )
+    "#;
+
+    let wasm = wat::parse_str(wat).unwrap();
+    let module = engine.load_module(&wasm).unwrap();
+    let mut game = new_test_game_instance(&engine, &module, &linker);
+    let mut state_manager = RollbackStateManager::with_defaults();
+
+    game.init().unwrap();
+    game.state_mut().input_prev[0] = TestInput {
+        buttons: 0x0001,
+        x: 0,
+        y: 0,
+    };
+    game.state_mut().input_curr[0] = TestInput {
+        buttons: 0x0010,
+        x: 0,
+        y: 0,
+    };
+    let snapshot_a = state_manager.save_state(&mut game, 7).unwrap();
+
+    game.state_mut().input_curr[0] = TestInput {
+        buttons: 0x0020,
+        x: 0,
+        y: 0,
+    };
+    let snapshot_b = state_manager.save_state(&mut game, 7).unwrap();
+
+    assert_eq!(
+        snapshot_a.checksum, snapshot_b.checksum,
+        "pre-frame snapshots must not depend on pre-seeded current-frame input"
+    );
+
+    game.state_mut().input_prev[0] = TestInput {
+        buttons: 0x0002,
+        x: 0,
+        y: 0,
+    };
+    let snapshot_c = state_manager.save_state(&mut game, 7).unwrap();
+
+    assert_ne!(
+        snapshot_b.checksum, snapshot_c.checksum,
+        "previous input must still be part of rollback snapshots"
+    );
+}
+
+#[test]
+fn test_sync_test_advances_noop_game_with_staged_inputs() {
+    let (engine, linker) = create_test_engine();
+
+    let wat = r#"
+        (module
+            (memory (export "memory") 1)
+            (func (export "init"))
+            (func (export "update"))
+            (func (export "render"))
+        )
+    "#;
+
+    let wasm = wat::parse_str(wat).unwrap();
+    let module = engine.load_module(&wasm).unwrap();
+    let mut game = new_test_game_instance(&engine, &module, &linker);
+    let config = crate::rollback::SessionConfig::sync_test_with_params(2, 0);
+    let mut session =
+        RollbackSession::<TestInput, ()>::new_sync_test(config, test_ram_limit()).unwrap();
+
+    game.init().unwrap();
+
+    for frame in 0..16 {
+        for player in 0..2 {
+            let input = TestInput {
+                buttons: ((frame + player) & 1) as u16,
+                x: frame as i8,
+                y: player as i8,
+            };
+            game.set_input(player, input);
+            session.add_local_input(player, input).unwrap();
+        }
+
+        let requests = session.advance_frame().unwrap();
+        session
+            .handle_requests_ordered(&mut game, requests, |game, inputs| {
+                for (player_idx, (input, _status)) in inputs.iter().enumerate() {
+                    game.set_input(player_idx, *input);
+                }
+                game.update(1.0 / 60.0)
+                    .map_err(|e| crate::rollback::SessionError::Ggrs(e.to_string()))
+            })
+            .unwrap();
+    }
+}
+
 /// Test rollback simulation with multiple save points
 ///
 /// State must be stored in memory (not globals) for rollback to work.

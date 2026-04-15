@@ -76,11 +76,11 @@ impl ZXGraphics {
         .hash_value();
 
         // Check if cached bind group is still valid
-        if let Some(ref cached) = self.cached_frame_bind_group {
-            if self.cached_frame_bind_group_hash == bind_group_hash {
-                // Reuse cached bind group
-                return Some(cached.clone());
-            }
+        if let Some(ref cached) = self.cached_frame_bind_group
+            && self.cached_frame_bind_group_hash == bind_group_hash
+        {
+            // Reuse cached bind group
+            return Some(cached.clone());
         }
 
         // Need to create new bind group (hash changed or no cached bind group)

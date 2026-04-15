@@ -31,12 +31,11 @@ fn newest_mtime_in_dir(dir: &Path) -> Option<SystemTime> {
     let mut newest: Option<SystemTime> = None;
     if let Ok(entries) = fs::read_dir(dir) {
         for entry in entries.flatten() {
-            if let Ok(meta) = entry.metadata() {
-                if let Ok(mtime) = meta.modified() {
-                    if newest.is_none_or(|n| mtime > n) {
-                        newest = Some(mtime);
-                    }
-                }
+            if let Ok(meta) = entry.metadata()
+                && let Ok(mtime) = meta.modified()
+                && newest.is_none_or(|n| mtime > n)
+            {
+                newest = Some(mtime);
             }
         }
     }

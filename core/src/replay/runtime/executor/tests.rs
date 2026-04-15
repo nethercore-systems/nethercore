@@ -490,7 +490,7 @@ fn test_executor_action_all_param_types() {
 
     let mut params = HashMap::new();
     params.insert("int_val".to_string(), ActionParamValue::Int(42));
-    params.insert("float_val".to_string(), ActionParamValue::Float(3.14));
+    params.insert("float_val".to_string(), ActionParamValue::Float(2.5));
     params.insert(
         "string_val".to_string(),
         ActionParamValue::String("hello".to_string()),
@@ -525,7 +525,7 @@ fn test_executor_action_all_param_types() {
         Some(ActionParamValue::Int(42))
     ));
     match params.get("float_val") {
-        Some(ActionParamValue::Float(f)) => assert!((*f - 3.14).abs() < 0.001),
+        Some(ActionParamValue::Float(f)) => assert!((*f - 2.5).abs() < 0.001),
         _ => panic!("Expected Float"),
     }
     assert!(matches!(

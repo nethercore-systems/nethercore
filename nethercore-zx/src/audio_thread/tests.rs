@@ -1,3 +1,5 @@
+#![allow(clippy::field_reassign_with_default, clippy::useless_vec)]
+
 use super::*;
 use std::sync::Arc;
 use std::time::Duration;
@@ -809,7 +811,7 @@ fn test_rollback_followed_by_normal_snapshot() {
     rollback_audio.channels[0].position = 5000;
 
     let rollback = AudioGenSnapshot::new(
-        rollback_audio.clone(),
+        rollback_audio,
         TrackerState::default(),
         TrackerEngine::new().snapshot(),
         Arc::new(Vec::new()),

@@ -77,7 +77,8 @@ where
                 let session_config = SessionConfig::sync_test_with_params(
                     self.config.num_players,
                     self.config.input_delay,
-                );
+                )
+                .with_check_distance(*check_distance);
                 let session = RollbackSession::new_sync_test(session_config, specs.ram_limit)
                     .context("Failed to create sync test session")?;
                 let started = Instant::now();

@@ -6,6 +6,8 @@
 //! - Winding order (CCW from outside)
 //! - Packed vertex format (POS_NORMAL: 12 bytes/vertex)
 
+#![allow(clippy::needless_range_loop)]
+
 use super::*;
 use crate::graphics::unpack_octahedral_u32;
 use half::f16;

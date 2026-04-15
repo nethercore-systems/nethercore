@@ -104,6 +104,10 @@ struct Args {
     #[arg(long, value_name = "FILE")]
     replay: Option<PathBuf>,
 
+    /// Exit after this many advanced input frames, useful for automated sync-test gates
+    #[arg(long)]
+    exit_after_frames: Option<u32>,
+
     /// Enable the local EPU workbench HTTP service on 127.0.0.1:<port>
     #[arg(long)]
     epu_workbench_port: Option<u16>,
@@ -183,6 +187,7 @@ fn main() -> Result<()> {
         input_delay: args.input_delay,
         connection_mode,
         replay_script: args.replay,
+        exit_after_frames: args.exit_after_frames,
         epu_workbench_port: args.epu_workbench_port,
         epu_workbench_dir: args.epu_workbench_dir,
     };

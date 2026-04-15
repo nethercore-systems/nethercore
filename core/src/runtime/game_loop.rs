@@ -6,7 +6,7 @@ use anyhow::Result;
 use ggrs::SessionState;
 
 use crate::console::Console;
-use crate::rollback::RollbackSession;
+use crate::rollback::{RollbackSession, SessionType};
 use crate::wasm::GameInstance;
 
 use super::RuntimeConfig;
@@ -60,9 +60,14 @@ pub fn execute_frame<C: Console>(
             return Ok((0, 0.0));
         }
 
-        // For P2P sessions, only advance once per render frame to match input cadence
-        // (we only add input once per run_game_frame call)
-        let is_p2p = session.session_state().is_some();
+        // GGRS-backed sessions require one submitted input sample per advance.
+        // StandaloneApp submits local input once per run_game_frame call, so do
+        // not let a long wall-clock catch-up burst advance these sessions more
+        // than once without another input sample.
+        let advances_once_per_input = matches!(
+            session.session_type(),
+            SessionType::SyncTest | SessionType::P2P
+        );
 
         while *accumulator >= tick_duration {
             let tick_start = Instant::now();
@@ -74,23 +79,25 @@ pub fn execute_frame<C: Console>(
 
             // Handle all requests (SaveGameState, LoadGameState, AdvanceFrame)
             if let Some(game) = game {
-                let advance_inputs = session
-                    .handle_requests(game, requests)
+                let advanced_frames = session
+                    .handle_requests_ordered(game, requests, |game, inputs| {
+                        // Note: Audio rollback is automatic via ConsoleRollbackState.
+                        // Audio state is part of snapshot, no explicit mode tracking needed.
+
+                        // Execute this AdvanceFrame at its exact position in the
+                        // GGRS request stream. Later SaveGameState requests in the
+                        // same batch depend on this state already being advanced.
+                        // Set inputs in GameState for FFI access.
+                        // Each entry is (input, status) for one player.
+                        for (player_idx, (input, _status)) in inputs.iter().enumerate() {
+                            game.set_input(player_idx, *input);
+                        }
+                        game.update(tick_duration.as_secs_f32())
+                            .map_err(|e| crate::rollback::SessionError::Ggrs(e.to_string()))
+                    })
                     .map_err(|e| anyhow::anyhow!("GGRS handle_requests failed: {}", e))?;
 
-                // Note: Audio rollback is automatic via ConsoleRollbackState
-                // Audio state is part of snapshot, no explicit mode tracking needed
-
-                // Execute each AdvanceFrame with its inputs
-                for inputs in advance_inputs {
-                    // Set inputs in GameState for FFI access
-                    // Each entry is (input, status) for one player
-                    for (player_idx, (input, _status)) in inputs.iter().enumerate() {
-                        game.set_input(player_idx, *input);
-                    }
-                    game.update(tick_duration.as_secs_f32())?;
-                    ticks += 1;
-                }
+                ticks += advanced_frames;
             }
 
             *accumulator -= tick_duration;
@@ -105,10 +112,7 @@ pub fn execute_frame<C: Console>(
                 );
             }
 
-            // For P2P sessions, only advance once per render frame
-            // We only receive one input per run_game_frame call, so we can't
-            // advance multiple times without new input
-            if is_p2p {
+            if advances_once_per_input {
                 // Clamp remaining accumulator to prevent runaway catchup
                 if *accumulator > tick_duration {
                     *accumulator = tick_duration;

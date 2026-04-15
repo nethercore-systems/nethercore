@@ -87,7 +87,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>
             .with_num_players(config.num_players)
             .with_max_prediction_window(config.max_prediction_frames)
             .with_input_delay(config.input_delay)
-            .with_check_distance(2)
+            .with_check_distance(config.check_distance)
             .start_synctest_session()?;
 
         let local_players = player_config.local_player_indices();
@@ -241,6 +241,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>
             fps: session_start.tick_rate.as_hz() as usize,
             disconnect_timeout: nchs_config.disconnect_timeout_ms as u64,
             disconnect_notify_start: nchs_config.disconnect_timeout_ms as u64 / 2,
+            check_distance: SessionConfig::default().check_distance,
         };
 
         // Build player types from NCHS player list

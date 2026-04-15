@@ -253,7 +253,7 @@ impl VirtualRenderPass {
     #[inline]
     fn perf_enabled() -> bool {
         static ENABLED: OnceLock<bool> = OnceLock::new();
-        *ENABLED.get_or_init(|| std::env::var("NETHERCORE_ZX_PERF").map_or(false, |v| v != "0"))
+        *ENABLED.get_or_init(|| std::env::var("NETHERCORE_ZX_PERF").is_ok_and(|v| v != "0"))
     }
 
     /// Create a new command buffer

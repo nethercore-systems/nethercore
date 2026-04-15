@@ -77,6 +77,7 @@ impl ZXGraphics {
 
     /// Execute all render passes for the frame.
     /// Commands are processed in segments, restarting render pass when depth_clear is needed.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn execute_render_passes(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,

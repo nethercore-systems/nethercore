@@ -66,12 +66,19 @@ impl RollbackStateManager {
         // SmallVec stores inline (no heap allocation) for typical console states (<512 bytes)
         let console_data = SmallVec::from_slice(bytemuck::bytes_of(game.rollback_state()));
 
-        // Serialize input state (input_prev and input_curr)
-        // Required for button_pressed() to work correctly after rollback
+        // Serialize the pre-frame input edge baseline.
+        //
+        // Snapshots are taken before GGRS advances a frame. Some host paths may
+        // have already staged the current frame's input in input_curr at that
+        // point, but rollback replay applies that same input later when handling
+        // AdvanceFrame. Including staged input_curr in the checksum makes the
+        // original pre-frame snapshot differ from the replayed pre-frame
+        // snapshot. input_prev is the only edge state needed before replaying the
+        // frame, so store it in both slots as the canonical loaded baseline.
         let game_state = game.state();
         let mut input_data: InputDataVec = SmallVec::new();
         input_data.extend_from_slice(bytemuck::cast_slice(&game_state.input_prev));
-        input_data.extend_from_slice(bytemuck::cast_slice(&game_state.input_curr));
+        input_data.extend_from_slice(bytemuck::cast_slice(&game_state.input_prev));
 
         // Capture host-side state that affects game simulation
         let host_state = HostRollbackState::new(

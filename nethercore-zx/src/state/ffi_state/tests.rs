@@ -1,5 +1,7 @@
 //! Tests for ZXFFIState
 
+#![allow(clippy::field_reassign_with_default)]
+
 use super::*;
 use glam::{Mat4, Vec3};
 

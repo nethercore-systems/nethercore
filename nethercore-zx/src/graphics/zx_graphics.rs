@@ -656,7 +656,7 @@ pub(super) struct ZXPerf {
 
 impl ZXPerf {
     pub fn new() -> Self {
-        let enabled = std::env::var("NETHERCORE_ZX_PERF").map_or(false, |v| v != "0");
+        let enabled = std::env::var("NETHERCORE_ZX_PERF").is_ok_and(|v| v != "0");
         Self {
             enabled,
             last_log: Instant::now(),

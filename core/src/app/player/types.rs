@@ -77,6 +77,8 @@ pub struct StandaloneConfig {
     pub connection_mode: ConnectionMode,
     /// Replay script path (.ncrs file) for automated playback
     pub replay_script: Option<PathBuf>,
+    /// Exit after this many advanced input frames. Intended for automated sync-test gates.
+    pub exit_after_frames: Option<u32>,
     /// Local EPU workbench HTTP port (127.0.0.1). None disables the service.
     pub epu_workbench_port: Option<u16>,
     /// Durable directory for workbench artifacts.

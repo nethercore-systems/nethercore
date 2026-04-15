@@ -53,6 +53,10 @@ pub struct RunArgs {
     #[arg(long)]
     pub sync_test: bool,
 
+    /// Sync-test check distance (frames between state checksums)
+    #[arg(long, default_value = "2")]
+    pub check_distance: usize,
+
     /// Number of players (1-4)
     #[arg(long, default_value = "1")]
     pub players: usize,
@@ -72,6 +76,10 @@ pub struct RunArgs {
     /// Run a replay script (.ncrs) for automated playback and screenshots
     #[arg(long, value_name = "FILE")]
     pub replay: Option<PathBuf>,
+
+    /// Exit after this many advanced input frames, useful for automated sync-test gates
+    #[arg(long)]
+    pub exit_after_frames: Option<u32>,
 }
 
 /// Execute the run command
@@ -411,6 +419,8 @@ fn build_player_args(args: &RunArgs) -> Vec<String> {
 
     if args.sync_test {
         extra_args.push("--sync-test".to_string());
+        extra_args.push("--check-distance".to_string());
+        extra_args.push(args.check_distance.to_string());
     }
 
     if args.players > 1 {
@@ -426,6 +436,11 @@ fn build_player_args(args: &RunArgs) -> Vec<String> {
     if let Some(ref replay) = args.replay {
         extra_args.push("--replay".to_string());
         extra_args.push(replay.display().to_string());
+    }
+
+    if let Some(frames) = args.exit_after_frames {
+        extra_args.push("--exit-after-frames".to_string());
+        extra_args.push(frames.to_string());
     }
 
     extra_args

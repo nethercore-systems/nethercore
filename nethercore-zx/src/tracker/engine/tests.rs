@@ -1,5 +1,7 @@
 //! Unit tests for tracker engine
 
+#![allow(clippy::field_reassign_with_default)]
+
 use super::super::TrackerEngine;
 use super::super::channels::NNA_CUT;
 use nether_tracker::{

@@ -497,8 +497,8 @@ mod tests {
         for i in 0..4 {
             assert!(state.save_data[i].is_none());
         }
-        for i in 4..MAX_SAVE_SLOTS {
-            assert_eq!(state.save_data[i].as_deref(), Some(&[i as u8][..]));
+        for (i, slot) in state.save_data.iter().enumerate().skip(4) {
+            assert_eq!(slot.as_deref(), Some(&[i as u8][..]));
         }
     }
 
@@ -521,8 +521,8 @@ mod tests {
         for i in 0..4 {
             assert_eq!(state.save_data[i].as_deref(), Some(&[1, 2, 3][..]));
         }
-        for i in 4..MAX_SAVE_SLOTS {
-            assert_eq!(state.save_data[i].as_deref(), Some(&[0xEE][..]));
+        for slot in state.save_data.iter().skip(4) {
+            assert_eq!(slot.as_deref(), Some(&[0xEE][..]));
         }
     }
 

@@ -180,10 +180,10 @@ fn is_rom_path(arg: &str) -> Option<PathBuf> {
             if let Ok(entries) = std::fs::read_dir(&path) {
                 for entry in entries.flatten() {
                     let entry_path = entry.path();
-                    if let Some(ext) = entry_path.extension().and_then(|e| e.to_str()) {
-                        if is_supported_rom_extension(ext) {
-                            return Some(entry_path);
-                        }
+                    if let Some(ext) = entry_path.extension().and_then(|e| e.to_str())
+                        && is_supported_rom_extension(ext)
+                    {
+                        return Some(entry_path);
                     }
                 }
             }

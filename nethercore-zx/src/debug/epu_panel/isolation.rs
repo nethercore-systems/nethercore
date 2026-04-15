@@ -96,10 +96,10 @@ impl LayerIsolationState {
         }
 
         // If a layer is soloed, only render that layer
-        if self.isolation_active {
-            if let Some(soloed) = self.isolated_layer {
-                return layer == soloed;
-            }
+        if self.isolation_active
+            && let Some(soloed) = self.isolated_layer
+        {
+            return layer == soloed;
         }
 
         // Otherwise, render if not muted
@@ -451,19 +451,19 @@ fn describe_color(rgb: [u8; 3]) -> &'static str {
 pub fn render_isolation_banner(ui: &mut egui::Ui, state: &LayerIsolationState) -> bool {
     let mut show_all_clicked = false;
 
-    if state.isolation_active {
-        if let Some(layer_idx) = state.isolated_layer {
-            ui.horizontal(|ui| {
-                ui.visuals_mut().override_text_color = Some(egui::Color32::YELLOW);
-                ui.label(format!("Layer {} isolated", layer_idx));
-                ui.visuals_mut().override_text_color = None;
+    if state.isolation_active
+        && let Some(layer_idx) = state.isolated_layer
+    {
+        ui.horizontal(|ui| {
+            ui.visuals_mut().override_text_color = Some(egui::Color32::YELLOW);
+            ui.label(format!("Layer {} isolated", layer_idx));
+            ui.visuals_mut().override_text_color = None;
 
-                if ui.button("Show All").clicked() {
-                    show_all_clicked = true;
-                }
-            });
-            ui.separator();
-        }
+            if ui.button("Show All").clicked() {
+                show_all_clicked = true;
+            }
+        });
+        ui.separator();
     }
 
     show_all_clicked

@@ -15,11 +15,13 @@ use crate::wasm::GameInstance;
 
 mod config;
 mod game_loop;
+mod sync_test;
 
 #[cfg(test)]
 mod tests;
 
 pub use config::RuntimeConfig;
+pub use sync_test::{ScriptedSyncTestConfig, ScriptedSyncTestReport};
 
 /// Tuple of mutable references to game instance and audio, where either can be None
 type GameAndAudioMut<'a, C> = (
@@ -191,10 +193,10 @@ impl<C: Console> Runtime<C> {
         let mut ticks = 0u32;
 
         if let Some(session) = &mut self.session {
-            if let Some(state) = session.session_state() {
-                if state != SessionState::Running {
-                    return Ok((0, 0.0));
-                }
+            if let Some(state) = session.session_state()
+                && state != SessionState::Running
+            {
+                return Ok((0, 0.0));
             }
 
             let requests = session
@@ -202,17 +204,17 @@ impl<C: Console> Runtime<C> {
                 .map_err(|e| anyhow::anyhow!("GGRS advance_frame failed: {}", e))?;
 
             if let Some(game) = &mut self.game {
-                let advance_inputs = session
-                    .handle_requests(game, requests)
+                let advanced_frames = session
+                    .handle_requests_ordered(game, requests, |game, inputs| {
+                        for (player_idx, (input, _status)) in inputs.iter().enumerate() {
+                            game.set_input(player_idx, *input);
+                        }
+                        game.update(self.tick_duration.as_secs_f32())
+                            .map_err(|e| crate::rollback::SessionError::Ggrs(e.to_string()))
+                    })
                     .map_err(|e| anyhow::anyhow!("GGRS handle_requests failed: {}", e))?;
 
-                for inputs in advance_inputs {
-                    for (player_idx, (input, _status)) in inputs.iter().enumerate() {
-                        game.set_input(player_idx, *input);
-                    }
-                    game.update(self.tick_duration.as_secs_f32())?;
-                    ticks += 1;
-                }
+                ticks += advanced_frames;
             }
         } else if let Some(game) = &mut self.game {
             game.update(self.tick_duration.as_secs_f32())?;

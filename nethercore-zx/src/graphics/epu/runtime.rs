@@ -375,6 +375,7 @@ impl EpuRuntime {
     // =========================================================================
 
     /// Dispatch a single downsample pass from mip i to mip i+1.
+    #[allow(clippy::too_many_arguments)]
     fn dispatch_mip_pass(
         &self,
         device: &wgpu::Device,
@@ -417,6 +418,7 @@ impl EpuRuntime {
         compute_pass.dispatch_workgroups(workgroups_x, workgroups_y, active_count);
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn dispatch_imported_face_mip_pass(
         &self,
         device: &wgpu::Device,
@@ -810,7 +812,7 @@ impl EpuRuntime {
             let n = EPU_BUILD_DEBUG_COUNT.fetch_add(1, Ordering::Relaxed);
             if n < 64 {
                 let (env0_id, env0_hash, env0_d0, env0_w0) = dirty_configs
-                    .get(0)
+                    .first()
                     .map(|(id, cfg)| {
                         let d0 = ((cfg.layers[0][1] >> 24) & 0xFF) as u8;
                         let gpu0 = GpuEnvironmentState::from(*cfg);

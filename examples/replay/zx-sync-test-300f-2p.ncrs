@@ -1,0 +1,22 @@
+console = "zx"
+seed = 4919
+players = 2
+
+# Console-level smoke script for `nether run --sync-test --players 2`.
+# Sparse entries are intentional: omitted frames compile as idle, so this file
+# runs 300 input frames without depending on any specific game's menu or rules.
+frames = [
+  { f = 0, p1 = "idle", p2 = "idle", snap = true },
+  { f = 5, p1 = "right", p2 = "left" },
+  { f = 11, p1 = "right+a", p2 = "left+b" },
+  { f = 17, p1 = "a", p2 = "b" },
+  { f = 23, p1 = "down+a", p2 = "down+b" },
+  { f = 31, p1 = "left", p2 = "right" },
+  { f = 47, p1 = "x", p2 = "y" },
+  { f = 59, p1 = "up", p2 = "up" },
+  { f = 83, p1 = "right+x", p2 = "left+y" },
+  { f = 127, p1 = "l", p2 = "r" },
+  { f = 191, p1 = "start", p2 = "select" },
+  { f = 255, p1 = "right+a", p2 = "left+b" },
+  { f = 299, p1 = "idle", p2 = "idle", snap = true },
+]

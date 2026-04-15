@@ -10,6 +10,14 @@ use std::path::Path;
 use crate::formats::write_nether_mesh;
 use crate::{vertex_stride_packed, FORMAT_NORMAL, FORMAT_UV};
 
+type ParsedObj = (
+    Vec<[f32; 3]>,
+    Option<Vec<[f32; 2]>>,
+    Option<Vec<[f32; 3]>>,
+    Vec<u16>,
+    u8,
+);
+
 /// Convert an OBJ file to in-memory mesh data (for direct ROM packing)
 pub fn convert_obj_to_memory(input: &Path) -> Result<ConvertedMesh> {
     let (positions, uvs, normals, indices, format) = parse_obj_file(input)?;
@@ -78,15 +86,7 @@ pub fn convert_obj(input: &Path, output: &Path, format_override: Option<&str>) -
 /// Parse OBJ file and return vertex data + auto-detected format
 ///
 /// Returns: (positions, uvs, normals, indices, format)
-fn parse_obj_file(
-    input: &Path,
-) -> Result<(
-    Vec<[f32; 3]>,
-    Option<Vec<[f32; 2]>>,
-    Option<Vec<[f32; 3]>>,
-    Vec<u16>,
-    u8,
-)> {
+fn parse_obj_file(input: &Path) -> Result<ParsedObj> {
     let file = File::open(input).with_context(|| format!("Failed to open OBJ: {:?}", input))?;
     let reader = BufReader::new(file);
 

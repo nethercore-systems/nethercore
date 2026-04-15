@@ -66,10 +66,23 @@ where
     fn advance_simulation(&mut self) {
         self.process_workbench_requests();
 
+        if self.should_exit {
+            return;
+        }
+
         // Replay capture must stay locked to rendered frames. If a redraw is still pending,
         // advancing another simulation step can move replay-driven animation and screenshot
         // requests ahead of the frame that will actually be captured.
         if self.replay_executor.is_some() && self.needs_redraw {
+            return;
+        }
+
+        if let Some(executor) = &self.replay_executor
+            && executor.is_complete()
+        {
+            if !self.capture.has_pending_saves() {
+                self.should_exit = true;
+            }
             return;
         }
 
@@ -112,26 +125,35 @@ where
             .map(|g| g.state().tick_count);
 
         match self.run_game_frame() {
-            Ok((game_running, did_render)) => {
+            Ok((game_running, did_render, ticks)) => {
                 self.last_sim_rendered = did_render;
 
                 if did_render {
                     self.execute_draw_commands();
                 }
 
+                if ticks > 0 {
+                    self.advanced_input_frames = self.advanced_input_frames.saturating_add(1);
+                    if let Some(limit) = self.config.exit_after_frames
+                        && self.advanced_input_frames >= limit
+                    {
+                        tracing::info!(
+                            "Frame limit reached after {} advanced input frames",
+                            self.advanced_input_frames
+                        );
+                        self.should_exit = true;
+                    }
+                }
+
                 // Advance replay executor and request screenshots
-                if did_render {
-                    if let Some(ref mut executor) = self.replay_executor {
-                        if executor.needs_screenshot() {
-                            self.capture.request_screenshot();
-                        }
-                        executor.advance_frame();
-                        if executor.is_complete() {
-                            if !self.capture.has_pending_saves() {
-                                tracing::info!("Replay complete, all screenshots saved");
-                                self.should_exit = true;
-                            }
-                        }
+                if did_render && let Some(ref mut executor) = self.replay_executor {
+                    if executor.needs_screenshot() {
+                        self.capture.request_screenshot();
+                    }
+                    executor.advance_frame();
+                    if executor.is_complete() && !self.capture.has_pending_saves() {
+                        tracing::info!("Replay complete, all screenshots saved");
+                        self.should_exit = true;
                     }
                 }
 

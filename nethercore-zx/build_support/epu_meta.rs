@@ -131,7 +131,8 @@ fn generate_code(opcodes: &BTreeMap<u8, OpcodeMeta>) -> String {
     code.push_str("// in shaders/epu/bounds/*.wgsl and shaders/epu/features/*.wgsl\n\n");
 
     // Suppress warnings for generated code
-    code.push_str("#![allow(dead_code)]\n\n");
+    code.push_str("#![allow(dead_code)]\n");
+    code.push_str("#![allow(clippy::excessive_precision)]\n\n");
 
     // Count
     code.push_str("/// Total number of defined opcodes\n");
@@ -206,6 +207,7 @@ fn generate_code(opcodes: &BTreeMap<u8, OpcodeMeta>) -> String {
 
     // OPCODES array - indexed by opcode number, with Option for missing opcodes
     code.push_str("/// Opcode info indexed by opcode number (None for undefined opcodes)\n");
+    code.push_str("#[rustfmt::skip]\n");
     code.push_str(&format!(
         "pub static OPCODES: [Option<OpcodeInfo>; {}] = [\n",
         MAX_OPCODES
@@ -228,6 +230,7 @@ fn generate_code(opcodes: &BTreeMap<u8, OpcodeMeta>) -> String {
 
     // VARIANTS array - variant names per opcode (up to 8)
     code.push_str("/// Variant names per opcode (up to 8)\n");
+    code.push_str("#[rustfmt::skip]\n");
     code.push_str(&format!(
         "pub static VARIANTS: [&[&str]; {}] = [\n",
         MAX_OPCODES
@@ -249,6 +252,7 @@ fn generate_code(opcodes: &BTreeMap<u8, OpcodeMeta>) -> String {
 
     // DOMAINS array - domain names per opcode (up to 4)
     code.push_str("/// Domain names per opcode (up to 4)\n");
+    code.push_str("#[rustfmt::skip]\n");
     code.push_str(&format!(
         "pub static DOMAINS: [&[&str]; {}] = [\n",
         MAX_OPCODES
@@ -271,6 +275,7 @@ fn generate_code(opcodes: &BTreeMap<u8, OpcodeMeta>) -> String {
     // Generate static field spec arrays for each opcode
     for (opcode, meta) in opcodes.iter() {
         if !meta.fields.is_empty() {
+            code.push_str("#[rustfmt::skip]\n");
             code.push_str(&format!(
                 "static FIELDS_{:02X}: [FieldSpec; {}] = [\n",
                 opcode,
@@ -301,6 +306,7 @@ fn generate_code(opcodes: &BTreeMap<u8, OpcodeMeta>) -> String {
 
     // FIELD_SPECS array - field specs per opcode
     code.push_str("/// Field specifications per opcode\n");
+    code.push_str("#[rustfmt::skip]\n");
     code.push_str(&format!(
         "pub static FIELD_SPECS: [&[FieldSpec]; {}] = [\n",
         MAX_OPCODES

@@ -70,11 +70,8 @@ fn test_host_guest_handshake() {
     let mut guest_accepted = false;
     for _ in 0..100 {
         // Poll host
-        match host.poll() {
-            NchsEvent::PlayerJoined { handle, .. } => {
-                tracing::info!("Host: Player {} joined", handle);
-            }
-            _ => {}
+        if let NchsEvent::PlayerJoined { handle, .. } = host.poll() {
+            tracing::info!("Host: Player {} joined", handle);
         }
 
         // Poll guest
@@ -135,19 +132,16 @@ fn test_host_guest_ready_and_start() {
     // Wait for host to see guest ready
     let mut all_ready = false;
     for _ in 0..100 {
-        match host.poll() {
-            NchsEvent::LobbyUpdated(lobby) => {
-                let guests_ready = lobby
-                    .players
-                    .iter()
-                    .filter(|p| p.active && p.handle != 0)
-                    .all(|p| p.ready);
-                if guests_ready {
-                    all_ready = true;
-                    break;
-                }
+        if let NchsEvent::LobbyUpdated(lobby) = host.poll() {
+            let guests_ready = lobby
+                .players
+                .iter()
+                .filter(|p| p.active && p.handle != 0)
+                .all(|p| p.ready);
+            if guests_ready {
+                all_ready = true;
+                break;
             }
-            _ => {}
         }
         guest.poll(); // Keep guest alive
         thread::sleep(Duration::from_millis(10));
@@ -229,13 +223,10 @@ fn test_rom_hash_mismatch_rejected() {
     let mut reject_reason = None;
     for _ in 0..100 {
         host.poll();
-        match guest.poll() {
-            NchsEvent::Error(NchsError::Rejected(reject)) => {
-                rejected = true;
-                reject_reason = Some(reject.reason);
-                break;
-            }
-            _ => {}
+        if let NchsEvent::Error(NchsError::Rejected(reject)) = guest.poll() {
+            rejected = true;
+            reject_reason = Some(reject.reason);
+            break;
         }
         thread::sleep(Duration::from_millis(10));
     }
@@ -270,13 +261,10 @@ fn test_console_type_mismatch_rejected() {
     let mut reject_reason = None;
     for _ in 0..100 {
         host.poll();
-        match guest.poll() {
-            NchsEvent::Error(NchsError::Rejected(reject)) => {
-                rejected = true;
-                reject_reason = Some(reject.reason);
-                break;
-            }
-            _ => {}
+        if let NchsEvent::Error(NchsError::Rejected(reject)) = guest.poll() {
+            rejected = true;
+            reject_reason = Some(reject.reason);
+            break;
         }
         thread::sleep(Duration::from_millis(10));
     }
@@ -314,13 +302,10 @@ fn test_tick_rate_mismatch_rejected() {
     let mut reject_reason = None;
     for _ in 0..100 {
         host.poll();
-        match guest.poll() {
-            NchsEvent::Error(NchsError::Rejected(reject)) => {
-                rejected = true;
-                reject_reason = Some(reject.reason);
-                break;
-            }
-            _ => {}
+        if let NchsEvent::Error(NchsError::Rejected(reject)) = guest.poll() {
+            rejected = true;
+            reject_reason = Some(reject.reason);
+            break;
         }
         thread::sleep(Duration::from_millis(10));
     }
@@ -379,13 +364,10 @@ fn test_lobby_full_rejected() {
     for _ in 0..100 {
         host.poll();
         guest1.poll(); // Keep guest1 alive
-        match guest2.poll() {
-            NchsEvent::Error(NchsError::Rejected(reject)) => {
-                rejected = true;
-                reject_reason = Some(reject.reason);
-                break;
-            }
-            _ => {}
+        if let NchsEvent::Error(NchsError::Rejected(reject)) = guest2.poll() {
+            rejected = true;
+            reject_reason = Some(reject.reason);
+            break;
         }
         thread::sleep(Duration::from_millis(10));
     }
@@ -439,13 +421,10 @@ fn test_join_while_game_in_progress_rejected() {
     for _ in 0..100 {
         host.poll();
         guest1.poll();
-        match guest2.poll() {
-            NchsEvent::Error(NchsError::Rejected(reject)) => {
-                rejected = true;
-                reject_reason = Some(reject.reason);
-                break;
-            }
-            _ => {}
+        if let NchsEvent::Error(NchsError::Rejected(reject)) = guest2.poll() {
+            rejected = true;
+            reject_reason = Some(reject.reason);
+            break;
         }
         thread::sleep(Duration::from_millis(10));
     }

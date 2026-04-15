@@ -5,6 +5,7 @@
 // in shaders/epu/bounds/*.wgsl and shaders/epu/features/*.wgsl
 
 #![allow(dead_code)]
+#![allow(clippy::excessive_precision)]
 
 /// Total number of defined opcodes
 pub const OPCODE_COUNT: usize = 23;
@@ -65,6 +66,7 @@ pub struct FieldSpec {
 }
 
 /// Opcode info indexed by opcode number (None for undefined opcodes)
+#[rustfmt::skip]
 pub static OPCODES: [Option<OpcodeInfo>; 32] = [
     None,
     Some(OpcodeInfo { code: 0x01, name: "RAMP", kind: OpcodeKind::Bounds }),
@@ -101,6 +103,7 @@ pub static OPCODES: [Option<OpcodeInfo>; 32] = [
 ];
 
 /// Variant names per opcode (up to 8)
+#[rustfmt::skip]
 pub static VARIANTS: [&[&str]; 32] = [
     &[],
     &[],
@@ -137,6 +140,7 @@ pub static VARIANTS: [&[&str]; 32] = [
 ];
 
 /// Domain names per opcode (up to 4)
+#[rustfmt::skip]
 pub static DOMAINS: [&[&str]; 32] = [
     &[],
     &[],
@@ -172,6 +176,7 @@ pub static DOMAINS: [&[&str]; 32] = [
     &[],
 ];
 
+#[rustfmt::skip]
 static FIELDS_01: [FieldSpec; 5] = [
     FieldSpec { name: "intensity", label: "softness", unit: None, map: MapKind::U8Lerp, min: 0.010000, max: 0.500000 },
     FieldSpec { name: "param_a", label: "wall_r", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
@@ -179,6 +184,7 @@ static FIELDS_01: [FieldSpec; 5] = [
     FieldSpec { name: "param_c", label: "wall_b", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_d", label: "thresholds", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
 ];
+#[rustfmt::skip]
 static FIELDS_02: [FieldSpec; 5] = [
     FieldSpec { name: "intensity", label: "opening", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_a", label: "azimuth", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
@@ -186,6 +192,7 @@ static FIELDS_02: [FieldSpec; 5] = [
     FieldSpec { name: "param_c", label: "-", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_d", label: "-", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
 ];
+#[rustfmt::skip]
 static FIELDS_03: [FieldSpec; 5] = [
     FieldSpec { name: "intensity", label: "edge_soft", unit: None, map: MapKind::U8Lerp, min: 0.005000, max: 0.100000 },
     FieldSpec { name: "param_a", label: "height", unit: None, map: MapKind::U8Lerp, min: -0.300000, max: 0.500000 },
@@ -193,6 +200,7 @@ static FIELDS_03: [FieldSpec; 5] = [
     FieldSpec { name: "param_c", label: "octaves", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_d", label: "wall_depth", unit: None, map: MapKind::U8Lerp, min: 0.050000, max: 1.200000 },
 ];
+#[rustfmt::skip]
 static FIELDS_04: [FieldSpec; 5] = [
     FieldSpec { name: "intensity", label: "-", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_a", label: "blend_width", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
@@ -200,6 +208,7 @@ static FIELDS_04: [FieldSpec; 5] = [
     FieldSpec { name: "param_c", label: "sides", unit: None, map: MapKind::U8Lerp, min: 2.000000, max: 16.000000 },
     FieldSpec { name: "param_d", label: "offset", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
 ];
+#[rustfmt::skip]
 static FIELDS_05: [FieldSpec; 5] = [
     FieldSpec { name: "intensity", label: "outline", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_a", label: "density", unit: None, map: MapKind::U8Lerp, min: 4.000000, max: 64.000000 },
@@ -207,6 +216,7 @@ static FIELDS_05: [FieldSpec; 5] = [
     FieldSpec { name: "param_c", label: "gap_width", unit: None, map: MapKind::U8Lerp, min: 0.000000, max: 0.200000 },
     FieldSpec { name: "param_d", label: "seed", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
 ];
+#[rustfmt::skip]
 static FIELDS_06: [FieldSpec; 5] = [
     FieldSpec { name: "intensity", label: "-", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_a", label: "scale", unit: None, map: MapKind::U8Lerp, min: 1.000000, max: 16.000000 },
@@ -214,6 +224,7 @@ static FIELDS_06: [FieldSpec; 5] = [
     FieldSpec { name: "param_c", label: "sharpness", unit: None, map: MapKind::U8Lerp, min: 0.000000, max: 0.500000 },
     FieldSpec { name: "param_d", label: "seed", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
 ];
+#[rustfmt::skip]
 static FIELDS_07: [FieldSpec; 5] = [
     FieldSpec { name: "intensity", label: "edge_soft", unit: None, map: MapKind::U8Lerp, min: 0.005000, max: 0.100000 },
     FieldSpec { name: "param_a", label: "half_width", unit: None, map: MapKind::U8Lerp, min: 0.100000, max: 1.500000 },
@@ -221,6 +232,7 @@ static FIELDS_07: [FieldSpec; 5] = [
     FieldSpec { name: "param_c", label: "frame", unit: None, map: MapKind::U8Lerp, min: 0.020000, max: 0.500000 },
     FieldSpec { name: "param_d", label: "(varies)", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
 ];
+#[rustfmt::skip]
 static FIELDS_08: [FieldSpec; 5] = [
     FieldSpec { name: "intensity", label: "brightness", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_a", label: "shape+soft", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
@@ -228,6 +240,7 @@ static FIELDS_08: [FieldSpec; 5] = [
     FieldSpec { name: "param_c", label: "glow_soft", unit: None, map: MapKind::U8Lerp, min: 0.000000, max: 0.200000 },
     FieldSpec { name: "param_d", label: "phase", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
 ];
+#[rustfmt::skip]
 static FIELDS_09: [FieldSpec; 5] = [
     FieldSpec { name: "intensity", label: "brightness", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_a", label: "scale", unit: None, map: MapKind::U8Lerp, min: 1.000000, max: 64.000000 },
@@ -235,6 +248,7 @@ static FIELDS_09: [FieldSpec; 5] = [
     FieldSpec { name: "param_c", label: "pat+scroll", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_d", label: "phase", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
 ];
+#[rustfmt::skip]
 static FIELDS_0A: [FieldSpec; 5] = [
     FieldSpec { name: "intensity", label: "brightness", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_a", label: "density", unit: None, map: MapKind::U8Lerp, min: 1.000000, max: 256.000000 },
@@ -242,6 +256,7 @@ static FIELDS_0A: [FieldSpec; 5] = [
     FieldSpec { name: "param_c", label: "twinkle", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_d", label: "seed", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
 ];
+#[rustfmt::skip]
 static FIELDS_0B: [FieldSpec; 5] = [
     FieldSpec { name: "intensity", label: "brightness", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_a", label: "scale", unit: None, map: MapKind::U8Lerp, min: 1.000000, max: 16.000000 },
@@ -249,6 +264,7 @@ static FIELDS_0B: [FieldSpec; 5] = [
     FieldSpec { name: "param_c", label: "oct+pat", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_d", label: "phase", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
 ];
+#[rustfmt::skip]
 static FIELDS_0C: [FieldSpec; 5] = [
     FieldSpec { name: "intensity", label: "brightness", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_a", label: "count", unit: None, map: MapKind::U8Lerp, min: 1.000000, max: 16.000000 },
@@ -256,6 +272,7 @@ static FIELDS_0C: [FieldSpec; 5] = [
     FieldSpec { name: "param_c", label: "jitter", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_d", label: "seed+shape", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
 ];
+#[rustfmt::skip]
 static FIELDS_0D: [FieldSpec; 5] = [
     FieldSpec { name: "intensity", label: "brightness", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_a", label: "count", unit: None, map: MapKind::U8Lerp, min: 2.000000, max: 32.000000 },
@@ -263,6 +280,7 @@ static FIELDS_0D: [FieldSpec; 5] = [
     FieldSpec { name: "param_c", label: "sway", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_d", label: "phase", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
 ];
+#[rustfmt::skip]
 static FIELDS_0E: [FieldSpec; 5] = [
     FieldSpec { name: "intensity", label: "strength", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_a", label: "falloff", unit: None, map: MapKind::U8Lerp, min: 0.500000, max: 8.000000 },
@@ -270,6 +288,7 @@ static FIELDS_0E: [FieldSpec; 5] = [
     FieldSpec { name: "param_c", label: "mie_conc", unit: None, map: MapKind::U8Lerp, min: 0.000000, max: 2.000000 },
     FieldSpec { name: "param_d", label: "mie_exp", unit: None, map: MapKind::U8Lerp, min: 4.000000, max: 128.000000 },
 ];
+#[rustfmt::skip]
 static FIELDS_0F: [FieldSpec; 5] = [
     FieldSpec { name: "intensity", label: "contrast", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_a", label: "scale", unit: Some("x"), map: MapKind::U8Lerp, min: 0.500000, max: 16.000000 },
@@ -277,6 +296,7 @@ static FIELDS_0F: [FieldSpec; 5] = [
     FieldSpec { name: "param_c", label: "roughness", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_d", label: "phase", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
 ];
+#[rustfmt::skip]
 static FIELDS_10: [FieldSpec; 5] = [
     FieldSpec { name: "intensity", label: "brightness", unit: None, map: MapKind::U8Lerp, min: 0.000000, max: 2.000000 },
     FieldSpec { name: "param_a", label: "ang_size", unit: Some("deg"), map: MapKind::U8Lerp, min: 0.500000, max: 45.000000 },
@@ -284,6 +304,7 @@ static FIELDS_10: [FieldSpec; 5] = [
     FieldSpec { name: "param_c", label: "phase_ang", unit: Some("deg"), map: MapKind::U8Lerp, min: 0.000000, max: 360.000000 },
     FieldSpec { name: "param_d", label: "(varies)", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
 ];
+#[rustfmt::skip]
 static FIELDS_11: [FieldSpec; 5] = [
     FieldSpec { name: "intensity", label: "glow", unit: None, map: MapKind::U8Lerp, min: 0.000000, max: 2.000000 },
     FieldSpec { name: "param_a", label: "size", unit: None, map: MapKind::U8Lerp, min: 0.050000, max: 0.800000 },
@@ -291,6 +312,7 @@ static FIELDS_11: [FieldSpec; 5] = [
     FieldSpec { name: "param_c", label: "roughness", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_d", label: "phase", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
 ];
+#[rustfmt::skip]
 static FIELDS_12: [FieldSpec; 5] = [
     FieldSpec { name: "intensity", label: "brightness", unit: None, map: MapKind::U8Lerp, min: 0.000000, max: 2.000000 },
     FieldSpec { name: "param_a", label: "exponent", unit: None, map: MapKind::U8Lerp, min: 1.000000, max: 64.000000 },
@@ -298,6 +320,7 @@ static FIELDS_12: [FieldSpec; 5] = [
     FieldSpec { name: "param_c", label: "waveform", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_d", label: "phase", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
 ];
+#[rustfmt::skip]
 static FIELDS_13: [FieldSpec; 5] = [
     FieldSpec { name: "intensity", label: "brightness", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_a", label: "width", unit: None, map: MapKind::U8Lerp, min: 0.005000, max: 0.500000 },
@@ -305,6 +328,7 @@ static FIELDS_13: [FieldSpec; 5] = [
     FieldSpec { name: "param_c", label: "softness", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_d", label: "phase", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
 ];
+#[rustfmt::skip]
 static FIELDS_14: [FieldSpec; 5] = [
     FieldSpec { name: "intensity", label: "brightness", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_a", label: "scale", unit: Some("x"), map: MapKind::U8Lerp, min: 0.500000, max: 20.000000 },
@@ -312,6 +336,7 @@ static FIELDS_14: [FieldSpec; 5] = [
     FieldSpec { name: "param_c", label: "detail", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_d", label: "phase", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
 ];
+#[rustfmt::skip]
 static FIELDS_15: [FieldSpec; 5] = [
     FieldSpec { name: "intensity", label: "brightness", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_a", label: "scale", unit: Some("x"), map: MapKind::U8Lerp, min: 0.500000, max: 12.000000 },
@@ -319,6 +344,7 @@ static FIELDS_15: [FieldSpec; 5] = [
     FieldSpec { name: "param_c", label: "breakup", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_d", label: "phase", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
 ];
+#[rustfmt::skip]
 static FIELDS_16: [FieldSpec; 5] = [
     FieldSpec { name: "intensity", label: "contrast", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_a", label: "scale", unit: Some("x"), map: MapKind::U8Lerp, min: 0.500000, max: 16.000000 },
@@ -326,6 +352,7 @@ static FIELDS_16: [FieldSpec; 5] = [
     FieldSpec { name: "param_c", label: "sheen", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_d", label: "phase", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
 ];
+#[rustfmt::skip]
 static FIELDS_17: [FieldSpec; 5] = [
     FieldSpec { name: "intensity", label: "density", unit: None, map: MapKind::U8_01, min: 0.000000, max: 1.000000 },
     FieldSpec { name: "param_a", label: "scale", unit: Some("x"), map: MapKind::U8Lerp, min: 0.500000, max: 10.000000 },
@@ -335,6 +362,7 @@ static FIELDS_17: [FieldSpec; 5] = [
 ];
 
 /// Field specifications per opcode
+#[rustfmt::skip]
 pub static FIELD_SPECS: [&[FieldSpec]; 32] = [
     &[],
     &FIELDS_01,

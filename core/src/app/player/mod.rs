@@ -85,6 +85,8 @@ where
     _loader_marker: std::marker::PhantomData<L>,
     /// Active replay script executor (when --replay is used)
     replay_executor: Option<ScriptExecutor>,
+    /// Number of input-sampled frames advanced since startup.
+    advanced_input_frames: u32,
     /// Legacy standalone console debug panel visibility.
     ///
     /// Most console-specific tools should prefer inline rendering inside the F4 debug inspector.
@@ -174,6 +176,7 @@ where
             _vram_limit: vram_limit,
             _loader_marker: std::marker::PhantomData,
             replay_executor: None,
+            advanced_input_frames: 0,
             console_debug_panel_visible: false,
             workbench: None,
         }

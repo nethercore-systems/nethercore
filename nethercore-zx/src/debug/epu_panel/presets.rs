@@ -339,7 +339,7 @@ impl PresetManager {
 
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.extension().map_or(false, |ext| ext == "json") {
+            if path.extension().is_some_and(|ext| ext == "json") {
                 // Try to load just the metadata
                 match self.load_preset_info(&path) {
                     Ok(info) => self.cached_presets.push(info),
@@ -389,10 +389,10 @@ impl PresetManager {
         let path = self.preset_path(&preset.name);
 
         // Ensure directory exists
-        if let Some(parent) = path.parent() {
-            if !parent.exists() {
-                fs::create_dir_all(parent)?;
-            }
+        if let Some(parent) = path.parent()
+            && !parent.exists()
+        {
+            fs::create_dir_all(parent)?;
         }
 
         // Serialize and write
@@ -561,10 +561,10 @@ pub fn render_preset_ui(
             }
 
             // Refresh list
-            if ui.button("Refresh").clicked() {
-                if let Err(e) = manager.refresh_cache() {
-                    ui_state.set_error(format!("Refresh failed: {}", e));
-                }
+            if ui.button("Refresh").clicked()
+                && let Err(e) = manager.refresh_cache()
+            {
+                ui_state.set_error(format!("Refresh failed: {}", e));
             }
         });
 

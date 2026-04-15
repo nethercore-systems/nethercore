@@ -608,16 +608,15 @@ impl EpuEditor {
 
                     // Bounds opcodes (0x01..=0x07)
                     for code in 1u8..=7 {
-                        if let Some(info) = &OPCODES[code as usize] {
-                            if ui
+                        if let Some(info) = &OPCODES[code as usize]
+                            && ui
                                 .selectable_value(&mut layer.opcode, info.code, info.name)
                                 .clicked()
-                            {
-                                changed = true;
-                                // Reset variant/domain when changing opcode
-                                layer.variant_id = 0;
-                                layer.domain_id = 0;
-                            }
+                        {
+                            changed = true;
+                            // Reset variant/domain when changing opcode
+                            layer.variant_id = 0;
+                            layer.domain_id = 0;
                         }
                     }
 
@@ -626,15 +625,14 @@ impl EpuEditor {
 
                     // Feature opcodes (0x08..=0x1F)
                     for code in 8u8..=0x1F {
-                        if let Some(info) = &OPCODES[code as usize] {
-                            if ui
+                        if let Some(info) = &OPCODES[code as usize]
+                            && ui
                                 .selectable_value(&mut layer.opcode, info.code, info.name)
                                 .clicked()
-                            {
-                                changed = true;
-                                layer.variant_id = 0;
-                                layer.domain_id = 0;
-                            }
+                        {
+                            changed = true;
+                            layer.variant_id = 0;
+                            layer.domain_id = 0;
                         }
                     }
                 });

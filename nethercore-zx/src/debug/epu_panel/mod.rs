@@ -434,21 +434,19 @@ impl EpuDebugPanel {
                                 format!("Env {}", env_id),
                             )
                             .clicked()
+                            && let Some(config) = self.snapshot_configs.get(&env_id)
                         {
-                            if let Some(config) = self.snapshot_configs.get(&env_id) {
-                                self.editor.load_config(config);
-                            }
+                            self.editor.load_config(config);
                         }
                     }
                 });
 
             // Load button
-            if let Some(env_id) = self.editing_env_id {
-                if ui.button("Reload").clicked() {
-                    if let Some(config) = self.snapshot_configs.get(&env_id) {
-                        self.editor.load_config(config);
-                    }
-                }
+            if let Some(env_id) = self.editing_env_id
+                && ui.button("Reload").clicked()
+                && let Some(config) = self.snapshot_configs.get(&env_id)
+            {
+                self.editor.load_config(config);
             }
 
             // Reset button
@@ -508,7 +506,7 @@ impl EpuDebugPanel {
         let config_entries: Vec<(u32, EpuConfig)> = self
             .snapshot_configs
             .iter()
-            .map(|(&id, cfg)| (id, cfg.clone()))
+            .map(|(&id, cfg)| (id, *cfg))
             .collect();
 
         egui::ScrollArea::vertical()
@@ -535,13 +533,13 @@ impl EpuDebugPanel {
         // Bounds opcodes
         ui.collapsing("Bounds", |ui| {
             for (code, info_opt) in OPCODES.iter().enumerate() {
-                if let Some(info) = info_opt {
-                    if info.kind == OpcodeKind::Bounds {
-                        let selected = self.selected_opcode == Some(code as u8);
-                        let label = format!("0x{:02X} {}", code, info.name);
-                        if ui.selectable_label(selected, label).clicked() {
-                            self.selected_opcode = if selected { None } else { Some(code as u8) };
-                        }
+                if let Some(info) = info_opt
+                    && info.kind == OpcodeKind::Bounds
+                {
+                    let selected = self.selected_opcode == Some(code as u8);
+                    let label = format!("0x{:02X} {}", code, info.name);
+                    if ui.selectable_label(selected, label).clicked() {
+                        self.selected_opcode = if selected { None } else { Some(code as u8) };
                     }
                 }
             }
@@ -550,13 +548,13 @@ impl EpuDebugPanel {
         // Feature opcodes
         ui.collapsing("Features", |ui| {
             for (code, info_opt) in OPCODES.iter().enumerate() {
-                if let Some(info) = info_opt {
-                    if info.kind == OpcodeKind::Radiance {
-                        let selected = self.selected_opcode == Some(code as u8);
-                        let label = format!("0x{:02X} {}", code, info.name);
-                        if ui.selectable_label(selected, label).clicked() {
-                            self.selected_opcode = if selected { None } else { Some(code as u8) };
-                        }
+                if let Some(info) = info_opt
+                    && info.kind == OpcodeKind::Radiance
+                {
+                    let selected = self.selected_opcode == Some(code as u8);
+                    let label = format!("0x{:02X} {}", code, info.name);
+                    if ui.selectable_label(selected, label).clicked() {
+                        self.selected_opcode = if selected { None } else { Some(code as u8) };
                     }
                 }
             }

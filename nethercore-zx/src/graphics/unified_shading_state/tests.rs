@@ -1,4 +1,5 @@
 #[cfg(test)]
+#[allow(clippy::module_inception, clippy::field_reassign_with_default)]
 mod tests {
     use super::super::*;
     use glam::Vec3;

@@ -17,8 +17,7 @@ use crate::console::Console;
 use crate::workbench::{
     EPU_WORKBENCH_PROTOCOL_VERSION, EpuWorkbenchCaptureResult, EpuWorkbenchConfig,
     EpuWorkbenchCrop, EpuWorkbenchExportOptions, EpuWorkbenchExportResult, EpuWorkbenchLayerPatch,
-    EpuWorkbenchMetadata, EpuWorkbenchSceneMode, EpuWorkbenchSceneSelection, EpuWorkbenchSnapshot,
-    EpuWorkbenchViewState,
+    EpuWorkbenchSceneMode, EpuWorkbenchSceneSelection, EpuWorkbenchSnapshot, EpuWorkbenchViewState,
 };
 
 use super::StandaloneApp;
@@ -457,7 +456,7 @@ where
                     .session()
                     .map(|session| session.runtime.console().epu_workbench_metadata())
             })
-            .unwrap_or_else(EpuWorkbenchMetadata::default);
+            .unwrap_or_default();
 
         let scene_mode =
             self.read_debug_value_bool("scene/show_benchmarks")?

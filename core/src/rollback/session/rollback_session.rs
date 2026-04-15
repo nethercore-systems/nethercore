@@ -404,6 +404,67 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>
         Ok(advance_inputs)
     }
 
+    /// Handle all GGRS requests in-order and execute AdvanceFrame requests immediately.
+    ///
+    /// GGRS request ordering is part of the rollback protocol. A request batch may
+    /// load a prior frame, advance one or more frames, then save a later frame.
+    /// Deferring all AdvanceFrame work until after processing the full batch makes
+    /// those later saves capture stale state and causes sync-test checksum
+    /// mismatches.
+    pub fn handle_requests_ordered<F>(
+        &mut self,
+        game: &mut GameInstance<I, S, R>,
+        requests: Vec<GgrsRequest<NethercoreConfig<I>>>,
+        mut advance_frame: F,
+    ) -> Result<u32, SessionError>
+    where
+        F: FnMut(&mut GameInstance<I, S, R>, Vec<(I, InputStatus)>) -> Result<(), SessionError>,
+    {
+        let mut advanced_frames = 0u32;
+        let mut rollback_frames_this_call = 0u32;
+
+        for request in requests {
+            match request {
+                GgrsRequest::SaveGameState { cell, frame } => {
+                    let snapshot = self
+                        .state_manager
+                        .save_state(game, frame)
+                        .map_err(|e| SessionError::SaveState(e.to_string()))?;
+                    let checksum = snapshot.checksum as u128;
+                    cell.save(frame, Some(snapshot), Some(checksum));
+                }
+                GgrsRequest::LoadGameState { cell, frame: _ } => {
+                    self.rolling_back = true;
+                    if let Some(snapshot) = cell.load() {
+                        self.state_manager
+                            .load_state(game, &snapshot)
+                            .map_err(|e| SessionError::LoadState(e.to_string()))?;
+                    }
+                }
+                GgrsRequest::AdvanceFrame { inputs } => {
+                    if self.rolling_back {
+                        rollback_frames_this_call += 1;
+                    }
+                    self.rolling_back = false;
+                    advance_frame(game, inputs)?;
+                    advanced_frames += 1;
+                }
+            }
+        }
+
+        self.total_rollback_frames += rollback_frames_this_call as u64;
+
+        if rollback_frames_this_call > 0 {
+            for stats in &mut self.network_stats {
+                stats.rollback_frames = stats
+                    .rollback_frames
+                    .saturating_add(rollback_frames_this_call);
+            }
+        }
+
+        Ok(advanced_frames)
+    }
+
     /// Save game state (convenience wrapper)
     pub fn save_game_state(
         &mut self,

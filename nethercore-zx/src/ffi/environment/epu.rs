@@ -26,9 +26,7 @@ fn read_epu_config(
     fn_name: &str,
 ) -> Option<EpuConfig> {
     // Get WASM memory
-    let Some(memory) = get_memory(caller, fn_name) else {
-        return None;
-    };
+    let memory = get_memory(caller, fn_name)?;
 
     // Read 128 bytes (16 x u64 = 8 x 128-bit) from WASM memory
     let mem_data = memory.data(caller);

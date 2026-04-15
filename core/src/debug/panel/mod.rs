@@ -88,6 +88,7 @@ impl DebugPanel {
     /// Returns (value_changed, action_request):
     /// - value_changed: true if any value was changed (caller should invoke on_debug_change)
     /// - action_request: Some if an action button was clicked (caller should invoke the action)
+    #[allow(clippy::too_many_arguments)]
     pub fn render(
         &mut self,
         ctx: &egui::Context,

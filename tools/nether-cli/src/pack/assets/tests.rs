@@ -1,6 +1,7 @@
 //! Tests for asset loading functionality.
 
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod tests {
     use super::super::load_assets;
     use crate::manifest::{AssetsSection, NetherManifest};
