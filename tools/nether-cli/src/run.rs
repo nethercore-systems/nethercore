@@ -547,12 +547,7 @@ fn find_nethercore_exe() -> Result<(PathBuf, Option<PathBuf>)> {
         "nethercore-zx"
     };
 
-    // 1. Try PATH first (installed globally)
-    if let Ok(path) = which::which("nethercore-zx") {
-        return Ok((path, None));
-    }
-
-    // 2. Try sibling binary (distributed bundle)
+    // 1. Try sibling binary (distributed bundle)
     // Look for nethercore-zx next to the nether CLI binary
     if let Ok(current_exe) = std::env::current_exe() {
         if let Some(exe_dir) = current_exe.parent() {
@@ -561,6 +556,11 @@ fn find_nethercore_exe() -> Result<(PathBuf, Option<PathBuf>)> {
                 return Ok((sibling, None));
             }
         }
+    }
+
+    // 2. Try PATH (installed globally)
+    if let Ok(path) = which::which("nethercore-zx") {
+        return Ok((path, None));
     }
 
     // 3. Fall back to cargo run (developers only)

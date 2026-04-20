@@ -1,0 +1,127 @@
+{
+  "id": "nethercore-zx-tool-preview",
+  "title": "Nethercore ZX Tool Preview",
+  "subtitle": "Rollback-first runtime and toolchain review packet",
+  "status": "draft",
+  "audience": "Fighting game developers evaluating the platform/tooling, not prototype game content.",
+  "description": "Nethercore ZX is a rollback-first fantasy console/runtime for deterministic 2D and 3D games. The review ask is whether the runtime, toolchain, examples, and constraints look credible for fighting game development.",
+  "nonGoals": [
+    "This is not a finished fighting game.",
+    "Prototype fighting-game content is not the showcase.",
+    "Online product UX, matchmaking, lobbies, and ranked systems are not the current review target."
+  ],
+  "reviewGoals": [
+    "Does the init/update/render model make sense for rollback-heavy games?",
+    "Are the determinism rules clear enough for serious fighting game prototyping?",
+    "Do the build, ROM packaging, asset loading, debug, replay, and capture tools look useful?",
+    "What is missing before this would feel trustworthy for a fighting game project?"
+  ],
+  "hotkeys": [
+    { "key": "F3", "purpose": "Runtime stats" },
+    { "key": "F4", "purpose": "Debug inspector" },
+    { "key": "F5", "purpose": "Pause" },
+    { "key": "F6", "purpose": "Step while paused" },
+    { "key": "F7/F8", "purpose": "Time scale" },
+    { "key": "F9", "purpose": "Screenshot" },
+    { "key": "F10", "purpose": "GIF capture" },
+    { "key": "F12", "purpose": "Network/debug panel" }
+  ],
+  "examples": [
+    {
+      "id": "debug-demo",
+      "title": "Debug Demo",
+      "category": "Debugging",
+      "why": "Debug inspector and runtime variable registration.",
+      "firstRun": true
+    },
+    {
+      "id": "epu-showcase",
+      "title": "EPU Showcase",
+      "category": "Rendering",
+      "why": "Procedural environment/background tooling and inspector workflow.",
+      "firstRun": true
+    },
+    {
+      "id": "skinned-mesh",
+      "title": "Skinned Mesh",
+      "category": "Animation",
+      "why": "Basic GPU skeletal animation.",
+      "firstRun": true
+    },
+    {
+      "id": "multi-skinned-rom",
+      "title": "Multi Skinned ROM",
+      "category": "Animation",
+      "why": "ROM-loaded animated character data.",
+      "firstRun": false
+    },
+    {
+      "id": "glb-inline",
+      "title": "GLB Inline",
+      "category": "Assets",
+      "why": "Raw GLB references converted at pack time.",
+      "firstRun": true
+    },
+    {
+      "id": "viewport-test",
+      "title": "Viewport Test",
+      "category": "Rendering",
+      "why": "Multiple viewports and split-screen rendering.",
+      "firstRun": true
+    },
+    {
+      "id": "audio-demo",
+      "title": "Audio Demo",
+      "category": "Audio",
+      "why": "SFX channels, panning, and looping.",
+      "firstRun": false
+    },
+    {
+      "id": "tracker-demo-xm",
+      "title": "Tracker Demo XM",
+      "category": "Audio",
+      "why": "XM tracker music playback.",
+      "firstRun": false
+    },
+    {
+      "id": "paddle",
+      "title": "Paddle",
+      "category": "Rollback/game loop",
+      "why": "Small complete game loop and rollback-safe multiplayer example. Not a content quality showcase.",
+      "firstRun": false
+    }
+  ],
+  "feedbackQuestions": [
+    "Where would you bounce off first as a fighting game developer?",
+    "Does the deterministic WASM model feel practical, restrictive, or both?",
+    "Is automatic memory snapshotting a compelling rollback workflow?",
+    "What debugging, training, replay, or capture tooling would be mandatory before you trusted this?",
+    "What parts feel credible already?",
+    "What parts feel like warning signs?",
+    "Which example or doc clarified the tool best?",
+    "Which example or doc should be removed from the review path?",
+    "If you were evaluating this for a prototype, what would you ask to see next?"
+  ],
+  "sourceLinks": [
+    {
+      "label": "Runtime repo",
+      "path": "https://github.com/nethercore-systems/nethercore"
+    },
+    {
+      "label": "Game developer docs",
+      "path": "https://nethercore-systems.github.io/nethercore"
+    },
+    {
+      "label": "Rollback safety guide",
+      "path": "https://nethercore-systems.github.io/nethercore/guides/rollback-safety.html"
+    },
+    {
+      "label": "API cheat sheet",
+      "path": "https://nethercore-systems.github.io/nethercore/cheat-sheet.html"
+    },
+    {
+      "label": "Examples reference",
+      "path": "https://nethercore-systems.github.io/nethercore/reference/examples.html"
+    }
+  ]
+}
