@@ -128,7 +128,7 @@ pub use script::{
 
 // Re-export runtime
 pub use runtime::{
-    DebugVariableInfo, ExecutionReport, HeadlessBackend, HeadlessConfig, HeadlessRunner, Player,
-    PlayerConfig, Recorder, RecorderConfig, ReportSummary, ScriptExecutor, SeekResult, StepResult,
-    StopReason,
+    DebugActionInfo, DebugActionParamInfo, DebugVariableInfo, ExecutionError, ExecutionReport,
+    HeadlessBackend, HeadlessConfig, HeadlessRunner, Player, PlayerConfig, Recorder,
+    RecorderConfig, ReportSummary, ScriptExecutor, SeekResult, StepResult, StopReason,
 };

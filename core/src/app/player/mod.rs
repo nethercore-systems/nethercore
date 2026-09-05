@@ -181,6 +181,15 @@ where
             workbench: None,
         }
     }
+
+    pub(super) fn is_automated_run(&self) -> bool {
+        self.config.replay_script.is_some()
+            || self.config.exit_after_frames.is_some()
+            || matches!(
+                self.config.connection_mode,
+                crate::rollback::ConnectionMode::SyncTest { .. }
+            )
+    }
 }
 
 /// Run a standalone player for the given console.
@@ -190,7 +199,40 @@ where
     C::Graphics: StandaloneGraphicsSupport,
     L: RomLoader<Console = C>,
 {
+    validate_rendered_replay::<C, L>(&config)?;
     let vram_limit = C::specs().vram_limit;
     let app = StandaloneApp::<C, L>::new(config, vram_limit);
     super::run(app)
+}
+
+fn validate_rendered_replay<C, L>(config: &types::StandaloneConfig) -> Result<()>
+where
+    C: Console + Clone,
+    L: RomLoader<Console = C>,
+{
+    let Some(script_path) = &config.replay_script else {
+        return Ok(());
+    };
+    anyhow::ensure!(
+        matches!(
+            config.connection_mode,
+            crate::rollback::ConnectionMode::Local
+                | crate::rollback::ConnectionMode::SyncTest { .. }
+        ),
+        "rendered replay supports local/sync-test sessions only"
+    );
+    let rom = L::load_rom(&config.rom_path)?;
+    let layout = rom
+        .console
+        .replay_input_layout()
+        .ok_or_else(|| anyhow::anyhow!("console does not support replay scripts"))?;
+    let script = crate::replay::ReplayScript::from_file(script_path)?;
+    let compiled = crate::replay::Compiler::new(layout.as_ref()).compile(&script)?;
+    anyhow::ensure!(
+        compiled.actions.is_empty()
+            && compiled.assertions.is_empty()
+            && compiled.snap_frames.is_empty(),
+        "rendered replay supports inputs and screenshots only; use `nether replay run --headless` for actions, assertions, or semantic snapshots"
+    );
+    Ok(())
 }

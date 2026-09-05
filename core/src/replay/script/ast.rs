@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 /// Complete replay script file (TOML structure)
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ReplayScript {
     /// Console identifier (e.g., "zx")
     pub console: String,
@@ -29,6 +30,7 @@ fn default_players() -> u8 {
 
 /// Single frame entry in the replay
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct FrameEntry {
     /// Frame number
     pub f: u64,
@@ -100,6 +102,7 @@ pub enum InputValue {
 
 /// Structured input for analog controllers
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct StructuredInput {
     /// Digital buttons: ["a", "b"]
     ///

@@ -12,7 +12,7 @@ use crate::replay::InputLayout;
 use crate::replay::script::{CompiledAction, CompiledScript, Compiler};
 use crate::replay::types::DebugValueData;
 
-use super::executor::{DebugVariableInfo, ExecutionReport, ScriptExecutor};
+use super::executor::{DebugActionInfo, DebugVariableInfo, ExecutionReport, ScriptExecutor};
 
 /// Headless replay runner configuration
 #[derive(Debug, Clone)]
@@ -44,27 +44,7 @@ pub trait HeadlessBackend {
     /// Read debug variable values from the game.
     fn read_debug_values(&mut self) -> Result<HashMap<String, DebugValueData>>;
     /// Execute debug actions for the current frame.
-    fn execute_actions(&mut self, _actions: &[&CompiledAction]) -> Result<()> {
-        Ok(())
-    }
-}
-
-struct ManualBackend {
-    values: HashMap<String, DebugValueData>,
-}
-
-impl HeadlessBackend for ManualBackend {
-    fn apply_inputs(&mut self, _inputs: Option<&Vec<Vec<u8>>>) -> Result<()> {
-        Ok(())
-    }
-
-    fn update(&mut self) -> Result<()> {
-        Ok(())
-    }
-
-    fn read_debug_values(&mut self) -> Result<HashMap<String, DebugValueData>> {
-        Ok(self.values.clone())
-    }
+    fn execute_actions(&mut self, actions: &[&CompiledAction]) -> Result<()>;
 }
 
 /// Headless replay runner
@@ -74,8 +54,8 @@ impl HeadlessBackend for ManualBackend {
 pub struct HeadlessRunner {
     executor: ScriptExecutor,
     config: HeadlessConfig,
-    debug_variables: HashMap<String, DebugValueData>,
     registered_vars: Vec<DebugVariableInfo>,
+    registered_actions: Vec<DebugActionInfo>,
     start_time: Option<Instant>,
 }
 
@@ -85,8 +65,8 @@ impl HeadlessRunner {
         Self {
             executor: ScriptExecutor::new(script),
             config,
-            debug_variables: HashMap::new(),
             registered_vars: Vec::new(),
+            registered_actions: Vec::new(),
             start_time: None,
         }
     }
@@ -120,21 +100,9 @@ impl HeadlessRunner {
         self.registered_vars = vars;
     }
 
-    /// Set a debug variable value
-    ///
-    /// In a full implementation, this would read from the game's debug inspector.
-    /// For testing, values can be set manually.
-    pub fn set_debug_variable(&mut self, name: String, value: DebugValueData) {
-        self.debug_variables.insert(name, value);
-    }
-
-    /// Execute the replay script
-    ///
-    pub fn execute(&mut self) -> Result<ExecutionReport> {
-        let mut backend = ManualBackend {
-            values: self.debug_variables.clone(),
-        };
-        self.execute_with_backend(&mut backend)
+    /// Register available debug actions for report discovery.
+    pub fn register_debug_actions(&mut self, actions: Vec<DebugActionInfo>) {
+        self.registered_actions = actions;
     }
 
     /// Execute the replay script with a concrete backend.
@@ -149,32 +117,59 @@ impl HeadlessRunner {
                 && start.elapsed().as_secs() > self.config.timeout_secs
             {
                 self.executor
-                    .stop_with_error("Execution timeout exceeded".to_string());
+                    .stop_with_error("timeout", "Execution timeout exceeded");
                 break;
             }
 
             let actions = self.executor.current_actions();
-            if !actions.is_empty() {
-                backend.execute_actions(actions.as_slice())?;
+            if !actions.is_empty()
+                && let Err(error) = backend.execute_actions(actions.as_slice())
+            {
+                self.executor
+                    .stop_with_error("action", format!("{error:#}"));
+                break;
             }
 
             let inputs = self.executor.current_inputs();
-            backend.apply_inputs(inputs)?;
+            if let Err(error) = backend.apply_inputs(inputs) {
+                self.executor.stop_with_error("input", format!("{error:#}"));
+                break;
+            }
 
             let take_snapshot = self.executor.needs_snapshot();
             let has_assertions = !self.executor.current_assertions().is_empty();
-            let needs_values = take_snapshot || has_assertions;
+            // $prev_ means the preceding tick, even across frames without snapshots.
+            let needs_values =
+                take_snapshot || has_assertions || self.executor.uses_previous_values();
 
             let pre_values = if take_snapshot {
-                backend.read_debug_values()?
+                match backend.read_debug_values() {
+                    Ok(values) => values,
+                    Err(error) => {
+                        self.executor
+                            .stop_with_error("pre-snapshot", format!("{error:#}"));
+                        break;
+                    }
+                }
             } else {
                 HashMap::new()
             };
 
-            backend.update()?;
+            if let Err(error) = backend.update() {
+                self.executor
+                    .stop_with_error("update", format!("{error:#}"));
+                break;
+            }
 
             let post_values = if needs_values {
-                backend.read_debug_values()?
+                match backend.read_debug_values() {
+                    Ok(values) => values,
+                    Err(error) => {
+                        self.executor
+                            .stop_with_error("post-snapshot", format!("{error:#}"));
+                        break;
+                    }
+                }
             } else {
                 HashMap::new()
             };
@@ -193,6 +188,8 @@ impl HeadlessRunner {
                 self.executor
                     .evaluate_assertion(&assertion, &post_values, self.config.fail_fast);
             }
+            self.executor.set_previous_values(post_values);
+            self.executor.mark_frame_executed();
 
             if self.executor.is_complete() {
                 break;
@@ -215,6 +212,9 @@ impl HeadlessRunner {
 
         if !self.registered_vars.is_empty() {
             report.registered_variables = Some(self.registered_vars.clone());
+        }
+        if !self.registered_actions.is_empty() {
+            report.registered_actions = Some(self.registered_actions.clone());
         }
 
         Ok(report)
@@ -338,20 +338,39 @@ mod tests {
                 name: "$player_x".to_string(),
                 type_name: "i32".to_string(),
                 description: "Player X position".to_string(),
+                full_path: None,
+                aliases: vec![],
             },
             DebugVariableInfo {
                 name: "$player_y".to_string(),
                 type_name: "i32".to_string(),
                 description: "Player Y position".to_string(),
+                full_path: None,
+                aliases: vec![],
             },
         ]);
 
-        // Set some values
-        runner.set_debug_variable("$player_x".to_string(), DebugValueData::I32(100));
-        runner.set_debug_variable("$player_y".to_string(), DebugValueData::I32(200));
-
-        // Execute
-        let report = runner.execute().expect("Execution failed");
+        struct StaticBackend(HashMap<String, DebugValueData>);
+        impl HeadlessBackend for StaticBackend {
+            fn apply_inputs(&mut self, _inputs: Option<&Vec<Vec<u8>>>) -> Result<()> {
+                Ok(())
+            }
+            fn update(&mut self) -> Result<()> {
+                Ok(())
+            }
+            fn read_debug_values(&mut self) -> Result<HashMap<String, DebugValueData>> {
+                Ok(self.0.clone())
+            }
+            fn execute_actions(&mut self, _actions: &[&CompiledAction]) -> Result<()> {
+                Ok(())
+            }
+        }
+        let mut values = HashMap::new();
+        values.insert("$player_x".to_string(), DebugValueData::I32(100));
+        values.insert("$player_y".to_string(), DebugValueData::I32(200));
+        let report = runner
+            .execute_with_backend(&mut StaticBackend(values))
+            .expect("Execution failed");
 
         assert_eq!(report.frames_executed, 5);
         assert_eq!(report.total_frames, 5);
@@ -359,5 +378,50 @@ mod tests {
         assert!(report.duration_ms.is_some());
         assert!(report.executed_at.is_some());
         assert_eq!(report.registered_variables.as_ref().unwrap().len(), 2);
+    }
+
+    struct FailingBackend;
+
+    impl HeadlessBackend for FailingBackend {
+        fn apply_inputs(&mut self, _inputs: Option<&Vec<Vec<u8>>>) -> Result<()> {
+            anyhow::bail!("bad input")
+        }
+
+        fn update(&mut self) -> Result<()> {
+            Ok(())
+        }
+
+        fn read_debug_values(&mut self) -> Result<HashMap<String, DebugValueData>> {
+            Ok(HashMap::new())
+        }
+        fn execute_actions(&mut self, _actions: &[&CompiledAction]) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn backend_failure_is_an_error_report_with_frame_context() {
+        let script = CompiledScript {
+            console: "test".to_string(),
+            console_id: 1,
+            player_count: 1,
+            input_size: 1,
+            seed: 0,
+            frame_count: 1,
+            inputs: InputSequence::new(),
+            screenshot_frames: vec![],
+            snap_frames: vec![],
+            assertions: vec![],
+            actions: vec![],
+        };
+        let mut runner = HeadlessRunner::new(script, HeadlessConfig::default());
+
+        let report = runner.execute_with_backend(&mut FailingBackend).unwrap();
+
+        assert_eq!(report.summary.status, "ERROR");
+        let error = report.error.expect("error details");
+        assert_eq!(error.frame, 0);
+        assert_eq!(error.context, "input");
+        assert!(error.message.contains("bad input"));
     }
 }

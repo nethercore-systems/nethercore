@@ -17,6 +17,8 @@ pub enum ValidationError {
     UnexpectedPlayerInput { frame: u64, player: u8 },
     /// Action parameters provided without an action.
     OrphanedActionParams(u64),
+    /// Script contains no frames to execute.
+    EmptyFrames,
 }
 
 impl std::fmt::Display for ValidationError {
@@ -41,6 +43,7 @@ impl std::fmt::Display for ValidationError {
                     frame
                 )
             }
+            ValidationError::EmptyFrames => write!(f, "script must contain at least one frame"),
         }
     }
 }
@@ -55,6 +58,10 @@ pub fn validate_script(script: &ReplayScript) -> Result<(), ValidationError> {
 
     if !(1..=4).contains(&script.players) {
         return Err(ValidationError::InvalidPlayerCount(script.players));
+    }
+
+    if script.frames.is_empty() {
+        return Err(ValidationError::EmptyFrames);
     }
 
     let mut frames = HashSet::new();

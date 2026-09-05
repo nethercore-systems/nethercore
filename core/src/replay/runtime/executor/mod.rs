@@ -10,7 +10,10 @@ mod report;
 mod tests;
 
 // Re-export public types
-pub use report::{DebugVariableInfo, ExecutionReport, ReportSummary};
+pub use report::{
+    DebugActionInfo, DebugActionParamInfo, DebugVariableInfo, ExecutionError, ExecutionReport,
+    ReportSummary,
+};
 
 use crate::replay::script::{
     CompareOp, CompiledAction, CompiledAssertValue, CompiledAssertion, CompiledScript,
@@ -25,6 +28,8 @@ pub struct ScriptExecutor {
     script: CompiledScript,
     /// Current frame number
     current_frame: u64,
+    /// Number of frames that completed update, snapshots, and assertions.
+    frames_executed: u64,
     /// Previous frame's debug values (for $prev_ comparisons)
     prev_values: HashMap<String, DebugValueData>,
     /// Collected snapshots
@@ -49,7 +54,11 @@ pub enum StopReason {
     /// Timeout exceeded
     Timeout,
     /// Error during execution
-    Error(String),
+    Error {
+        frame: u64,
+        context: String,
+        message: String,
+    },
 }
 
 /// Result of executing one frame
@@ -71,6 +80,7 @@ impl ScriptExecutor {
         Self {
             script,
             current_frame: 0,
+            frames_executed: 0,
             prev_values: HashMap::new(),
             snapshots: Vec::new(),
             assertion_results: Vec::new(),
@@ -167,11 +177,21 @@ impl ScriptExecutor {
             delta,
         });
 
-        // Store for next frame's $prev_ comparisons
-        self.prev_values = post_values;
+        // Previous values advance only after assertions have been evaluated.
     }
 
-    /// Evaluate an assertion
+    /// Whether any assertion needs a preceding-tick value.
+    pub fn uses_previous_values(&self) -> bool {
+        self.script
+            .assertions
+            .iter()
+            .any(|a| matches!(a.value, CompiledAssertValue::PrevValue(_)))
+    }
+
+    pub fn set_previous_values(&mut self, values: HashMap<String, DebugValueData>) {
+        self.prev_values = values;
+    }
+
     pub fn evaluate_assertion(
         &mut self,
         assertion: &CompiledAssertion,
@@ -189,10 +209,26 @@ impl ScriptExecutor {
             }
         };
 
-        let passed = match (actual, expected) {
+        let expected_value = match &assertion.value {
+            CompiledAssertValue::Variable(name) => values.get(name),
+            CompiledAssertValue::PrevValue(name) => self.prev_values.get(&format!("${name}")),
+            CompiledAssertValue::Number(_) => None,
+        };
+        let float_comparison = matches!(
+            values.get(&assertion.variable),
+            Some(DebugValueData::F32(_))
+        ) || matches!(expected_value, Some(DebugValueData::F32(_)));
+        // Compare at the registered scalar precision (0.1 literals match f32 0.1).
+        let compared = match (actual, expected) {
+            (Some(a), Some(e)) if float_comparison => {
+                (Some(a as f32 as f64), Some(e as f32 as f64))
+            }
+            pair => pair,
+        };
+        let passed = match compared {
             (Some(a), Some(e)) => match assertion.operator {
-                CompareOp::Eq => (a - e).abs() < f64::EPSILON,
-                CompareOp::Ne => (a - e).abs() >= f64::EPSILON,
+                CompareOp::Eq => a == e,
+                CompareOp::Ne => a != e,
                 CompareOp::Lt => a < e,
                 CompareOp::Gt => a > e,
                 CompareOp::Le => a <= e,
@@ -257,10 +293,45 @@ impl ScriptExecutor {
         }
     }
 
+    /// Record that the current frame completed its automation boundary.
+    pub fn mark_frame_executed(&mut self) {
+        self.frames_executed += 1;
+    }
+
     /// Generate the execution report
     pub fn generate_report(&self) -> ExecutionReport {
         let passed = self.assertion_results.iter().filter(|r| r.passed).count();
         let failed = self.assertion_results.iter().filter(|r| !r.passed).count();
+
+        let error = match &self.stop_reason {
+            Some(StopReason::Error {
+                frame,
+                context,
+                message,
+            }) => Some(ExecutionError {
+                frame: *frame,
+                context: context.clone(),
+                message: message.clone(),
+            }),
+            Some(StopReason::Timeout) => Some(ExecutionError {
+                frame: self.current_frame,
+                context: "timeout".to_string(),
+                message: "Execution timeout exceeded".to_string(),
+            }),
+            Some(StopReason::Breakpoint { frame, message }) => Some(ExecutionError {
+                frame: *frame,
+                context: "breakpoint".to_string(),
+                message: message
+                    .clone()
+                    .unwrap_or_else(|| "Replay stopped at a breakpoint".to_string()),
+            }),
+            None if self.current_frame < self.script.frame_count => Some(ExecutionError {
+                frame: self.current_frame,
+                context: "incomplete".to_string(),
+                message: "Replay stopped before completion".to_string(),
+            }),
+            _ => None,
+        };
 
         ExecutionReport {
             version: "1.0".to_string(),
@@ -269,16 +340,20 @@ impl ScriptExecutor {
             duration_ms: None, // Set by caller if available
             console: self.script.console.clone(),
             seed: self.script.seed,
-            frames_executed: self.current_frame,
+            frames_executed: self.frames_executed,
             total_frames: self.script.frame_count,
             snapshots: self.snapshots.clone(),
             assertions: self.assertion_results.clone(),
             registered_variables: None, // Set by caller if available
+            registered_actions: None,
+            error: error.clone(),
             summary: ReportSummary {
                 frames_with_snap: self.snapshots.len(),
                 assertions_passed: passed,
                 assertions_failed: failed,
-                status: if failed > 0 {
+                status: if error.is_some() {
+                    "ERROR".to_string()
+                } else if failed > 0 {
                     "FAILED".to_string()
                 } else {
                     "PASSED".to_string()
@@ -288,9 +363,13 @@ impl ScriptExecutor {
     }
 
     /// Stop execution with an error
-    pub fn stop_with_error(&mut self, error: String) {
+    pub fn stop_with_error(&mut self, context: impl Into<String>, error: impl Into<String>) {
         self.stopped = true;
-        self.stop_reason = Some(StopReason::Error(error));
+        self.stop_reason = Some(StopReason::Error {
+            frame: self.current_frame,
+            context: context.into(),
+            message: error.into(),
+        });
     }
 
     /// Get the stop reason

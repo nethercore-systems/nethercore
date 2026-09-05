@@ -11,7 +11,17 @@ pub struct WasmEngine {
 impl WasmEngine {
     /// Create a new WASM engine with default configuration
     pub fn new() -> Result<Self> {
+        Self::configured(false)
+    }
+
+    /// Create an engine whose stores can be interrupted by epoch deadlines.
+    pub fn new_interruptible() -> Result<Self> {
+        Self::configured(true)
+    }
+
+    fn configured(epoch_interruption: bool) -> Result<Self> {
         let mut config = Config::new();
+        config.epoch_interruption(epoch_interruption);
 
         // Debug builds prioritize fast startup (WASM compilation) over peak runtime perf.
         // This is particularly noticeable when iterating on games and restarting often.

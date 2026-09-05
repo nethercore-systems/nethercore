@@ -88,3 +88,4 @@ zx-common = { path = "../zx-common", default-features = false }
 [dev-dependencies]
 naga = { version = "23", features = ["wgsl-in"] }
 tempfile = "3"
+wat = { workspace = true }

@@ -239,6 +239,7 @@ fn test_assertion_prev_value() {
     let mut values = HashMap::new();
     values.insert("$x".to_string(), DebugValueData::F32(100.0));
     executor.capture_post_snapshot(values.clone(), values.clone(), "idle".to_string());
+    executor.set_previous_values(values.clone());
     executor.advance_frame();
 
     // Frame 1: x increased, assertion should pass

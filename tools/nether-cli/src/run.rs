@@ -540,7 +540,7 @@ fn launch_p2p_test(
 
 /// Find the nethercore-zx player executable
 /// Returns (exe_path, optional_workspace_dir for cargo:run fallback)
-fn find_nethercore_exe() -> Result<(PathBuf, Option<PathBuf>)> {
+pub(crate) fn find_nethercore_exe() -> Result<(PathBuf, Option<PathBuf>)> {
     let exe_name = if cfg!(windows) {
         "nethercore-zx.exe"
     } else {

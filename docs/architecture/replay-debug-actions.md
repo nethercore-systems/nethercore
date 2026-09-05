@@ -1,291 +1,60 @@
-# Replay Debug Action Integration
+# Executable ZX replay automation
 
-> **Status:** Implemented (schema + compilation; execution depends on the replay backend)
-> Last reviewed: 2026-01-14
+## Run the real game
 
-## Overview
-
-Replay scripts can invoke **debug actions** at specific frames (e.g. "Load Level") to set up game state without recording long input sequences. This keeps scripts short, stable, and focused on the behavior under test.
-
-## Current State
-
-### Debug Actions (Implemented)
-
-Games can register callable actions with parameters:
-
-```rust
-// In game's init()
-debug_action_begin(b"Load Level".as_ptr(), 10, b"debug_load_level".as_ptr(), 16);
-debug_action_param_i32(b"level".as_ptr(), 5, 1);  // param "level", default 1
-debug_action_end();
+```bash
+cargo build -p nether-cli -p nethercore-zx
+nether replay run tests/scenario.ncrs --rom game.nczx --headless --report report.json --timeout 30
 ```
 
-The debug inspector UI shows these as buttons with editable parameter fields. When clicked, it calls the exported WASM function with the parameter values.
+Use the matching `nether` and `nethercore-zx` binaries from the build. The CLI prefers a sibling player. `.wasm` is also supported, but has no packed ROM assets.
 
-**Registry structure:**
-```rust
-pub struct RegisteredAction {
-    pub name: String,           // "Load Level"
-    pub full_path: String,      // "debug/Load Level"
-    pub func_name: String,      // "debug_load_level"
-    pub params: Vec<ActionParam>,
-}
-
-pub struct ActionParam {
-    pub name: String,           // "level"
-    pub param_type: ValueType,  // I32
-    pub default: ActionParamValue,
-}
-```
-
-### Replay Scripts (Implemented)
-
-Current `.ncrs` format:
+To discover state and actions, start with:
 
 ```toml
 console = "zx"
-seed = 12345
-players = 1
+seed = 4401
+players = 2
 
 [[frames]]
 f = 0
-p1 = "idle"
 snap = true
-
-[[frames]]
-f = 60
-p1 = "right+a"
-assert = "$player_x > 100"
 ```
 
-## Script Format: Actions
+Reports expose typed `registered_variables` (canonical name, full registry path and unambiguous aliases), `registered_actions` (label, full path, parameter types/defaults), actual assertion results, and snapshots. Games must register relevant state/actions during `init()`. Empty state is not semantic coverage. Register only stable-memory watches; the runtime uses bounds-checked reads.
 
-### Script Format Addition
+## Semantics
 
-Replay scripts support optional `action` and `action_params` fields on frame entries:
+- Frame zero is the first update. Unspecified frames/players are idle; inputs do not persist. Repeat held input on every intended tick.
+- One frame entry/action per frame. Duplicate frames, unknown fields/buttons, malformed input byte lengths and invalid analog ranges are rejected. Dense scripts are bounded to 1,000,000 ticks.
+- Seed and player count apply before `init()`. Persistent saves are not loaded or written in replay mode. The default tick interval is available at init; subsequent updates use the game's selected tick rate.
+- Order: action → inputs → `pre` snapshot → update/audio-state advance → `post` snapshot → assertions. No graphics or audio device is created by the headless path.
+- `$prev_name` refers to the preceding tick's post-update value, even across ticks with no snapshot. It is unavailable on frame zero. Assertions compare scalar numbers (f32 precision when either operand is f32, otherwise exact integers); vectors remain typed snapshot data.
+- `match/score_p1` becomes `$match_score_p1`. A unique leaf alias such as `$score_p1` is offered only if it cannot shadow another canonical name. Canonical normalization collisions fail explicitly.
+- Use exact action labels or full paths. Only registered i32/f32 action parameters are supported; omitted parameters use registered defaults. Unknown parameters or wrong types fail.
+
+Example **only if the game registers this action/state**:
 
 ```toml
-console = "zx"
-seed = 12345
-players = 1
-
-# Frame 0: Invoke debug action to skip to level 2
-[[frames]]
-f = 0
-action = "Load Level"
-action_params = { level = 2 }
-
-# Frame 1: Start actual input recording from level 2
 [[frames]]
 f = 1
 p1 = "idle"
+action = "Force Point"
+action_params = { scorer = 0 }
 snap = true
-
-[[frames]]
-f = 120
-p1 = "right+a"
-assert = "$player_x > 100"
+assert = "$match_score_p1 == 1"
 ```
 
-### Parser Changes
+## Failure contract
 
-Implemented in `core/src/replay/script/ast.rs` (`FrameEntry`):
+Success requires exit code zero, report status `PASSED`, completed frame count, and your expected assertions/nonempty state. Failed assertions report `FAILED`; startup, trap and runtime errors report `ERROR` with context. Both exit nonzero. `--fail-fast` stops at the first failed assertion. `--timeout` bounds the headless player invocation, including ROM loading, compilation, initialization, actions and updates; it does not cover building a missing player through Cargo fallback. Use an already-built player for automation.
 
-```rust
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct FrameEntry {
-    pub f: u64,
-    #[serde(default)]
-    pub p1: Option<InputValue>,
-    #[serde(default)]
-    pub p2: Option<InputValue>,
-    #[serde(default)]
-    pub p3: Option<InputValue>,
-    #[serde(default)]
-    pub p4: Option<InputValue>,
-    #[serde(default)]
-    pub snap: bool,
-    #[serde(default)]
-    pub assert: Option<String>,
+A requested report is replaced on ordinary replay failures; it may not overwrite the ROM/script. Invalid CLI arguments fail before execution and may not write a report: always check the exit code, never trust an old JSON alone. A watchdog timeout may have only startup-level context rather than the exact interrupted frame.
 
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub action: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub action_params: Option<HashMap<String, ActionParamValue>>,
-}
-```
+## Rendered playback and boundaries
 
-### Executor Changes
+`nether run --no-build --replay tests/visual.ncrs` supports **inputs and `screenshot = true` only**. Remove actions, assertions and `snap` directives; they are rejected before window creation, not silently skipped. Headless runs reject screenshots. Rendered replay and sync-test can be paired; replay/netplay combinations are unsupported. Runtime errors in automated rendered runs exit nonzero.
 
-Execution order is implemented in `core/src/replay/runtime/headless.rs`:
+Semantic snapshots are **not restorable save states**. Binary `.ncrp` compilation/recording stores inputs, not an executable semantic test with actions/assertions. This is not a rewind/seek debugger. Identical local runs establish repeatability, not cross-machine/platform determinism or multiplayer correctness. Pixels, audio and game feel need separate acceptance.
 
-```rust
-let actions = self.executor.current_actions();
-if !actions.is_empty() {
-    backend.execute_actions(actions.as_slice())?;
-}
-
-let inputs = self.executor.current_inputs();
-backend.apply_inputs(inputs)?;
-
-backend.update()?;
-
-// (optional) snapshots + assertions...
-
-self.executor.advance_frame();
-```
-
-The per-frame query helpers live in `core/src/replay/runtime/executor/mod.rs` (`current_actions`, `current_inputs`, `needs_snapshot`, `current_assertions`).
-
-### Compiled Script Changes
-
-Implemented in `core/src/replay/script/compiler.rs`:
-
-```rust
-#[derive(Debug, Clone)]
-pub struct CompiledAction {
-    pub frame: u64,
-    pub name: String,
-    pub params: HashMap<String, ActionParamValue>,
-}
-
-pub struct CompiledScript {
-    // ... existing fields ...
-    pub actions: Vec<CompiledAction>,
-}
-```
-
-## Use Cases
-
-### 1. Level-Specific Testing
-
-Test level 3 boss without playing through levels 1-2:
-
-```toml
-console = "zx"
-seed = 42
-players = 1
-
-[[frames]]
-f = 0
-action = "Load Level"
-action_params = { level = 3 }
-
-[[frames]]
-f = 1
-snap = true  # Capture initial state of level 3
-
-[[frames]]
-f = 300
-assert = "$boss_health < 100"  # Verify boss took damage
-```
-
-### 2. Spawn Testing
-
-Test enemy behavior by spawning specific enemies:
-
-```toml
-[[frames]]
-f = 0
-action = "Spawn Enemy"
-action_params = { enemy_type = "goblin", x = 100, y = 50 }
-
-[[frames]]
-f = 1
-p1 = "right+a"  # Attack the spawned enemy
-snap = true
-```
-
-### 3. State Setup for Regression Tests
-
-Set up specific game state for testing edge cases:
-
-```toml
-[[frames]]
-f = 0
-action = "Set Player Health"
-action_params = { health = 1 }
-
-[[frames]]
-f = 0
-action = "Set Player Position"
-action_params = { x = 500, y = 200 }
-
-[[frames]]
-f = 1
-p1 = "a"  # Jump
-assert = "$player_alive == 1"  # Should survive
-```
-
-### 4. AI-Assisted Debugging with Claude Code
-
-The zx-dev plugin can leverage this for targeted debugging:
-
-```markdown
-**User:** "The game crashes when I beat the level 2 boss with low health"
-
-**Claude:** Let me create a test script to reproduce this:
-
-1. Skip to level 2 boss room
-2. Set player health to 1
-3. Simulate boss defeat sequence
-4. Check for crash/invalid state
-```
-
-Generated script:
-```toml
-console = "zx"
-seed = 12345
-players = 1
-
-[[frames]]
-f = 0
-action = "Load Level"
-action_params = { level = 2 }
-
-[[frames]]
-f = 0
-action = "Skip To Boss"
-
-[[frames]]
-f = 0
-action = "Set Player Health"
-action_params = { health = 1 }
-
-[[frames]]
-f = 1
-snap = true
-
-# Simulate killing the boss
-[[frames]]
-f = 60
-p1 = "a"
-# ... attack inputs ...
-
-[[frames]]
-f = 500
-assert = "$game_state != CRASHED"
-snap = true
-```
-
-## Tooling Guidance
-
-When writing or generating replay scripts, prefer debug actions over long input sequences:
-
-- Use `action = "Load Level"` to skip menus/tutorials
-- Use `action = "Set Player Position"`/`"Spawn Enemy"` to construct test scenarios
-- Combine actions with `snap = true` + `assert = "..."` to make failures obvious and diffable
-
-## Compatibility
-
-- Scripts without `action` fields work unchanged
-- Actions are optional - pure input scripts remain valid
-- Games without debug actions can still use input-only scripts
-- Binary format (`.ncrp`) does not include actions (input-only)
-
-## Current Behavior (Implemented)
-
-- Invocation timing: actions run **before** inputs for the same frame in `core/src/replay/runtime/headless.rs`.
-- Multiple actions per frame: supported by emitting multiple `[[frames]]` entries with the same `f`.
-- Backend hook: actions are routed through `HeadlessBackend::execute_actions` (default no-op).
-- Recording: the replay recorder currently captures inputs only (no debug actions).
+Runtime regressions: `cargo test -p nethercore-zx --lib replay::` and `cargo test -p nethercore-zx --test replay_cli`. Cross-game proof lives in sibling `nethercore-ai-plugins`: `python scripts/verify_agent_workflow.py --rebuild-games` builds/re-packs temporary Volley Fighter and Scrapheap Saints carts without replacing checked-in ROMs, then compares semantic states and deliberate negatives.

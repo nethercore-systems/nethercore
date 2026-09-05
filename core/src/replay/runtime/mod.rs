@@ -12,7 +12,8 @@ mod player;
 mod recorder;
 
 pub use executor::{
-    DebugVariableInfo, ExecutionReport, ReportSummary, ScriptExecutor, StepResult, StopReason,
+    DebugActionInfo, DebugActionParamInfo, DebugVariableInfo, ExecutionError, ExecutionReport,
+    ReportSummary, ScriptExecutor, StepResult, StopReason,
 };
 pub use headless::{HeadlessBackend, HeadlessConfig, HeadlessRunner};
 pub use player::{Player, PlayerConfig, SeekResult};

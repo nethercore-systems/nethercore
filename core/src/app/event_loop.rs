@@ -117,6 +117,11 @@ pub trait ConsoleApp<C: Console>: Sized {
     ///
     /// Calls `window.request_redraw()`.
     fn request_redraw(&self);
+
+    /// Return an automation error that must make the process exit unsuccessfully.
+    fn exit_error(&self) -> Option<String> {
+        None
+    }
 }
 
 /// Generic event loop handler for any Console implementation.
@@ -125,6 +130,7 @@ pub trait ConsoleApp<C: Console>: Sized {
 /// to provide a console-agnostic event loop.
 pub struct AppEventHandler<C: Console, A: ConsoleApp<C>> {
     app: Option<A>,
+    error: Option<anyhow::Error>,
     _phantom: std::marker::PhantomData<C>,
 }
 
@@ -133,6 +139,7 @@ impl<C: Console, A: ConsoleApp<C>> AppEventHandler<C, A> {
     pub fn new(app: A) -> Self {
         Self {
             app: Some(app),
+            error: None,
             _phantom: std::marker::PhantomData,
         }
     }
@@ -153,11 +160,13 @@ impl<C: Console, A: ConsoleApp<C>> ApplicationHandler for AppEventHandler<C, A> 
                     let window = Arc::new(window);
                     if let Err(e) = app.on_window_created(window, event_loop) {
                         tracing::error!("Failed to initialize window: {}", e);
+                        self.error = Some(e);
                         event_loop.exit();
                     }
                 }
                 Err(e) => {
                     tracing::error!("Failed to create window: {}", e);
+                    self.error = Some(e.into());
                     event_loop.exit();
                 }
             }
@@ -246,6 +255,13 @@ pub fn run<C: Console, A: ConsoleApp<C>>(app: A) -> anyhow::Result<()> {
 
     let mut handler = AppEventHandler::new(app);
     event_loop.run_app(&mut handler)?;
+
+    if let Some(error) = handler.error {
+        return Err(error);
+    }
+    if let Some(error) = handler.app.as_ref().and_then(ConsoleApp::exit_error) {
+        anyhow::bail!(error);
+    }
 
     Ok(())
 }

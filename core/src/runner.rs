@@ -43,6 +43,7 @@ pub struct ConsoleRunner<C: Console> {
     session: Option<GameSession<C>>,
     /// Cached console specs
     specs: &'static crate::console::ConsoleSpecs,
+    pub(crate) replay_seed: Option<u64>,
 }
 
 impl<C: Console> ConsoleRunner<C> {
@@ -68,6 +69,7 @@ impl<C: Console> ConsoleRunner<C> {
             wasm_engine,
             session: None,
             specs,
+            replay_seed: None,
         })
     }
 
@@ -196,7 +198,9 @@ impl<C: Console> ConsoleRunner<C> {
         // Load persistent saves and prefill per-session save slots before init().
         if !nethercore_shared::is_safe_game_id(game_id) {
             tracing::warn!("Invalid game_id for save path: '{}'", game_id);
-        } else if let Some(data_dir) = crate::app::config::data_dir() {
+        } else if self.replay_seed.is_none()
+            && let Some(data_dir) = crate::app::config::data_dir()
+        {
             let save_path = data_dir
                 .join("saves")
                 .join(self.specs.console_type)
@@ -221,6 +225,13 @@ impl<C: Console> ConsoleRunner<C> {
         runtime.initialize_console_state();
 
         // Initialize the game (calls init() export)
+        if let Some(seed) = self.replay_seed {
+            runtime
+                .game_mut()
+                .expect("loaded game")
+                .state_mut()
+                .seed_rng(seed);
+        }
         runtime.init_game()?;
 
         // Create resource manager from console reference
@@ -307,7 +318,9 @@ impl<C: Console> ConsoleRunner<C> {
         // Load persistent saves and prefill per-session save slots before init().
         if !nethercore_shared::is_safe_game_id(game_id) {
             tracing::warn!("Invalid game_id for save path: '{}'", game_id);
-        } else if let Some(data_dir) = crate::app::config::data_dir() {
+        } else if self.replay_seed.is_none()
+            && let Some(data_dir) = crate::app::config::data_dir()
+        {
             let save_path = data_dir
                 .join("saves")
                 .join(self.specs.console_type)
@@ -338,6 +351,13 @@ impl<C: Console> ConsoleRunner<C> {
         runtime.initialize_console_state();
 
         // Initialize the game (calls init() export)
+        if let Some(seed) = self.replay_seed {
+            runtime
+                .game_mut()
+                .expect("loaded game")
+                .state_mut()
+                .seed_rng(seed);
+        }
         runtime.init_game()?;
 
         // Create resource manager from console reference

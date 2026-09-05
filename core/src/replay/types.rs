@@ -290,6 +290,7 @@ pub enum DebugValueData {
     Bool(bool),
     Vec2 { x: f32, y: f32 },
     Vec3 { x: f32, y: f32, z: f32 },
+    Rect { x: i16, y: i16, w: i16, h: i16 },
     Bytes(Vec<u8>),
 }
 

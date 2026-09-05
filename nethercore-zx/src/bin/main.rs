@@ -22,9 +22,10 @@
 
 use std::path::PathBuf;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 
+use nethercore_core::replay::{ExecutionReport, HeadlessConfig};
 use nethercore_core::rollback::ConnectionMode;
 use nethercore_zx::player::{PlayerConfig, run};
 use nethercore_zx::preview::{PreviewConfig, run as run_preview};
@@ -104,6 +105,22 @@ struct Args {
     #[arg(long, value_name = "FILE")]
     replay: Option<PathBuf>,
 
+    /// Execute the replay without creating graphics or audio devices
+    #[arg(long)]
+    headless: bool,
+
+    /// Write the replay execution report as JSON
+    #[arg(long, value_name = "JSON")]
+    report: Option<PathBuf>,
+
+    /// Stop after the first failed assertion
+    #[arg(long)]
+    fail_fast: bool,
+
+    /// Whole replay execution timeout in seconds
+    #[arg(long, default_value = "300")]
+    timeout: u64,
+
     /// Exit after this many advanced input frames, useful for automated sync-test gates
     #[arg(long)]
     exit_after_frames: Option<u32>,
@@ -128,6 +145,29 @@ struct Args {
 
 fn main() -> Result<()> {
     let args = Args::parse();
+
+    if let Some(path) = &args.report {
+        for input in std::iter::once(&args.rom).chain(args.replay.iter()) {
+            if let (Ok(output), Ok(input)) = (path.canonicalize(), input.canonicalize()) {
+                anyhow::ensure!(output != input, "report must not overwrite ROM or script");
+            }
+        }
+        let message = validate_args(&args)
+            .err()
+            .map(|e| format!("{e:#}"))
+            .unwrap_or_else(|| "execution not completed".into());
+        ExecutionReport::startup_error(
+            args.replay.as_ref().map(|p| p.display().to_string()),
+            "startup",
+            message,
+        )
+        .write_to_file(path)?;
+    }
+    validate_args(&args)?;
+
+    if args.headless {
+        return run_headless(&args);
+    }
 
     // Validate ROM path exists
     if !args.rom.exists() {
@@ -193,4 +233,120 @@ fn main() -> Result<()> {
     };
 
     run(config)
+}
+
+fn validate_args(args: &Args) -> Result<()> {
+    if args.headless {
+        anyhow::ensure!(args.replay.is_some(), "--headless requires --replay SCRIPT");
+        anyhow::ensure!(!args.preview, "--headless conflicts with --preview");
+        anyhow::ensure!(!args.sync_test, "--headless conflicts with --sync-test");
+        anyhow::ensure!(!args.p2p, "--headless conflicts with --p2p");
+        anyhow::ensure!(args.host.is_none(), "--headless conflicts with --host");
+        anyhow::ensure!(args.join.is_none(), "--headless conflicts with --join");
+        anyhow::ensure!(
+            args.session.is_none(),
+            "--headless conflicts with --session"
+        );
+        anyhow::ensure!(
+            args.exit_after_frames.is_none(),
+            "--headless conflicts with --exit-after-frames"
+        );
+    } else {
+        anyhow::ensure!(args.report.is_none(), "--report requires --headless");
+        anyhow::ensure!(!args.fail_fast, "--fail-fast requires --headless");
+    }
+    anyhow::ensure!(args.timeout > 0, "--timeout must be greater than zero");
+    Ok(())
+}
+
+fn run_headless(args: &Args) -> Result<()> {
+    let script = args.replay.as_ref().expect("validated replay argument");
+    let config = HeadlessConfig {
+        fail_fast: args.fail_fast,
+        timeout_secs: args.timeout,
+        script_path: Some(script.display().to_string()),
+    };
+    // Bound loading/compilation as well as guest execution. This CLI owns the process.
+    let (cancel, cancelled) = std::sync::mpsc::channel::<()>();
+    let report_path = args.report.clone();
+    let script_name = script.display().to_string();
+    let timeout = args.timeout;
+    let deadline = std::thread::spawn(move || {
+        if cancelled
+            .recv_timeout(std::time::Duration::from_secs(timeout))
+            .is_err()
+        {
+            let error = ExecutionReport::startup_error(
+                Some(script_name),
+                "timeout",
+                format!("headless invocation exceeded {timeout}s"),
+            );
+            if let Some(path) = report_path {
+                let _ = error.write_to_file(&path);
+            }
+            eprintln!("headless invocation exceeded {timeout}s");
+            std::process::exit(1);
+        }
+    });
+    let result = nethercore_zx::replay::run_headless(&args.rom, script, config);
+    let _ = cancel.send(());
+    let _ = deadline.join();
+    let report = match result {
+        Ok(report) => report,
+        Err(error) => ExecutionReport::startup_error(
+            Some(script.display().to_string()),
+            "startup",
+            format!("{error:#}"),
+        ),
+    };
+
+    if let Some(path) = &args.report {
+        report
+            .write_to_file(path)
+            .with_context(|| format!("Failed to write report: {}", path.display()))?;
+    }
+    println!(
+        "Replay {}: {}/{} frames, {} assertions failed",
+        report.summary.status,
+        report.frames_executed,
+        report.total_frames,
+        report.summary.assertions_failed
+    );
+    if !report.succeeded() {
+        let detail = report
+            .error
+            .as_ref()
+            .map(|error| error.message.as_str())
+            .unwrap_or("one or more assertions failed");
+        anyhow::bail!("replay {}: {detail}", report.summary.status);
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn headless_requires_a_replay_script() {
+        let args = Args::try_parse_from(["nethercore-zx", "game.wasm", "--headless"]).unwrap();
+        assert!(
+            validate_args(&args)
+                .unwrap_err()
+                .to_string()
+                .contains("--replay")
+        );
+    }
+
+    #[test]
+    fn report_is_rejected_without_headless_mode() {
+        let args = Args::try_parse_from(["nethercore-zx", "game.wasm", "--report", "report.json"])
+            .unwrap();
+        assert!(
+            validate_args(&args)
+                .unwrap_err()
+                .to_string()
+                .contains("--headless")
+        );
+    }
 }

@@ -183,6 +183,22 @@ frames = [
     }
 
     #[test]
+    fn rejects_misspelled_frame_directives() {
+        let error = ReplayScript::from_toml(
+            r#"
+console = "zx"
+[[frames]]
+f = 0
+action = "Reset"
+params = { value = 1 }
+"#,
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("unknown field `params`"));
+    }
+
+    #[test]
     fn test_parse_assertion_all_operators() {
         // Test all 6 comparison operators
         let cond = AssertCondition::parse("$x == 100").unwrap();

@@ -56,6 +56,11 @@ where
         let mut runner = ConsoleRunner::new(console.clone(), window.clone())?;
         tracing::info!("Graphics init took {:?}", started.elapsed());
         runner.graphics_mut().set_scale_mode(self.scale_mode);
+        if let Some(script) = &self.config.replay_script {
+            let script = crate::replay::script::ReplayScript::from_file(script)?;
+            self.config.num_players = script.players as usize;
+            runner.replay_seed = Some(script.seed);
+        }
 
         // Create session based on connection mode
         match &self.config.connection_mode {

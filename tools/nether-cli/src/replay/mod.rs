@@ -20,6 +20,10 @@ pub enum ReplayAction {
         /// Script file (.ncrs)
         script: PathBuf,
 
+        /// ZX ROM file (.nczx or .wasm)
+        #[arg(long)]
+        rom: PathBuf,
+
         /// Output report file (JSON)
         #[arg(short, long)]
         report: Option<PathBuf>,
@@ -69,11 +73,12 @@ pub fn execute(action: ReplayAction) -> Result<()> {
     match action {
         ReplayAction::Run {
             script,
+            rom,
             report,
             headless,
             fail_fast,
             timeout,
-        } => run::execute(script, report, headless, fail_fast, timeout),
+        } => run::execute(script, rom, report, headless, fail_fast, timeout),
 
         ReplayAction::Compile { input, output } => compile::execute(input, output),
 

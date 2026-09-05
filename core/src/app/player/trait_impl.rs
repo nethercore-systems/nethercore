@@ -174,6 +174,9 @@ where
                     parse_wasm_error(&anyhow::anyhow!("{}", error_msg), tick_before, phase);
                 tracing::error!("Game error: {}", game_error);
                 self.error_state = Some(game_error);
+                if self.is_automated_run() {
+                    self.should_exit = true;
+                }
                 self.needs_redraw = true;
             }
         }
@@ -219,6 +222,9 @@ where
 
         tracing::error!("Runtime error: {}", game_error);
         self.error_state = Some(game_error);
+        if self.is_automated_run() {
+            self.should_exit = true;
+        }
         self.needs_redraw = true;
     }
 
@@ -233,6 +239,14 @@ where
     fn request_redraw(&self) {
         if let Some(window) = &self.window {
             window.request_redraw();
+        }
+    }
+
+    fn exit_error(&self) -> Option<String> {
+        if self.is_automated_run() {
+            self.error_state.as_ref().map(ToString::to_string)
+        } else {
+            None
         }
     }
 }

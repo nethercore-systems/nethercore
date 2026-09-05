@@ -119,12 +119,35 @@ impl<'a> Compiler<'a> {
         Self { layout }
     }
 
+    fn validate_buttons<'b>(
+        &self,
+        buttons: impl Iterator<Item = &'b str>,
+    ) -> Result<(), CompileError> {
+        for button in buttons {
+            if !self
+                .layout
+                .button_names()
+                .iter()
+                .any(|valid| valid.eq_ignore_ascii_case(button))
+            {
+                return Err(CompileError::UnknownButton(button.into()));
+            }
+        }
+        Ok(())
+    }
+
     /// Compile a parsed script into executable form
     pub fn compile(&self, script: &ReplayScript) -> Result<CompiledScript, CompileError> {
         validate_script(script).map_err(CompileError::Validation)?;
 
         // Build frame map for sparse-to-dense conversion
         let max_frame = script.max_frame();
+        // ponytail: dense inputs cap at one million ticks; use streaming for longer replays.
+        if max_frame >= 1_000_000 {
+            return Err(CompileError::InvalidInput(
+                "replay exceeds one million frames".into(),
+            ));
+        }
         let mut frame_inputs: HashMap<u64, Vec<Option<InputValue>>> = HashMap::new();
         let mut snap_frames = Vec::new();
         let mut screenshot_frames = Vec::new();
@@ -192,12 +215,36 @@ impl<'a> Compiler<'a> {
                     let bytes = match input {
                         Some(InputValue::Symbolic(s)) => {
                             let buttons = InputValue::parse_symbolic(s);
+                            self.validate_buttons(buttons.iter().map(|b| b.as_str()))?;
                             self.layout.encode_buttons(&buttons)
                         }
                         Some(InputValue::HexBytes(bytes)) => bytes.clone(),
-                        Some(InputValue::Structured(s)) => self.layout.encode_input(s),
+                        Some(InputValue::Structured(s)) => {
+                            self.validate_buttons(s.buttons.iter().map(|b| b.as_ref()))?;
+                            let sticks = s.lstick.iter().chain(s.rstick.iter()).flatten();
+                            let triggers = s.lt.iter().chain(s.rt.iter());
+                            if sticks
+                                .clone()
+                                .any(|v| !v.is_finite() || !(-1.0..=1.0).contains(v))
+                                || triggers
+                                    .clone()
+                                    .any(|v| !v.is_finite() || !(0.0..=1.0).contains(v))
+                            {
+                                return Err(CompileError::InvalidInput(
+                                    "analog input out of range".into(),
+                                ));
+                            }
+                            self.layout.encode_input(s)
+                        }
                         None => idle_input.clone(),
                     };
+                    if bytes.len() != self.layout.input_size() {
+                        return Err(CompileError::InvalidInput(format!(
+                            "frame {frame}: expected {} input bytes, got {}",
+                            self.layout.input_size(),
+                            bytes.len()
+                        )));
+                    }
                     frame_bytes.push(bytes);
                 }
             } else {
@@ -235,8 +282,12 @@ pub enum CompileError {
     InvalidAssertion(String),
     /// Unknown button name
     UnknownButton(String),
+    InvalidInput(String),
     /// Console mismatch
-    ConsoleMismatch { expected: String, got: String },
+    ConsoleMismatch {
+        expected: String,
+        got: String,
+    },
 }
 
 impl std::fmt::Display for CompileError {
@@ -245,6 +296,7 @@ impl std::fmt::Display for CompileError {
             CompileError::Validation(e) => write!(f, "Validation error: {}", e),
             CompileError::InvalidAssertion(e) => write!(f, "Invalid assertion: {}", e),
             CompileError::UnknownButton(b) => write!(f, "Unknown button: {}", b),
+            CompileError::InvalidInput(message) => write!(f, "Invalid input: {message}"),
             CompileError::ConsoleMismatch { expected, got } => {
                 write!(f, "Console mismatch: expected {}, got {}", expected, got)
             }
@@ -369,6 +421,19 @@ mod tests {
 
         // Check frame 1 is right+a (0x08 | 0x10 = 0x18)
         assert_eq!(compiled.inputs.get_frame(1), Some(&vec![vec![0x18]]));
+    }
+
+    #[test]
+    fn rejects_empty_scripts() {
+        let script = ReplayScript {
+            console: "zx".to_string(),
+            seed: 0,
+            players: 1,
+            frames: vec![],
+        };
+
+        let error = Compiler::new(&MockLayout).compile(&script).unwrap_err();
+        assert!(error.to_string().contains("at least one frame"));
     }
 
     #[test]
