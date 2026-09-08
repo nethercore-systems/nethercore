@@ -91,15 +91,37 @@ fn mapped_samples_round_trip_and_reject_truncation() {
     instrument.sample_map = vec![0; 96];
     instrument.sample_map[60] = 1;
     instrument.samples = vec![
-        crate::XmSample {volume: 16, pan: 0, loop_start: 3, loop_length: 17, loop_type: 1, ..Default::default()},
-        crate::XmSample {volume: 48, pan: 255, finetune: -17, relative_note: 12, loop_type: 2, ..Default::default()},
+        crate::XmSample {
+            volume: 16,
+            pan: 0,
+            loop_start: 3,
+            loop_length: 17,
+            loop_type: 1,
+            ..Default::default()
+        },
+        crate::XmSample {
+            volume: 48,
+            pan: 255,
+            finetune: -17,
+            relative_note: 12,
+            loop_type: 2,
+            ..Default::default()
+        },
     ];
     let bytes = pack_xm_minimal(&module).unwrap();
     assert_ne!(bytes[13] & super::FLAG_SAMPLE_MAP, 0);
     let decoded = parse_xm_minimal(&bytes).unwrap();
-    assert_eq!(decoded.instruments[0].sample_map, module.instruments[0].sample_map);
-    assert_eq!(decoded.instruments[0].samples, module.instruments[0].samples);
-    for end in 0..bytes.len() { assert!(parse_xm_minimal(&bytes[..end]).is_err()); }
+    assert_eq!(
+        decoded.instruments[0].sample_map,
+        module.instruments[0].sample_map
+    );
+    assert_eq!(
+        decoded.instruments[0].samples,
+        module.instruments[0].samples
+    );
+    for end in 0..bytes.len() {
+        assert!(parse_xm_minimal(&bytes[..end]).is_err());
+    }
     module.instruments[0].sample_map[60] = 2;
     assert!(pack_xm_minimal(&module).is_err());
 }
@@ -116,10 +138,13 @@ fn stereo_sample_metadata_round_trips_without_changing_legacy_mono() {
 
     module.instruments[0].num_samples = 2;
     module.instruments[0].sample_map = vec![0; 96];
-    module.instruments[0].samples = vec![crate::XmSample::default(), crate::XmSample {
-        is_stereo: true,
-        ..Default::default()
-    }];
+    module.instruments[0].samples = vec![
+        crate::XmSample::default(),
+        crate::XmSample {
+            is_stereo: true,
+            ..Default::default()
+        },
+    ];
     let decoded = parse_xm_minimal(&pack_xm_minimal(&module).unwrap()).unwrap();
     assert!(!decoded.instruments[0].samples[0].is_stereo);
     assert!(decoded.instruments[0].samples[1].is_stereo);

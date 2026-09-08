@@ -442,7 +442,9 @@ mod tests {
         let mut engine = TrackerEngine::new();
         let mut state = crate::state::TrackerState::default();
         state.handle = engine.load_tracker_module(
-            nether_tracker::from_it_module(&nether_it::ItModule::default()), vec![]);
+            nether_tracker::from_it_module(&nether_it::ItModule::default()),
+            vec![],
+        );
         state.flags = crate::state::tracker_flags::PLAYING;
         engine.sync_to_state(&state, &[]);
         engine.rollback_cache.clear();

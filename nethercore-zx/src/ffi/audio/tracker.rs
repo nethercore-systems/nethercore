@@ -22,7 +22,11 @@ pub(super) fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     // Tracker loading
     linker.func_wrap("env", "rom_tracker", rom_tracker)?;
     linker.func_wrap("env", "load_tracker", load_tracker)?;
-    linker.func_wrap("env", "load_tracker_with_samples", load_tracker_with_samples)?;
+    linker.func_wrap(
+        "env",
+        "load_tracker_with_samples",
+        load_tracker_with_samples,
+    )?;
 
     // Position/control functions
     linker.func_wrap("env", "music_jump", music_jump)?;
@@ -212,7 +216,11 @@ fn load_tracker(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len: 
         }
     };
 
-    if module.instruments.iter().any(|instrument| instrument.num_samples > 0) {
+    if module
+        .instruments
+        .iter()
+        .any(|instrument| instrument.num_samples > 0)
+    {
         warn!(
             "load_tracker: raw XM requires supplied sample handles; use load_tracker_with_samples"
         );
@@ -283,7 +291,10 @@ fn load_tracker_with_samples(
         let module = match nether_xm::parse_xm_minimal(&memory_data[data_ptr as usize..data_end]) {
             Ok(module) => module,
             Err(e) => {
-                warn!("load_tracker_with_samples: failed to parse tracker data: {:?}", e);
+                warn!(
+                    "load_tracker_with_samples: failed to parse tracker data: {:?}",
+                    e
+                );
                 return 0;
             }
         };
@@ -292,8 +303,7 @@ fn load_tracker_with_samples(
         if sample_count as usize != expected_count {
             warn!(
                 "load_tracker_with_samples: expected {} sample handles, got {}",
-                expected_count,
-                sample_count as usize
+                expected_count, sample_count as usize
             );
             return 0;
         }
@@ -323,11 +333,11 @@ fn load_tracker_with_samples(
         }
     }
 
-    let handle = ctx
-        .ffi
-        .tracker_engine
-        .load_xm_module(module, sound_handles);
-    info!("Loaded raw tracker with supplied samples as handle {}", handle);
+    let handle = ctx.ffi.tracker_engine.load_xm_module(module, sound_handles);
+    info!(
+        "Loaded raw tracker with supplied samples as handle {}",
+        handle
+    );
     handle
 }
 

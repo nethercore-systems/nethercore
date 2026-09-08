@@ -312,19 +312,19 @@ fn read_sample_data(
     fn decode_plane(encoded: &[u8], is_16bit: bool) -> Vec<i16> {
         let mut samples = Vec::with_capacity(encoded.len() / if is_16bit { 2 } else { 1 });
         if is_16bit {
-        let mut old = 0i16;
+            let mut old = 0i16;
             for bytes in encoded.chunks_exact(2) {
                 let delta = i16::from_le_bytes([bytes[0], bytes[1]]);
-            old = old.wrapping_add(delta);
-            samples.push(old);
-        }
+                old = old.wrapping_add(delta);
+                samples.push(old);
+            }
         } else {
-        let mut old = 0i8;
+            let mut old = 0i8;
             for &byte in encoded {
                 let delta = byte as i8;
-            old = old.wrapping_add(delta);
-            samples.push((old as i16) * 256);
-        }
+                old = old.wrapping_add(delta);
+                samples.push((old as i16) * 256);
+            }
         }
         samples
     }
@@ -336,7 +336,11 @@ fn read_sample_data(
     let (left, right) = encoded.split_at(encoded.len() / 2);
     let left = decode_plane(left, is_16bit);
     let right = decode_plane(right, is_16bit);
-    Ok(left.into_iter().zip(right).flat_map(|(l, r)| [l, r]).collect())
+    Ok(left
+        .into_iter()
+        .zip(right)
+        .flat_map(|(l, r)| [l, r])
+        .collect())
 }
 
 // =============================================================================

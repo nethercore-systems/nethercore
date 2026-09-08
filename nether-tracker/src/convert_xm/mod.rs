@@ -30,26 +30,41 @@ pub fn from_xm_module(xm: &nether_xm::XmModule) -> TrackerModule {
     // Legacy NCXM has one sound per instrument; mapped NCXM flattens local slots.
     let mut samples = Vec::new();
     let mut instruments: Vec<crate::TrackerInstrument> = instruments;
-    if xm.instruments.iter().any(|i| i.num_samples > 1 && !i.samples.is_empty()) {
+    if xm
+        .instruments
+        .iter()
+        .any(|i| i.num_samples > 1 && !i.samples.is_empty())
+    {
         for (source, instrument) in xm.instruments.iter().zip(&mut instruments) {
             let base = samples.len();
             for (note, entry) in instrument.note_sample_table.iter_mut().enumerate() {
-                entry.1 = source.sample_map.get(note)
+                entry.1 = source
+                    .sample_map
+                    .get(note)
                     .filter(|&&slot| (slot as usize) < source.samples.len())
                     .map_or(0, |&slot| (base + slot as usize + 1) as u16);
             }
             for sample in &source.samples {
-                let rate = nether_xm::ExtractedSample::calculate_sample_rate(sample.finetune, sample.relative_note);
-                let (start, length) = convert_loop_points(rate, sample.loop_start, sample.loop_length);
+                let rate = nether_xm::ExtractedSample::calculate_sample_rate(
+                    sample.finetune,
+                    sample.relative_note,
+                );
+                let (start, length) =
+                    convert_loop_points(rate, sample.loop_start, sample.loop_length);
                 samples.push(crate::TrackerSample {
                     default_volume: sample.volume,
                     default_pan: Some(sample.pan),
                     loop_begin: start,
                     loop_end: start.saturating_add(length),
-                    loop_type: match sample.loop_type { 1 => crate::LoopType::Forward, 2 => crate::LoopType::PingPong, _ => crate::LoopType::None },
+                    loop_type: match sample.loop_type {
+                        1 => crate::LoopType::Forward,
+                        2 => crate::LoopType::PingPong,
+                        _ => crate::LoopType::None,
+                    },
                     is_stereo: sample.is_stereo,
                     c5_speed: TARGET_SAMPLE_RATE,
-                    xm_source_tuning: i16::from(sample.relative_note)*128 + i16::from(sample.finetune),
+                    xm_source_tuning: i16::from(sample.relative_note) * 128
+                        + i16::from(sample.finetune),
                     xm_source_finetune: sample.finetune,
                     xm_forward_loop_start: f64::from(sample.loop_start)
                         * f64::from(TARGET_SAMPLE_RATE)
@@ -75,7 +90,9 @@ pub fn from_xm_module(xm: &nether_xm::XmModule) -> TrackerModule {
     if xm.linear_frequency_table {
         format = format | FormatFlags::LINEAR_SLIDES;
     }
-    if xm.legacy_retrigger { format = format | FormatFlags::XM_LEGACY_RETRIGGER; }
+    if xm.legacy_retrigger {
+        format = format | FormatFlags::XM_LEGACY_RETRIGGER;
+    }
     if matches!(xm.mix_mode, nether_xm::XmMixMode::Legacy) {
         format = format | FormatFlags::XM_LEGACY_MIX;
     }
@@ -88,7 +105,7 @@ pub fn from_xm_module(xm: &nether_xm::XmModule) -> TrackerModule {
         num_channels: xm.num_channels,
         initial_speed: xm.default_speed as u8,
         initial_tempo: xm.default_bpm as u8,
-        global_volume: 64,       // XM doesn't have global volume in header
+        global_volume: 64,            // XM doesn't have global volume in header
         mix_volume: xm.sample_preamp, // Source preamp in the shared 1/128 gain path
         panning_separation: 128, // XM doesn't have panning separation - default to full stereo (IT feature)
         channel_pan: [32; 64],

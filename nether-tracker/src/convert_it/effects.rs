@@ -281,8 +281,14 @@ mod tests {
 
     #[test]
     fn it_volume_pitch_slides_are_regular_tick_slides() {
-        assert_eq!(convert_it_extended_effect(0x7b), TrackerEffect::SetPitchEnvelope(false));
-        assert_eq!(convert_it_extended_effect(0x7c), TrackerEffect::SetPitchEnvelope(true));
+        assert_eq!(
+            convert_it_extended_effect(0x7b),
+            TrackerEffect::SetPitchEnvelope(false)
+        );
+        assert_eq!(
+            convert_it_extended_effect(0x7c),
+            TrackerEffect::SetPitchEnvelope(true)
+        );
         assert_eq!(
             convert_it_extended_effect(0x79),
             TrackerEffect::SetPanningEnvelope(false)

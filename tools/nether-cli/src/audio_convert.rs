@@ -115,7 +115,10 @@ pub fn convert_xm_sample(sample: &nether_xm::ExtractedSample) -> Vec<i16> {
     };
     let start = sample.loop_start as usize;
     let length = sample.loop_length as usize;
-    if matches!(sample.loop_type, 1 | 2) && length > 0 && start + length <= sample.data.len() / channels {
+    if matches!(sample.loop_type, 1 | 2)
+        && length > 0
+        && start + length <= sample.data.len() / channels
+    {
         // Match convert_loop_points: independently round the start and length.
         let ratio = TARGET_SAMPLE_RATE as f64 / sample.sample_rate as f64;
         let target_start = (start as f64 * ratio).round() as usize;
@@ -134,7 +137,11 @@ pub fn convert_xm_sample(sample: &nether_xm::ExtractedSample) -> Vec<i16> {
                 let fraction = position - index as f64;
                 for lane in 0..channels {
                     let a = sample.data[(start + index) * channels + lane] as f64;
-                    let next = if sample.loop_type == 1 { (index + 1) % length } else { (index + 1).min(length - 1) };
+                    let next = if sample.loop_type == 1 {
+                        (index + 1) % length
+                    } else {
+                        (index + 1).min(length - 1)
+                    };
                     let b = sample.data[(start + next) * channels + lane] as f64;
                     output[(target_start + frame) * channels + lane] =
                         (a + (b - a) * fraction).round() as i16;
@@ -280,11 +287,9 @@ mod tests {
         };
         let converted = convert_xm_sample(&sample);
         assert_eq!(converted.len() % 2, 0);
-        assert!(
-            converted
-                .chunks_exact(2)
-                .all(|frame| frame[0] > 0 && frame[1] < 0)
-        );
+        assert!(converted
+            .chunks_exact(2)
+            .all(|frame| frame[0] > 0 && frame[1] < 0));
         sample.sample_rate = 8363;
         sample.loop_start = 4;
         sample.loop_length = 8;

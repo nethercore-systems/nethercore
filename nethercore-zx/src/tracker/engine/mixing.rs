@@ -14,10 +14,7 @@ pub(super) fn xm_pan(sample: f32, pan: f32, ft2: bool) -> (f32, f32) {
     let max_pan = if ft2 { 255.0 } else { 256.0 };
     let source_pan = source_pan.clamp(0.0, max_pan);
     let (left_share, right_share) = if ft2 {
-        (
-            (256.0 - source_pan).sqrt() / 16.0,
-            source_pan.sqrt() / 16.0,
-        )
+        ((256.0 - source_pan).sqrt() / 16.0, source_pan.sqrt() / 16.0)
     } else {
         ((256.0 - source_pan) / 256.0, source_pan / 256.0)
     };
@@ -26,14 +23,16 @@ pub(super) fn xm_pan(sample: f32, pan: f32, ft2: bool) -> (f32, f32) {
 
 /// XM retains fractional volume nodes; pan rounds in its unsigned source range.
 fn xm_envelope_value(env: &nether_tracker::TrackerEnvelope, tick: u16) -> f32 {
-    env.points.windows(2).find_map(|p| {
-        let [(x1, y1), (x2, y2)] = [p[0], p[1]];
-        (tick >= x1 && tick < x2).then(|| {
-            f32::from(y1) + f32::from(y2 - y1) * f32::from(tick - x1) / f32::from(x2 - x1)
+    env.points
+        .windows(2)
+        .find_map(|p| {
+            let [(x1, y1), (x2, y2)] = [p[0], p[1]];
+            (tick >= x1 && tick < x2).then(|| {
+                f32::from(y1) + f32::from(y2 - y1) * f32::from(tick - x1) / f32::from(x2 - x1)
+            })
         })
-    }).unwrap_or_else(|| env.value_at(tick) as f32)
+        .unwrap_or_else(|| env.value_at(tick) as f32)
 }
-
 
 impl TrackerEngine {
     /// Mix all active channels into a stereo sample.
@@ -74,22 +73,39 @@ impl TrackerEngine {
         sample_rate: u32,
         tick_samples: u32,
     ) -> (f32, f32) {
-        let (num_channels, mix_volume, panning_separation, is_it, xm_ft2_mix, it_balance_mix) = self
-            .modules
-            .get(raw_handle as usize)
-            .and_then(|m| m.as_ref())
-            .map(|m| {
-                (
-                    m.module.num_channels as usize,
-                    m.module.mix_volume as f32 * if !m.module.format.contains(nether_tracker::FormatFlags::IS_IT_FORMAT)
-                        && m.module.format.contains(nether_tracker::FormatFlags::XM_LEGACY_MIX) {2.0/3.0}else{1.0},
-                    m.module.panning_separation,
-                    m.module.format.contains(nether_tracker::FormatFlags::IS_IT_FORMAT),
-                    m.module.format.contains(nether_tracker::FormatFlags::XM_FT2_MIX),
-                    m.module.format.contains(nether_tracker::FormatFlags::IT_BALANCE_MIX),
-                )
-            })
-            .unwrap_or((0, 128.0, 128, false, false, false));
+        let (num_channels, mix_volume, panning_separation, is_it, xm_ft2_mix, it_balance_mix) =
+            self.modules
+                .get(raw_handle as usize)
+                .and_then(|m| m.as_ref())
+                .map(|m| {
+                    (
+                        m.module.num_channels as usize,
+                        m.module.mix_volume as f32
+                            * if !m
+                                .module
+                                .format
+                                .contains(nether_tracker::FormatFlags::IS_IT_FORMAT)
+                                && m.module
+                                    .format
+                                    .contains(nether_tracker::FormatFlags::XM_LEGACY_MIX)
+                            {
+                                2.0 / 3.0
+                            } else {
+                                1.0
+                            },
+                        m.module.panning_separation,
+                        m.module
+                            .format
+                            .contains(nether_tracker::FormatFlags::IS_IT_FORMAT),
+                        m.module
+                            .format
+                            .contains(nether_tracker::FormatFlags::XM_FT2_MIX),
+                        m.module
+                            .format
+                            .contains(nether_tracker::FormatFlags::IT_BALANCE_MIX),
+                    )
+                })
+                .unwrap_or((0, 128.0, 128, false, false, false));
 
         let mut left = 0.0f32;
         let mut right = 0.0f32;
@@ -130,14 +146,18 @@ impl TrackerEngine {
             channel.pitch_envelope_value = 0.0;
             // Apply pitch envelope (IT only)
             if let Some(loaded) = self
-                    .modules
-                    .get(raw_handle as usize)
-                    .and_then(|m| m.as_ref())
+                .modules
+                .get(raw_handle as usize)
+                .and_then(|m| m.as_ref())
                 && let Some(instr) = loaded.module.instruments.get(instr_idx)
                 && let Some(ref env) = instr.pitch_envelope
                 && (channel.pitch_envelope_enabled
-                    || loaded.module.format.contains(nether_tracker::FormatFlags::IS_IT_FORMAT)
-                        && env.is_enabled() && channel.envelope_started & 4 != 0)
+                    || loaded
+                        .module
+                        .format
+                        .contains(nether_tracker::FormatFlags::IS_IT_FORMAT)
+                        && env.is_enabled()
+                        && channel.envelope_started & 4 != 0)
                 && !env.is_filter()
             {
                 let env_val = env.value_at(channel.pitch_envelope_pos) as f32;
@@ -145,17 +165,27 @@ impl TrackerEngine {
             }
 
             // IT applies the signed envelope to the base cutoff; never overwrite Zxx/defaults.
-            let filter_value = self.modules.get(raw_handle as usize).and_then(|m| m.as_ref())
+            let filter_value = self
+                .modules
+                .get(raw_handle as usize)
+                .and_then(|m| m.as_ref())
                 .and_then(|m| m.module.instruments.get(instr_idx))
                 .and_then(|i| i.pitch_envelope.as_ref())
                 .filter(|e| e.is_filter())
                 .and_then(|e| {
                     if channel.filter_envelope_enabled || e.is_enabled() {
                         // IT's authored-on S7B at note start still applies midpoint cutoff.
-                        Some(if !channel.filter_envelope_enabled && channel.envelope_started & 8 == 0 {
-                            0
-                        } else {e.value_at(channel.filter_envelope_pos)})
-                    } else {None}
+                        Some(
+                            if !channel.filter_envelope_enabled && channel.envelope_started & 8 == 0
+                            {
+                                0
+                            } else {
+                                e.value_at(channel.filter_envelope_pos)
+                            },
+                        )
+                    } else {
+                        None
+                    }
                 });
             if channel.filter_envelope_value != filter_value {
                 channel.filter_envelope_value = filter_value;
@@ -170,8 +200,8 @@ impl TrackerEngine {
                 sample_right = sample_left;
             }
 
-            let xm_envelopes = !is_it
-                && (channel.volume_envelope_enabled || channel.panning_envelope_enabled);
+            let xm_envelopes =
+                !is_it && (channel.volume_envelope_enabled || channel.panning_envelope_enabled);
             // XM envelope gains carry a within-tick transition. Silent replay
             // must consume it too, including while the sample voice is stopped.
             // A fresh envelope attack (including E9 and delayed instrument
@@ -184,26 +214,41 @@ impl TrackerEngine {
             // Advance this history on the silent path as well as audible mixing.
             let it_tremolo = if is_it && channel.tremolo_active {
                 channel.it_tremolo_ramp_pos = channel.it_tremolo_ramp_pos.saturating_add(1);
-                let progress = (channel.it_tremolo_ramp_pos as f32 / tick_samples.max(1) as f32).min(1.0);
-                channel.it_tremolo_from + (channel.it_tremolo_delta - channel.it_tremolo_from) * progress
-            } else { 0.0 };
+                let progress =
+                    (channel.it_tremolo_ramp_pos as f32 / tick_samples.max(1) as f32).min(1.0);
+                channel.it_tremolo_from
+                    + (channel.it_tremolo_delta - channel.it_tremolo_from) * progress
+            } else {
+                0.0
+            };
             if !OUTPUT && !xm_envelopes {
                 continue;
             }
 
             // Apply volume with envelope processing
-            let mut vol = (channel.volume + if is_it { it_tremolo }
-                else if channel.volume == 0.0 {0.0}else{channel.xm_tremolo_delta}).clamp(0.0,1.0);
+            let mut vol = (channel.volume
+                + if is_it {
+                    it_tremolo
+                } else if channel.volume == 0.0 {
+                    0.0
+                } else {
+                    channel.xm_tremolo_delta
+                })
+            .clamp(0.0, 1.0);
 
             if let Some(loaded) = self
-                    .modules
-                    .get(raw_handle as usize)
-                    .and_then(|m| m.as_ref())
+                .modules
+                .get(raw_handle as usize)
+                .and_then(|m| m.as_ref())
                 && let Some(instr) = loaded.module.instruments.get(instr_idx)
                 && let Some(ref env) = instr.volume_envelope
                 && (channel.volume_envelope_enabled
-                    || loaded.module.format.contains(nether_tracker::FormatFlags::IS_IT_FORMAT)
-                        && env.is_enabled() && channel.envelope_started & 1 != 0)
+                    || loaded
+                        .module
+                        .format
+                        .contains(nether_tracker::FormatFlags::IS_IT_FORMAT)
+                        && env.is_enabled()
+                        && channel.envelope_started & 1 != 0)
             {
                 let env_val = if is_it {
                     env.value_at(channel.volume_envelope_pos) as f32
@@ -221,21 +266,28 @@ impl TrackerEngine {
             vol *= self.global_volume;
             vol *= channel.channel_volume as f32 / CHANNEL_VOLUME_MAX;
             let mut instrument_gain = channel.instrument_global_volume as f32 / CHANNEL_VOLUME_MAX;
-            if let Some(sample) = self.modules.get(raw_handle as usize)
+            if let Some(sample) = self
+                .modules
+                .get(raw_handle as usize)
                 .and_then(|m| m.as_ref())
                 .and_then(|m| channel.sample_index.and_then(|i| m.module.samples.get(i)))
             {
                 instrument_gain *= sample.global_volume.min(64) as f32 / CHANNEL_VOLUME_MAX;
             }
 
-            vol *= if is_it { (instrument_gain + channel.volume_swing).clamp(0.0, 1.0) } else { instrument_gain };
+            vol *= if is_it {
+                (instrument_gain + channel.volume_swing).clamp(0.0, 1.0)
+            } else {
+                instrument_gain
+            };
 
             if channel.tremor_mute && (!is_it || channel.tremor_active) {
                 vol = 0.0;
             }
 
             // Apply panning with envelope
-            let mut pan = (channel.panning + if is_it { channel.pan_swing } else { 0.0 }).clamp(-1.0, 1.0);
+            let mut pan =
+                (channel.panning + if is_it { channel.pan_swing } else { 0.0 }).clamp(-1.0, 1.0);
 
             if channel.pitch_pan_separation != 0 {
                 let note_offset = channel.current_note as i16 - channel.pitch_pan_center as i16;
@@ -245,14 +297,18 @@ impl TrackerEngine {
             }
 
             if let Some(loaded) = self
-                    .modules
-                    .get(raw_handle as usize)
-                    .and_then(|m| m.as_ref())
+                .modules
+                .get(raw_handle as usize)
+                .and_then(|m| m.as_ref())
                 && let Some(instr) = loaded.module.instruments.get(instr_idx)
                 && let Some(ref env) = instr.panning_envelope
                 && (channel.panning_envelope_enabled
-                    || loaded.module.format.contains(nether_tracker::FormatFlags::IS_IT_FORMAT)
-                        && env.is_enabled() && channel.envelope_started & 2 != 0)
+                    || loaded
+                        .module
+                        .format
+                        .contains(nether_tracker::FormatFlags::IS_IT_FORMAT)
+                        && env.is_enabled()
+                        && channel.envelope_started & 2 != 0)
             {
                 let env_val = if is_it {
                     env.value_at(channel.panning_envelope_pos) as f32
@@ -285,22 +341,30 @@ impl TrackerEngine {
                 let (left_gain, right_gain) = if is_it {
                     let right_share = (pan.clamp(-1.0, 1.0) + 1.0) * 0.5;
                     if it_balance_mix {
-                        ((2.0 * (1.0 - right_share)).min(1.0), (2.0 * right_share).min(1.0))
+                        (
+                            (2.0 * (1.0 - right_share)).min(1.0),
+                            (2.0 * right_share).min(1.0),
+                        )
                     } else {
                         (1.0 - right_share, right_share)
                     }
                 } else {
                     xm_pan(1.0, pan, xm_ft2_mix)
                 };
-                (sample_left * vol * left_gain, sample_right * vol * right_gain)
+                (
+                    sample_left * vol * left_gain,
+                    sample_right * vol * right_gain,
+                )
             } else if is_it {
                 // IT distributes mono amplitude linearly, not by equal power.
                 let right_share = (pan.clamp(-1.0, 1.0) + 1.0) * 0.5;
                 let amplitude = sample_left * vol;
                 if it_balance_mix {
                     // Explicit RC3 balance: unity at center, attenuate the far side.
-                    (amplitude * (2.0 * (1.0 - right_share)).min(1.0),
-                     amplitude * (2.0 * right_share).min(1.0))
+                    (
+                        amplitude * (2.0 * (1.0 - right_share)).min(1.0),
+                        amplitude * (2.0 * right_share).min(1.0),
+                    )
                 } else {
                     (amplitude * (1.0 - right_share), amplitude * right_share)
                 }
@@ -317,11 +381,19 @@ impl TrackerEngine {
                 let quantum = 128.0 / (4096.0 * mix_volume);
                 let target = [lg, rg].map(|g| (g / quantum).floor() * quantum);
                 let duration = tick_samples.max(1);
-                if channel.xm_envelope_ramp.as_ref().is_some_and(|r| r.stopped && !was_stopped) {
+                if channel
+                    .xm_envelope_ramp
+                    .as_ref()
+                    .is_some_and(|r| r.stopped && !was_stopped)
+                {
                     channel.xm_envelope_ramp = None;
                 }
                 let ramp = channel.xm_envelope_ramp.get_or_insert(XmEnvelopeRamp {
-                    from: target, target, current: target, position: duration, stopped: false,
+                    from: target,
+                    target,
+                    current: target,
+                    position: duration,
+                    stopped: false,
                 });
                 if ramp.target != target {
                     ramp.from = ramp.target;
@@ -338,7 +410,8 @@ impl TrackerEngine {
                         }
                         // The measured rising/falling transitions begin one
                         // gain unit toward their target, then traverse a tick.
-                        let value = ramp.from[lane] + delta.signum() * quantum
+                        let value = ramp.from[lane]
+                            + delta.signum() * quantum
                             + delta * (ramp.position as f32 / duration as f32);
                         gain[lane] = (value / quantum).floor().max(0.0) * quantum;
                     }
@@ -374,7 +447,7 @@ impl TrackerEngine {
         }
 
         // Source preamp is retained at import, independently of the pan law.
-        let mix_scale = mix_volume as f32 / 128.0;
+        let mix_scale = mix_volume / 128.0;
         (left * mix_scale, right * mix_scale)
     }
 }

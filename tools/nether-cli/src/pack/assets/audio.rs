@@ -129,47 +129,71 @@ pub fn load_tracker(
         TrackerFormat::Xm => {
             let module = nether_xm::parse_xm(&data)
                 .with_context(|| format!("Failed to parse XM tracker: {}", path.display()))?;
-            let mapped = module.instruments.iter().any(|i| i.num_samples > 1 && !i.samples.is_empty());
+            let mapped = module
+                .instruments
+                .iter()
+                .any(|i| i.num_samples > 1 && !i.samples.is_empty());
             if mapped {
                 for (index, instrument) in module.instruments.iter().enumerate() {
                     for (slot, sample) in instrument.samples.iter().enumerate() {
                         if sample.source_sample_bytes.is_some_and(|bytes| bytes > 0)
-                            && extracted_sample_ids.and_then(|ids| ids.get(&(index * 256 + slot))).is_none()
+                            && extracted_sample_ids
+                                .and_then(|ids| ids.get(&(index * 256 + slot)))
+                                .is_none()
                             && !available_sound_ids.contains(&instrument.name)
                         {
-                            anyhow::bail!("Missing XM sample {}:{} in {}", index, slot, path.display());
+                            anyhow::bail!(
+                                "Missing XM sample {}:{} in {}",
+                                index,
+                                slot,
+                                path.display()
+                            );
                         }
                     }
                 }
             }
             let sample_ids: Vec<String> = if mapped {
-                module.instruments.iter().enumerate().flat_map(|(index, instrument)| {
-                    (0..instrument.num_samples as usize).map(move |slot| {
-                        extracted_sample_ids.and_then(|ids| ids.get(&(index * 256 + slot))).cloned()
-                            .unwrap_or_else(|| if available_sound_ids.contains(&instrument.name) {
-                                instrument.name.clone()
-                            } else { String::new() })
+                module
+                    .instruments
+                    .iter()
+                    .enumerate()
+                    .flat_map(|(index, instrument)| {
+                        (0..instrument.num_samples as usize).map(move |slot| {
+                            extracted_sample_ids
+                                .and_then(|ids| ids.get(&(index * 256 + slot)))
+                                .cloned()
+                                .unwrap_or_else(|| {
+                                    if available_sound_ids.contains(&instrument.name) {
+                                        instrument.name.clone()
+                                    } else {
+                                        String::new()
+                                    }
+                                })
+                        })
                     })
-                }).collect()
-            } else { module
-                .instruments
-                .iter()
-                .enumerate()
-                .map(|(index, instrument)| {
-                    if let Some(extracted_id) = extracted_sample_ids.and_then(|ids| ids.get(&(index * 256)))
-                    {
-                        extracted_id.clone()
-                    } else if available_sound_ids.contains(&instrument.name) {
-                        instrument.name.clone()
-                    } else if instrument.num_samples == 0
-                        || instrument.source_sample_bytes == Some(0)
-                    {
-                        String::new()
-                    } else {
-                        super::utils::sanitize_name(&instrument.name, id, index as u8)
-                    }
-                })
-                .collect() };
+                    .collect()
+            } else {
+                module
+                    .instruments
+                    .iter()
+                    .enumerate()
+                    .map(|(index, instrument)| {
+                        if let Some(extracted_id) =
+                            extracted_sample_ids.and_then(|ids| ids.get(&(index * 256)))
+                        {
+                            extracted_id.clone()
+                        } else if available_sound_ids.contains(&instrument.name) {
+                            instrument.name.clone()
+                        } else if instrument.num_samples == 0
+                            || instrument.source_sample_bytes == Some(0)
+                        {
+                            String::new()
+                        } else {
+                            super::utils::sanitize_name(&instrument.name, id, index as u8)
+                        }
+                    })
+                    .collect()
+            };
             validate_tracker_samples(id, path, &sample_ids, available_sound_ids)?;
 
             let pattern_data = nether_xm::pack_xm_minimal(&module).with_context(|| {

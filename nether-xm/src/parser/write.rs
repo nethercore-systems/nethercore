@@ -4,6 +4,8 @@ use crate::error::XmError;
 use crate::module::{XmModule, XmPattern};
 use crate::{XM_MAGIC, XM_VERSION};
 
+type OriginalSampleHeaders = Vec<Vec<[u8; 40]>>;
+
 fn read_u32_at(data: &[u8], offset: usize) -> Result<u32, XmError> {
     let bytes = data
         .get(offset..offset.checked_add(4).ok_or(XmError::UnexpectedEof)?)
@@ -24,9 +26,9 @@ fn read_u16_at(data: &[u8], offset: usize) -> Result<u16, XmError> {
 fn original_sample_headers(
     original_data: &[u8],
     module: &XmModule,
-) -> Result<(Vec<Vec<[u8; 40]>>, usize), XmError> {
-    let header_size = usize::try_from(read_u32_at(original_data, 60)?)
-        .map_err(|_| XmError::UnexpectedEof)?;
+) -> Result<(OriginalSampleHeaders, usize), XmError> {
+    let header_size =
+        usize::try_from(read_u32_at(original_data, 60)?).map_err(|_| XmError::UnexpectedEof)?;
     let mut offset = 60usize
         .checked_add(header_size)
         .ok_or(XmError::UnexpectedEof)?;
@@ -107,7 +109,10 @@ fn original_sample_headers(
                 .unwrap();
             instrument_headers.push(sample_header);
             sample_data_bytes = sample_data_bytes
-                .checked_add(usize::try_from(u32::from_le_bytes(sample_header[..4].try_into().unwrap())).map_err(|_| XmError::UnexpectedEof)?)
+                .checked_add(
+                    usize::try_from(u32::from_le_bytes(sample_header[..4].try_into().unwrap()))
+                        .map_err(|_| XmError::UnexpectedEof)?,
+                )
                 .ok_or(XmError::UnexpectedEof)?;
         }
 
@@ -223,8 +228,13 @@ pub(crate) fn rebuild_xm_without_samples(
 
     for (instrument_index, instrument) in module.instruments.iter().enumerate() {
         // Calculate instrument header size
-        let header_size = if instrument.num_samples > 0 { 243 }
-            else if module.mix_mode == crate::XmMixMode::Compatible { 29 } else { 33 };
+        let header_size = if instrument.num_samples > 0 {
+            243
+        } else if module.mix_mode == crate::XmMixMode::Compatible {
+            29
+        } else {
+            33
+        };
 
         // Instrument header size (4 bytes)
         write_u32(&mut output, header_size);
@@ -248,7 +258,10 @@ pub(crate) fn rebuild_xm_without_samples(
 
         if instrument.num_samples > 0 {
             if instrument.sample_map.len() != 96
-                || instrument.sample_map.iter().any(|&sample| sample >= instrument.num_samples)
+                || instrument
+                    .sample_map
+                    .iter()
+                    .any(|&sample| sample >= instrument.num_samples)
                 || instrument.samples.len() != instrument.num_samples as usize
             {
                 return Err(XmError::InvalidInstrument(0));

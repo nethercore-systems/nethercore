@@ -1,3 +1,5 @@
+// Authored tests build defaults incrementally to isolate each control.
+#![allow(clippy::field_reassign_with_default)]
 //! Original IT fixtures for initially disabled S78/S7A envelopes.
 use nether_it::*;
 use std::path::Path;
@@ -80,7 +82,7 @@ fn main() {
         let env = Some(ItEnvelope {
             points: if mode == "volume_sustain" {
                 vec![(0, 64), (1, 16), (3, 48), (5, 64)]
-            } else if (mode == "pitch_control" || mode == "pitch_pause") {
+            } else if mode == "pitch_control" || mode == "pitch_pause" {
                 vec![(0, 24), (64, 24)]
             } else if mode.starts_with("pitch") {
                 vec![
@@ -104,7 +106,6 @@ fn main() {
             } else {
                 ItEnvelopeFlags::empty()
             },
-            ..Default::default()
         });
         let mut ins = ItInstrument::default();
         for (i, entry) in ins.note_sample_table.iter_mut().enumerate() {

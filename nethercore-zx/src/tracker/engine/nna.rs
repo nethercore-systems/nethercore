@@ -44,6 +44,8 @@ impl TrackerEngine {
     ///
     /// Checks all background channels for duplicates matching the DCT criteria
     /// and applies the DCA action to matching channels.
+    // Keep the explicit tracker identity fields; a wrapper adds no behavior.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn process_duplicate_check(
         &mut self,
         num_channels: usize,

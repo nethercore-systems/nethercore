@@ -118,7 +118,13 @@ pub fn convert_xm_effect(effect: u8, param: u8) -> TrackerEffect {
         }
 
         // Kxx - Key off
-        nether_xm::effects::KEY_OFF => if param == 0 { TrackerEffect::KeyOff } else { TrackerEffect::KeyOffAt(param) },
+        nether_xm::effects::KEY_OFF => {
+            if param == 0 {
+                TrackerEffect::KeyOff
+            } else {
+                TrackerEffect::KeyOffAt(param)
+            }
+        }
 
         // Lxx - Set envelope position
         nether_xm::effects::SET_ENVELOPE_POS => TrackerEffect::SetEnvelopePosition(param),
@@ -138,7 +144,10 @@ pub fn convert_xm_effect(effect: u8, param: u8) -> TrackerEffect {
         }
 
         // Txy - Tremor
-        0x1d => TrackerEffect::Tremor { ontime: param >> 4, offtime: param & 15 },
+        0x1d => TrackerEffect::Tremor {
+            ontime: param >> 4,
+            offtime: param & 15,
+        },
 
         // Xxx - Extra fine portamento (XM specific)
         nether_xm::effects::EXTRA_FINE_PORTA => {

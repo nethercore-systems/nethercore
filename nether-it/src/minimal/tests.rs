@@ -1,3 +1,5 @@
+// Authored tests build defaults incrementally to isolate each control.
+#![allow(clippy::field_reassign_with_default)]
 //! Tests for NCIT format
 
 use std::io::Cursor;
@@ -137,10 +139,12 @@ fn ncit_uses_versioned_it_channel_markers_and_reads_legacy_zero_based_data() {
 
     let ncit = pack_ncit(&module);
     assert_eq!(ncit[16], super::NCIT_PATTERN_ENCODING_VERSION);
-    let mut v1=ncit.clone();v1[16]=1;v1[17]=255;
-    let previous=parse_ncit(&v1).unwrap();
+    let mut v1 = ncit.clone();
+    v1[16] = 1;
+    v1[17] = 255;
+    let previous = parse_ncit(&v1).unwrap();
     assert!(!previous.balance_mix);
-    assert_eq!(previous.patterns[0].notes[0][63].note,61);
+    assert_eq!(previous.patterns[0].notes[0][63].note, 61);
 
     // Header (24) + 64 panning bytes + 64 volume bytes + pattern header (4).
     assert_eq!(&ncit[156..163], &[0x81, 0x01, 60, 0xc0, 0x01, 61, 0]);
@@ -383,26 +387,48 @@ fn test_channel_and_random_settings_round_trip() {
 
 #[test]
 fn ncit_v2_preserves_old_reserved_semantics_and_rejects_bad_bounds() {
-    let bytes=pack_ncit(&ItModule::default());
-    for version in [0,1] {
-        for reserved in [1,255] {
-            let mut old=bytes.clone();old[16]=version;old[17]=reserved;
+    let bytes = pack_ncit(&ItModule::default());
+    for version in [0, 1] {
+        for reserved in [1, 255] {
+            let mut old = bytes.clone();
+            old[16] = version;
+            old[17] = reserved;
             assert!(!parse_ncit(&old).unwrap().balance_mix);
         }
     }
-    let mut current=bytes.clone();current[17]=255;
-    assert!(matches!(parse_ncit(&current),Err(crate::ItError::UnsupportedMixMetadata)));
-    current=bytes.clone();current[0]=0;
-    assert!(matches!(parse_ncit(&current),Err(crate::ItError::TooManyChannels(0))));
-    for (offset,value) in [(3,100u16),(5,100),(7,257)] {
-        current=bytes.clone();current[offset..offset+2].copy_from_slice(&value.to_le_bytes());
-        assert!(matches!(parse_ncit(&current),Err(crate::ItError::TooManyInstruments(_) | crate::ItError::TooManySamples(_) | crate::ItError::TooManyPatterns(_))));
+    let mut current = bytes.clone();
+    current[17] = 255;
+    assert!(matches!(
+        parse_ncit(&current),
+        Err(crate::ItError::UnsupportedMixMetadata)
+    ));
+    current = bytes.clone();
+    current[0] = 0;
+    assert!(matches!(
+        parse_ncit(&current),
+        Err(crate::ItError::TooManyChannels(0))
+    ));
+    for (offset, value) in [(3, 100u16), (5, 100), (7, 257)] {
+        current = bytes.clone();
+        current[offset..offset + 2].copy_from_slice(&value.to_le_bytes());
+        assert!(matches!(
+            parse_ncit(&current),
+            Err(crate::ItError::TooManyInstruments(_)
+                | crate::ItError::TooManySamples(_)
+                | crate::ItError::TooManyPatterns(_))
+        ));
     }
-    let mut pattern=Vec::new();pattern.extend_from_slice(&201u16.to_le_bytes());pattern.extend_from_slice(&201u16.to_le_bytes());pattern.extend_from_slice(&[0;201]);
-    assert!(matches!(super::parse::parse_pattern(&mut Cursor::new(pattern.as_slice()),1,false),Err(crate::ItError::InvalidPattern(0))));
-    for marker in [0x80,0x41,0xc1,0xff] {
-        assert!(super::parse::unpack_pattern_data(&[marker,0,0],1,64,false).is_err());
+    let mut pattern = Vec::new();
+    pattern.extend_from_slice(&201u16.to_le_bytes());
+    pattern.extend_from_slice(&201u16.to_le_bytes());
+    pattern.extend_from_slice(&[0; 201]);
+    assert!(matches!(
+        super::parse::parse_pattern(&mut Cursor::new(pattern.as_slice()), 1, false),
+        Err(crate::ItError::InvalidPattern(0))
+    ));
+    for marker in [0x80, 0x41, 0xc1, 0xff] {
+        assert!(super::parse::unpack_pattern_data(&[marker, 0, 0], 1, 64, false).is_err());
     }
     // Legal one-based reused-mask records must not be rejected with invalid aliases.
-    assert!(super::parse::unpack_pattern_data(&[0x81,1,60,1,61,0],1,1,false).is_ok());
+    assert!(super::parse::unpack_pattern_data(&[0x81, 1, 60, 1, 61, 0], 1, 1, false).is_ok());
 }

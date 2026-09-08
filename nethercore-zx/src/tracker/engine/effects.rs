@@ -55,12 +55,21 @@ impl TrackerEngine {
             return;
         }
 
-        let xm_pitch_change = !self.is_it_format && matches!(effect,
-            TrackerEffect::FinePortaUp(_) | TrackerEffect::FinePortaDown(_)
-            | TrackerEffect::ExtraFinePortaUp(_) | TrackerEffect::ExtraFinePortaDown(_));
-        if xm_pitch_change { channel.period = channel.base_period; }
+        let xm_pitch_change = !self.is_it_format
+            && matches!(
+                effect,
+                TrackerEffect::FinePortaUp(_)
+                    | TrackerEffect::FinePortaDown(_)
+                    | TrackerEffect::ExtraFinePortaUp(_)
+                    | TrackerEffect::ExtraFinePortaDown(_)
+            );
+        if xm_pitch_change {
+            channel.period = channel.base_period;
+        }
         match effect {
-            TrackerEffect::None | TrackerEffect::ItExtended(_) | TrackerEffect::PastNoteAction(_) => {}
+            TrackerEffect::None
+            | TrackerEffect::ItExtended(_)
+            | TrackerEffect::PastNoteAction(_) => {}
             TrackerEffect::SetNewNoteAction(action) => {
                 channel.nna = (*action).min(3);
             }
@@ -100,16 +109,24 @@ impl TrackerEngine {
                 }
                 if *count == 0 {
                     channel.pattern_loop_row = self.current_row;
-
-                } else if !self.is_it_format && channel.xm_legacy_retrigger
-                    && self.xm_loop_owner.is_some_and(|owner| owner != ch_idx) {
+                } else if !self.is_it_format
+                    && channel.xm_legacy_retrigger
+                    && self.xm_loop_owner.is_some_and(|owner| owner != ch_idx)
+                {
                     // Measured legacy flow serializes competing channel loops.
                 } else if channel.pattern_loop_count == 0 {
                     channel.pattern_loop_count = *count;
-                    if !self.is_it_format && channel.xm_legacy_retrigger { self.xm_loop_owner = Some(ch_idx); }
+                    if !self.is_it_format && channel.xm_legacy_retrigger {
+                        self.xm_loop_owner = Some(ch_idx);
+                    }
                 } else {
                     channel.pattern_loop_count -= 1;
-                    if !self.is_it_format && channel.xm_legacy_retrigger && channel.pattern_loop_count == 0 { self.xm_loop_owner = None; }
+                    if !self.is_it_format
+                        && channel.xm_legacy_retrigger
+                        && channel.pattern_loop_count == 0
+                    {
+                        self.xm_loop_owner = None;
+                    }
                 }
             }
 
@@ -151,7 +168,9 @@ impl TrackerEngine {
                     _ => unreachable!(),
                 };
                 if !self.is_it_format && channel.xm_legacy_retrigger {
-                    if param != 0 { self.last_global_vol_slide = param; }
+                    if param != 0 {
+                        self.last_global_vol_slide = param;
+                    }
                     channel.global_volume_slide = self.last_global_vol_slide;
                 } else if param != 0 {
                     channel.global_volume_slide = param;
@@ -217,21 +236,40 @@ impl TrackerEngine {
                 if v != 0 {
                     channel.last_fine_porta_up = v;
                 }
-                channel.period = slide_xm_period(channel.period,
-                    -(channel.last_fine_porta_up as f32) * 4.0, channel.xm_amiga_slides, channel.xm_source_tuning);
+                channel.period = slide_xm_period(
+                    channel.period,
+                    -(channel.last_fine_porta_up as f32) * 4.0,
+                    channel.xm_amiga_slides,
+                    channel.xm_source_tuning,
+                );
             }
             TrackerEffect::FinePortaDown(val) => {
                 let v = (*val as u8) & 0x0F;
                 if v != 0 {
                     channel.last_fine_porta_down = v;
                 }
-                channel.period = slide_xm_period(channel.period, channel.last_fine_porta_down as f32 * 4.0, channel.xm_amiga_slides, channel.xm_source_tuning);
+                channel.period = slide_xm_period(
+                    channel.period,
+                    channel.last_fine_porta_down as f32 * 4.0,
+                    channel.xm_amiga_slides,
+                    channel.xm_source_tuning,
+                );
             }
             TrackerEffect::ExtraFinePortaUp(val) => {
-                channel.period = slide_xm_period(channel.period, -(*val as f32), channel.xm_amiga_slides, channel.xm_source_tuning);
+                channel.period = slide_xm_period(
+                    channel.period,
+                    -(*val as f32),
+                    channel.xm_amiga_slides,
+                    channel.xm_source_tuning,
+                );
             }
             TrackerEffect::ExtraFinePortaDown(val) => {
-                channel.period = slide_xm_period(channel.period, *val as f32, channel.xm_amiga_slides, channel.xm_source_tuning);
+                channel.period = slide_xm_period(
+                    channel.period,
+                    *val as f32,
+                    channel.xm_amiga_slides,
+                    channel.xm_source_tuning,
+                );
             }
             TrackerEffect::TonePortamento(speed) => {
                 channel.tone_porta_active = true;
@@ -320,7 +358,12 @@ impl TrackerEngine {
                     channel.tremolo_depth = p & 0x0F;
                 }
                 if !self.is_it_format {
-                    channel.xm_tremolo_delta = super::super::utils::xm_tremolo_delta(channel.tremolo_depth, channel.tremolo_waveform, channel.tremolo_pos, channel.vibrato_pos);
+                    channel.xm_tremolo_delta = super::super::utils::xm_tremolo_delta(
+                        channel.tremolo_depth,
+                        channel.tremolo_waveform,
+                        channel.tremolo_pos,
+                        channel.vibrato_pos,
+                    );
                 }
             }
             TrackerEffect::Tremor { ontime, offtime } => {
@@ -338,13 +381,17 @@ impl TrackerEngine {
                 channel.arpeggio_active = true;
                 let mut param = (*note1 << 4) | *note2;
                 if self.is_it_format {
-                    if param != 0 { channel.last_it_arpeggio = param; }
+                    if param != 0 {
+                        channel.last_it_arpeggio = param;
+                    }
                     param = channel.last_it_arpeggio;
                 }
                 channel.arpeggio_note1 = param >> 4;
                 channel.arpeggio_note2 = param & 15;
                 channel.arpeggio_tick = 0;
-                if !self.is_it_format { channel.period = channel.base_period; }
+                if !self.is_it_format {
+                    channel.period = channel.base_period;
+                }
             }
 
             // Panning Effects
@@ -352,13 +399,19 @@ impl TrackerEngine {
                 channel.surround = false;
                 channel.panning = (*pan as f32 / 64.0) * 2.0 - 1.0;
             }
-            TrackerEffect::PanningLeftOnTicks => { channel.panning_left_on_ticks = true; }
+            TrackerEffect::PanningLeftOnTicks => {
+                channel.panning_left_on_ticks = true;
+            }
             TrackerEffect::PanningSlide { left, right } => {
                 channel.panning_slide_active = true;
                 if self.is_it_format {
                     channel.panning_slide = (*right as i8) - (*left as i8);
                 } else if *right != 0 || *left != 0 {
-                    channel.panning_slide = if *right != 0 { *right as i8 } else { -(*left as i8) };
+                    channel.panning_slide = if *right != 0 {
+                        *right as i8
+                    } else {
+                        -(*left as i8)
+                    };
                 }
             }
             TrackerEffect::FinePanningRight(amount) => {
@@ -379,7 +432,10 @@ impl TrackerEngine {
 
             // Sample Effects
             // FT2 note-less cells and volume-column portamento suppress 9xx memory/seek.
-            TrackerEffect::SampleOffset(_) if !self.is_it_format && (channel.tone_porta_active || (!channel.xm_legacy_retrigger && !(1..=96).contains(&note_num))) => {}
+            TrackerEffect::SampleOffset(_)
+                if !self.is_it_format
+                    && (channel.tone_porta_active
+                        || (!channel.xm_legacy_retrigger && !(1..=96).contains(&note_num))) => {}
             TrackerEffect::SampleOffset(offset) => {
                 let high = (*offset >> 16) as u8;
                 let low = ((*offset >> 8) & 0xFF) as u8;
@@ -400,7 +456,8 @@ impl TrackerEngine {
                     let relative = (channel.xm_source_tuning / 128).clamp(-128, 127) as i8;
                     let fine = (channel.xm_source_tuning - i16::from(relative) * 128) as i8;
                     let rate = nether_xm::ExtractedSample::calculate_sample_rate(fine, relative);
-                    channel.sample_pos = nether_tracker::convert_loop_points(rate, full_offset, 0).0 as f64;
+                    channel.sample_pos =
+                        nether_tracker::convert_loop_points(rate, full_offset, 0).0 as f64;
                     channel.xm_source_position = f64::from(full_offset) * 22050.0 / f64::from(rate);
                 }
             }
@@ -410,8 +467,12 @@ impl TrackerEngine {
             } => {
                 if self.is_it_format {
                     let param = ((*volume_change as u8) << 4) | *ticks;
-                    if param != 0 { channel.last_it_retrigger = param; }
-                    if channel.last_it_retrigger == 0 { return; }
+                    if param != 0 {
+                        channel.last_it_retrigger = param;
+                    }
+                    if channel.last_it_retrigger == 0 {
+                        return;
+                    }
                     channel.retrigger_tick = (channel.last_it_retrigger & 15).max(1);
                     channel.retrigger_mode = channel.last_it_retrigger >> 4;
                     channel.retrigger_volume = match channel.retrigger_mode {
@@ -419,10 +480,16 @@ impl TrackerEngine {
                         9..=13 => 1i8 << (channel.retrigger_mode - 9),
                         _ => 0,
                     };
-                    if (1..=120).contains(&note_num) { channel.it_retrigger_count = channel.retrigger_tick; }
+                    if (1..=120).contains(&note_num) {
+                        channel.it_retrigger_count = channel.retrigger_tick;
+                    }
                     return;
                 }
-                channel.retrigger_tick = if !self.is_it_format && channel.xm_legacy_retrigger { (*ticks).max(1) } else { *ticks };
+                channel.retrigger_tick = if !self.is_it_format && channel.xm_legacy_retrigger {
+                    (*ticks).max(1)
+                } else {
+                    *ticks
+                };
                 if !self.is_it_format && !channel.xm_legacy_retrigger && *ticks == 0 {
                     channel.sample_pos = 0.0;
                     channel.xm_source_position = 0.0;
@@ -432,7 +499,9 @@ impl TrackerEngine {
                     channel.panning_envelope_frozen = false;
                     channel.envelope_started = 0;
                 }
-                if !self.is_it_format { channel.retrigger_mode = 0; }
+                if !self.is_it_format {
+                    channel.retrigger_mode = 0;
+                }
                 channel.retrigger_volume = *volume_change;
             }
             TrackerEffect::NoteCut(tick) => {
@@ -446,7 +515,9 @@ impl TrackerEngine {
                 channel.delayed_note = note_num;
             }
             TrackerEffect::SetFinetune(val) => {
-                if self.is_it_format { channel.finetune = *val; }
+                if self.is_it_format {
+                    channel.finetune = *val;
+                }
                 // XM E5x is resolved at note initialization before baked-tuning compensation.
             }
 
@@ -480,7 +551,9 @@ impl TrackerEngine {
                     channel.pitch_envelope_pos = *pos as u16;
                 }
             }
-            TrackerEffect::KeyOffAt(tick) => { channel.key_off_tick = *tick; }
+            TrackerEffect::KeyOffAt(tick) => {
+                channel.key_off_tick = *tick;
+            }
             TrackerEffect::KeyOff => {
                 channel.key_off = true;
                 channel.sample_sustain_released = true;
@@ -505,9 +578,19 @@ impl TrackerEngine {
             }
 
             TrackerEffect::MultiRetrigNote { ticks, volume } => {
-                let (ticks, volume) = if self.is_it_format { (*ticks, *volume) } else {
-                    let ticks = if *ticks == 0 { channel.xm_retrigger_memory & 15 } else { *ticks };
-                    let volume = if *volume == 0 { channel.xm_retrigger_memory >> 4 } else { *volume };
+                let (ticks, volume) = if self.is_it_format {
+                    (*ticks, *volume)
+                } else {
+                    let ticks = if *ticks == 0 {
+                        channel.xm_retrigger_memory & 15
+                    } else {
+                        *ticks
+                    };
+                    let volume = if *volume == 0 {
+                        channel.xm_retrigger_memory >> 4
+                    } else {
+                        *volume
+                    };
                     channel.xm_retrigger_memory = (volume << 4) | ticks;
                     channel.xm_multi_retrigger_active = true;
                     (ticks.max(1), volume)
@@ -528,7 +611,10 @@ impl TrackerEngine {
                     _ => 0,
                 };
                 if !self.is_it_format {
-                    if (1..=96).contains(&note_num) { channel.xm_retrigger_count = if channel.xm_legacy_retrigger {0}else{1}; }
+                    if (1..=96).contains(&note_num) {
+                        channel.xm_retrigger_count =
+                            if channel.xm_legacy_retrigger { 0 } else { 1 };
+                    }
                     channel.advance_xm_retrigger();
                 }
             }
@@ -544,10 +630,18 @@ impl TrackerEngine {
                 channel.volume_slide_active = false;
             }
         }
-        if xm_pitch_change { channel.base_period = channel.period; }
+        if xm_pitch_change {
+            channel.base_period = channel.period;
+        }
         if !self.is_it_format && channel.vibrato_active {
-            channel.period = xm_vibrato_period(channel.base_period, channel.vibrato_depth,
-                channel.vibrato_waveform, channel.vibrato_pos, channel.xm_amiga_slides, channel.xm_source_tuning);
+            channel.period = xm_vibrato_period(
+                channel.base_period,
+                channel.vibrato_depth,
+                channel.vibrato_waveform,
+                channel.vibrato_pos,
+                channel.xm_amiga_slides,
+                channel.xm_source_tuning,
+            );
         }
     }
 }

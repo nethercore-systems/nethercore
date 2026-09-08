@@ -21,7 +21,9 @@ pub fn from_it_module(it: &nether_it::ItModule) -> TrackerModule {
 
     // Convert format flags
     let mut format = FormatFlags::IS_IT_FORMAT;
-    if it.balance_mix { format = format | FormatFlags::IT_BALANCE_MIX; }
+    if it.balance_mix {
+        format = format | FormatFlags::IT_BALANCE_MIX;
+    }
     if it.uses_linear_slides() {
         format = format | FormatFlags::LINEAR_SLIDES;
     }

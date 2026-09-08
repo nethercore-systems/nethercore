@@ -4,7 +4,7 @@ use std::io::{Cursor, Read, Seek, SeekFrom};
 
 use crate::error::XmError;
 use crate::module::{XmEnvelope, XmInstrument, XmModule, XmNote, XmPattern, XmSample};
-use crate::{MAX_CHANNELS, MAX_PATTERNS, MAX_PATTERN_ROWS, XM_MAGIC, XM_VERSION};
+use crate::{MAX_CHANNELS, MAX_PATTERN_ROWS, MAX_PATTERNS, XM_MAGIC, XM_VERSION};
 
 /// Parse an XM file into an XmModule
 ///
@@ -69,8 +69,8 @@ pub fn parse_xm(data: &[u8]) -> Result<XmModule, XmError> {
     let restart_position = read_u16(&mut cursor)?;
 
     // Number of channels (2 bytes)
-    let num_channels = u8::try_from(read_u16(&mut cursor)?)
-        .map_err(|_| XmError::InvalidHeaderSize)?;
+    let num_channels =
+        u8::try_from(read_u16(&mut cursor)?).map_err(|_| XmError::InvalidHeaderSize)?;
     if num_channels == 0 {
         return Err(XmError::InvalidHeaderSize);
     }
@@ -122,17 +122,19 @@ pub fn parse_xm(data: &[u8]) -> Result<XmModule, XmError> {
         let instrument =
             parse_instrument(&mut cursor).map_err(|_| XmError::InvalidInstrument(instr_idx))?;
         if instrument.num_samples == 0 {
-            let size = u32::from_le_bytes(data[start..start+4].try_into().unwrap());
+            let size = u32::from_le_bytes(data[start..start + 4].try_into().unwrap());
             compatible_empty_header |= !matches!(size, 33 | 263);
         }
         if !instrument.samples.is_empty() {
             // Extents were validated by parse_instrument; retain only the measured
             // raw padding distinction, not another persisted creator field.
-            let header = u32::from_le_bytes(data[start..start+4].try_into().unwrap()) as usize;
-            let stride = u32::from_le_bytes(data[start+29..start+33].try_into().unwrap()) as usize;
+            let header = u32::from_le_bytes(data[start..start + 4].try_into().unwrap()) as usize;
+            let stride =
+                u32::from_le_bytes(data[start + 29..start + 33].try_into().unwrap()) as usize;
             for index in 0..instrument.samples.len() {
                 let name = start + header + index * stride + 18;
-                non_space_sample_name |= data.get(name..name+22)
+                non_space_sample_name |= data
+                    .get(name..name + 22)
                     .is_some_and(|bytes| bytes != b"                      ");
             }
         }
@@ -141,7 +143,9 @@ pub fn parse_xm(data: &[u8]) -> Result<XmModule, XmError> {
     // Original header perturbations and mixed-slot playback independently
     // distinguish this legacy default from the space-padded FT2 sample form.
     let legacy_sample_form = tracker_name == *b"FastTracker v2.00   " && non_space_sample_name;
-    if legacy_sample_form { mix_mode = crate::XmMixMode::Legacy; }
+    if legacy_sample_form {
+        mix_mode = crate::XmMixMode::Legacy;
+    }
     // Original empty-header/pan controls distinguish this marker-specific default.
     // Explicit trailing mixer properties below still take precedence.
     if tracker_name == *b"FastTracker v2.00   " && compatible_empty_header {
@@ -151,7 +155,10 @@ pub fn parse_xm(data: &[u8]) -> Result<XmModule, XmError> {
     let mut legacy_retrigger = legacy_sample_form;
     let sample_preamp = read_mix_metadata(
         data.get(cursor.position() as usize..).unwrap_or_default(),
-        num_instruments, &mut mix_mode, &mut legacy_retrigger, 48,
+        num_instruments,
+        &mut mix_mode,
+        &mut legacy_retrigger,
+        48,
     )?;
 
     Ok(XmModule {
@@ -174,35 +181,62 @@ pub fn parse_xm(data: &[u8]) -> Result<XmModule, XmError> {
 }
 
 /// Read length-framed mixer properties; never search arbitrary payload bytes for tags.
-fn read_mix_metadata(mut bytes: &[u8], instruments: u16, mode: &mut crate::XmMixMode, legacy_retrigger: &mut bool, mut preamp: u8) -> Result<u8, XmError> {
+fn read_mix_metadata(
+    mut bytes: &[u8],
+    instruments: u16,
+    mode: &mut crate::XmMixMode,
+    legacy_retrigger: &mut bool,
+    mut preamp: u8,
+) -> Result<u8, XmError> {
     let mut explicit_preamp = false;
     let mut field_multiplier = None;
     let mut song_fields = false;
     while !bytes.is_empty() {
         if bytes.starts_with(b"STPM") || bytes.starts_with(b"XTPM") {
             song_fields = bytes.starts_with(b"STPM");
-            field_multiplier = Some(if song_fields { 1 } else { usize::from(instruments) });
+            field_multiplier = Some(if song_fields {
+                1
+            } else {
+                usize::from(instruments)
+            });
             bytes = &bytes[4..];
             continue;
         }
         let Some(multiplier) = field_multiplier else {
             // Optional ordinary chunks have a four-byte length. Opaque trailing
             // data is not itself evidence of an unsupported mixer mode.
-            if bytes.len() < 8 { break; }
+            if bytes.len() < 8 {
+                break;
+            }
             let length = u32::from_le_bytes(bytes[4..8].try_into().unwrap()) as usize;
-            let Some(rest) = bytes.get(8..).and_then(|payload| payload.get(length..)) else { break; };
+            let Some(rest) = bytes.get(8..).and_then(|payload| payload.get(length..)) else {
+                break;
+            };
             bytes = rest;
             continue;
         };
-        if bytes.len() < 6 { return Err(XmError::UnexpectedEof); }
+        if bytes.len() < 6 {
+            return Err(XmError::UnexpectedEof);
+        }
         let size = usize::from(u16::from_le_bytes([bytes[4], bytes[5]]));
         let length = size.checked_mul(multiplier).ok_or(XmError::UnexpectedEof)?;
-        let payload = bytes.get(6..).and_then(|p| p.get(..length)).ok_or(XmError::UnexpectedEof)?;
+        let payload = bytes
+            .get(6..)
+            .and_then(|p| p.get(..length))
+            .ok_or(XmError::UnexpectedEof)?;
         if song_fields && matches!(&bytes[..4], b".MMP" | b".APS") {
-            let value = u32::from_le_bytes(payload.try_into().map_err(|_| XmError::UnsupportedMixMetadata)?);
+            let value = u32::from_le_bytes(
+                payload
+                    .try_into()
+                    .map_err(|_| XmError::UnsupportedMixMetadata)?,
+            );
             if &bytes[..4] == b".MMP" {
-                if !explicit_preamp { preamp = 48; }
-                if value == 4 { *legacy_retrigger = true; }
+                if !explicit_preamp {
+                    preamp = 48;
+                }
+                if value == 4 {
+                    *legacy_retrigger = true;
+                }
                 *mode = match value {
                     4 => crate::XmMixMode::Compatible,
                     5 => crate::XmMixMode::Ft2,
@@ -385,7 +419,6 @@ pub(crate) fn parse_instrument(cursor: &mut Cursor<&[u8]>) -> Result<XmInstrumen
         }
         instrument.sample_map = sample_map;
 
-
         // Volume envelope points (48 bytes = 12 points * 4 bytes)
         let mut vol_points = Vec::with_capacity(12);
         for _ in 0..12 {
@@ -501,8 +534,8 @@ pub(crate) fn parse_instrument(cursor: &mut Cursor<&[u8]>) -> Result<XmInstrumen
                 let end = u64::from(raw_loop_start) + u64::from(raw_loop_length);
                 (
                     raw_loop_start / bytes_per_frame,
-                    (end / u64::from(bytes_per_frame)
-                        - u64::from(raw_loop_start / bytes_per_frame)) as u32,
+                    (end / u64::from(bytes_per_frame) - u64::from(raw_loop_start / bytes_per_frame))
+                        as u32,
                 )
             } else {
                 (raw_loop_start, raw_loop_length)

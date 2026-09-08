@@ -1,7 +1,7 @@
 //! Tests for the parser module
 
 #[cfg(test)]
-mod tests {
+mod parsing {
     use crate::error::ItError;
     use crate::parser::parse_it;
     use crate::{ItNote, ItWriter};

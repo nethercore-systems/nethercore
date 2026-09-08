@@ -45,7 +45,16 @@ pub fn pack_ncit(module: &ItModule) -> Vec<u8> {
     write_u16(&mut output, module.flags.bits());
     output.push(module.panning_separation);
     // Reserved bytes; byte 0 versions the pattern marker encoding.
-    output.extend_from_slice(&[NCIT_PATTERN_ENCODING_VERSION, u8::from(module.balance_mix), 0, 0, 0, 0, 0, 0]);
+    output.extend_from_slice(&[
+        NCIT_PATTERN_ENCODING_VERSION,
+        u8::from(module.balance_mix),
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+    ]);
 
     // ========== Write Order Table ==========
     output.extend_from_slice(&module.order_table[..module.num_orders as usize]);

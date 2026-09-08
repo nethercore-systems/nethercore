@@ -230,10 +230,8 @@ pub fn load_assets(
 
         // Try to extract samples based on format
         let extracted_samples = match format {
-            Some(zx_common::TrackerFormat::Xm) => {
-                nether_xm::extract_samples(&tracker_data)
-                    .with_context(|| format!("Failed to extract XM samples from {}", path.display()))?
-            }
+            Some(zx_common::TrackerFormat::Xm) => nether_xm::extract_samples(&tracker_data)
+                .with_context(|| format!("Failed to extract XM samples from {}", path.display()))?,
             Some(zx_common::TrackerFormat::It) => {
                 // Extract samples from IT file
                 match nether_it::extract_samples(&tracker_data) {
@@ -334,8 +332,7 @@ pub fn load_assets(
                     sample_id.push('_');
                 }
             }
-            ids.entry(sample_slot)
-                .or_insert_with(|| sample_id.clone());
+            ids.entry(sample_slot).or_insert_with(|| sample_id.clone());
 
             // Add new sample
             println!("    Extracted: {} from {}", sample_id, tracker_id);

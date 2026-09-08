@@ -6,7 +6,10 @@ use crate::error::XmError;
 use crate::module::{XmEnvelope, XmInstrument, XmModule, XmPattern};
 
 use super::io::{read_u8, read_u16, read_u32};
-use super::{FLAG_LEGACY_MIX, FLAG_SAMPLE_PREAMP, FLAG_FT2_MIX, FLAG_LINEAR_FREQUENCY, FLAG_SAMPLE_DEFAULT_PAN, FLAG_SAMPLE_MAP, HEADER_SIZE, SUPPORTED_FLAGS};
+use super::{
+    FLAG_FT2_MIX, FLAG_LEGACY_MIX, FLAG_LINEAR_FREQUENCY, FLAG_SAMPLE_DEFAULT_PAN, FLAG_SAMPLE_MAP,
+    FLAG_SAMPLE_PREAMP, HEADER_SIZE, SUPPORTED_FLAGS,
+};
 
 /// Parse a minimal XM format into an XmModule
 ///
@@ -58,8 +61,14 @@ fn parse_ncxm(data: &[u8]) -> Result<XmModule, XmError> {
     let default_speed = read_u16(&mut cursor)?;
     let default_bpm = read_u16(&mut cursor)?;
     let flags = read_u8(&mut cursor)?;
-    let conflicting_mix = flags & (FLAG_FT2_MIX | FLAG_LEGACY_MIX) == (FLAG_FT2_MIX | FLAG_LEGACY_MIX);
-    let unsupported_flags = (flags & !SUPPORTED_FLAGS) | if conflicting_mix { FLAG_FT2_MIX | FLAG_LEGACY_MIX } else {0};
+    let conflicting_mix =
+        flags & (FLAG_FT2_MIX | FLAG_LEGACY_MIX) == (FLAG_FT2_MIX | FLAG_LEGACY_MIX);
+    let unsupported_flags = (flags & !SUPPORTED_FLAGS)
+        | if conflicting_mix {
+            FLAG_FT2_MIX | FLAG_LEGACY_MIX
+        } else {
+            0
+        };
     if unsupported_flags != 0 {
         return Err(XmError::UnsupportedMinimalFlags(unsupported_flags));
     }
@@ -75,7 +84,11 @@ fn parse_ncxm(data: &[u8]) -> Result<XmModule, XmError> {
 
     // Skip reserved bytes
     let encoded_preamp = read_u8(&mut cursor)?;
-    let sample_preamp = if flags & FLAG_SAMPLE_PREAMP != 0 { encoded_preamp } else { 48 };
+    let sample_preamp = if flags & FLAG_SAMPLE_PREAMP != 0 {
+        encoded_preamp
+    } else {
+        48
+    };
     cursor.seek(SeekFrom::Current(1))?;
 
     // Read pattern order table
@@ -92,7 +105,8 @@ fn parse_ncxm(data: &[u8]) -> Result<XmModule, XmError> {
     // Read instruments
     let mut instruments = Vec::with_capacity(num_instruments as usize);
     for _i in 0..num_instruments {
-        let instrument = read_instrument(&mut cursor, has_sample_pan, flags & FLAG_SAMPLE_MAP != 0)?;
+        let instrument =
+            read_instrument(&mut cursor, has_sample_pan, flags & FLAG_SAMPLE_MAP != 0)?;
         instruments.push(instrument);
     }
 
@@ -296,8 +310,20 @@ fn read_instrument(
             let is_stereo = encoded_loop_type & super::SAMPLE_STEREO != 0;
             let volume = read_u8(cursor)?;
             let pan = read_u8(cursor)?;
-            if volume > 64 { return Err(XmError::InvalidSampleVolume(volume)); }
-            samples.push(crate::XmSample {source_sample_bytes: None, loop_start, loop_length, finetune, relative_note, loop_type, is_stereo, volume, pan});
+            if volume > 64 {
+                return Err(XmError::InvalidSampleVolume(volume));
+            }
+            samples.push(crate::XmSample {
+                source_sample_bytes: None,
+                loop_start,
+                loop_length,
+                finetune,
+                relative_note,
+                loop_type,
+                is_stereo,
+                volume,
+                pan,
+            });
         }
     }
     Ok(XmInstrument {

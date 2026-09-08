@@ -8,7 +8,12 @@ use crate::state::tracker_flags;
 use nether_tracker::{TrackerEffect, TrackerNote};
 
 impl TrackerEngine {
-    pub(super) fn row_notes(&self, raw_handle: u32, order: u16, row: u16) -> Vec<(usize, TrackerNote)> {
+    pub(super) fn row_notes(
+        &self,
+        raw_handle: u32,
+        order: u16,
+        row: u16,
+    ) -> Vec<(usize, TrackerNote)> {
         if self.resolved_row_key == Some((raw_handle, order, row)) {
             return self.resolved_row_notes.clone();
         }
@@ -62,10 +67,15 @@ impl TrackerEngine {
                         channel.period = channel.base_period;
                         if channel.vibrato_active && channel.vibrato_depth > 0 {
                             channel.period = super::super::utils::xm_vibrato_period(
-                                channel.base_period, channel.vibrato_depth,
-                                channel.vibrato_waveform, channel.vibrato_pos,
-                                channel.xm_amiga_slides, channel.xm_source_tuning);
-                            channel.vibrato_pos = channel.vibrato_pos.wrapping_add(channel.vibrato_speed << 2);
+                                channel.base_period,
+                                channel.vibrato_depth,
+                                channel.vibrato_waveform,
+                                channel.vibrato_pos,
+                                channel.xm_amiga_slides,
+                                channel.xm_source_tuning,
+                            );
+                            channel.vibrato_pos =
+                                channel.vibrato_pos.wrapping_add(channel.vibrato_speed << 2);
                         }
                     }
                 }
@@ -74,7 +84,11 @@ impl TrackerEngine {
             self.repeat_fine_pitch_slides(state.handle);
             // IT replays SDx on each SEx repetition, not other note cells.
             if self.is_it_format {
-                for (channel, note) in self.row_notes(raw_tracker_handle(state.handle), state.order_position, state.row) {
+                for (channel, note) in self.row_notes(
+                    raw_tracker_handle(state.handle),
+                    state.order_position,
+                    state.row,
+                ) {
                     if matches!(note.effect, TrackerEffect::NoteDelay(_)) {
                         self.process_note_internal(channel, &note, state.handle, sounds);
                     }
@@ -103,7 +117,10 @@ impl TrackerEngine {
                 (
                     loaded.module.order_table.len() as u16,
                     loaded.module.restart_position,
-                    loaded.module.format.contains(nether_tracker::FormatFlags::IS_IT_FORMAT),
+                    loaded
+                        .module
+                        .format
+                        .contains(nether_tracker::FormatFlags::IS_IT_FORMAT),
                 )
             })
         else {
@@ -174,8 +191,10 @@ impl TrackerEngine {
                 match effect {
                     TrackerEffect::PositionJump(target) => {
                         jump = Some(target);
-                        if !is_it { break_row = None; }
-                    },
+                        if !is_it {
+                            break_row = None;
+                        }
+                    }
                     TrackerEffect::PatternBreak(target) => {
                         break_row = Some(if is_it {
                             target as u16
@@ -199,7 +218,9 @@ impl TrackerEngine {
                 && self.channels[channel].pattern_loop_count > 0
             {
                 target = Some(self.channels[channel].pattern_loop_row);
-                if self.is_it_format || self.channels[channel].xm_legacy_retrigger { return target; }
+                if self.is_it_format || self.channels[channel].xm_legacy_retrigger {
+                    return target;
+                }
             }
         }
         target
@@ -242,7 +263,11 @@ impl TrackerEngine {
                 state.row += 1;
             } else {
                 state.order_position = state.order_position.saturating_add(1);
-                state.row = if self.is_it_format { 0 } else { std::mem::take(&mut self.xm_next_pattern_row) };
+                state.row = if self.is_it_format {
+                    0
+                } else {
+                    std::mem::take(&mut self.xm_next_pattern_row)
+                };
                 self.xm_loop_owner = None;
             }
         }
@@ -268,7 +293,11 @@ impl TrackerEngine {
             self.process_tick(state.tick, state.speed);
             if self.is_it_format {
                 // IT applies each channel's remembered T command in channel order.
-                for (_, note) in self.row_notes(raw_tracker_handle(state.handle), state.order_position, state.row) {
+                for (_, note) in self.row_notes(
+                    raw_tracker_handle(state.handle),
+                    state.order_position,
+                    state.row,
+                ) {
                     let delta = match note.effect {
                         TrackerEffect::TempoSlideUp(amount) => i16::from(amount),
                         TrackerEffect::TempoSlideDown(amount) => -i16::from(amount),
@@ -312,7 +341,12 @@ impl TrackerEngine {
             return (0.0, 0.0);
         }
 
-        let (left, right) = self.mix_channels(raw_handle, sounds, sample_rate, samples_per_tick(state.bpm, sample_rate));
+        let (left, right) = self.mix_channels(
+            raw_handle,
+            sounds,
+            sample_rate,
+            samples_per_tick(state.bpm, sample_rate),
+        );
         let vol = state.volume as f32 / TRACKER_VOLUME_MAX;
         (left * vol, right * vol)
     }
@@ -335,7 +369,12 @@ impl TrackerEngine {
         }
 
         let raw_handle = raw_tracker_handle(state.handle);
-        let (left, right) = self.mix_channels(raw_handle, sounds, sample_rate, samples_per_tick(state.bpm, sample_rate));
+        let (left, right) = self.mix_channels(
+            raw_handle,
+            sounds,
+            sample_rate,
+            samples_per_tick(state.bpm, sample_rate),
+        );
         self.advance_clock(state, sample_rate);
 
         self.current_tick = state.tick;
@@ -375,7 +414,12 @@ impl TrackerEngine {
             }
             // Reuse the mixer state transitions; discard only the output.
             // ponytail: silent advance costs a mix; optimize only with state-parity tests.
-            let _ = self.process_channels::<false>(raw_handle, sounds, sample_rate, samples_per_tick(state.bpm, sample_rate));
+            let _ = self.process_channels::<false>(
+                raw_handle,
+                sounds,
+                sample_rate,
+                samples_per_tick(state.bpm, sample_rate),
+            );
             self.advance_clock(state, sample_rate);
             if (state.flags & tracker_flags::PLAYING) == 0 {
                 break;

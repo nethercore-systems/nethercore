@@ -1,3 +1,5 @@
+// Authored tests build defaults incrementally to isolate each control.
+#![allow(clippy::field_reassign_with_default)]
 //! Focused regressions for tracker row flow and clock boundaries.
 
 #[path = "rollback_tests.rs"]
@@ -106,7 +108,10 @@ fn duplicate_samples_do_not_confuse_deduplicated_audio_handles() {
         ch.parent_channel = 0;
     }
     engine.process_duplicate_check(1, 0, 2, 0, 61, 1, Some(1), 1);
-    assert!(engine.channels[1].note_on, "different source sample must survive");
+    assert!(
+        engine.channels[1].note_on,
+        "different source sample must survive"
+    );
     assert!(!engine.channels[2].note_on);
 }
 
@@ -125,7 +130,10 @@ fn duplicate_check_leaves_other_pattern_channels_voices_alone() {
     }
     engine.process_duplicate_check(2, 0, 1, 0, 61, 1, None, 1);
     assert!(!engine.channels[2].note_on);
-    assert!(engine.channels[3].note_on, "other pattern channel must survive");
+    assert!(
+        engine.channels[3].note_on,
+        "other pattern channel must survive"
+    );
 }
 
 #[test]
@@ -167,28 +175,72 @@ fn it_empty_note_map_slot_preserves_voice_but_runs_effects() {
     engine.channels[0].sample_handle = 1;
     engine.channels[0].note_on = true;
     engine.channels[0].sample_pos = 12.5;
-    engine.process_note_internal(0, &TrackerNote { note: 65, instrument: 1,
-        effect: TrackerEffect::SetPanning(0), ..Default::default() }, handle, &[]);
+    engine.process_note_internal(
+        0,
+        &TrackerNote {
+            note: 65,
+            instrument: 1,
+            effect: TrackerEffect::SetPanning(0),
+            ..Default::default()
+        },
+        handle,
+        &[],
+    );
     assert_eq!(engine.channels[0].current_note, 61);
     assert_eq!(engine.channels[0].sample_pos, 12.5);
     assert!(engine.channels[0].note_on);
     assert_eq!(engine.channels[0].panning, -1.0);
     engine.channels[0].target_period = 1234.0;
-    engine.process_note_internal(0, &TrackerNote { note: 65, instrument: 1,
-        effect: TrackerEffect::TonePortamento(16), ..Default::default() }, handle, &[]);
+    engine.process_note_internal(
+        0,
+        &TrackerNote {
+            note: 65,
+            instrument: 1,
+            effect: TrackerEffect::TonePortamento(16),
+            ..Default::default()
+        },
+        handle,
+        &[],
+    );
     assert_eq!(engine.channels[0].target_period, 1234.0);
     assert_eq!(engine.channels[0].sample_pos, 12.5);
     assert!(engine.channels[0].tone_porta_active);
-
 }
 
 #[test]
 fn xm_delay_volume_slide_runs_before_but_not_on_instrument_trigger() {
     let mut engine = TrackerEngine::new();
-    let handle = engine.load_tracker_module(module(vec![pattern(vec![row(TrackerEffect::None)])], vec![0], FormatFlags::empty()), vec![1]);
-    engine.process_note_internal(0, &TrackerNote { note: 49, instrument: 1, ..Default::default() }, handle, &[]);
+    let handle = engine.load_tracker_module(
+        module(
+            vec![pattern(vec![row(TrackerEffect::None)])],
+            vec![0],
+            FormatFlags::empty(),
+        ),
+        vec![1],
+    );
+    engine.process_note_internal(
+        0,
+        &TrackerNote {
+            note: 49,
+            instrument: 1,
+            ..Default::default()
+        },
+        handle,
+        &[],
+    );
     engine.channels[0].volume = 0.5;
-    engine.process_note_internal(0, &TrackerNote { note: 61, instrument: 1, effect: TrackerEffect::NoteDelay(3), volume_effect: TrackerEffect::VolumeSlide { up: 0, down: 1 }, ..Default::default() }, handle, &[]);
+    engine.process_note_internal(
+        0,
+        &TrackerNote {
+            note: 61,
+            instrument: 1,
+            effect: TrackerEffect::NoteDelay(3),
+            volume_effect: TrackerEffect::VolumeSlide { up: 0, down: 1 },
+            ..Default::default()
+        },
+        handle,
+        &[],
+    );
     assert_eq!(engine.channels[0].volume, 0.5);
     engine.process_tick(1, 6);
     assert_eq!(engine.channels[0].volume, 31.0 / 64.0);
@@ -201,25 +253,69 @@ fn xm_delay_volume_slide_runs_before_but_not_on_instrument_trigger() {
 
 #[test]
 fn xm_portamento_reloads_explicit_instrument_pan_and_clears_surround() {
-    let mut source = module(vec![pattern(vec![row(TrackerEffect::None)])], vec![0], FormatFlags::empty());
+    let mut source = module(
+        vec![pattern(vec![row(TrackerEffect::None)])],
+        vec![0],
+        FormatFlags::empty(),
+    );
     source.instruments[0].default_pan = Some(0);
-    source.instruments.push(TrackerInstrument { default_pan: Some(64), ..Default::default() });
+    source.instruments.push(TrackerInstrument {
+        default_pan: Some(64),
+        ..Default::default()
+    });
     let mut engine = TrackerEngine::new();
     let handle = engine.load_tracker_module(source, vec![1, 2]);
-    engine.process_note_internal(0, &TrackerNote { note: 49, instrument: 1, ..Default::default() }, handle, &[]);
+    engine.process_note_internal(
+        0,
+        &TrackerNote {
+            note: 49,
+            instrument: 1,
+            ..Default::default()
+        },
+        handle,
+        &[],
+    );
     engine.channels[0].surround = true;
-    engine.process_note_internal(0, &TrackerNote { note: 61, instrument: 2, effect: TrackerEffect::TonePortamento(16), ..Default::default() }, handle, &[]);
-    assert_eq!(engine.channels[0].sample_handle, 1, "portamento retains the playing sample");
-    assert_eq!(engine.channels[0].panning, -1.0, "FT2 portamento retains the old sample pan");
+    engine.process_note_internal(
+        0,
+        &TrackerNote {
+            note: 61,
+            instrument: 2,
+            effect: TrackerEffect::TonePortamento(16),
+            ..Default::default()
+        },
+        handle,
+        &[],
+    );
+    assert_eq!(
+        engine.channels[0].sample_handle, 1,
+        "portamento retains the playing sample"
+    );
+    assert_eq!(
+        engine.channels[0].panning, -1.0,
+        "FT2 portamento retains the old sample pan"
+    );
     assert!(!engine.channels[0].surround);
 }
 
 #[test]
 fn xm_mapped_samples_select_note_slots_and_keep_note_only_volume() {
-    let mut source = module(vec![pattern(vec![row(TrackerEffect::None)])], vec![0], FormatFlags::IS_XM_FORMAT);
+    let mut source = module(
+        vec![pattern(vec![row(TrackerEffect::None)])],
+        vec![0],
+        FormatFlags::IS_XM_FORMAT,
+    );
     source.samples = vec![
-        TrackerSample { default_volume: 32, default_pan: Some(0), ..Default::default() },
-        TrackerSample { default_volume: 16, default_pan: Some(255), ..Default::default() },
+        TrackerSample {
+            default_volume: 32,
+            default_pan: Some(0),
+            ..Default::default()
+        },
+        TrackerSample {
+            default_volume: 16,
+            default_pan: Some(255),
+            ..Default::default()
+        },
     ];
     source.instruments[0].note_sample_table[60] = (60, 2);
     let mut empty = TrackerInstrument::default();
@@ -227,17 +323,55 @@ fn xm_mapped_samples_select_note_slots_and_keep_note_only_volume() {
     source.instruments.push(empty);
     let mut engine = TrackerEngine::new();
     let handle = engine.load_tracker_module(source, vec![7, 9]);
-    engine.process_note_internal(0, &TrackerNote {note: 49, instrument: 1, ..Default::default()}, handle, &[]);
+    engine.process_note_internal(
+        0,
+        &TrackerNote {
+            note: 49,
+            instrument: 1,
+            ..Default::default()
+        },
+        handle,
+        &[],
+    );
     assert_eq!(engine.channels[0].sample_handle, 7);
     assert_eq!(engine.channels[0].volume, 0.5);
-    engine.process_note_internal(0, &TrackerNote {note: 61, ..Default::default()}, handle, &[]);
+    engine.process_note_internal(
+        0,
+        &TrackerNote {
+            note: 61,
+            ..Default::default()
+        },
+        handle,
+        &[],
+    );
     assert_eq!(engine.channels[0].sample_handle, 9);
     assert_eq!(engine.channels[0].volume, 0.5);
-    engine.process_note_internal(0, &TrackerNote {note: 61, instrument: 1, ..Default::default()}, handle, &[]);
+    engine.process_note_internal(
+        0,
+        &TrackerNote {
+            note: 61,
+            instrument: 1,
+            ..Default::default()
+        },
+        handle,
+        &[],
+    );
     assert_eq!(engine.channels[0].volume, 0.25);
     assert_eq!(engine.channels[0].panning, 127.0 / 128.0);
-    engine.process_note_internal(0, &TrackerNote {note: 49, instrument: 2, ..Default::default()}, handle, &[]);
-    assert_eq!(engine.channels[0].sample_handle, 0, "unmapped note cannot alias another instrument's sample");
+    engine.process_note_internal(
+        0,
+        &TrackerNote {
+            note: 49,
+            instrument: 2,
+            ..Default::default()
+        },
+        handle,
+        &[],
+    );
+    assert_eq!(
+        engine.channels[0].sample_handle, 0,
+        "unmapped note cannot alias another instrument's sample"
+    );
 }
 
 #[test]
@@ -246,10 +380,17 @@ fn xm_high_pattern_indices_are_not_it_order_markers() {
         let mut patterns = vec![pattern(vec![row(TrackerEffect::None)]); 256];
         patterns[index].notes[0][0].effect = TrackerEffect::SetPanning(0);
         let mut engine = TrackerEngine::new();
-        let handle = engine.load_tracker_module(module(patterns, vec![index as u8], FormatFlags::empty()), vec![]);
+        let handle = engine.load_tracker_module(
+            module(patterns, vec![index as u8], FormatFlags::empty()),
+            vec![],
+        );
         let mut state = make_state(handle, 6, 125);
         engine.advance_positions(&mut state, &[], 1, 44_100);
-        assert_ne!(state.flags & tracker_flags::PLAYING, 0, "XM pattern {index} must play");
+        assert_ne!(
+            state.flags & tracker_flags::PLAYING,
+            0,
+            "XM pattern {index} must play"
+        );
         assert_eq!(engine.channels[0].panning, -1.0);
     }
 }
@@ -257,11 +398,24 @@ fn xm_high_pattern_indices_are_not_it_order_markers() {
 #[test]
 fn cached_seek_does_not_apply_row_zero_twice() {
     let mut engine = TrackerEngine::new();
-    let handle = engine.load_tracker_module(module(vec![pattern(vec![row(TrackerEffect::FineVolumeUp(1)), row(TrackerEffect::None)])], vec![0], FormatFlags::empty()), vec![1]);
+    let handle = engine.load_tracker_module(
+        module(
+            vec![pattern(vec![
+                row(TrackerEffect::FineVolumeUp(1)),
+                row(TrackerEffect::None),
+            ])],
+            vec![0],
+            FormatFlags::empty(),
+        ),
+        vec![1],
+    );
     engine.seek_to_position(handle, 0, 1, &[]);
     let first = engine.channels[0].volume;
     engine.seek_to_position(handle, 0, 1, &[]);
-    assert_eq!(engine.channels[0].volume, first, "cached and fresh seek must agree");
+    assert_eq!(
+        engine.channels[0].volume, first,
+        "cached and fresh seek must agree"
+    );
 }
 
 #[test]
@@ -307,7 +461,10 @@ fn cached_seek_restores_engine_control_state() {
 
     engine.seek_to_position(handle, 0, 4, &[]);
 
-    assert_eq!(engine.channel_mutes, [false; crate::tracker::MAX_TRACKER_CHANNELS]);
+    assert_eq!(
+        engine.channel_mutes,
+        [false; crate::tracker::MAX_TRACKER_CHANNELS]
+    );
     assert_eq!(engine.global_volume, 1.0);
     assert_eq!((engine.pattern_delay, engine.pattern_delay_count), (2, 0));
     assert_eq!(engine.fine_pattern_delay, 4);
@@ -316,9 +473,7 @@ fn cached_seek_restores_engine_control_state() {
     assert!(engine.old_effects_mode);
     assert!(!engine.link_g_memory);
     assert_eq!(engine.tempo_slide, 3);
-    assert!(
-        engine.modules[crate::tracker::raw_tracker_handle(later_handle) as usize].is_some()
-    );
+    assert!(engine.modules[crate::tracker::raw_tracker_handle(later_handle) as usize].is_some());
 }
 
 #[test]
@@ -326,55 +481,118 @@ fn invalid_seek_returns_without_looping_forever() {
     let (send, receive) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         let mut engine = TrackerEngine::new();
-        let handle = engine.load_tracker_module(module(vec![pattern(vec![row(TrackerEffect::None)])], vec![0], FormatFlags::empty()), vec![1]);
+        let handle = engine.load_tracker_module(
+            module(
+                vec![pattern(vec![row(TrackerEffect::None)])],
+                vec![0],
+                FormatFlags::empty(),
+            ),
+            vec![1],
+        );
         engine.seek_to_position(handle, 1, 0, &[]);
         engine.seek_to_position(handle, 0, 1, &[]);
-        send.send((engine.current_order, engine.current_row)).unwrap();
+        send.send((engine.current_order, engine.current_row))
+            .unwrap();
     });
-    assert_eq!(receive.recv_timeout(std::time::Duration::from_secs(2)).expect("invalid seek must terminate"), (0, 0));
+    assert_eq!(
+        receive
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .expect("invalid seek must terminate"),
+        (0, 0)
+    );
 }
 
 #[test]
 fn xm_sample_pan_reload_and_explicit_override() {
     for mapped in [false, true] {
-    for pan in 0..=255u8 {
-        let mut source = module(vec![pattern(vec![row(TrackerEffect::None)])], vec![0], FormatFlags::empty());
-        source.instruments[0].default_pan = Some(pan);
-        if mapped {
-            source.samples = vec![TrackerSample { default_pan: Some(pan), ..Default::default() }];
+        for pan in 0..=255u8 {
+            let mut source = module(
+                vec![pattern(vec![row(TrackerEffect::None)])],
+                vec![0],
+                FormatFlags::empty(),
+            );
+            source.instruments[0].default_pan = Some(pan);
+            if mapped {
+                source.samples = vec![TrackerSample {
+                    default_pan: Some(pan),
+                    ..Default::default()
+                }];
+            }
+            let mut engine = TrackerEngine::new();
+            let handle = engine.load_tracker_module(source, vec![1]);
+            let note = TrackerNote {
+                note: 49,
+                instrument: 1,
+                ..Default::default()
+            };
+            engine.process_note_internal(0, &note, handle, &[]);
+            assert_eq!(engine.channels[0].panning, pan as f32 / 128.0 - 1.0);
+            engine.process_note_internal(
+                0,
+                &TrackerNote {
+                    effect: TrackerEffect::SetPanning(32),
+                    ..note
+                },
+                handle,
+                &[],
+            );
+            let explicit = engine.channels[0].panning;
+            assert!(explicit.abs() < 0.01);
+            engine.process_note_internal(
+                0,
+                &TrackerNote {
+                    instrument: 99,
+                    ..Default::default()
+                },
+                handle,
+                &[],
+            );
+            assert_eq!(engine.channels[0].panning, pan as f32 / 128.0 - 1.0);
+            assert_eq!(engine.channels[0].instrument, 1);
+            assert_eq!(engine.channels[0].last_xm_instrument, 99);
+            let snapshot = engine.snapshot();
+            engine.reset();
+            engine.apply_snapshot(&snapshot);
+            assert_eq!(engine.channels[0].last_xm_instrument, 99);
         }
-        let mut engine = TrackerEngine::new();
-        let handle = engine.load_tracker_module(source, vec![1]);
-        let note = TrackerNote { note: 49, instrument: 1, ..Default::default() };
-        engine.process_note_internal(0, &note, handle, &[]);
-        assert_eq!(engine.channels[0].panning, pan as f32 / 128.0 - 1.0);
-        engine.process_note_internal(0, &TrackerNote { effect: TrackerEffect::SetPanning(32), ..note }, handle, &[]);
-        let explicit = engine.channels[0].panning;
-        assert!(explicit.abs() < 0.01);
-        engine.process_note_internal(0, &TrackerNote { instrument: 99, ..Default::default() }, handle, &[]);
-        assert_eq!(engine.channels[0].panning, pan as f32 / 128.0 - 1.0);
-        assert_eq!(engine.channels[0].instrument, 1);
-        assert_eq!(engine.channels[0].last_xm_instrument, 99);
-        let snapshot = engine.snapshot();
-        engine.reset();
-        engine.apply_snapshot(&snapshot);
-        assert_eq!(engine.channels[0].last_xm_instrument, 99);
-    }
     }
 }
 
 #[test]
 fn xm_valid_instrument_selection_defers_voice_change_until_note() {
     for mapped in [false, true] {
-        let mut source = module(vec![pattern(vec![row(TrackerEffect::None)])], vec![0], FormatFlags::empty());
-        let mut first = TrackerInstrument { default_pan: Some(0), sample_default_volume: Some(32), ..Default::default() };
-        let mut second = TrackerInstrument { default_pan: Some(255), sample_default_volume: Some(8), sample_relative_note: 12, ..Default::default() };
+        let mut source = module(
+            vec![pattern(vec![row(TrackerEffect::None)])],
+            vec![0],
+            FormatFlags::empty(),
+        );
+        let mut first = TrackerInstrument {
+            default_pan: Some(0),
+            sample_default_volume: Some(32),
+            ..Default::default()
+        };
+        let mut second = TrackerInstrument {
+            default_pan: Some(255),
+            sample_default_volume: Some(8),
+            sample_relative_note: 12,
+            ..Default::default()
+        };
         if mapped {
             source.samples = vec![
-                TrackerSample { default_volume: 32, default_pan: Some(0), ..Default::default() },
-                TrackerSample { default_volume: 8, default_pan: Some(255), ..Default::default() },
+                TrackerSample {
+                    default_volume: 32,
+                    default_pan: Some(0),
+                    ..Default::default()
+                },
+                TrackerSample {
+                    default_volume: 8,
+                    default_pan: Some(255),
+                    ..Default::default()
+                },
             ];
-            for entry in &mut first.note_sample_table { entry.1 = 1; }
+            for entry in &mut first.note_sample_table {
+                entry.1 = 1;
+            }
             for entry in &mut second.note_sample_table {
                 entry.0 = 60;
                 entry.1 = 2;
@@ -390,10 +608,22 @@ fn xm_valid_instrument_selection_defers_voice_change_until_note() {
 
         let mut engine = TrackerEngine::new();
         let handle = engine.load_tracker_module(source, vec![11, 22]);
-        engine.process_note_internal(0, &TrackerNote { note: 49, instrument: 1, ..Default::default() }, handle, &[]);
+        engine.process_note_internal(
+            0,
+            &TrackerNote {
+                note: 49,
+                instrument: 1,
+                ..Default::default()
+            },
+            handle,
+            &[],
+        );
         let initial_period = engine.channels[0].base_period;
         engine.channels[0].sample_pos = 12.0;
-        let initial_sample = (engine.channels[0].sample_handle, engine.channels[0].sample_index);
+        let initial_sample = (
+            engine.channels[0].sample_handle,
+            engine.channels[0].sample_index,
+        );
         engine.channels[0].key_off = true;
         engine.channels[0].sample_sustain_released = true;
         engine.channels[0].note_fade = true;
@@ -407,13 +637,42 @@ fn xm_valid_instrument_selection_defers_voice_change_until_note() {
         engine.channels[0].auto_vibrato_pos = 6;
         engine.channels[0].auto_vibrato_sweep = 9;
 
-        engine.process_note_internal(0, &TrackerNote { instrument: 2, ..Default::default() }, handle, &[]);
-        assert_eq!(engine.channels[0].instrument, 1, "selection must not switch the active instrument");
-        assert_eq!(engine.channels[0].sample_handle, 11, "selection must not switch the active sample");
-        assert_eq!(engine.channels[0].volume, 0.5, "selection reloads the old voice defaults");
-        assert_eq!(engine.channels[0].panning, -1.0, "selection reloads the old voice pan");
-        assert_eq!(engine.channels[0].sample_pos, 12.0, "selection must not retrigger the voice");
-        assert_eq!((engine.channels[0].sample_handle, engine.channels[0].sample_index), initial_sample);
+        engine.process_note_internal(
+            0,
+            &TrackerNote {
+                instrument: 2,
+                ..Default::default()
+            },
+            handle,
+            &[],
+        );
+        assert_eq!(
+            engine.channels[0].instrument, 1,
+            "selection must not switch the active instrument"
+        );
+        assert_eq!(
+            engine.channels[0].sample_handle, 11,
+            "selection must not switch the active sample"
+        );
+        assert_eq!(
+            engine.channels[0].volume, 0.5,
+            "selection reloads the old voice defaults"
+        );
+        assert_eq!(
+            engine.channels[0].panning, -1.0,
+            "selection reloads the old voice pan"
+        );
+        assert_eq!(
+            engine.channels[0].sample_pos, 12.0,
+            "selection must not retrigger the voice"
+        );
+        assert_eq!(
+            (
+                engine.channels[0].sample_handle,
+                engine.channels[0].sample_index
+            ),
+            initial_sample
+        );
         assert!(!engine.channels[0].key_off);
         assert!(!engine.channels[0].sample_sustain_released);
         assert!(!engine.channels[0].note_fade);
@@ -423,40 +682,104 @@ fn xm_valid_instrument_selection_defers_voice_change_until_note() {
         assert_eq!(engine.channels[0].filter_envelope_pos, 0);
         assert_eq!(engine.channels[0].envelope_started, 0);
         assert_eq!(engine.channels[0].volume_fadeout, 65535);
-        assert_eq!(engine.channels[0].auto_vibrato_depth, 5, "authored selection playback retains depth");
+        assert_eq!(
+            engine.channels[0].auto_vibrato_depth, 5,
+            "authored selection playback retains depth"
+        );
         assert_eq!(engine.channels[0].auto_vibrato_sweep, 0);
         assert_eq!(engine.channels[0].auto_vibrato_pos, 0);
 
-        engine.process_note_internal(0, &TrackerNote { note: 49, ..Default::default() }, handle, &[]);
-        assert_eq!(engine.channels[0].instrument, 2, "the remembered selection applies to the next pitched note");
-        assert_eq!(engine.channels[0].sample_handle, 22, "the next pitched note must use the selected sample");
+        engine.process_note_internal(
+            0,
+            &TrackerNote {
+                note: 49,
+                ..Default::default()
+            },
+            handle,
+            &[],
+        );
+        assert_eq!(
+            engine.channels[0].instrument, 2,
+            "the remembered selection applies to the next pitched note"
+        );
+        assert_eq!(
+            engine.channels[0].sample_handle, 22,
+            "the next pitched note must use the selected sample"
+        );
         assert!(
             engine.channels[0].base_period < initial_period,
             "the selected instrument's tuning must apply (mapped={mapped}, initial={initial_period}, actual={})",
             engine.channels[0].base_period
         );
-        assert_eq!(engine.channels[0].volume, 0.5, "instrument-less note must retain prior volume");
-        assert_eq!(engine.channels[0].panning, -1.0, "instrument-less note must retain prior pan");
-        assert_eq!(engine.channels[0].sample_pos, 0.0, "the pitched note starts the selected sample");
+        assert_eq!(
+            engine.channels[0].volume, 0.5,
+            "instrument-less note must retain prior volume"
+        );
+        assert_eq!(
+            engine.channels[0].panning, -1.0,
+            "instrument-less note must retain prior pan"
+        );
+        assert_eq!(
+            engine.channels[0].sample_pos, 0.0,
+            "the pitched note starts the selected sample"
+        );
 
-        engine.process_note_internal(0, &TrackerNote { note: 49, instrument: 2, ..Default::default() }, handle, &[]);
-        assert_eq!(engine.channels[0].volume, 0.125, "an explicit instrument reloads its default volume");
-        assert!(engine.channels[0].panning > 0.9, "an explicit instrument reloads its default pan");
+        engine.process_note_internal(
+            0,
+            &TrackerNote {
+                note: 49,
+                instrument: 2,
+                ..Default::default()
+            },
+            handle,
+            &[],
+        );
+        assert_eq!(
+            engine.channels[0].volume, 0.125,
+            "an explicit instrument reloads its default volume"
+        );
+        assert!(
+            engine.channels[0].panning > 0.9,
+            "an explicit instrument reloads its default pan"
+        );
     }
 }
 
 #[test]
 fn xm_k00_selection_keeps_voice_release_and_selection_memory() {
     for mapped in [false, true] {
-        let mut source = module(vec![pattern(vec![row(TrackerEffect::None)])], vec![0], FormatFlags::empty());
-        let mut first = TrackerInstrument { default_pan: Some(0), sample_default_volume: Some(32), ..Default::default() };
-        let second = TrackerInstrument { default_pan: Some(255), sample_default_volume: Some(8), sample_relative_note: 12, ..Default::default() };
+        let mut source = module(
+            vec![pattern(vec![row(TrackerEffect::None)])],
+            vec![0],
+            FormatFlags::empty(),
+        );
+        let mut first = TrackerInstrument {
+            default_pan: Some(0),
+            sample_default_volume: Some(32),
+            ..Default::default()
+        };
+        let second = TrackerInstrument {
+            default_pan: Some(255),
+            sample_default_volume: Some(8),
+            sample_relative_note: 12,
+            ..Default::default()
+        };
         if mapped {
             source.samples = vec![
-                TrackerSample { default_volume: 32, default_pan: Some(0), ..Default::default() },
-                TrackerSample { default_volume: 8, default_pan: Some(255), ..Default::default() },
+                TrackerSample {
+                    default_volume: 32,
+                    default_pan: Some(0),
+                    ..Default::default()
+                },
+                TrackerSample {
+                    default_volume: 8,
+                    default_pan: Some(255),
+                    ..Default::default()
+                },
             ];
-            for entry in &mut first.note_sample_table { entry.1 = 1; }
+            for entry in &mut first.note_sample_table {
+                entry.1 = 1;
+            }
             let mut mapped_second = second.clone();
             for entry in &mut mapped_second.note_sample_table {
                 entry.0 = 60;
@@ -474,31 +797,87 @@ fn xm_k00_selection_keeps_voice_release_and_selection_memory() {
 
         let mut engine = TrackerEngine::new();
         let handle = engine.load_tracker_module(source, vec![11, 22]);
-        engine.process_note_internal(0, &TrackerNote { note: 49, instrument: 1, ..Default::default() }, handle, &[]);
+        engine.process_note_internal(
+            0,
+            &TrackerNote {
+                note: 49,
+                instrument: 1,
+                ..Default::default()
+            },
+            handle,
+            &[],
+        );
         engine.channels[0].sample_pos = 12.0;
         engine.channels[0].volume_envelope_pos = 7;
-        let initial_sample = (engine.channels[0].sample_handle, engine.channels[0].sample_index);
+        let initial_sample = (
+            engine.channels[0].sample_handle,
+            engine.channels[0].sample_index,
+        );
 
-        engine.process_note_internal(0, &TrackerNote {
-            instrument: 2,
-            volume: 32,
-            effect: TrackerEffect::KeyOff,
-            ..Default::default()
-        }, handle, &[]);
+        engine.process_note_internal(
+            0,
+            &TrackerNote {
+                instrument: 2,
+                volume: 32,
+                effect: TrackerEffect::KeyOff,
+                ..Default::default()
+            },
+            handle,
+            &[],
+        );
         let channel = &engine.channels[0];
-        assert_eq!(channel.instrument, 1, "K00 selection must not switch the active instrument");
-        assert_eq!((channel.sample_handle, channel.sample_index), initial_sample, "K00 selection must keep the active sample");
-        assert_eq!(channel.sample_pos, 12.0, "K00 selection must not retrigger the sample");
-        assert_eq!(channel.volume_envelope_pos, 7, "K00 selection must not retrigger the envelope");
+        assert_eq!(
+            channel.instrument, 1,
+            "K00 selection must not switch the active instrument"
+        );
+        assert_eq!(
+            (channel.sample_handle, channel.sample_index),
+            initial_sample,
+            "K00 selection must keep the active sample"
+        );
+        assert_eq!(
+            channel.sample_pos, 12.0,
+            "K00 selection must not retrigger the sample"
+        );
+        assert_eq!(
+            channel.volume_envelope_pos, 7,
+            "K00 selection must not retrigger the envelope"
+        );
         assert!(channel.key_off, "K00 must release the active envelope");
-        assert!(channel.sample_sustain_released, "K00 must release sample sustain");
-        assert!(!channel.note_fade, "an enabled XM envelope must not be faded by K00");
-        assert_eq!(channel.volume, 0.5, "the co-located volume command must run");
-        assert_eq!(channel.last_xm_instrument, 2, "K00 selection must remain remembered");
+        assert!(
+            channel.sample_sustain_released,
+            "K00 must release sample sustain"
+        );
+        assert!(
+            !channel.note_fade,
+            "an enabled XM envelope must not be faded by K00"
+        );
+        assert_eq!(
+            channel.volume, 0.5,
+            "the co-located volume command must run"
+        );
+        assert_eq!(
+            channel.last_xm_instrument, 2,
+            "K00 selection must remain remembered"
+        );
 
-        engine.process_note_internal(0, &TrackerNote { note: 49, ..Default::default() }, handle, &[]);
-        assert_eq!(engine.channels[0].instrument, 2, "the remembered K00 selection must apply on the next note");
-        assert_eq!(engine.channels[0].sample_handle, 22, "the next note must use the selected sample");
+        engine.process_note_internal(
+            0,
+            &TrackerNote {
+                note: 49,
+                ..Default::default()
+            },
+            handle,
+            &[],
+        );
+        assert_eq!(
+            engine.channels[0].instrument, 2,
+            "the remembered K00 selection must apply on the next note"
+        );
+        assert_eq!(
+            engine.channels[0].sample_handle, 22,
+            "the next note must use the selected sample"
+        );
     }
 }
 
@@ -519,8 +898,24 @@ fn xm_d0_pans_left_on_ticks_and_resets_each_row() {
 #[test]
 fn xm_empty_delayed_cell_retriggers_previous_note() {
     let mut engine = TrackerEngine::new();
-    let handle = engine.load_tracker_module(module(vec![pattern(vec![row(TrackerEffect::None)])], vec![0], FormatFlags::empty()), vec![1]);
-    engine.process_note_internal(0, &TrackerNote { note: 49, instrument: 1, ..Default::default() }, handle, &[]);
+    let handle = engine.load_tracker_module(
+        module(
+            vec![pattern(vec![row(TrackerEffect::None)])],
+            vec![0],
+            FormatFlags::empty(),
+        ),
+        vec![1],
+    );
+    engine.process_note_internal(
+        0,
+        &TrackerNote {
+            note: 49,
+            instrument: 1,
+            ..Default::default()
+        },
+        handle,
+        &[],
+    );
     engine.channels[0].sample_pos = 12.5;
     engine.process_note_internal(0, &row(TrackerEffect::NoteDelay(3)), handle, &[]);
     assert_eq!(engine.channels[0].sample_pos, 12.5);
@@ -533,10 +928,37 @@ fn xm_empty_delayed_cell_retriggers_previous_note() {
 #[test]
 fn xm_delayed_note_ignores_volume_tone_portamento() {
     let mut engine = TrackerEngine::new();
-    let handle = engine.load_tracker_module(module(vec![pattern(vec![row(TrackerEffect::None)])], vec![0], FormatFlags::empty()), vec![1]);
-    engine.process_note_internal(0, &TrackerNote { note: 49, instrument: 1, ..Default::default() }, handle, &[]);
+    let handle = engine.load_tracker_module(
+        module(
+            vec![pattern(vec![row(TrackerEffect::None)])],
+            vec![0],
+            FormatFlags::empty(),
+        ),
+        vec![1],
+    );
+    engine.process_note_internal(
+        0,
+        &TrackerNote {
+            note: 49,
+            instrument: 1,
+            ..Default::default()
+        },
+        handle,
+        &[],
+    );
     engine.channels[0].sample_pos = 12.5;
-    engine.process_note_internal(0, &TrackerNote { note: 61, instrument: 1, effect: TrackerEffect::NoteDelay(3), volume_effect: TrackerEffect::TonePortamento(16), ..Default::default() }, handle, &[]);
+    engine.process_note_internal(
+        0,
+        &TrackerNote {
+            note: 61,
+            instrument: 1,
+            effect: TrackerEffect::NoteDelay(3),
+            volume_effect: TrackerEffect::TonePortamento(16),
+            ..Default::default()
+        },
+        handle,
+        &[],
+    );
     assert_eq!(engine.channels[0].current_note, 49);
     engine.process_tick(3, 6);
     assert_eq!(engine.channels[0].current_note, 61);
@@ -548,17 +970,36 @@ fn xm_delayed_note_ignores_volume_tone_portamento() {
 fn xm_note_delay_defers_the_entire_note_and_survives_snapshot() {
     for delay in [1, 3, 6] {
         let mut engine = TrackerEngine::new();
-        let handle = engine.load_tracker_module(module(vec![pattern(vec![row(TrackerEffect::None)])], vec![0], FormatFlags::empty()), vec![1]);
+        let handle = engine.load_tracker_module(
+            module(
+                vec![pattern(vec![row(TrackerEffect::None)])],
+                vec![0],
+                FormatFlags::empty(),
+            ),
+            vec![1],
+        );
         engine.channels[0].volume = 0.25;
-        let note = TrackerNote { note: 49, instrument: 1, effect: TrackerEffect::NoteDelay(delay), volume_effect: TrackerEffect::SetVolume(32), ..Default::default() };
+        let note = TrackerNote {
+            note: 49,
+            instrument: 1,
+            effect: TrackerEffect::NoteDelay(delay),
+            volume_effect: TrackerEffect::SetVolume(32),
+            ..Default::default()
+        };
         engine.process_note_internal(0, &note, handle, &[]);
-        assert!(!engine.channels[0].note_on, "EDx must not trigger at tick zero");
+        assert!(
+            !engine.channels[0].note_on,
+            "EDx must not trigger at tick zero"
+        );
         assert_eq!(engine.channels[0].volume, 0.25);
         let snapshot = engine.snapshot();
         engine.apply_snapshot(&snapshot);
         for tick in 1..=6 {
             engine.process_tick(tick, 6);
-            assert_eq!(engine.channels[0].note_on, delay < 6 && tick >= u16::from(delay));
+            assert_eq!(
+                engine.channels[0].note_on,
+                delay < 6 && tick >= u16::from(delay)
+            );
         }
         engine.channels[0].reset_row_effects();
     }
@@ -568,19 +1009,37 @@ fn xm_note_delay_defers_the_entire_note_and_survives_snapshot() {
 fn xm_note_off_distinguishes_volume_from_other_commands() {
     for context in 0..5 {
         let mut engine = TrackerEngine::new();
-        let handle = engine.load_tracker_module(module(vec![pattern(vec![row(TrackerEffect::None)])], vec![0], FormatFlags::empty()), vec![]);
+        let handle = engine.load_tracker_module(
+            module(
+                vec![pattern(vec![row(TrackerEffect::None)])],
+                vec![0],
+                FormatFlags::empty(),
+            ),
+            vec![],
+        );
         engine.channels[0].note_on = true;
         engine.channels[0].volume = 0.5;
         let note = TrackerNote {
             note: TrackerNote::NOTE_OFF,
             instrument: if context == 1 { 1 } else { 0 },
-            volume_effect: match context { 2 => TrackerEffect::SetVolume(32), 3 => TrackerEffect::SetPanning(32), _ => TrackerEffect::None },
-            effect: if context == 4 { TrackerEffect::SetVolume(32) } else { TrackerEffect::None },
+            volume_effect: match context {
+                2 => TrackerEffect::SetVolume(32),
+                3 => TrackerEffect::SetPanning(32),
+                _ => TrackerEffect::None,
+            },
+            effect: if context == 4 {
+                TrackerEffect::SetVolume(32)
+            } else {
+                TrackerEffect::None
+            },
             ..Default::default()
         };
         engine.process_note_internal(0, &note, handle, &[]);
         assert!(engine.channels[0].note_on);
-        assert_eq!(engine.channels[0].volume == 0.0, context == 0 || context == 3);
+        assert_eq!(
+            engine.channels[0].volume == 0.0,
+            context == 0 || context == 3
+        );
         assert!(engine.channels[0].note_fade);
     }
 }
@@ -590,14 +1049,25 @@ fn xm_k00_mutes_or_fades_with_row_context() {
     for envelope in [false, true] {
         for context in 0..3 {
             let mut engine = TrackerEngine::new();
-            let handle = engine.load_tracker_module(module(vec![pattern(vec![row(TrackerEffect::None)])], vec![0], FormatFlags::empty()), vec![]);
+            let handle = engine.load_tracker_module(
+                module(
+                    vec![pattern(vec![row(TrackerEffect::None)])],
+                    vec![0],
+                    FormatFlags::empty(),
+                ),
+                vec![],
+            );
             engine.channels[0].note_on = true;
             engine.channels[0].volume = 0.5;
             engine.channels[0].volume_envelope_enabled = envelope;
             let note = TrackerNote {
                 effect: TrackerEffect::KeyOff,
                 instrument: if context == 1 { 1 } else { 0 },
-                volume_effect: if context == 2 { TrackerEffect::SetPanning(32) } else { TrackerEffect::None },
+                volume_effect: if context == 2 {
+                    TrackerEffect::SetPanning(32)
+                } else {
+                    TrackerEffect::None
+                },
                 ..Default::default()
             };
             engine.process_note_internal(0, &note, handle, &[]);
@@ -612,46 +1082,84 @@ fn xm_k00_mutes_or_fades_with_row_context() {
 
 #[test]
 fn it_sd_fine_tick_extension_uses_exclusive_extended_boundary() {
-    for delay in [6,7,8] {
-        let song = module(vec![pattern(vec![TrackerNote::default()])], vec![0],
-            FormatFlags::IS_IT_FORMAT | FormatFlags::INSTRUMENTS);
+    for delay in [6, 7, 8] {
+        let song = module(
+            vec![pattern(vec![TrackerNote::default()])],
+            vec![0],
+            FormatFlags::IS_IT_FORMAT | FormatFlags::INSTRUMENTS,
+        );
         let mut engine = TrackerEngine::new();
         let handle = engine.load_tracker_module(song, vec![1]);
         engine.is_it_format = true;
         engine.fine_pattern_delay = 2;
-        engine.process_note_internal(0, &TrackerNote { note:49, instrument:1,
-            effect:TrackerEffect::NoteDelay(delay), ..Default::default() }, handle, &[]);
-        for tick in 1..delay as u16 { engine.process_tick(tick,6); }
+        engine.process_note_internal(
+            0,
+            &TrackerNote {
+                note: 49,
+                instrument: 1,
+                effect: TrackerEffect::NoteDelay(delay),
+                ..Default::default()
+            },
+            handle,
+            &[],
+        );
+        for tick in 1..delay as u16 {
+            engine.process_tick(tick, 6);
+        }
         assert!(!engine.channels[0].note_on);
-        engine.process_tick(delay as u16,6);
-        assert_eq!(engine.channels[0].note_on,delay < 8);
+        engine.process_tick(delay as u16, 6);
+        assert_eq!(engine.channels[0].note_on, delay < 8);
     }
 }
 
 #[test]
 fn it_sd3_defers_volume_only_and_cut_without_retriggering() {
     for cut in [false, true] {
-        let song = module(vec![pattern(vec![TrackerNote::default()])], vec![0],
-            FormatFlags::IS_IT_FORMAT | FormatFlags::INSTRUMENTS);
+        let song = module(
+            vec![pattern(vec![TrackerNote::default()])],
+            vec![0],
+            FormatFlags::IS_IT_FORMAT | FormatFlags::INSTRUMENTS,
+        );
         let mut engine = TrackerEngine::new();
         let handle = engine.load_tracker_module(song, vec![1]);
-        engine.process_note_internal(0, &TrackerNote { note:49, instrument:1, ..Default::default() }, handle, &[]);
+        engine.process_note_internal(
+            0,
+            &TrackerNote {
+                note: 49,
+                instrument: 1,
+                ..Default::default()
+            },
+            handle,
+            &[],
+        );
         engine.is_it_format = true;
         engine.channels[0].sample_pos = 17.0;
-        engine.process_note_internal(0, &TrackerNote {
-            note: if cut { TrackerNote::NOTE_CUT } else { 0 },
-            volume_effect: if cut { TrackerEffect::None } else { TrackerEffect::SetVolume(0) },
-            effect: TrackerEffect::NoteDelay(3), ..Default::default()
-        }, handle, &[]);
+        engine.process_note_internal(
+            0,
+            &TrackerNote {
+                note: if cut { TrackerNote::NOTE_CUT } else { 0 },
+                volume_effect: if cut {
+                    TrackerEffect::None
+                } else {
+                    TrackerEffect::SetVolume(0)
+                },
+                effect: TrackerEffect::NoteDelay(3),
+                ..Default::default()
+            },
+            handle,
+            &[],
+        );
         assert!(engine.channels[0].note_on);
         assert!(engine.channels[0].volume > 0.0);
-        for tick in [1,2] { engine.process_tick(tick,6); }
+        for tick in [1, 2] {
+            engine.process_tick(tick, 6);
+        }
         assert!(engine.channels[0].note_on);
         assert!(engine.channels[0].volume > 0.0);
-        engine.process_tick(3,6);
-        assert_eq!(engine.channels[0].volume,0.0);
-        assert_eq!(engine.channels[0].sample_pos,17.0);
-        assert_eq!(engine.channels[0].note_on,!cut);
+        engine.process_tick(3, 6);
+        assert_eq!(engine.channels[0].volume, 0.0);
+        assert_eq!(engine.channels[0].sample_pos, 17.0);
+        assert_eq!(engine.channels[0].note_on, !cut);
     }
 }
 
@@ -776,7 +1284,10 @@ fn it_sc0_cuts_at_tick_one_not_zero_or_never() {
         let song = nether_tracker::from_it_module(&source);
         let effect = song.patterns[0].notes[0][0].effect;
         assert_eq!(effect, TrackerEffect::ItExtended(0xc0 | value));
-        assert_eq!(TrackerEffect::from_it_extended(0xc0 | value), TrackerEffect::NoteCut(value.max(1)));
+        assert_eq!(
+            TrackerEffect::from_it_extended(0xc0 | value),
+            TrackerEffect::NoteCut(value.max(1))
+        );
         let mut engine = TrackerEngine::new();
         engine.is_it_format = true;
         engine.channels[0].note_on = true;
@@ -835,7 +1346,10 @@ fn it_s73_s76_override_only_the_foreground_nna() {
         let converted = nether_tracker::from_it_module(&source);
         let effect = converted.patterns[0].notes[0][0].effect;
         assert_eq!(effect, TrackerEffect::ItExtended(0x70 | value));
-        assert_eq!(TrackerEffect::from_it_extended(0x70 | value), TrackerEffect::SetNewNoteAction(value - 3));
+        assert_eq!(
+            TrackerEffect::from_it_extended(0x70 | value),
+            TrackerEffect::SetNewNoteAction(value - 3)
+        );
         let mut engine = TrackerEngine::new();
         engine.channels[1].nna = 2;
         engine.channels[1].is_background = true;
@@ -1156,44 +1670,76 @@ fn envelope_clock_counts_row_boundaries_for_foreground_and_nna() {
 
 #[test]
 fn paused_authored_it_envelopes_keep_tick_zero_values_after_playback_only() {
-    let mut song = module(vec![pattern(vec![TrackerNote {note:49,instrument:1,..Default::default()}])],vec![0],FormatFlags::IS_IT_FORMAT|FormatFlags::INSTRUMENTS);
-    song.instruments[0].volume_envelope=Some(nether_tracker::TrackerEnvelope {points:vec![(0,32)],flags:nether_tracker::EnvelopeFlags::ENABLED|nether_tracker::EnvelopeFlags::SUSTAIN_LOOP,..Default::default()});
-    let mut engine=TrackerEngine::new();
-    let handle=engine.load_tracker_module(song,vec![1]);let raw=crate::tracker::raw_tracker_handle(handle);
-    engine.sync_to_state(&make_state(handle,6,125),&[]);engine.process_row_tick0_internal(raw,&[]);
-    let sounds=vec![None,Some(crate::audio::Sound{data:vec![8192;64].into()})];
-    engine.channels[0].fade_in_samples=0;
-    engine.process_unified_effect_tick0(0,&TrackerEffect::SetVolumeEnvelope(false),0,0);
-    let initial=engine.mix_channels(raw,&sounds,44100, 882).0;
-    engine.process_unified_effect_tick0(0,&TrackerEffect::SetVolumeEnvelope(true),0,0);
+    let mut song = module(
+        vec![pattern(vec![TrackerNote {
+            note: 49,
+            instrument: 1,
+            ..Default::default()
+        }])],
+        vec![0],
+        FormatFlags::IS_IT_FORMAT | FormatFlags::INSTRUMENTS,
+    );
+    song.instruments[0].volume_envelope = Some(nether_tracker::TrackerEnvelope {
+        points: vec![(0, 32)],
+        flags: nether_tracker::EnvelopeFlags::ENABLED | nether_tracker::EnvelopeFlags::SUSTAIN_LOOP,
+        ..Default::default()
+    });
+    let mut engine = TrackerEngine::new();
+    let handle = engine.load_tracker_module(song, vec![1]);
+    let raw = crate::tracker::raw_tracker_handle(handle);
+    engine.sync_to_state(&make_state(handle, 6, 125), &[]);
+    engine.process_row_tick0_internal(raw, &[]);
+    let sounds = vec![
+        None,
+        Some(crate::audio::Sound {
+            data: vec![8192; 64].into(),
+        }),
+    ];
+    engine.channels[0].fade_in_samples = 0;
+    engine.process_unified_effect_tick0(0, &TrackerEffect::SetVolumeEnvelope(false), 0, 0);
+    let initial = engine.mix_channels(raw, &sounds, 44100, 882).0;
+    engine.process_unified_effect_tick0(0, &TrackerEffect::SetVolumeEnvelope(true), 0, 0);
     engine.advance_envelopes();
-    assert_eq!(engine.channels[0].volume_envelope_pos,0);
-    assert_eq!(engine.channels[0].envelope_started&1,1);
-    engine.process_unified_effect_tick0(0,&TrackerEffect::SetVolumeEnvelope(false),0,0);
-    let held=engine.mix_channels(raw,&sounds,44100, 882).0;
-    assert!((held/initial-0.5).abs()<0.001);
-    let mut restored=TrackerEngine::new();restored.apply_snapshot(&engine.snapshot());
-    assert_eq!(restored.channels[0].envelope_started,engine.channels[0].envelope_started);
-    assert_eq!(restored.mix_channels(raw,&sounds,44100, 882),engine.mix_channels(raw,&sounds,44100, 882));
-    engine.process_row_tick0_internal(raw,&[]);
-    assert_eq!(engine.channels[0].envelope_started,0);
+    assert_eq!(engine.channels[0].volume_envelope_pos, 0);
+    assert_eq!(engine.channels[0].envelope_started & 1, 1);
+    engine.process_unified_effect_tick0(0, &TrackerEffect::SetVolumeEnvelope(false), 0, 0);
+    let held = engine.mix_channels(raw, &sounds, 44100, 882).0;
+    assert!((held / initial - 0.5).abs() < 0.001);
+    let mut restored = TrackerEngine::new();
+    restored.apply_snapshot(&engine.snapshot());
+    assert_eq!(
+        restored.channels[0].envelope_started,
+        engine.channels[0].envelope_started
+    );
+    assert_eq!(
+        restored.mix_channels(raw, &sounds, 44100, 882),
+        engine.mix_channels(raw, &sounds, 44100, 882)
+    );
+    engine.process_row_tick0_internal(raw, &[]);
+    assert_eq!(engine.channels[0].envelope_started, 0);
 }
 
 #[test]
 fn xm_lxx_pan_position_depends_on_volume_sustain_not_pan_sustain() {
-    for volume_sustain in [false,true] {
-        for pan_sustain in [false,true] {
+    for volume_sustain in [false, true] {
+        for pan_sustain in [false, true] {
             let mut engine = TrackerEngine::new();
             let ch = &mut engine.channels[0];
-            ch.volume_envelope_sustain_loop = volume_sustain.then_some((2,2));
-            ch.panning_envelope_sustain_loop = pan_sustain.then_some((2,2));
+            ch.volume_envelope_sustain_loop = volume_sustain.then_some((2, 2));
+            ch.panning_envelope_sustain_loop = pan_sustain.then_some((2, 2));
             ch.panning_envelope_pos = 3;
             ch.pitch_envelope_pos = 4;
             ch.panning_envelope_frozen = true;
-            engine.process_unified_effect_tick0(0,&TrackerEffect::SetEnvelopePosition(24),0,0);
-            assert_eq!(engine.channels[0].volume_envelope_pos,24);
-            assert_eq!(engine.channels[0].panning_envelope_pos,if volume_sustain {24} else {3});
-            assert_eq!(engine.channels[0].pitch_envelope_pos,if volume_sustain {24} else {4});
+            engine.process_unified_effect_tick0(0, &TrackerEffect::SetEnvelopePosition(24), 0, 0);
+            assert_eq!(engine.channels[0].volume_envelope_pos, 24);
+            assert_eq!(
+                engine.channels[0].panning_envelope_pos,
+                if volume_sustain { 24 } else { 3 }
+            );
+            assert_eq!(
+                engine.channels[0].pitch_envelope_pos,
+                if volume_sustain { 24 } else { 4 }
+            );
             assert!(engine.channels[0].panning_envelope_frozen);
         }
     }
@@ -1209,39 +1755,76 @@ fn delayed_note_clears_previous_pan_sustain_freeze() {
     channel.panning_envelope_frozen = true;
     channel.note_delay_tick = 2;
     channel.delayed_note = 49;
-    engine.process_tick(2,6);
+    engine.process_tick(2, 6);
     // process_tick also advances envelopes at the completed tick boundary.
-    assert_eq!(engine.channels[0].panning_envelope_pos,1);
+    assert_eq!(engine.channels[0].panning_envelope_pos, 1);
     assert!(!engine.channels[0].panning_envelope_frozen);
     engine.advance_envelopes();
-    assert_eq!(engine.channels[0].panning_envelope_pos,2);
+    assert_eq!(engine.channels[0].panning_envelope_pos, 2);
 }
 
 #[test]
 fn xm_pan_sustain_freezes_only_if_reached_before_release_and_resets_on_note() {
     for it in [false, true] {
         for early_release in [false, true] {
-            let format = if it {FormatFlags::IS_IT_FORMAT | FormatFlags::INSTRUMENTS} else {FormatFlags::empty()};
-            let mut song = module(vec![pattern(vec![TrackerNote {note:49,instrument:1,..Default::default()}])],vec![0],format);
+            let format = if it {
+                FormatFlags::IS_IT_FORMAT | FormatFlags::INSTRUMENTS
+            } else {
+                FormatFlags::empty()
+            };
+            let mut song = module(
+                vec![pattern(vec![TrackerNote {
+                    note: 49,
+                    instrument: 1,
+                    ..Default::default()
+                }])],
+                vec![0],
+                format,
+            );
             song.instruments[0].panning_envelope = Some(nether_tracker::TrackerEnvelope {
-                points:vec![(0,0),(2,32),(8,-32)], sustain_begin:1,sustain_end:1,
-                flags:nether_tracker::EnvelopeFlags::ENABLED | nether_tracker::EnvelopeFlags::SUSTAIN_LOOP,..Default::default()
+                points: vec![(0, 0), (2, 32), (8, -32)],
+                sustain_begin: 1,
+                sustain_end: 1,
+                flags: nether_tracker::EnvelopeFlags::ENABLED
+                    | nether_tracker::EnvelopeFlags::SUSTAIN_LOOP,
+                ..Default::default()
             });
             let mut engine = TrackerEngine::new();
-            let handle = engine.load_tracker_module(song,vec![1]);
+            let handle = engine.load_tracker_module(song, vec![1]);
             let raw = crate::tracker::raw_tracker_handle(handle);
-            engine.sync_to_state(&make_state(handle,6,125),&[]);
-            engine.process_row_tick0_internal(raw,&[]);
-            for _ in 0..if early_release {1} else {4} { engine.advance_envelopes(); }
-            assert_eq!(engine.channels[0].panning_envelope_frozen,!it && !early_release);
+            engine.sync_to_state(&make_state(handle, 6, 125), &[]);
+            engine.process_row_tick0_internal(raw, &[]);
+            for _ in 0..if early_release { 1 } else { 4 } {
+                engine.advance_envelopes();
+            }
+            assert_eq!(
+                engine.channels[0].panning_envelope_frozen,
+                !it && !early_release
+            );
             engine.channels[0].key_off = true;
-            let mut restored = TrackerEngine::new();restored.apply_snapshot(&engine.snapshot());
-            for _ in 0..3 {engine.advance_envelopes();restored.advance_envelopes();}
-            assert_eq!(engine.channels[0].panning_envelope_pos, if early_release {4} else if it {5} else {2});
-            assert_eq!(format!("{:?}",engine.channels),format!("{:?}",restored.channels));
-            engine.process_row_tick0_internal(raw,&[]);
+            let mut restored = TrackerEngine::new();
+            restored.apply_snapshot(&engine.snapshot());
+            for _ in 0..3 {
+                engine.advance_envelopes();
+                restored.advance_envelopes();
+            }
+            assert_eq!(
+                engine.channels[0].panning_envelope_pos,
+                if early_release {
+                    4
+                } else if it {
+                    5
+                } else {
+                    2
+                }
+            );
+            assert_eq!(
+                format!("{:?}", engine.channels),
+                format!("{:?}", restored.channels)
+            );
+            engine.process_row_tick0_internal(raw, &[]);
             assert!(!engine.channels[0].panning_envelope_frozen);
-            assert_eq!(engine.channels[0].panning_envelope_pos,0);
+            assert_eq!(engine.channels[0].panning_envelope_pos, 0);
         }
     }
 }
@@ -1249,38 +1832,76 @@ fn xm_pan_sustain_freezes_only_if_reached_before_release_and_resets_on_note() {
 #[test]
 fn xm_loop_escape_requires_same_authored_node_and_survives_snapshot() {
     for sustain_node in [0, 1, 2] {
-        let mut song = module(vec![pattern(vec![TrackerNote {note:49,instrument:1,..Default::default()}])], vec![0], FormatFlags::empty());
+        let mut song = module(
+            vec![pattern(vec![TrackerNote {
+                note: 49,
+                instrument: 1,
+                ..Default::default()
+            }])],
+            vec![0],
+            FormatFlags::empty(),
+        );
         let envelope = nether_tracker::TrackerEnvelope {
-            points: vec![(0,64),(4,32),(4,32),(10,0)],
-            sustain_begin:sustain_node, sustain_end:sustain_node, loop_begin:0, loop_end:1,
-            flags:nether_tracker::EnvelopeFlags::ENABLED | nether_tracker::EnvelopeFlags::SUSTAIN_LOOP | nether_tracker::EnvelopeFlags::LOOP,
+            points: vec![(0, 64), (4, 32), (4, 32), (10, 0)],
+            sustain_begin: sustain_node,
+            sustain_end: sustain_node,
+            loop_begin: 0,
+            loop_end: 1,
+            flags: nether_tracker::EnvelopeFlags::ENABLED
+                | nether_tracker::EnvelopeFlags::SUSTAIN_LOOP
+                | nether_tracker::EnvelopeFlags::LOOP,
         };
         song.instruments[0].volume_envelope = Some(envelope.clone());
         song.instruments[0].panning_envelope = Some(envelope);
         let mut engine = TrackerEngine::new();
         let handle = engine.load_tracker_module(song, vec![1]);
-        engine.sync_to_state(&make_state(handle,6,125), &[]);
+        engine.sync_to_state(&make_state(handle, 6, 125), &[]);
         engine.process_row_tick0_internal(crate::tracker::raw_tracker_handle(handle), &[]);
-        assert_eq!(engine.channels[0].volume_envelope_escape_loop, sustain_node == 1);
-        assert_eq!(engine.channels[0].panning_envelope_escape_loop, sustain_node == 1);
+        assert_eq!(
+            engine.channels[0].volume_envelope_escape_loop,
+            sustain_node == 1
+        );
+        assert_eq!(
+            engine.channels[0].panning_envelope_escape_loop,
+            sustain_node == 1
+        );
         engine.channels[0].key_off = true;
         let mut restored = TrackerEngine::new();
         restored.apply_snapshot(&engine.snapshot());
-        for _ in 0..5 { engine.advance_envelopes(); restored.advance_envelopes(); }
-        let expected = if sustain_node == 1 {5} else {1};
-        assert_eq!(engine.channels[0].volume_envelope_pos,expected);
-        assert_eq!(engine.channels[0].panning_envelope_pos,expected);
-        assert_eq!(format!("{:?}",engine.channels),format!("{:?}",restored.channels));
+        for _ in 0..5 {
+            engine.advance_envelopes();
+            restored.advance_envelopes();
+        }
+        let expected = if sustain_node == 1 { 5 } else { 1 };
+        assert_eq!(engine.channels[0].volume_envelope_pos, expected);
+        assert_eq!(engine.channels[0].panning_envelope_pos, expected);
+        assert_eq!(
+            format!("{:?}", engine.channels),
+            format!("{:?}", restored.channels)
+        );
     }
 }
 
 #[test]
 fn it_envelope_sustain_range_precedes_normal_loop_and_releases() {
-    let mut song = module(vec![pattern(vec![TrackerNote { note:61, instrument:1, ..Default::default() }])], vec![0], FormatFlags::IS_IT_FORMAT | FormatFlags::INSTRUMENTS);
+    let mut song = module(
+        vec![pattern(vec![TrackerNote {
+            note: 61,
+            instrument: 1,
+            ..Default::default()
+        }])],
+        vec![0],
+        FormatFlags::IS_IT_FORMAT | FormatFlags::INSTRUMENTS,
+    );
     let envelope = nether_tracker::TrackerEnvelope {
         points: vec![(0, 32), (1, 32), (3, 32), (5, 32)],
-        flags: nether_tracker::EnvelopeFlags::ENABLED | nether_tracker::EnvelopeFlags::SUSTAIN_LOOP | nether_tracker::EnvelopeFlags::LOOP,
-        sustain_begin: 1, sustain_end: 2, loop_begin: 0, loop_end: 3,
+        flags: nether_tracker::EnvelopeFlags::ENABLED
+            | nether_tracker::EnvelopeFlags::SUSTAIN_LOOP
+            | nether_tracker::EnvelopeFlags::LOOP,
+        sustain_begin: 1,
+        sustain_end: 2,
+        loop_begin: 0,
+        loop_end: 3,
     };
     song.instruments[0].volume_envelope = Some(envelope.clone());
     song.instruments[0].panning_envelope = Some(envelope.clone());
@@ -1310,7 +1931,10 @@ fn it_envelope_sustain_range_precedes_normal_loop_and_releases() {
         assert_eq!(engine.channels[0].panning_envelope_pos, expected);
         assert_eq!(engine.channels[0].pitch_envelope_pos, expected);
         assert_eq!(engine.channels[32].pitch_envelope_pos, expected);
-        assert_eq!(format!("{:?}", engine.channels), format!("{:?}", restored.channels));
+        assert_eq!(
+            format!("{:?}", engine.channels),
+            format!("{:?}", restored.channels)
+        );
     }
 }
 
@@ -1340,50 +1964,85 @@ fn pitch_envelope_control_preserves_position_and_background_voices() {
 
 #[test]
 fn it_filter_envelope_preserves_base_cutoff_pause_and_snapshot_state() {
-    for voice in [0,1] {
-        let mut song = module(vec![pattern(vec![TrackerNote {note:49,instrument:1,..Default::default()}])],vec![0],FormatFlags::IS_IT_FORMAT|FormatFlags::INSTRUMENTS);
-        song.instruments[0].filter_cutoff=Some(64);
-        song.instruments[0].pitch_envelope=Some(nether_tracker::TrackerEnvelope {
-            points:vec![(0,-16),(1,32)],
-            flags:nether_tracker::EnvelopeFlags::ENABLED|nether_tracker::EnvelopeFlags::FILTER|nether_tracker::EnvelopeFlags::SUSTAIN_LOOP,
+    for voice in [0, 1] {
+        let mut song = module(
+            vec![pattern(vec![TrackerNote {
+                note: 49,
+                instrument: 1,
+                ..Default::default()
+            }])],
+            vec![0],
+            FormatFlags::IS_IT_FORMAT | FormatFlags::INSTRUMENTS,
+        );
+        song.instruments[0].filter_cutoff = Some(64);
+        song.instruments[0].pitch_envelope = Some(nether_tracker::TrackerEnvelope {
+            points: vec![(0, -16), (1, 32)],
+            flags: nether_tracker::EnvelopeFlags::ENABLED
+                | nether_tracker::EnvelopeFlags::FILTER
+                | nether_tracker::EnvelopeFlags::SUSTAIN_LOOP,
             ..Default::default()
         });
         song.instruments.push(TrackerInstrument::default());
-        let mut engine=TrackerEngine::new();
-        let handle=engine.load_tracker_module(song,vec![1,1]);let raw=crate::tracker::raw_tracker_handle(handle);
-        engine.sync_to_state(&make_state(handle,6,125),&[]);engine.process_row_tick0_internal(raw,&[]);
+        let mut engine = TrackerEngine::new();
+        let handle = engine.load_tracker_module(song, vec![1, 1]);
+        let raw = crate::tracker::raw_tracker_handle(handle);
+        engine.sync_to_state(&make_state(handle, 6, 125), &[]);
+        engine.process_row_tick0_internal(raw, &[]);
         assert!(engine.channels[0].filter_envelope_enabled);
-        assert_eq!(engine.channels[0].filter_envelope_sustain_loop,Some((0,0)));
+        assert_eq!(
+            engine.channels[0].filter_envelope_sustain_loop,
+            Some((0, 0))
+        );
         assert!(!engine.channels[0].pitch_envelope_enabled);
-        if voice==1 {engine.channels[1]=engine.channels[0].clone();engine.channels[1].is_background=true;engine.channels[0].note_on=false;}
-        let sounds=vec![None,Some(crate::audio::Sound{data:vec![8192;512].into()})];
-        let base=64.0/127.0;
-        engine.process_unified_effect_tick0(voice,&TrackerEffect::SetPitchEnvelope(false),0,0);
-        engine.mix_channels(raw,&sounds,44100, 882);
-        assert_eq!(engine.channels[voice].filter_envelope_value,Some(0));
-        engine.process_unified_effect_tick0(voice,&TrackerEffect::SetPitchEnvelope(true),0,0);
+        if voice == 1 {
+            engine.channels[1] = engine.channels[0].clone();
+            engine.channels[1].is_background = true;
+            engine.channels[0].note_on = false;
+        }
+        let sounds = vec![
+            None,
+            Some(crate::audio::Sound {
+                data: vec![8192; 512].into(),
+            }),
+        ];
+        let base = 64.0 / 127.0;
+        engine.process_unified_effect_tick0(voice, &TrackerEffect::SetPitchEnvelope(false), 0, 0);
+        engine.mix_channels(raw, &sounds, 44100, 882);
+        assert_eq!(engine.channels[voice].filter_envelope_value, Some(0));
+        engine.process_unified_effect_tick0(voice, &TrackerEffect::SetPitchEnvelope(true), 0, 0);
         engine.advance_envelopes();
-        assert_eq!(engine.channels[voice].filter_envelope_pos,0);
-        assert_eq!(engine.channels[voice].envelope_started&8,8);
-        engine.process_unified_effect_tick0(voice,&TrackerEffect::SetPitchEnvelope(false),0,0);
-        engine.mix_channels(raw,&sounds,44100, 882);
-        assert_eq!(engine.channels[voice].filter_cutoff,base);
-        assert_eq!(engine.channels[voice].filter_envelope_value,Some(-16));
-        let mut restored=TrackerEngine::new();restored.apply_snapshot(&engine.snapshot());
-        for _ in 0..8 {engine.mix_channels(raw,&sounds,44100, 882);restored.process_channels::<false>(raw,&sounds,44100, 882);}
-        assert_eq!(engine.channels[voice].filter_z1,restored.channels[voice].filter_z1);
-        assert_eq!(engine.channels[voice].filter_envelope_value,restored.channels[voice].filter_envelope_value);
-        engine.process_unified_effect_tick0(voice,&TrackerEffect::SetFilterCutoff(32),0,0);
-        engine.mix_channels(raw,&sounds,44100, 882);
-        assert_eq!(engine.channels[voice].filter_cutoff,32.0/127.0);
-        assert_eq!(engine.channels[voice].filter_envelope_value,Some(-16));
-        engine.process_unified_effect_tick0(voice,&TrackerEffect::SetPitchEnvelope(true),0,0);
-        engine.channels[voice].key_off=true;engine.advance_envelopes();
-        engine.mix_channels(raw,&sounds,44100, 882);
-        assert_eq!(engine.channels[voice].filter_envelope_value,Some(32));
-        engine.channels[voice].instrument=2;
-        engine.mix_channels(raw,&sounds,44100, 882);
-        assert_eq!(engine.channels[voice].filter_envelope_value,None);
+        assert_eq!(engine.channels[voice].filter_envelope_pos, 0);
+        assert_eq!(engine.channels[voice].envelope_started & 8, 8);
+        engine.process_unified_effect_tick0(voice, &TrackerEffect::SetPitchEnvelope(false), 0, 0);
+        engine.mix_channels(raw, &sounds, 44100, 882);
+        assert_eq!(engine.channels[voice].filter_cutoff, base);
+        assert_eq!(engine.channels[voice].filter_envelope_value, Some(-16));
+        let mut restored = TrackerEngine::new();
+        restored.apply_snapshot(&engine.snapshot());
+        for _ in 0..8 {
+            engine.mix_channels(raw, &sounds, 44100, 882);
+            restored.process_channels::<false>(raw, &sounds, 44100, 882);
+        }
+        assert_eq!(
+            engine.channels[voice].filter_z1,
+            restored.channels[voice].filter_z1
+        );
+        assert_eq!(
+            engine.channels[voice].filter_envelope_value,
+            restored.channels[voice].filter_envelope_value
+        );
+        engine.process_unified_effect_tick0(voice, &TrackerEffect::SetFilterCutoff(32), 0, 0);
+        engine.mix_channels(raw, &sounds, 44100, 882);
+        assert_eq!(engine.channels[voice].filter_cutoff, 32.0 / 127.0);
+        assert_eq!(engine.channels[voice].filter_envelope_value, Some(-16));
+        engine.process_unified_effect_tick0(voice, &TrackerEffect::SetPitchEnvelope(true), 0, 0);
+        engine.channels[voice].key_off = true;
+        engine.advance_envelopes();
+        engine.mix_channels(raw, &sounds, 44100, 882);
+        assert_eq!(engine.channels[voice].filter_envelope_value, Some(32));
+        engine.channels[voice].instrument = 2;
+        engine.mix_channels(raw, &sounds, 44100, 882);
+        assert_eq!(engine.channels[voice].filter_envelope_value, None);
     }
 }
 
@@ -1391,19 +2050,32 @@ fn it_filter_envelope_preserves_base_cutoff_pause_and_snapshot_state() {
 fn it_live_filter_defaults_preserve_absent_values_and_row_effect_wins() {
     for cutoff in [None, Some(0), Some(64), Some(127)] {
         for effect in [TrackerEffect::None, TrackerEffect::SetFilterCutoff(32)] {
-            let mut song = module(vec![pattern(vec![TrackerNote { note:61, instrument:1, effect, ..Default::default() }])], vec![0], FormatFlags::IS_IT_FORMAT | FormatFlags::INSTRUMENTS);
+            let mut song = module(
+                vec![pattern(vec![TrackerNote {
+                    note: 61,
+                    instrument: 1,
+                    effect,
+                    ..Default::default()
+                }])],
+                vec![0],
+                FormatFlags::IS_IT_FORMAT | FormatFlags::INSTRUMENTS,
+            );
             song.instruments[0].filter_cutoff = cutoff;
             song.instruments[0].filter_resonance = Some(48);
             let mut engine = TrackerEngine::new();
             let handle = engine.load_tracker_module(song, vec![1]);
-            engine.sync_to_state(&make_state(handle,6,125), &[]);
+            engine.sync_to_state(&make_state(handle, 6, 125), &[]);
             engine.channels[0].filter_cutoff = 0.25;
             engine.channels[0].filter_resonance = 0.75;
             engine.process_row_tick0_internal(handle, &[]);
             assert!(engine.channels[0].note_on);
-            let expected = if effect == TrackerEffect::SetFilterCutoff(32) {32.0/127.0} else {cutoff.map(|v|v as f32/127.0).unwrap_or(0.25)};
+            let expected = if effect == TrackerEffect::SetFilterCutoff(32) {
+                32.0 / 127.0
+            } else {
+                cutoff.map(|v| v as f32 / 127.0).unwrap_or(0.25)
+            };
             assert_eq!(engine.channels[0].filter_cutoff, expected);
-            assert_eq!(engine.channels[0].filter_resonance, 48.0/127.0);
+            assert_eq!(engine.channels[0].filter_resonance, 48.0 / 127.0);
             assert!(engine.channels[0].filter_dirty);
         }
     }
@@ -1411,11 +2083,20 @@ fn it_live_filter_defaults_preserve_absent_values_and_row_effect_wins() {
 
 #[test]
 fn filter_coefficients_follow_render_rate_and_silent_snapshot() {
-    let song = module(vec![pattern(vec![row(TrackerEffect::None)])], vec![0], FormatFlags::IS_IT_FORMAT);
+    let song = module(
+        vec![pattern(vec![row(TrackerEffect::None)])],
+        vec![0],
+        FormatFlags::IS_IT_FORMAT,
+    );
     let mut engine = TrackerEngine::new();
     let handle = engine.load_tracker_module(song, vec![1]);
     let raw = crate::tracker::raw_tracker_handle(handle);
-    let sounds = vec![None, Some(crate::audio::Sound { data: vec![2000i16; 64].into() })];
+    let sounds = vec![
+        None,
+        Some(crate::audio::Sound {
+            data: vec![2000i16; 64].into(),
+        }),
+    ];
     for voice in [0, 1] {
         let ch = &mut engine.channels[voice];
         ch.reset();
@@ -1435,7 +2116,10 @@ fn filter_coefficients_follow_render_rate_and_silent_snapshot() {
             let got = &engine.channels[voice];
             let mut expected = got.clone();
             expected.update_filter_coefficients(rate as f32);
-            assert_eq!(got.filter_b0, expected.filter_b0, "voice={voice}, rate={rate}");
+            assert_eq!(
+                got.filter_b0, expected.filter_b0,
+                "voice={voice}, rate={rate}"
+            );
             assert_eq!(got.filter_a1, expected.filter_a1);
             assert_eq!(got.filter_z1, silent.channels[voice].filter_z1);
             assert_eq!(got.filter_z2, silent.channels[voice].filter_z2);
@@ -1448,7 +2132,11 @@ fn filter_coefficients_follow_render_rate_and_silent_snapshot() {
 fn pitch_envelope_changes_rate_without_mutating_period_and_matches_silent_advance() {
     for voice in [0, 1] {
         for (value, enabled, ratio) in [(24, true, 2.0), (-24, true, 0.5), (24, false, 1.0)] {
-            let mut song = module(vec![pattern(vec![row(TrackerEffect::None)])], vec![0], FormatFlags::IS_IT_FORMAT);
+            let mut song = module(
+                vec![pattern(vec![row(TrackerEffect::None)])],
+                vec![0],
+                FormatFlags::IS_IT_FORMAT,
+            );
             song.instruments[0].pitch_envelope = Some(nether_tracker::TrackerEnvelope {
                 points: vec![(0, value)],
                 flags: nether_tracker::EnvelopeFlags::ENABLED,
@@ -1464,15 +2152,24 @@ fn pitch_envelope_changes_rate_without_mutating_period_and_matches_silent_advanc
             ch.instrument = 1;
             ch.period = 4608.0;
             ch.pitch_envelope_enabled = enabled;
-            let sounds = vec![None, Some(crate::audio::Sound { data: vec![2000i16; 64].into() })];
+            let sounds = vec![
+                None,
+                Some(crate::audio::Sound {
+                    data: vec![2000i16; 64].into(),
+                }),
+            ];
             let mut silent = TrackerEngine::new();
             silent.apply_snapshot(&engine.snapshot());
             let raw = crate::tracker::raw_tracker_handle(handle);
             engine.mix_channels(raw, &sounds, 44100, 882);
             silent.process_channels::<false>(raw, &sounds, 44100, 882);
             let got = engine.channels[voice].sample_pos;
-            let expected = crate::tracker::utils::period_to_frequency(4608.0) as f64 / 44100.0 * ratio;
-            assert!((got - expected).abs() < 0.000001, "voice={voice} value={value}: {got} != {expected}");
+            let expected =
+                crate::tracker::utils::period_to_frequency(4608.0) as f64 / 44100.0 * ratio;
+            assert!(
+                (got - expected).abs() < 0.000001,
+                "voice={voice} value={value}: {got} != {expected}"
+            );
             assert_eq!(got, silent.channels[voice].sample_pos);
             assert_eq!(engine.channels[voice].period, 4608.0);
             engine.channels[voice].pitch_envelope_enabled = false;
@@ -2282,7 +2979,10 @@ fn it_sample_portamento_switch_respects_compatible_gxx() {
             Some(if compatible { 0 } else { 1 })
         );
         // OpenMPT Snd_fx.cpp:3130-3137: actual pitched sample swaps reset position.
-        assert_eq!(engine.channels[0].sample_pos, if compatible { 12.0 } else { 0.0 });
+        assert_eq!(
+            engine.channels[0].sample_pos,
+            if compatible { 12.0 } else { 0.0 }
+        );
         assert_eq!(engine.channels[0].period, period);
         assert!(engine.channels[0].target_period < period);
     }

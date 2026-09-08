@@ -43,9 +43,15 @@ pub fn parse_ncit(data: &[u8]) -> Result<ItModule, ItError> {
     let num_instruments = read_u16(&mut cursor)?;
     let num_samples = read_u16(&mut cursor)?;
     let num_patterns = read_u16(&mut cursor)?;
-    if num_instruments > crate::MAX_INSTRUMENTS { return Err(ItError::TooManyInstruments(num_instruments)); }
-    if num_samples > crate::MAX_SAMPLES { return Err(ItError::TooManySamples(num_samples)); }
-    if num_patterns > crate::MAX_PATTERNS { return Err(ItError::TooManyPatterns(num_patterns)); }
+    if num_instruments > crate::MAX_INSTRUMENTS {
+        return Err(ItError::TooManyInstruments(num_instruments));
+    }
+    if num_samples > crate::MAX_SAMPLES {
+        return Err(ItError::TooManySamples(num_samples));
+    }
+    if num_patterns > crate::MAX_PATTERNS {
+        return Err(ItError::TooManyPatterns(num_patterns));
+    }
     let initial_speed = read_u8(&mut cursor)?;
     let initial_tempo = read_u8(&mut cursor)?;
     let global_volume = read_u8(&mut cursor)?;
@@ -105,7 +111,15 @@ pub fn parse_ncit(data: &[u8]) -> Result<ItModule, ItError> {
         special: 0,
         global_volume,
         mix_volume,
-        balance_mix: if reserved[0] < NCIT_PATTERN_ENCODING_VERSION { false } else { match reserved[1] { 0 => false, 1 => true, _ => return Err(ItError::UnsupportedMixMetadata) } },
+        balance_mix: if reserved[0] < NCIT_PATTERN_ENCODING_VERSION {
+            false
+        } else {
+            match reserved[1] {
+                0 => false,
+                1 => true,
+                _ => return Err(ItError::UnsupportedMixMetadata),
+            }
+        },
         initial_speed,
         initial_tempo,
         panning_separation,
@@ -350,7 +364,9 @@ pub(super) fn parse_pattern(
     legacy_zero_based_markers: bool,
 ) -> Result<ItPattern, ItError> {
     let num_rows = read_u16(cursor)?;
-    if num_rows == 0 || num_rows > crate::MAX_PATTERN_ROWS { return Err(ItError::InvalidPattern(0)); }
+    if num_rows == 0 || num_rows > crate::MAX_PATTERN_ROWS {
+        return Err(ItError::InvalidPattern(0));
+    }
     let packed_size = read_u16(cursor)?;
 
     let mut packed_data = vec![0u8; packed_size as usize];
@@ -400,7 +416,9 @@ pub(super) fn unpack_pattern_data(
                 (channel_var & 0x7F) as usize
             } else {
                 let encoded = channel_var & 0x7f;
-                if !(1..=64).contains(&encoded) { return Err(ItError::InvalidPattern(0)); }
+                if !(1..=64).contains(&encoded) {
+                    return Err(ItError::InvalidPattern(0));
+                }
                 (encoded - 1) as usize
             };
 

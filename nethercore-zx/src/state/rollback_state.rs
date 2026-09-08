@@ -148,7 +148,9 @@ impl TrackerState {
         self._reserved[2] = sample_rate;
     }
 
-    pub(crate) fn control_epoch(&self) -> u32 { self._reserved[4] }
+    pub(crate) fn control_epoch(&self) -> u32 {
+        self._reserved[4]
+    }
 
     pub(crate) fn request_position_change(&mut self) {
         self._reserved[4] = self._reserved[4].wrapping_add(1);

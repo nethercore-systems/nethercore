@@ -172,12 +172,18 @@ pub fn sample_channels(channel: &mut TrackerChannel, data: &[i16], sample_rate: 
     if restart_attack {
         let duration = if channel.xm_short_restart_attack {
             ((u64::from(sample_rate) * 16 + 22050) / 44100) as u32
-        } else { sample_rate.div_ceil(200) }.max(1);
+        } else {
+            sample_rate.div_ceil(200)
+        }
+        .max(1);
         let gain = channel.xm_restart_attack.min(duration) as f32 / duration as f32;
         samples.0 *= gain;
         samples.1 *= gain;
-        channel.xm_restart_attack = if channel.xm_restart_attack >= duration { 0 }
-            else { channel.xm_restart_attack + 1 };
+        channel.xm_restart_attack = if channel.xm_restart_attack >= duration {
+            0
+        } else {
+            channel.xm_restart_attack + 1
+        };
         channel.fade_in_samples = 0;
     }
     // Handle fade-in phase (crossfade from previous sample when new note triggers)
@@ -211,14 +217,21 @@ pub fn sample_channels(channel: &mut TrackerChannel, data: &[i16], sample_rate: 
             // The independently observed positive-finetune octave transition
             // saturates at the last measured subdivision of the lower octave.
             if channel.xm_source_finetune >= 64 {
-                let source_note = 4608.0 + f64::from(channel.xm_source_tuning - i16::from(channel.xm_source_finetune)) / 2.0 - f64::from(lower);
+                let source_note = 4608.0
+                    + f64::from(channel.xm_source_tuning - i16::from(channel.xm_source_finetune))
+                        / 2.0
+                    - f64::from(lower);
                 let octave = (source_note / 768.0).floor();
                 let edge = f64::from(XM_MEASURED_PERIODS[95]) * 2.0_f64.powf(-octave - 1.0);
                 boundary = boundary.max(edge);
             }
-            if xm_native_period(f64::from(channel.period), channel.xm_source_tuning).round() >= boundary {
+            if xm_native_period(f64::from(channel.period), channel.xm_source_tuning).round()
+                >= boundary
+            {
                 lower
-            } else { lower - 64.0 }
+            } else {
+                lower - 64.0
+            }
         } else {
             ((channel.period + fine) / 64.0).round() * 64.0 - fine
         }
@@ -459,16 +472,194 @@ pub fn period_to_frequency(period: f32) -> f32 {
     22050.0 * freq_frac * octave_scale
 }
 
+// Independently measured from our original sine-tone XM, not reference source.
+// tools/tracker-debug/xm_period_measure.py; xm-independent-period-repeat-v1/report.json.
+// C-3 octave, eight observations per semitone. Inferred integer periods differ
+// from the two-window frequency measurements by less than 0.15 period units.
+const XM_MEASURED_PERIODS: [u16; 96] = [
+    3424, 3400, 3376, 3352, 3328, 3304, 3280, 3256, 3232, 3208, 3184, 3164, 3140, 3116, 3096, 3072,
+    3048, 3028, 3008, 2984, 2964, 2944, 2920, 2900, 2880, 2860, 2836, 2816, 2796, 2776, 2756, 2736,
+    2712, 2700, 2680, 2660, 2640, 2620, 2604, 2584, 2560, 2544, 2528, 2512, 2492, 2476, 2456, 2440,
+    2416, 2404, 2388, 2368, 2352, 2336, 2320, 2300, 2280, 2268, 2252, 2236, 2220, 2204, 2188, 2172,
+    2152, 2140, 2128, 2112, 2096, 2080, 2064, 2052, 2032, 2020, 2008, 1992, 1976, 1964, 1948, 1936,
+    1920, 1908, 1896, 1880, 1868, 1852, 1840, 1828, 1812, 1800, 1788, 1772, 1760, 1748, 1736, 1724,
+];
+
+// Interpolate in the source period coordinate. Runtime pitch stays logarithmic
+// because tuning is baked into PCM; source slide increments are not logarithmic.
+fn xm_native_period(period: f64, tuning: i16) -> f64 {
+    let step = (4608.0 + f64::from(tuning) / 2.0 - period) / 8.0;
+    let octave = (step / 96.0).floor();
+    let within = step - octave * 96.0;
+    let index = within.floor() as usize;
+    let left = f64::from(XM_MEASURED_PERIODS[index]);
+    let right = if index == 95 {
+        f64::from(XM_MEASURED_PERIODS[0]) / 2.0
+    } else {
+        f64::from(XM_MEASURED_PERIODS[index + 1])
+    };
+    (left + (right - left) * (within - index as f64)) * 2.0_f64.powf(-octave - 1.0)
+}
+
+fn xm_runtime_period(native: f64, tuning: i16) -> f32 {
+    let octave = (1712.0 / native).log2().floor();
+    let normalized = native * 2.0_f64.powf(octave + 1.0);
+    let mut index = 0;
+    while index < 95 && normalized < f64::from(XM_MEASURED_PERIODS[index + 1]) {
+        index += 1;
+    }
+    let left = f64::from(XM_MEASURED_PERIODS[index]);
+    let right = if index == 95 {
+        f64::from(XM_MEASURED_PERIODS[0]) / 2.0
+    } else {
+        f64::from(XM_MEASURED_PERIODS[index + 1])
+    };
+    let step = octave * 96.0 + index as f64 + (left - normalized) / (left - right);
+    (4608.0 + f64::from(tuning) / 2.0 - step * 8.0) as f32
+}
+
+/// Apply a signed XM period increment without confusing Amiga and linear units.
+/// C-4 is runtime period4608 and source period1712; measured source spacing is nonuniform.
+pub(super) fn slide_xm_period(period: f32, delta: f32, amiga: bool, tuning: i16) -> f32 {
+    if !amiga {
+        return (period + delta).max(1.0);
+    }
+    // The source period counter advances in integer units. Reconstruct its
+    // integer before adding an effect so f32 coordinate round trips cannot
+    // accumulate across a semitone threshold.
+    let native = xm_native_period(f64::from(period), tuning).round();
+    // Preserve the playable runtime-domain floor, as on the linear path.
+    xm_runtime_period((native + f64::from(delta)).max(1.0), tuning).max(1.0)
+}
+
+// Original mathematical sine construction, not a reference-player lookup table.
+const IT_SINE: [i16; 256] = {
+    let mut values = [0; 256];
+    let mut i = 0;
+    while i < 256 {
+        let phase = i % 128;
+        let x =
+            (if phase <= 64 { phase } else { 128 - phase }) as f64 * std::f64::consts::PI / 128.0;
+        let mut term = x;
+        let mut sum = x;
+        let mut n = 1;
+        while n < 8 {
+            term *= -x * x / ((2 * n) * (2 * n + 1)) as f64;
+            sum += term;
+            n += 1;
+        }
+        values[i] = (sum * 64.0 + 0.5) as i16 * if i < 128 { 1 } else { -1 };
+        i += 1;
+    }
+    values
+};
+
+pub(super) fn it_waveform(waveform: u8, position: u8) -> i16 {
+    if waveform & 3 == 0 {
+        IT_SINE[position as usize]
+    } else {
+        (get_waveform_value(waveform, position) * 64.0) as i16
+    }
+}
+
+// Original mathematical sine construction, not a reference-player lookup table.
+const XM_SINE: [u8; 32] = {
+    let mut values = [0; 32];
+    let mut i = 0;
+    while i < 32 {
+        let x = (if i <= 16 { i } else { 32 - i }) as f64 * std::f64::consts::PI / 32.0;
+        let mut term = x;
+        let mut sum = x;
+        let mut n = 1;
+        while n < 8 {
+            term *= -x * x / ((2 * n) * (2 * n + 1)) as f64;
+            sum += term;
+            n += 1;
+        }
+        values[i] = (sum * 255.0 + 0.5) as u8;
+        i += 1;
+    }
+    values
+};
+
+// Independently measured from original depth15 XM playback, not reference source.
+// Provenance: xm-random-independent-measure-v1/inferred-waveform.json; <=1 unit inference uncertainty.
+const XM_MEASURED_RANDOM: [i16; 64] = [
+    196, -254, -86, 176, 204, 82, -129, -188, 250, 40, -142, -172, -140, -65, -33, -193, 33, 144,
+    214, -10, 232, -138, -124, -80, 20, -122, 129, 218, -36, -76, -26, -152, -46, 176, 42, -188,
+    16, 212, 42, -225, 12, 218, 40, -176, -60, 18, -254, 236, 84, -68, 178, -8, -102, -144, 42,
+    -58, 225, 246, 168, -202, -184, 196, -108, -190,
+];
+
+// Measured original 7xy sine probes: depth4 oscillates by 0.25 around base.
+pub(super) fn xm_tremolo_delta(depth: u8, waveform: u8, position: u8, vibrato_position: u8) -> f32 {
+    let wave = if waveform & 3 == 0 {
+        f32::from(XM_SINE[((position >> 2) & 31) as usize]) / 255.0
+            * if position < 128 { 1.0 } else { -1.0 }
+    } else if waveform & 3 == 1 {
+        // Independent ramp controls: retained negative-half vibrato reverses its slope.
+        let ramp = f32::from(position % 128) / 128.0;
+        (if vibrato_position < 128 {
+            ramp
+        } else {
+            1.0 - ramp
+        }) * if position < 128 { 1.0 } else { -1.0 }
+    } else if waveform & 3 == 3 {
+        f32::from(XM_MEASURED_RANDOM[(position >> 2) as usize]) / 255.0
+    } else {
+        get_waveform_value(waveform, position)
+    };
+    wave * f32::from(depth) / 16.0
+}
+
+pub(super) fn xm_vibrato_period(
+    base: f32,
+    depth: u8,
+    waveform: u8,
+    position: u8,
+    amiga: bool,
+    tuning: i16,
+) -> f32 {
+    let wave = if waveform & 3 == 0 {
+        i16::from(XM_SINE[((position >> 2) & 31) as usize]) * if position < 128 { 1 } else { -1 }
+    } else if waveform & 3 == 1 {
+        // Authored E41 measurements start at zero and ramp within each half-cycle.
+        if position < 128 {
+            i16::from(position) * 2
+        } else {
+            i16::from(position) * 2 - 511
+        }
+    } else if waveform & 3 == 3 {
+        XM_MEASURED_RANDOM[(position >> 2) as usize]
+    } else {
+        (get_waveform_value(waveform, position) * 255.0) as i16
+    };
+    let magnitude = (wave.unsigned_abs() * u16::from(depth)) >> 5;
+    slide_xm_period(
+        base,
+        if wave < 0 {
+            -(magnitude as f32)
+        } else {
+            magnitude as f32
+        },
+        amiga,
+        tuning,
+    )
+}
+
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::field_reassign_with_default)] // Incremental sample controls.
     use super::*;
 
     #[test]
     fn ping_pong_interpolation_holds_endpoint_without_tail_or_wrap() {
         for stereo in [false, true] {
             let data = if stereo {
-                vec![1000,-1000,2000,-2000,3000,-3000,31000,-31000]
-            } else { vec![1000,2000,3000,31000] };
+                vec![1000, -1000, 2000, -2000, 3000, -3000, 31000, -31000]
+            } else {
+                vec![1000, 2000, 3000, 31000]
+            };
             for position in [2.5, 3.0] {
                 let mut channel = TrackerChannel::default();
                 channel.sample_is_stereo = stereo;
@@ -478,13 +669,12 @@ mod tests {
                 channel.sample_pos = position;
                 channel.sample_direction = 1;
                 channel.period = 4608.0;
-                let (left,right) = sample_channels(&mut channel,&data,44100);
-                assert_eq!(left,3000.0/32768.0);
-                assert_eq!(right,if stereo {-left} else {left});
+                let (left, right) = sample_channels(&mut channel, &data, 44100);
+                assert_eq!(left, 3000.0 / 32768.0);
+                assert_eq!(right, if stereo { -left } else { left });
             }
         }
     }
-
 
     #[test]
     fn ping_pong_multiple_crossings_preserve_position_and_direction() {
@@ -500,8 +690,11 @@ mod tests {
                     sample_loop_type: 2,
                     ..Default::default()
                 };
-                let data = if stereo { vec![0,0,2000,-2000,3000,-3000,0,0] }
-                    else { vec![0,2000,3000,0] };
+                let data = if stereo {
+                    vec![0, 0, 2000, -2000, 3000, -3000, 0, 0]
+                } else {
+                    vec![0, 2000, 3000, 0]
+                };
                 for _ in 0..8 {
                     sample_channels(&mut channel, &data, 44100);
                     assert_eq!(channel.sample_pos, 2.5);
@@ -524,8 +717,11 @@ mod tests {
                 sample_loop_type: 1,
                 ..Default::default()
             };
-            let data = if stereo { vec![0,0,2000,-2000,2000,-2000,0,0] }
-                else { vec![0,2000,2000,0] };
+            let data = if stereo {
+                vec![0, 0, 2000, -2000, 2000, -2000, 0, 0]
+            } else {
+                vec![0, 2000, 2000, 0]
+            };
             for _ in 0..8 {
                 let (left, right) = sample_channels(&mut channel, &data, 44100);
                 assert_eq!(channel.sample_pos, 2.5);
@@ -537,18 +733,32 @@ mod tests {
 
     #[test]
     fn xm_forward_source_limit_stops_only_opted_in_forward_voices() {
-        for (loop_type, limit, stops) in [(1, 2.5, true), (1, 4.0, false), (1, 0.0, false), (2, 2.5, false)] {
+        for (loop_type, limit, stops) in [
+            (1, 2.5, true),
+            (1, 4.0, false),
+            (1, 0.0, false),
+            (2, 2.5, false),
+        ] {
             let mut channel = TrackerChannel {
-                note_on: true, period: 4608.0, sample_loop_type: loop_type,
-                sample_loop_start: 1, sample_loop_end: 8,
-                xm_forward_loop_limit: limit, ..Default::default()
+                note_on: true,
+                period: 4608.0,
+                sample_loop_type: loop_type,
+                sample_loop_start: 1,
+                sample_loop_end: 8,
+                xm_forward_loop_limit: limit,
+                ..Default::default()
             };
             let mut restored = channel.clone();
-            assert_eq!(sample_channels(&mut channel, &[2000; 16], 44100),
-                sample_channels(&mut restored, &[2000; 16], 44100));
+            assert_eq!(
+                sample_channels(&mut channel, &[2000; 16], 44100),
+                sample_channels(&mut restored, &[2000; 16], 44100)
+            );
             assert_eq!(channel.sample_pos, restored.sample_pos);
             assert_eq!(channel.note_on, restored.note_on);
-            assert_eq!(channel.xm_forward_loop_limit, restored.xm_forward_loop_limit);
+            assert_eq!(
+                channel.xm_forward_loop_limit,
+                restored.xm_forward_loop_limit
+            );
             assert_eq!(channel.xm_loop_stopped, restored.xm_loop_stopped);
             if stops {
                 channel.period = 2304.0;
@@ -589,7 +799,10 @@ mod tests {
         }
         assert_eq!(channel.fade_out_samples, 0);
         assert_eq!(channel.xm_stop_tail_remaining, 0);
-        assert_eq!(sample_channels(&mut channel, &[2000; 16], 44100), (0.0, 0.0));
+        assert_eq!(
+            sample_channels(&mut channel, &[2000; 16], 44100),
+            (0.0, 0.0)
+        );
         assert!(channel.note_on);
         channel.retrigger_sample(true);
         assert!(!channel.xm_loop_stopped);
@@ -600,26 +813,33 @@ mod tests {
 
     #[test]
     fn xm_source_phase_escape_matches_original_tempo_controls() {
-        for (tempo, expected) in [(120,21), (125,28), (127,26), (137,30)] {
+        for (tempo, expected) in [(120, 21), (125, 28), (127, 26), (137, 30)] {
             let tick = 110250 / tempo;
             let base = note_to_period(77, 0);
             let mut channel = TrackerChannel {
-                note_on: true, period: base,
-                sample_loop_type: 1, sample_loop_start: 0, sample_loop_end: 3,
+                note_on: true,
+                period: base,
+                sample_loop_type: 1,
+                sample_loop_start: 0,
+                sample_loop_end: 3,
                 xm_forward_loop_start: 4.0 * 22050.0 / 8363.0,
                 xm_forward_loop_limit: 22050.0 / 8363.0,
                 ..Default::default()
             };
-            for _ in 0..6*tick { sample_channels(&mut channel, &[8192;16], 44100); }
-            for delta in [0,16,32,48] {
+            for _ in 0..6 * tick {
+                sample_channels(&mut channel, &[8192; 16], 44100);
+            }
+            for delta in [0, 16, 32, 48] {
                 channel.period = base - delta as f32;
-                for _ in 0..tick { sample_channels(&mut channel, &[8192;16], 44100); }
+                for _ in 0..tick {
+                    sample_channels(&mut channel, &[8192; 16], 44100);
+                }
             }
             assert!(!channel.xm_loop_stopped);
             channel.period = base - 64.0;
             let mut elapsed = 0;
             while !channel.xm_loop_stopped && elapsed < 100 {
-                sample_channels(&mut channel, &[8192;16], 44100);
+                sample_channels(&mut channel, &[8192; 16], 44100);
                 elapsed += 1;
             }
             assert_eq!(elapsed, expected, "tempo={tempo}");
@@ -632,28 +852,43 @@ mod tests {
             for stereo in [false, true] {
                 for anchor in [0.0, -0.125] {
                     let mut channel = TrackerChannel {
-                        note_on: true, period: 2048.0,
-                        sample_is_stereo: stereo, sample_loop_type: 1,
-                        sample_loop_end: 16, sample_direction: 1,
+                        note_on: true,
+                        period: 2048.0,
+                        sample_is_stereo: stereo,
+                        sample_loop_type: 1,
+                        sample_loop_end: 16,
+                        sample_direction: 1,
                         xm_forward_loop_start: 8.0,
                         xm_forward_loop_limit: 0.25,
                         fade_in_samples: FADE_IN_SAMPLES,
-                        prev_sample: anchor, prev_sample_right: anchor,
+                        prev_sample: anchor,
+                        prev_sample_right: anchor,
                         ..Default::default()
                     };
-                    let data: Vec<_> = (0..32).flat_map(|_| {
-                        if stereo { vec![8192, -4096] } else { vec![8192] }
-                    }).collect();
+                    let data: Vec<_> = (0..32)
+                        .flat_map(|_| {
+                            if stereo {
+                                vec![8192, -4096]
+                            } else {
+                                vec![8192]
+                            }
+                        })
+                        .collect();
                     let mut last = (0.0, 0.0);
                     for _ in 0..20 {
                         last = sample_channels(&mut channel, &data, rate);
-                        if channel.xm_loop_stopped { break; }
+                        if channel.xm_loop_stopped {
+                            break;
+                        }
                     }
                     assert!(channel.xm_loop_stopped);
                     assert_ne!(last.0, anchor, "stop must occur during audible attack");
                     let tail = sample_channels(&mut channel, &data, rate);
-                    assert_eq!(tail, (last.0 * XM_STOP_TAIL_DECAY, last.1 * XM_STOP_TAIL_DECAY),
-                        "rate={rate} stereo={stereo} anchor={anchor}");
+                    assert_eq!(
+                        tail,
+                        (last.0 * XM_STOP_TAIL_DECAY, last.1 * XM_STOP_TAIL_DECAY),
+                        "rate={rate} stereo={stereo} anchor={anchor}"
+                    );
                     assert_eq!(channel.fade_in_samples, 0);
                 }
             }
@@ -662,25 +897,36 @@ mod tests {
 
     #[test]
     fn xm_stopped_restart_attack_is_rate_scaled_and_cloned() {
-        for (rate, short, duration) in [(44100u32,false,221),(48000,false,240),
-            (96000,false,480),(44100,true,16),(48000,true,17),(96000,true,35)] {
-            let mut channel = TrackerChannel { note_on:true, period:4608.0,
-                xm_short_restart_attack:short,
-                xm_loop_stopped:true, sample_loop_type:1, sample_loop_end:16,
-                ..Default::default() };
+        for (rate, short, duration) in [
+            (44100u32, false, 221),
+            (48000, false, 240),
+            (96000, false, 480),
+            (44100, true, 16),
+            (48000, true, 17),
+            (96000, true, 35),
+        ] {
+            let mut channel = TrackerChannel {
+                note_on: true,
+                period: 4608.0,
+                xm_short_restart_attack: short,
+                xm_loop_stopped: true,
+                sample_loop_type: 1,
+                sample_loop_end: 16,
+                ..Default::default()
+            };
             channel.retrigger_sample(true);
             let mut replay = channel.clone();
             for n in 1..=duration {
                 let expected = 0.25 * n as f32 / duration as f32;
-                let actual = sample_channels(&mut channel,&[8192;16],rate);
-                assert!((actual.0-expected).abs()<0.000001);
-                assert_eq!(actual,sample_channels(&mut replay,&[8192;16],rate));
-                assert_eq!(channel.xm_restart_attack,replay.xm_restart_attack);
+                let actual = sample_channels(&mut channel, &[8192; 16], rate);
+                assert!((actual.0 - expected).abs() < 0.000001);
+                assert_eq!(actual, sample_channels(&mut replay, &[8192; 16], rate));
+                assert_eq!(channel.xm_restart_attack, replay.xm_restart_attack);
             }
-            assert_eq!(channel.xm_restart_attack,0);
-            channel.xm_restart_attack=5;
-            channel.trigger_note(49,None);
-            assert_eq!(channel.xm_restart_attack,0);
+            assert_eq!(channel.xm_restart_attack, 0);
+            channel.xm_restart_attack = 5;
+            channel.trigger_note(49, None);
+            assert_eq!(channel.xm_restart_attack, 0);
         }
     }
 
@@ -749,19 +995,29 @@ mod tests {
         for tuning in [-1600, -64, 0, 32, 64, 96, 1600] {
             for native in (1..65536).step_by(127) {
                 let period = xm_runtime_period(native as f64, tuning);
-                assert_eq!(xm_native_period(f64::from(period), tuning).round(), native as f64);
+                assert_eq!(
+                    xm_native_period(f64::from(period), tuning).round(),
+                    native as f64
+                );
                 let next = slide_xm_period(period, 4.0, true, tuning);
                 let expected = xm_runtime_period((native + 4) as f64, tuning);
                 assert!(next.is_finite() && next >= 1.0);
                 if expected >= 1.0 {
-                    assert_eq!(xm_native_period(f64::from(next), tuning).round(), (native + 4) as f64);
-                } else { assert_eq!(next, 1.0); }
+                    assert_eq!(
+                        xm_native_period(f64::from(next), tuning).round(),
+                        (native + 4) as f64
+                    );
+                } else {
+                    assert_eq!(next, 1.0);
+                }
             }
         }
         assert_eq!(slide_xm_period(4608.0, -20.0, false, 64), 4588.0);
         // Original failing glissando boundary: seven -20 source-period steps.
         let mut period = 4608.0;
-        for _ in 0..7 { period = slide_xm_period(period, -20.0, true, 64); }
+        for _ in 0..7 {
+            period = slide_xm_period(period, -20.0, true, 64);
+        }
         assert_eq!(period, 4512.0);
         assert_eq!((period / 64.0).round() * 64.0, 4544.0);
     }
@@ -784,7 +1040,21 @@ mod tests {
 
     #[test]
     fn xm_default_finetune_boundaries_and_legacy_isolation() {
-        for (source, expected) in [(-9,-16),(-8,-8),(-7,-8),(-1,-8),(0,0),(1,0),(7,0),(8,8),(9,8),(119,112),(120,120),(121,120),(127,120)] {
+        for (source, expected) in [
+            (-9, -16),
+            (-8, -8),
+            (-7, -8),
+            (-1, -8),
+            (0, 0),
+            (1, 0),
+            (7, 0),
+            (8, 8),
+            (9, 8),
+            (119, 112),
+            (120, 120),
+            (121, 120),
+            (127, 120),
+        ] {
             assert_eq!(xm_sample_finetune(source, false), expected);
             assert_eq!(xm_sample_finetune(source, true), source);
         }
@@ -800,128 +1070,4 @@ mod tests {
         let spt = samples_per_tick(125, 22050);
         assert_eq!(spt, 441);
     }
-}
-
-// Independently measured from our original sine-tone XM, not reference source.
-// tools/tracker-debug/xm_period_measure.py; xm-independent-period-repeat-v1/report.json.
-// C-3 octave, eight observations per semitone. Inferred integer periods differ
-// from the two-window frequency measurements by less than 0.15 period units.
-const XM_MEASURED_PERIODS: [u16; 96] = [
-    3424, 3400, 3376, 3352, 3328, 3304, 3280, 3256, 3232, 3208, 3184, 3164,
-    3140, 3116, 3096, 3072, 3048, 3028, 3008, 2984, 2964, 2944, 2920, 2900,
-    2880, 2860, 2836, 2816, 2796, 2776, 2756, 2736, 2712, 2700, 2680, 2660,
-    2640, 2620, 2604, 2584, 2560, 2544, 2528, 2512, 2492, 2476, 2456, 2440,
-    2416, 2404, 2388, 2368, 2352, 2336, 2320, 2300, 2280, 2268, 2252, 2236,
-    2220, 2204, 2188, 2172, 2152, 2140, 2128, 2112, 2096, 2080, 2064, 2052,
-    2032, 2020, 2008, 1992, 1976, 1964, 1948, 1936, 1920, 1908, 1896, 1880,
-    1868, 1852, 1840, 1828, 1812, 1800, 1788, 1772, 1760, 1748, 1736, 1724,
-];
-
-// Interpolate in the source period coordinate. Runtime pitch stays logarithmic
-// because tuning is baked into PCM; source slide increments are not logarithmic.
-fn xm_native_period(period: f64, tuning: i16) -> f64 {
-    let step = (4608.0 + f64::from(tuning) / 2.0 - period) / 8.0;
-    let octave = (step / 96.0).floor();
-    let within = step - octave * 96.0;
-    let index = within.floor() as usize;
-    let left = f64::from(XM_MEASURED_PERIODS[index]);
-    let right = if index == 95 { f64::from(XM_MEASURED_PERIODS[0]) / 2.0 }
-        else { f64::from(XM_MEASURED_PERIODS[index + 1]) };
-    (left + (right - left) * (within - index as f64)) * 2.0_f64.powf(-octave - 1.0)
-}
-
-fn xm_runtime_period(native: f64, tuning: i16) -> f32 {
-    let octave = (1712.0 / native).log2().floor();
-    let normalized = native * 2.0_f64.powf(octave + 1.0);
-    let mut index = 0;
-    while index < 95 && normalized < f64::from(XM_MEASURED_PERIODS[index + 1]) { index += 1; }
-    let left = f64::from(XM_MEASURED_PERIODS[index]);
-    let right = if index == 95 { f64::from(XM_MEASURED_PERIODS[0]) / 2.0 }
-        else { f64::from(XM_MEASURED_PERIODS[index + 1]) };
-    let step = octave * 96.0 + index as f64 + (left - normalized) / (left - right);
-    (4608.0 + f64::from(tuning) / 2.0 - step * 8.0) as f32
-}
-
-/// Apply a signed XM period increment without confusing Amiga and linear units.
-/// C-4 is runtime period4608 and source period1712; measured source spacing is nonuniform.
-pub(super) fn slide_xm_period(period: f32, delta: f32, amiga: bool, tuning: i16) -> f32 {
-    if !amiga { return (period + delta).max(1.0); }
-    // The source period counter advances in integer units. Reconstruct its
-    // integer before adding an effect so f32 coordinate round trips cannot
-    // accumulate across a semitone threshold.
-    let native = xm_native_period(f64::from(period), tuning).round();
-    // Preserve the playable runtime-domain floor, as on the linear path.
-    xm_runtime_period((native + f64::from(delta)).max(1.0), tuning).max(1.0)
-}
-
-
-
-// Original mathematical sine construction, not a reference-player lookup table.
-const IT_SINE: [i16; 256] = {
-    let mut values = [0; 256];
-    let mut i = 0;
-    while i < 256 {
-        let phase = i % 128;
-        let x = (if phase <= 64 { phase } else { 128 - phase }) as f64 * std::f64::consts::PI / 128.0;
-        let mut term = x;
-        let mut sum = x;
-        let mut n = 1;
-        while n < 8 { term *= -x*x / ((2*n)*(2*n+1)) as f64; sum += term; n += 1; }
-        values[i] = (sum * 64.0 + 0.5) as i16 * if i < 128 { 1 } else { -1 };
-        i += 1;
-    }
-    values
-};
-
-pub(super) fn it_waveform(waveform: u8, position: u8) -> i16 {
-    if waveform & 3 == 0 { IT_SINE[position as usize] }
-    else { (get_waveform_value(waveform, position) * 64.0) as i16 }
-}
-
-// Original mathematical sine construction, not a reference-player lookup table.
-const XM_SINE: [u8;32] = {
-    let mut values=[0;32];let mut i=0;
-    while i<32 {
-        let x=(if i<=16 {i}else{32-i}) as f64*std::f64::consts::PI/32.0;
-        let mut term=x;let mut sum=x;let mut n=1;
-        while n<8 {term *= -x*x/((2*n)*(2*n+1)) as f64;sum+=term;n+=1;}
-        values[i]=(sum*255.0+0.5) as u8;i+=1;
-    }
-    values
-};
-
-// Independently measured from original depth15 XM playback, not reference source.
-// Provenance: xm-random-independent-measure-v1/inferred-waveform.json; <=1 unit inference uncertainty.
-const XM_MEASURED_RANDOM: [i16;64] = [
-    196, -254, -86, 176, 204, 82, -129, -188, 250, 40, -142, -172, -140, -65, -33, -193,
-    33, 144, 214, -10, 232, -138, -124, -80, 20, -122, 129, 218, -36, -76, -26, -152,
-    -46, 176, 42, -188, 16, 212, 42, -225, 12, 218, 40, -176, -60, 18, -254, 236,
-    84, -68, 178, -8, -102, -144, 42, -58, 225, 246, 168, -202, -184, 196, -108, -190,
-];
-
-// Measured original 7xy sine probes: depth4 oscillates by 0.25 around base.
-pub(super) fn xm_tremolo_delta(depth:u8, waveform:u8, position:u8, vibrato_position:u8)->f32 {
-    let wave = if waveform & 3 == 0 {
-        f32::from(XM_SINE[((position>>2)&31) as usize]) / 255.0 * if position<128 {1.0}else{-1.0}
-    } else if waveform & 3 == 1 {
-        // Independent ramp controls: retained negative-half vibrato reverses its slope.
-        let ramp=f32::from(position % 128) / 128.0;
-        (if vibrato_position<128 {ramp}else{1.0-ramp}) * if position<128 {1.0}else{-1.0}
-    } else if waveform & 3 == 3 {
-        f32::from(XM_MEASURED_RANDOM[(position>>2) as usize]) / 255.0
-    } else { get_waveform_value(waveform,position) };
-    wave * f32::from(depth) / 16.0
-}
-
-pub(super) fn xm_vibrato_period(base:f32, depth:u8, waveform:u8, position:u8, amiga:bool, tuning:i16)->f32 {
-    let wave = if waveform & 3 == 0 {
-        i16::from(XM_SINE[((position>>2)&31) as usize]) * if position<128 {1}else{-1}
-    } else if waveform & 3 == 1 {
-        // Authored E41 measurements start at zero and ramp within each half-cycle.
-        if position<128 {i16::from(position)*2}else{i16::from(position)*2-511}
-    } else if waveform & 3 == 3 {
-        XM_MEASURED_RANDOM[(position>>2) as usize]
-    } else { (get_waveform_value(waveform,position)*255.0) as i16 };
-    let magnitude=(wave.unsigned_abs()*u16::from(depth))>>5;
-    slide_xm_period(base,if wave<0 {-(magnitude as f32)}else{magnitude as f32},amiga,tuning)
 }

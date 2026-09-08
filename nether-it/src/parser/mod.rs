@@ -223,7 +223,11 @@ pub fn parse_it(data: &[u8]) -> Result<ItModule, ItError> {
         None
     };
 
-    let balance_mix = read_mix_metadata(data.get(payload_end..).ok_or(ItError::UnexpectedEof)?, num_instruments, &mut mix_volume)?;
+    let balance_mix = read_mix_metadata(
+        data.get(payload_end..).ok_or(ItError::UnexpectedEof)?,
+        num_instruments,
+        &mut mix_volume,
+    )?;
     Ok(ItModule {
         name,
         num_channels,
@@ -270,19 +274,47 @@ fn read_mix_metadata(mut bytes: &[u8], instruments: u16, preamp: &mut u8) -> Res
     let mut multiplier = None;
     let mut song = false;
     while !bytes.is_empty() {
-        if bytes.starts_with(b"XTPM") { multiplier = Some(instruments as usize); song = false; bytes = &bytes[4..]; continue; }
-        if bytes.starts_with(b"STPM") { multiplier = Some(1); song = true; bytes = &bytes[4..]; continue; }
-        let Some(multiplier) = multiplier else { break; }; // Opaque unrelated trailing data is not rejected.
-        if bytes.len() < 6 { return Err(ItError::UnexpectedEof); }
+        if bytes.starts_with(b"XTPM") {
+            multiplier = Some(instruments as usize);
+            song = false;
+            bytes = &bytes[4..];
+            continue;
+        }
+        if bytes.starts_with(b"STPM") {
+            multiplier = Some(1);
+            song = true;
+            bytes = &bytes[4..];
+            continue;
+        }
+        let Some(multiplier) = multiplier else {
+            break;
+        }; // Opaque unrelated trailing data is not rejected.
+        if bytes.len() < 6 {
+            return Err(ItError::UnexpectedEof);
+        }
         let size = u16::from_le_bytes([bytes[4], bytes[5]]) as usize;
         let length = size.checked_mul(multiplier).ok_or(ItError::UnexpectedEof)?;
-        let payload = bytes.get(6..).and_then(|b| b.get(..length)).ok_or(ItError::UnexpectedEof)?;
+        let payload = bytes
+            .get(6..)
+            .and_then(|b| b.get(..length))
+            .ok_or(ItError::UnexpectedEof)?;
         if song && matches!(&bytes[..4], b".MMP" | b".APS") {
-            let value = u32::from_le_bytes(payload.try_into().map_err(|_| ItError::UnsupportedMixMetadata)?);
+            let value = u32::from_le_bytes(
+                payload
+                    .try_into()
+                    .map_err(|_| ItError::UnsupportedMixMetadata)?,
+            );
             if &bytes[..4] == b".MMP" {
-                balance = match value { 3 => true, 4 => false, _ => return Err(ItError::UnsupportedMixMetadata) };
+                balance = match value {
+                    3 => true,
+                    4 => false,
+                    _ => return Err(ItError::UnsupportedMixMetadata),
+                };
             } else {
-                *preamp = u8::try_from(value).ok().filter(|v| *v <= 128).ok_or(ItError::UnsupportedMixMetadata)?;
+                *preamp = u8::try_from(value)
+                    .ok()
+                    .filter(|v| *v <= 128)
+                    .ok_or(ItError::UnsupportedMixMetadata)?;
             }
         }
         bytes = &bytes[6 + length..];
@@ -305,25 +337,43 @@ mod mixing_metadata_tests {
         let legacy = crate::pack_ncit(&plain);
         assert_eq!(legacy[17], 0);
         assert!(!crate::parse_ncit(&legacy).unwrap().balance_mix);
-        source.extend_from_slice(b"XTPMtest\x01\x00STPM.MMP\x04\x00\x03\x00\x00\x00.APS\x04\x00\x18\x00\x00\x00");
+        source.extend_from_slice(
+            b"XTPMtest\x01\x00STPM.MMP\x04\x00\x03\x00\x00\x00.APS\x04\x00\x18\x00\x00\x00",
+        );
         let parsed = parse_it(&source).unwrap();
         assert!(parsed.balance_mix);
-        assert_eq!(parsed.mix_volume,24);
+        assert_eq!(parsed.mix_volume, 24);
         let roundtrip = crate::parse_ncit(&crate::pack_ncit(&parsed)).unwrap();
         assert!(roundtrip.balance_mix);
-        let stripped=crate::strip_it_samples(&source).unwrap();
+        let stripped = crate::strip_it_samples(&source).unwrap();
         assert!(parse_it(&stripped).unwrap().balance_mix);
-        assert_eq!(roundtrip.mix_volume,24);
+        assert_eq!(roundtrip.mix_volume, 24);
         source.pop();
-        assert!(matches!(parse_it(&source),Err(ItError::UnexpectedEof)));
+        assert!(matches!(parse_it(&source), Err(ItError::UnexpectedEof)));
     }
     #[test]
     fn opaque_data_and_embedded_tags_do_not_select_a_mode() {
         let mut preamp = 48;
-        assert!(!read_mix_metadata(b"opaqueSTPM.MMP\x04\x00\x03\x00\x00\x00", 1, &mut preamp).unwrap());
-        assert!(!read_mix_metadata(b"XTPMtest\x0e\x00STPM.MMP\x04\x00\x03\x00\x00\x00", 1, &mut preamp).unwrap());
-        assert!(read_mix_metadata(b"STPM.MMP\x04\x00\x03\x00\x00\x00XTPM.MMP\x04\x00\x04\x00\x00\x00",1,&mut preamp).unwrap());
-        assert!(read_mix_metadata(b"STPM.MMP\x04\x00\x63\x00\x00\x00",0,&mut preamp).is_err());
-        assert!(read_mix_metadata(b"STPM.APS\x04\x00\x01\x01\x00\x00",0,&mut preamp).is_err());
+        assert!(
+            !read_mix_metadata(b"opaqueSTPM.MMP\x04\x00\x03\x00\x00\x00", 1, &mut preamp).unwrap()
+        );
+        assert!(
+            !read_mix_metadata(
+                b"XTPMtest\x0e\x00STPM.MMP\x04\x00\x03\x00\x00\x00",
+                1,
+                &mut preamp
+            )
+            .unwrap()
+        );
+        assert!(
+            read_mix_metadata(
+                b"STPM.MMP\x04\x00\x03\x00\x00\x00XTPM.MMP\x04\x00\x04\x00\x00\x00",
+                1,
+                &mut preamp
+            )
+            .unwrap()
+        );
+        assert!(read_mix_metadata(b"STPM.MMP\x04\x00\x63\x00\x00\x00", 0, &mut preamp).is_err());
+        assert!(read_mix_metadata(b"STPM.APS\x04\x00\x01\x01\x00\x00", 0, &mut preamp).is_err());
     }
 }

@@ -76,9 +76,14 @@ fn make_it_s_memory_module(first: u8, second: u8, second_note: bool) -> TrackerM
 #[test]
 fn it_seek_does_not_replay_past_end_marker() {
     let mut module = make_it_s_memory_module(0xD3, 0x81, false);
-    module.patterns = module.patterns[0].notes.iter().map(|row| TrackerPattern {
-        num_rows: 1, notes: vec![row.clone()],
-    }).collect();
+    module.patterns = module.patterns[0]
+        .notes
+        .iter()
+        .map(|row| TrackerPattern {
+            num_rows: 1,
+            notes: vec![row.clone()],
+        })
+        .collect();
     module.order_table = vec![0, 255, 1];
     let mut engine = TrackerEngine::new();
     let handle = engine.load_tracker_module(module, vec![1]);
@@ -92,8 +97,16 @@ fn it_seek_skips_order_marker_preserving_s_memory() {
     let mut module = make_it_s_memory_module(0xD3, 0, true);
     let first = module.patterns[0].notes[0].clone();
     let second = module.patterns[0].notes[1].clone();
-    module.patterns = vec![TrackerPattern { num_rows: 1, notes: vec![first] },
-        TrackerPattern { num_rows: 1, notes: vec![second] }];
+    module.patterns = vec![
+        TrackerPattern {
+            num_rows: 1,
+            notes: vec![first],
+        },
+        TrackerPattern {
+            num_rows: 1,
+            notes: vec![second],
+        },
+    ];
     module.order_table = vec![0, 254, 1, 255];
     let mut engine = TrackerEngine::new();
     let handle = engine.load_tracker_module(module, vec![1]);
@@ -110,11 +123,18 @@ fn it_sample_global_volume_scales_foreground_and_background() {
         let mut module = make_it_module_with_second_row_effect(TrackerEffect::None);
         module.format = FormatFlags::IS_IT_FORMAT;
         module.samples = vec![nether_tracker::TrackerSample {
-            global_volume, length: 64, ..Default::default()
+            global_volume,
+            length: 64,
+            ..Default::default()
         }];
         let mut engine = TrackerEngine::new();
         let handle = engine.load_tracker_module(module, vec![1]);
-        let sounds = vec![None, Some(crate::audio::Sound { data: vec![12000i16; 64].into() })];
+        let sounds = vec![
+            None,
+            Some(crate::audio::Sound {
+                data: vec![12000i16; 64].into(),
+            }),
+        ];
         engine.process_row_tick0_internal(handle, &sounds);
         engine.channels[0].panning = 0.0;
         engine.channels[0].channel_volume = 64;
@@ -123,7 +143,18 @@ fn it_sample_global_volume_scales_foreground_and_background() {
             engine.channels[1].is_background = true;
             engine.channels[0].note_on = false;
         }
-        (0..16).map(|_| engine.mix_channels(super::super::raw_tracker_handle(handle), &sounds, 44100, 882).0).sum::<f32>()
+        (0..16)
+            .map(|_| {
+                engine
+                    .mix_channels(
+                        super::super::raw_tracker_handle(handle),
+                        &sounds,
+                        44100,
+                        882,
+                    )
+                    .0
+            })
+            .sum::<f32>()
     };
     for background in [false, true] {
         let full = render(64, background);
@@ -137,7 +168,11 @@ fn it_sample_global_volume_scales_foreground_and_background() {
 fn it_empty_map_selection_survives_snapshot_without_replacing_voice() {
     let mut module = make_it_module_with_second_row_effect(TrackerEffect::None);
     module.samples = vec![nether_tracker::TrackerSample::default()];
-    for (n, entry) in module.instruments[0].note_sample_table.iter_mut().enumerate() {
+    for (n, entry) in module.instruments[0]
+        .note_sample_table
+        .iter_mut()
+        .enumerate()
+    {
         *entry = (n as u8, 1);
     }
     let mut second = module.instruments[0].clone();
@@ -146,9 +181,22 @@ fn it_empty_map_selection_survives_snapshot_without_replacing_voice() {
     module.instruments.push(second);
     module.patterns[0].num_rows = 3;
     module.patterns[0].notes = vec![
-        vec![TrackerNote { note: 61, instrument: 1, ..Default::default() }],
-        vec![TrackerNote { note: 65, instrument: 2, volume: 16, effect: TrackerEffect::ItExtended(0x63), ..Default::default() }],
-        vec![TrackerNote { note: 73, ..Default::default() }],
+        vec![TrackerNote {
+            note: 61,
+            instrument: 1,
+            ..Default::default()
+        }],
+        vec![TrackerNote {
+            note: 65,
+            instrument: 2,
+            volume: 16,
+            effect: TrackerEffect::ItExtended(0x63),
+            ..Default::default()
+        }],
+        vec![TrackerNote {
+            note: 73,
+            ..Default::default()
+        }],
     ];
     let mut engine = TrackerEngine::new();
     let handle = engine.load_tracker_module(module, vec![1]);
@@ -173,28 +221,52 @@ fn it_empty_map_selection_survives_snapshot_without_replacing_voice() {
 
 #[test]
 fn it_special_notes_remember_selection_without_replacing_active_instrument() {
-    for special in [TrackerNote::NOTE_OFF, TrackerNote::NOTE_CUT, TrackerNote::NOTE_FADE] {
+    for special in [
+        TrackerNote::NOTE_OFF,
+        TrackerNote::NOTE_CUT,
+        TrackerNote::NOTE_FADE,
+    ] {
         for selection in [2, 99] {
             let mut module = make_it_module_with_second_row_effect(TrackerEffect::None);
-            module.samples = vec![nether_tracker::TrackerSample::default(), nether_tracker::TrackerSample { default_volume: 16, ..Default::default() }];
-            for (n, entry) in module.instruments[0].note_sample_table.iter_mut().enumerate() {
+            module.samples = vec![
+                nether_tracker::TrackerSample::default(),
+                nether_tracker::TrackerSample {
+                    default_volume: 16,
+                    ..Default::default()
+                },
+            ];
+            for (n, entry) in module.instruments[0]
+                .note_sample_table
+                .iter_mut()
+                .enumerate()
+            {
                 *entry = (n as u8, 1);
             }
             module.instruments.push(module.instruments[0].clone());
-            for entry in &mut module.instruments[1].note_sample_table { entry.1 = 2; }
+            for entry in &mut module.instruments[1].note_sample_table {
+                entry.1 = 2;
+            }
             module.patterns[0].notes[1][0] = TrackerNote {
-                note: special, instrument: selection, ..Default::default()
+                note: special,
+                instrument: selection,
+                ..Default::default()
             };
             let mut engine = TrackerEngine::new();
             let handle = engine.load_tracker_module(module, vec![1, 2]);
             engine.process_row_tick0_internal(handle, &[]);
             engine.current_row = 1;
             engine.process_row_tick0_internal(handle, &[]);
-            assert_eq!(engine.channels[0].instrument, 1, "special {special}, selection {selection}");
+            assert_eq!(
+                engine.channels[0].instrument, 1,
+                "special {special}, selection {selection}"
+            );
             assert_eq!(engine.channels[0].last_it_instrument, selection);
             assert_eq!(engine.channels[0].sample_index, Some(0));
             if special != TrackerNote::NOTE_CUT {
-                assert_eq!(engine.channels[0].volume, if selection == 2 { 0.25 } else { 1.0 });
+                assert_eq!(
+                    engine.channels[0].volume,
+                    if selection == 2 { 0.25 } else { 1.0 }
+                );
             }
         }
     }
@@ -206,14 +278,26 @@ fn it_pan_law_preserves_sum_and_doubles_center_gain_at_edge() {
     engine.reset();
     let mut module = make_it_module_with_second_row_effect(TrackerEffect::None);
     module.samples = vec![nether_tracker::TrackerSample::default()];
-    for entry in &mut module.instruments[0].note_sample_table { entry.1 = 1; }
+    for entry in &mut module.instruments[0].note_sample_table {
+        entry.1 = 1;
+    }
     let handle = engine.load_tracker_module(module, vec![1]);
     engine.process_row_tick0_internal(handle, &[]);
-    let sounds = vec![None, Some(crate::audio::Sound { data: vec![4096; 64].into() })];
+    let sounds = vec![
+        None,
+        Some(crate::audio::Sound {
+            data: vec![4096; 64].into(),
+        }),
+    ];
     engine.channels[0].fade_in_samples = 0;
     engine.channels[0].channel_volume = 64;
     engine.channels[0].panning = 0.0;
-    let center = engine.mix_channels(super::super::raw_tracker_handle(handle), &sounds, 44100, 882);
+    let center = engine.mix_channels(
+        super::super::raw_tracker_handle(handle),
+        &sounds,
+        44100,
+        882,
+    );
     assert!(center.0 > 0.0, "channel={:?}", engine.channels[0]);
     let snapshot = engine.snapshot();
     for background in [false, true] {
@@ -227,7 +311,12 @@ fn it_pan_law_preserves_sum_and_doubles_center_gain_at_edge() {
         engine.is_it_format = false;
         for pan in [-1.0, -0.5, 0.0, 0.5, 1.0] {
             engine.channels[voice].panning = pan;
-            let (left, right) = engine.mix_channels(super::super::raw_tracker_handle(handle), &sounds, 44100, 882);
+            let (left, right) = engine.mix_channels(
+                super::super::raw_tracker_handle(handle),
+                &sounds,
+                44100,
+                882,
+            );
             assert!((left + right - center.0 - center.1).abs() < 0.000001);
             assert!((right / (left + right) - (pan + 1.0) * 0.5).abs() < 0.000001);
         }
@@ -236,13 +325,27 @@ fn it_pan_law_preserves_sum_and_doubles_center_gain_at_edge() {
 
 #[test]
 fn it_sample_special_recalls_volume_without_replacing_voice() {
-    for special in [TrackerNote::NOTE_OFF, TrackerNote::NOTE_FADE, TrackerNote::NOTE_CUT] {
+    for special in [
+        TrackerNote::NOTE_OFF,
+        TrackerNote::NOTE_FADE,
+        TrackerNote::NOTE_CUT,
+    ] {
         let mut module = make_it_module_with_second_row_effect(TrackerEffect::None);
         module.format = FormatFlags::IS_IT_FORMAT;
-        module.samples = vec![nether_tracker::TrackerSample::default(), nether_tracker::TrackerSample {
-            default_volume: 16, loop_begin: 10, loop_end: 30, ..Default::default()
-        }];
-        module.patterns[0].notes[1][0] = TrackerNote { note: special, instrument: 2, ..Default::default() };
+        module.samples = vec![
+            nether_tracker::TrackerSample::default(),
+            nether_tracker::TrackerSample {
+                default_volume: 16,
+                loop_begin: 10,
+                loop_end: 30,
+                ..Default::default()
+            },
+        ];
+        module.patterns[0].notes[1][0] = TrackerNote {
+            note: special,
+            instrument: 2,
+            ..Default::default()
+        };
         let mut engine = TrackerEngine::new();
         let handle = engine.load_tracker_module(module, vec![1, 2]);
         engine.process_row_tick0_internal(handle, &[]);
@@ -253,7 +356,9 @@ fn it_sample_special_recalls_volume_without_replacing_voice() {
         assert_eq!(channel.sample_handle, 1);
         assert_eq!(channel.sample_index, Some(0));
         assert_eq!(channel.sample_pos, 7.0);
-        if special != TrackerNote::NOTE_CUT { assert_eq!(channel.volume, 0.25); }
+        if special != TrackerNote::NOTE_CUT {
+            assert_eq!(channel.volume, 0.25);
+        }
     }
 }
 
@@ -261,22 +366,33 @@ fn it_sample_special_recalls_volume_without_replacing_voice() {
 fn it_old_effects_noteoff_changes_envelope_not_sample() {
     for old in [false, true] {
         let mut module = make_it_module_with_second_row_effect(TrackerEffect::None);
-        if old { module.format = module.format | FormatFlags::OLD_EFFECTS; }
+        if old {
+            module.format = module.format | FormatFlags::OLD_EFFECTS;
+        }
         module.instruments[0].volume_envelope = Some(nether_tracker::TrackerEnvelope {
-            points: vec![(0, 64), (12, 64)], flags: nether_tracker::EnvelopeFlags::ENABLED,
+            points: vec![(0, 64), (12, 64)],
+            flags: nether_tracker::EnvelopeFlags::ENABLED,
             ..Default::default()
         });
         let mut next = module.instruments[0].clone();
         next.volume_envelope.as_mut().unwrap().points = vec![(0, 16), (8, 16)];
         next.fadeout = 32;
         next.nna = nether_tracker::NewNoteAction::Continue;
-        module.samples = vec![nether_tracker::TrackerSample::default(), nether_tracker::TrackerSample {
-            default_pan: Some(64), ..Default::default()
-        }];
-        for entry in &mut next.note_sample_table { entry.1 = 2; }
+        module.samples = vec![
+            nether_tracker::TrackerSample::default(),
+            nether_tracker::TrackerSample {
+                default_pan: Some(64),
+                ..Default::default()
+            },
+        ];
+        for entry in &mut next.note_sample_table {
+            entry.1 = 2;
+        }
         module.instruments.push(next);
         module.patterns[0].notes[1][0] = TrackerNote {
-            note: TrackerNote::NOTE_OFF, instrument: 2, ..Default::default()
+            note: TrackerNote::NOTE_OFF,
+            instrument: 2,
+            ..Default::default()
         };
         let mut engine = TrackerEngine::new();
         let handle = engine.load_tracker_module(module, vec![1]);
@@ -287,12 +403,12 @@ fn it_old_effects_noteoff_changes_envelope_not_sample() {
         engine.current_row = 1;
         engine.process_row_tick0_internal(handle, &[]);
         let channel = &engine.channels[0];
-        assert_eq!(channel.instrument, if old {2} else {1});
-        assert_eq!(channel.nna, if old {1} else {0});
-        assert_eq!(channel.panning, if old {1.0} else {0.0});
-        assert_eq!(channel.volume_envelope_end, Some(if old {8} else {12}));
-        assert_eq!(channel.volume_envelope_pos, if old {0} else {5});
-        assert_eq!(channel.volume_fadeout, if old {65535} else {30000});
+        assert_eq!(channel.instrument, if old { 2 } else { 1 });
+        assert_eq!(channel.nna, if old { 1 } else { 0 });
+        assert_eq!(channel.panning, if old { 1.0 } else { 0.0 });
+        assert_eq!(channel.volume_envelope_end, Some(if old { 8 } else { 12 }));
+        assert_eq!(channel.volume_envelope_pos, if old { 0 } else { 5 });
+        assert_eq!(channel.volume_fadeout, if old { 65535 } else { 30000 });
         assert_eq!(channel.key_off, !old);
         assert!(channel.sample_sustain_released);
         assert_eq!(channel.sample_pos, 7.0);
@@ -316,7 +432,9 @@ fn it_note_dispatch_carries_terminal_envelope_into_nna_and_snapshot() {
     let snapshot = engine.snapshot();
     engine.reset();
     engine.apply_snapshot(&snapshot);
-    for _ in 0..3 { engine.advance_envelopes(); }
+    for _ in 0..3 {
+        engine.advance_envelopes();
+    }
     for index in [0, 32] {
         assert!(!engine.channels[index].note_fade);
     }
@@ -330,8 +448,10 @@ fn it_note_dispatch_carries_terminal_envelope_into_nna_and_snapshot() {
 #[test]
 fn it_keyoff_waits_for_nonlooping_envelope_but_direct_fade_does_not() {
     for (enabled, looped, direct_fade, fades_now) in [
-        (true, false, false, false), (true, true, false, true),
-        (false, false, false, true), (true, false, true, true),
+        (true, false, false, false),
+        (true, true, false, true),
+        (false, false, false, true),
+        (true, false, true, true),
     ] {
         let mut engine = TrackerEngine::new();
         engine.is_it_format = true;
@@ -349,13 +469,18 @@ fn it_keyoff_waits_for_nonlooping_envelope_but_direct_fade_does_not() {
         }
         engine.advance_envelopes();
         for index in [0, 32] {
-            assert_eq!(engine.channels[index].volume_fadeout, if fades_now {1008} else {1024});
+            assert_eq!(
+                engine.channels[index].volume_fadeout,
+                if fades_now { 1008 } else { 1024 }
+            );
         }
         let snapshot = engine.snapshot();
         engine.reset();
         engine.apply_snapshot(&snapshot);
         if enabled && !looped && !direct_fade {
-            for _ in 0..3 { engine.advance_envelopes(); }
+            for _ in 0..3 {
+                engine.advance_envelopes();
+            }
             for index in [0, 32] {
                 assert!(engine.channels[index].note_fade);
                 assert_eq!(engine.channels[index].volume_fadeout, 1008);
@@ -401,10 +526,8 @@ fn it_s00_recalls_note_delay_and_snapshot_memory() {
 fn it_s00_recall_reaches_fine_and_row_delay_collectors() {
     for (memory, expected_fine, expected_rows) in [(0x63, 3, 0), (0xE1, 0, 1)] {
         let mut engine = TrackerEngine::new();
-        let handle = engine.load_tracker_module(
-            make_it_s_memory_module(memory, 0x00, false),
-            vec![1],
-        );
+        let handle =
+            engine.load_tracker_module(make_it_s_memory_module(memory, 0x00, false), vec![1]);
         engine.current_row = 0;
         engine.process_row_tick0_internal(handle, &[]);
         engine.current_row = 1;

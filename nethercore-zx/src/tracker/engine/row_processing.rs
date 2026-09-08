@@ -13,29 +13,61 @@ impl TrackerEngine {
             // D/K/L share the complete main-column slide byte, including fine mode.
             let slide = match effect {
                 TrackerEffect::VolumeSlide { up, down }
-                | TrackerEffect::TonePortaVolSlide { vol_up: up, vol_down: down, .. }
-                | TrackerEffect::VibratoVolSlide { vol_up: up, vol_down: down, .. } => Some((up << 4) | down),
+                | TrackerEffect::TonePortaVolSlide {
+                    vol_up: up,
+                    vol_down: down,
+                    ..
+                }
+                | TrackerEffect::VibratoVolSlide {
+                    vol_up: up,
+                    vol_down: down,
+                    ..
+                } => Some((up << 4) | down),
                 TrackerEffect::FineVolumeUp(value) => Some((value << 4) | 15),
                 TrackerEffect::FineVolumeDown(value) => Some(0xf0 | value),
                 _ => None,
             };
             if let Some(value) = slide {
-                if value != 0 { self.channels[ch_idx].last_volume_slide = value; }
+                if value != 0 {
+                    self.channels[ch_idx].last_volume_slide = value;
+                }
                 let value = self.channels[ch_idx].last_volume_slide;
                 return match effect {
-                    TrackerEffect::TonePortaVolSlide { porta, .. } => TrackerEffect::TonePortaVolSlide { porta, vol_up: value >> 4, vol_down: value & 15 },
-                    TrackerEffect::VibratoVolSlide { vib_speed, vib_depth, .. } => TrackerEffect::VibratoVolSlide { vib_speed, vib_depth, vol_up: value >> 4, vol_down: value & 15 },
-                    _ => TrackerEffect::VolumeSlide { up: value >> 4, down: value & 15 },
+                    TrackerEffect::TonePortaVolSlide { porta, .. } => {
+                        TrackerEffect::TonePortaVolSlide {
+                            porta,
+                            vol_up: value >> 4,
+                            vol_down: value & 15,
+                        }
+                    }
+                    TrackerEffect::VibratoVolSlide {
+                        vib_speed,
+                        vib_depth,
+                        ..
+                    } => TrackerEffect::VibratoVolSlide {
+                        vib_speed,
+                        vib_depth,
+                        vol_up: value >> 4,
+                        vol_down: value & 15,
+                    },
+                    _ => TrackerEffect::VolumeSlide {
+                        up: value >> 4,
+                        down: value & 15,
+                    },
                 };
             }
             let tempo = match effect {
-                TrackerEffect::SetTempo(value) | TrackerEffect::TempoSlideDown(value) => Some(value),
+                TrackerEffect::SetTempo(value) | TrackerEffect::TempoSlideDown(value) => {
+                    Some(value)
+                }
                 TrackerEffect::TempoSlideUp(value) => Some(0x10 | value),
                 _ => None,
             };
             if let Some(value) = tempo {
                 let memory = &mut self.channels[ch_idx].last_it_tempo;
-                if value != 0 { *memory = value; }
+                if value != 0 {
+                    *memory = value;
+                }
                 // Resolve before row timing controls so T00 can restore a tempo,
                 // not just its slide magnitude. T10 remains a zero upward slide.
                 return match *memory {
@@ -60,10 +92,24 @@ impl TrackerEngine {
         TrackerEffect::from_it_extended(param)
     }
 
-    fn resolve_it_row_note(&mut self, handle: u32, ch_idx: usize, mut note: TrackerNote) -> TrackerNote {
-        let empty_mapping = note.has_note() && note.has_instrument()
-            && self.modules.get(raw_tracker_handle(handle) as usize).and_then(|m| m.as_ref())
-                .filter(|m| m.module.format.contains(nether_tracker::FormatFlags::IS_IT_FORMAT | nether_tracker::FormatFlags::INSTRUMENTS))
+    fn resolve_it_row_note(
+        &mut self,
+        handle: u32,
+        ch_idx: usize,
+        mut note: TrackerNote,
+    ) -> TrackerNote {
+        let empty_mapping = note.has_note()
+            && note.has_instrument()
+            && self
+                .modules
+                .get(raw_tracker_handle(handle) as usize)
+                .and_then(|m| m.as_ref())
+                .filter(|m| {
+                    m.module.format.contains(
+                        nether_tracker::FormatFlags::IS_IT_FORMAT
+                            | nether_tracker::FormatFlags::INSTRUMENTS,
+                    )
+                })
                 .and_then(|m| m.module.instruments.get(note.instrument as usize - 1))
                 .and_then(|i| i.note_sample_table.get(note.note as usize - 1))
                 .is_some_and(|(_, sample)| *sample == 0);
@@ -124,7 +170,11 @@ impl TrackerEngine {
                 is_it,
                 old_effects,
                 link_g,
-                !is_it && !loaded.module.format.contains(nether_tracker::FormatFlags::LINEAR_SLIDES),
+                !is_it
+                    && !loaded
+                        .module
+                        .format
+                        .contains(nether_tracker::FormatFlags::LINEAR_SLIDES),
             )
         };
 
@@ -138,7 +188,11 @@ impl TrackerEngine {
             *note = self.resolve_it_row_note(handle, *ch_idx, *note);
         }
         self.resolved_row_notes = pattern_info.clone();
-        self.resolved_row_key = Some((raw_tracker_handle(handle), self.current_order, self.current_row));
+        self.resolved_row_key = Some((
+            raw_tracker_handle(handle),
+            self.current_order,
+            self.current_row,
+        ));
 
         // Reset tempo slide (only active during the row it appears on)
         self.tempo_slide = 0;
@@ -146,7 +200,10 @@ impl TrackerEngine {
         // Reset per-row effect state for all channels before processing
         // XM/IT effects only apply during the row they appear on
         for ch_idx in 0..num_channels as usize {
-            if self.channels[ch_idx].arpeggio_active || self.channels[ch_idx].vibrato_active || (!is_it && self.channels[ch_idx].auto_vibrato_depth > 0) {
+            if self.channels[ch_idx].arpeggio_active
+                || self.channels[ch_idx].vibrato_active
+                || (!is_it && self.channels[ch_idx].auto_vibrato_depth > 0)
+            {
                 self.channels[ch_idx].period = self.channels[ch_idx].base_period;
             }
             self.channels[ch_idx].reset_row_effects();
@@ -185,7 +242,11 @@ impl TrackerEngine {
         if !self.is_it_format {
             return;
         }
-        for (ch_idx, note) in self.row_notes(raw_tracker_handle(handle), self.current_order, self.current_row) {
+        for (ch_idx, note) in self.row_notes(
+            raw_tracker_handle(handle),
+            self.current_order,
+            self.current_row,
+        ) {
             if let TrackerEffect::PortamentoUp(value) | TrackerEffect::PortamentoDown(value) =
                 note.effect
             {
@@ -201,18 +262,30 @@ impl TrackerEngine {
         }
     }
 
-    fn process_volume_column_tick0(&mut self, ch_idx: usize, effect: &TrackerEffect, note: u8, instrument: u8) {
+    fn process_volume_column_tick0(
+        &mut self,
+        ch_idx: usize,
+        effect: &TrackerEffect,
+        note: u8,
+        instrument: u8,
+    ) {
         if !self.is_it_format {
-            if *effect == TrackerEffect::PanningLeftOnTicks && self.channels[ch_idx].xm_legacy_retrigger {
-                self.channels[ch_idx].xm_volume_column_pan_slide = self.channels[ch_idx].panning_slide;
+            if *effect == TrackerEffect::PanningLeftOnTicks
+                && self.channels[ch_idx].xm_legacy_retrigger
+            {
+                self.channels[ch_idx].xm_volume_column_pan_slide =
+                    self.channels[ch_idx].panning_slide;
                 return;
             }
             if let TrackerEffect::PanningSlide { left, right } = *effect {
                 let slide = right as i8 - left as i8;
                 self.channels[ch_idx].xm_volume_column_pan_slide = slide;
                 if self.channels[ch_idx].xm_legacy_retrigger {
-                    if slide != 0 { self.channels[ch_idx].panning_slide = slide; }
-                    self.channels[ch_idx].xm_volume_column_pan_slide = self.channels[ch_idx].panning_slide;
+                    if slide != 0 {
+                        self.channels[ch_idx].panning_slide = slide;
+                    }
+                    self.channels[ch_idx].xm_volume_column_pan_slide =
+                        self.channels[ch_idx].panning_slide;
                 }
                 return;
             }
@@ -246,37 +319,48 @@ impl TrackerEngine {
         self.channels[ch_idx].xm_short_restart_attack = !is_it
             && (!format.contains(nether_tracker::FormatFlags::XM_FT2_MIX)
                 || format.contains(nether_tracker::FormatFlags::XM_LEGACY_RETRIGGER));
-        self.channels[ch_idx].xm_legacy_retrigger = !is_it
-            && format.contains(nether_tracker::FormatFlags::XM_LEGACY_RETRIGGER);
+        self.channels[ch_idx].xm_legacy_retrigger =
+            !is_it && format.contains(nether_tracker::FormatFlags::XM_LEGACY_RETRIGGER);
         // Defer the whole delayed cell. IT SD0 is SD1; unlike XM, IT's
         // volume-column effects stay with the delayed trigger.
-        if is_it || note.has_note() || note.note == 0 {
-            if let TrackerEffect::NoteDelay(delay) = note.effect {
-                let delay = if is_it { delay.max(1) } else { delay };
-                if delay != 0 {
-                    if !is_it && (matches!(note.volume_effect, TrackerEffect::VolumeSlide { .. })
-                        || (!self.channels[ch_idx].xm_legacy_retrigger && matches!(note.volume_effect, TrackerEffect::PanningSlide { .. } | TrackerEffect::PanningLeftOnTicks))) {
-                        self.process_volume_column_tick0(ch_idx, &note.volume_effect, 0, 0);
-                    }
-                    self.channels[ch_idx].note_delay_tick = delay;
-                    self.channels[ch_idx].delayed_xm_note = Some((*note, handle));
-                    return false;
+        if (is_it || note.has_note() || note.note == 0)
+            && let TrackerEffect::NoteDelay(delay) = note.effect
+        {
+            let delay = if is_it { delay.max(1) } else { delay };
+            if delay != 0 {
+                if !is_it
+                    && (matches!(note.volume_effect, TrackerEffect::VolumeSlide { .. })
+                        || (!self.channels[ch_idx].xm_legacy_retrigger
+                            && matches!(
+                                note.volume_effect,
+                                TrackerEffect::PanningSlide { .. }
+                                    | TrackerEffect::PanningLeftOnTicks
+                            )))
+                {
+                    self.process_volume_column_tick0(ch_idx, &note.volume_effect, 0, 0);
                 }
+                self.channels[ch_idx].note_delay_tick = delay;
+                self.channels[ch_idx].delayed_xm_note = Some((*note, handle));
+                return false;
             }
         }
         let sample_mode = is_it && !format.contains(nether_tracker::FormatFlags::INSTRUMENTS);
         let has_active_note =
             self.channels[ch_idx].note_on && self.channels[ch_idx].sample_handle != 0;
         // A rate-stopped voice retains note identity, but has no sample to crossfade.
-        let starts_xm_attack = !is_it && (!has_active_note || self.channels[ch_idx].xm_loop_stopped);
+        let starts_xm_attack =
+            !is_it && (!has_active_note || self.channels[ch_idx].xm_loop_stopped);
         let valid_instrument = note.instrument.checked_sub(1).is_some_and(|index| {
             self.modules
                 .get(raw_handle as usize)
                 .and_then(|m| m.as_ref())
-                .is_some_and(|loaded| (index as usize) < if sample_mode {
-                    loaded.module.samples.len()
-                } else {
-                    loaded.module.instruments.len()
+                .is_some_and(|loaded| {
+                    (index as usize)
+                        < if sample_mode {
+                            loaded.module.samples.len()
+                        } else {
+                            loaded.module.instruments.len()
+                        }
                 })
         });
         let mut note = *note;
@@ -293,8 +377,10 @@ impl TrackerEngine {
                     // voice now. A later instrument-less note changes sample only.
                     note.instrument = self.channels[ch_idx].instrument;
                 }
-            } else if note.has_note() && self.channels[ch_idx].last_xm_instrument != 0
-                && self.channels[ch_idx].last_xm_instrument != self.channels[ch_idx].instrument {
+            } else if note.has_note()
+                && self.channels[ch_idx].last_xm_instrument != 0
+                && self.channels[ch_idx].last_xm_instrument != self.channels[ch_idx].instrument
+            {
                 note.instrument = self.channels[ch_idx].last_xm_instrument;
                 xm_pending_instrument = true;
             }
@@ -309,10 +395,20 @@ impl TrackerEngine {
             }
         }
         if is_it && !sample_mode && note.has_note() {
-            let instrument = if note.has_instrument() { note.instrument } else { self.channels[ch_idx].instrument };
-            let empty_slot = self.modules.get(raw_handle as usize)
+            let instrument = if note.has_instrument() {
+                note.instrument
+            } else {
+                self.channels[ch_idx].instrument
+            };
+            let empty_slot = self
+                .modules
+                .get(raw_handle as usize)
                 .and_then(|m| m.as_ref())
-                .and_then(|m| instrument.checked_sub(1).and_then(|i| m.module.instruments.get(i as usize)))
+                .and_then(|m| {
+                    instrument
+                        .checked_sub(1)
+                        .and_then(|i| m.module.instruments.get(i as usize))
+                })
                 .and_then(|i| i.note_sample_table.get((note.note - 1) as usize))
                 .is_some_and(|(_, sample)| *sample == 0);
             if empty_slot {
@@ -323,9 +419,12 @@ impl TrackerEngine {
         }
         if is_it && !sample_mode {
             let selected = self.channels[ch_idx].last_it_instrument;
-            let invalid = selected != 0 && self.modules.get(raw_handle as usize)
-                .and_then(|m| m.as_ref())
-                .is_some_and(|m| selected as usize > m.module.instruments.len());
+            let invalid = selected != 0
+                && self
+                    .modules
+                    .get(raw_handle as usize)
+                    .and_then(|m| m.as_ref())
+                    .is_some_and(|m| selected as usize > m.module.instruments.len());
             if (note.note == 0 || note.has_note()) && invalid {
                 // Invalid selections persist across instrument-less notes, but
                 // do not replace the active voice or discard volume/effects.
@@ -345,8 +444,12 @@ impl TrackerEngine {
         } else {
             self.channels[ch_idx].instrument
         };
-        let xm_mapped = !is_it && self.modules.get(raw_handle as usize)
-            .and_then(|m| m.as_ref()).is_some_and(|m| !m.module.samples.is_empty());
+        let xm_mapped = !is_it
+            && self
+                .modules
+                .get(raw_handle as usize)
+                .and_then(|m| m.as_ref())
+                .is_some_and(|m| !m.module.samples.is_empty());
         let it_mapped_sample = if (is_it || xm_mapped) && !sample_mode {
             self.modules
                 .get(raw_handle as usize)
@@ -413,27 +516,40 @@ impl TrackerEngine {
             }
             self.channels[ch_idx].xm_porta_target_reached = false;
             self.channels[ch_idx].target_period = note_to_period(effective_note, finetune)
-                - if is_it {0.0} else {f32::from(self.channels[ch_idx].xm_finetune_delta) / 2.0};
+                - if is_it {
+                    0.0
+                } else {
+                    f32::from(self.channels[ch_idx].xm_finetune_delta) / 2.0
+                };
         }
 
         // Compatible Gxx also retains the active sample on command-only cells.
         // Retain the active sample selection for subsequent instrument-less notes.
-        let retain_sample = sample_mode && has_active_note
+        let retain_sample = sample_mode
+            && has_active_note
             && format.contains(nether_tracker::FormatFlags::LINK_G_MEMORY)
-            && [note.volume_effect, note.effect].iter().any(|effect| matches!(
-                effect, TrackerEffect::TonePortamento(_) | TrackerEffect::TonePortaVolSlide { .. }
-            ));
+            && [note.volume_effect, note.effect].iter().any(|effect| {
+                matches!(
+                    effect,
+                    TrackerEffect::TonePortamento(_) | TrackerEffect::TonePortaVolSlide { .. }
+                )
+            });
 
         let sample_special = sample_mode
-            && matches!(note.note, TrackerNote::NOTE_OFF | TrackerNote::NOTE_CUT | TrackerNote::NOTE_FADE)
+            && matches!(
+                note.note,
+                TrackerNote::NOTE_OFF | TrackerNote::NOTE_CUT | TrackerNote::NOTE_FADE
+            )
             && !format.contains(nether_tracker::FormatFlags::OLD_EFFECTS);
-        if sample_special && note.has_instrument() {
-            if let Some(sample) = self.modules.get(raw_handle as usize)
+        if sample_special
+            && note.has_instrument()
+            && let Some(sample) = self
+                .modules
+                .get(raw_handle as usize)
                 .and_then(|m| m.as_ref())
                 .and_then(|m| m.module.samples.get(note.instrument as usize - 1))
-            {
-                self.channels[ch_idx].volume = sample.default_volume as f32 / CHANNEL_VOLUME_MAX;
-            }
+        {
+            self.channels[ch_idx].volume = sample.default_volume as f32 / CHANNEL_VOLUME_MAX;
         }
 
         // Handle instrument change
@@ -442,11 +558,19 @@ impl TrackerEngine {
         let porta_sample_switch = tone_porta_note_continues_current
             && sample_mode
             && !format.contains(nether_tracker::FormatFlags::LINK_G_MEMORY);
-        if note.has_instrument() && !sample_special && (!tone_porta_note_continues_current || porta_sample_switch) {
+        if note.has_instrument()
+            && !sample_special
+            && (!tone_porta_note_continues_current || porta_sample_switch)
+        {
             let instr_idx = (note.instrument - 1) as usize;
-            if !retain_sample
-                && !(is_it && matches!(note.note, TrackerNote::NOTE_OFF | TrackerNote::NOTE_CUT | TrackerNote::NOTE_FADE))
-                && (porta_sample_switch || !(is_it && (note.has_note() || restarts_instrument_note)))
+            if !(retain_sample
+                || is_it
+                    && matches!(
+                        note.note,
+                        TrackerNote::NOTE_OFF | TrackerNote::NOTE_CUT | TrackerNote::NOTE_FADE
+                    ))
+                && (porta_sample_switch
+                    || !(is_it && (note.has_note() || restarts_instrument_note)))
             {
                 self.channels[ch_idx].instrument = note.instrument;
             }
@@ -500,17 +624,32 @@ impl TrackerEngine {
                     } else {
                         (sound_handle, 0, 0, 0, false, 0, 0, 0, 0, 1.0)
                     }
-                } else if (is_it || (xm_mapped && note.note == 0)) && !loaded.module.samples.is_empty() {
+                } else if (is_it || (xm_mapped && note.note == 0))
+                    && !loaded.module.samples.is_empty()
+                {
                     let channel = &self.channels[ch_idx];
                     // IT special notes recall the selected sample's volume,
                     // without changing the playing instrument/sample/envelopes.
-                    let special_volume = matches!(note.note, TrackerNote::NOTE_OFF | TrackerNote::NOTE_CUT | TrackerNote::NOTE_FADE)
-                        .then(|| loaded.module.instruments.get(instr_idx)
-                            .and_then(|i| channel.current_note.checked_sub(1).and_then(|n| i.note_sample_table.get(n as usize)))
+                    let special_volume = matches!(
+                        note.note,
+                        TrackerNote::NOTE_OFF | TrackerNote::NOTE_CUT | TrackerNote::NOTE_FADE
+                    )
+                    .then(|| {
+                        loaded
+                            .module
+                            .instruments
+                            .get(instr_idx)
+                            .and_then(|i| {
+                                channel
+                                    .current_note
+                                    .checked_sub(1)
+                                    .and_then(|n| i.note_sample_table.get(n as usize))
+                            })
                             .and_then(|(_, sample)| sample.checked_sub(1))
                             .and_then(|s| loaded.module.samples.get(s as usize))
-                            .map(|s| s.default_volume as f32 / CHANNEL_VOLUME_MAX))
-                        .flatten();
+                            .map(|s| s.default_volume as f32 / CHANNEL_VOLUME_MAX)
+                    })
+                    .flatten();
                     (
                         channel.sample_handle,
                         channel.sample_loop_start,
@@ -522,8 +661,12 @@ impl TrackerEngine {
                         channel.sample_sustain_loop_type,
                         channel.finetune,
                         if xm_mapped {
-                            channel.sample_index.and_then(|index| loaded.module.samples.get(index))
-                                .map_or(channel.volume, |sample| sample.default_volume as f32 / CHANNEL_VOLUME_MAX)
+                            channel
+                                .sample_index
+                                .and_then(|index| loaded.module.samples.get(index))
+                                .map_or(channel.volume, |sample| {
+                                    sample.default_volume as f32 / CHANNEL_VOLUME_MAX
+                                })
                         } else {
                             special_volume.unwrap_or(channel.volume)
                         },
@@ -582,111 +725,132 @@ impl TrackerEngine {
         // IT instrument-mode porta changes the mapped sample without retriggering.
         // Same-sample changes keep direction/loop state, but clear key-off/fade;
         // a released sustain remains released through the selector below.
-        let porta_instrument_switch = tone_porta_note_continues_current
-            && is_it
-            && !sample_mode
-            && note.has_instrument();
-        if porta_instrument_switch {
-            if let Some((_, sound_handle, sample, sample_index)) = it_mapped_sample.as_ref() {
-                let channel = &mut self.channels[ch_idx];
-                let sample_changed = channel.sample_index != Some(*sample_index);
-                if channel.instrument != incoming_instrument {
-                    channel.key_off = false;
-                    channel.note_fade = false;
-                }
-                channel.instrument = incoming_instrument;
-                // Compatible Gxx retains the playing sample across instrument changes.
-                if sample_changed && !format.contains(nether_tracker::FormatFlags::LINK_G_MEMORY) {
-                    channel.sample_handle = *sound_handle;
-                    channel.sample_index = Some(*sample_index);
-                    // IT sample swaps on a pitched porta cell restart sample position.
-                    channel.sample_pos = 0.0;
-                    channel.xm_loop_stopped = false;
-                    channel.sample_loop_start = sample.loop_begin;
-                    channel.sample_loop_end = sample.loop_end;
-                    channel.sample_loop_type = match sample.loop_type {
-                        nether_tracker::LoopType::None => 0,
-                        nether_tracker::LoopType::Forward => 1,
-                        nether_tracker::LoopType::PingPong => 2,
-                    };
-                    channel.sample_sustain_loop_start = sample.sustain_loop_begin;
-                    channel.sample_sustain_loop_end = sample.sustain_loop_end;
-                    channel.sample_sustain_loop_type = match sample.sustain_loop_type {
-                        nether_tracker::LoopType::None => 0,
-                        nether_tracker::LoopType::Forward => 1,
-                        nether_tracker::LoopType::PingPong => 2,
-                    };
-                    channel.sample_direction = 1;
-                }
+        let porta_instrument_switch =
+            tone_porta_note_continues_current && is_it && !sample_mode && note.has_instrument();
+        if porta_instrument_switch
+            && let Some((_, sound_handle, sample, sample_index)) = it_mapped_sample.as_ref()
+        {
+            let channel = &mut self.channels[ch_idx];
+            let sample_changed = channel.sample_index != Some(*sample_index);
+            if channel.instrument != incoming_instrument {
+                channel.key_off = false;
+                channel.note_fade = false;
+            }
+            channel.instrument = incoming_instrument;
+            // Compatible Gxx retains the playing sample across instrument changes.
+            if sample_changed && !format.contains(nether_tracker::FormatFlags::LINK_G_MEMORY) {
+                channel.sample_handle = *sound_handle;
+                channel.sample_index = Some(*sample_index);
+                // IT sample swaps on a pitched porta cell restart sample position.
+                channel.sample_pos = 0.0;
+                channel.xm_loop_stopped = false;
+                channel.sample_loop_start = sample.loop_begin;
+                channel.sample_loop_end = sample.loop_end;
+                channel.sample_loop_type = match sample.loop_type {
+                    nether_tracker::LoopType::None => 0,
+                    nether_tracker::LoopType::Forward => 1,
+                    nether_tracker::LoopType::PingPong => 2,
+                };
+                channel.sample_sustain_loop_start = sample.sustain_loop_begin;
+                channel.sample_sustain_loop_end = sample.sustain_loop_end;
+                channel.sample_sustain_loop_type = match sample.sustain_loop_type {
+                    nether_tracker::LoopType::None => 0,
+                    nether_tracker::LoopType::Forward => 1,
+                    nether_tracker::LoopType::PingPong => 2,
+                };
+                channel.sample_direction = 1;
             }
         }
 
         // IT's Old Effects Note Off can select a new envelope while the
         // existing sample keeps running. Sample sustain releases independently.
-        let old_effects_off = is_it && !sample_mode && note.is_note_off()
-            && note.has_instrument() && format.contains(nether_tracker::FormatFlags::OLD_EFFECTS);
-        if old_effects_off {
-            if let Some(instrument) = self.modules.get(raw_handle as usize)
+        let old_effects_off = is_it
+            && !sample_mode
+            && note.is_note_off()
+            && note.has_instrument()
+            && format.contains(nether_tracker::FormatFlags::OLD_EFFECTS);
+        if old_effects_off
+            && let Some(instrument) = self
+                .modules
+                .get(raw_handle as usize)
                 .and_then(|m| m.as_ref())
                 .and_then(|m| m.module.instruments.get(note.instrument as usize - 1))
-            {
-                let channel = &mut self.channels[ch_idx];
-                if channel.instrument != note.instrument {
-                    channel.nna = match instrument.nna {
-                        nether_tracker::NewNoteAction::Cut => 0,
-                        nether_tracker::NewNoteAction::Continue => 1,
-                        nether_tracker::NewNoteAction::NoteOff => 2,
-                        nether_tracker::NewNoteAction::NoteFade => 3,
-                    };
-                }
-                channel.instrument = note.instrument;
-                channel.instrument_fadeout_rate = instrument.fadeout;
-                let loop_ticks = |env: Option<&nether_tracker::TrackerEnvelope>| env
-                    .filter(|e| e.has_loop()).and_then(|e| Some((
+        {
+            let channel = &mut self.channels[ch_idx];
+            if channel.instrument != note.instrument {
+                channel.nna = match instrument.nna {
+                    nether_tracker::NewNoteAction::Cut => 0,
+                    nether_tracker::NewNoteAction::Continue => 1,
+                    nether_tracker::NewNoteAction::NoteOff => 2,
+                    nether_tracker::NewNoteAction::NoteFade => 3,
+                };
+            }
+            channel.instrument = note.instrument;
+            channel.instrument_fadeout_rate = instrument.fadeout;
+            let loop_ticks = |env: Option<&nether_tracker::TrackerEnvelope>| {
+                env.filter(|e| e.has_loop()).and_then(|e| {
+                    Some((
                         e.points.get(e.loop_begin as usize)?.0,
-                        e.points.get(e.loop_end as usize)?.0)));
-                let vol = instrument.volume_envelope.as_ref();
-                let pan = instrument.panning_envelope.as_ref();
-                let pitch = instrument.pitch_envelope.as_ref();
-                channel.volume_envelope_end = vol.and_then(|e| e.points.last()).map(|p| p.0);
-                channel.volume_envelope_zero_end = vol.and_then(|e| e.points.last())
-                    .and_then(|&(tick, value)| (value == 0).then_some(tick));
-                channel.volume_envelope_enabled = vol.is_some_and(|e| e.is_enabled());
-                channel.volume_envelope_sustain_loop = vol.and_then(|e| e.sustain_ticks());
-                channel.volume_envelope_loop = loop_ticks(vol);
-                channel.panning_envelope_enabled = pan.is_some_and(|e| e.is_enabled());
-                channel.panning_envelope_sustain_loop = pan.and_then(|e| e.sustain_ticks());
-                channel.panning_envelope_loop = loop_ticks(pan);
-                channel.pitch_envelope_enabled = pitch.is_some_and(|e| e.is_enabled() && !e.is_filter());
-                channel.pitch_envelope_sustain_loop = pitch.and_then(|e| e.sustain_ticks());
-                channel.pitch_envelope_loop = loop_ticks(pitch);
-                channel.reset_filter_envelope(pitch);
-                channel.apply_instrument_filter_defaults(instrument);
-                let porta = [note.volume_effect, note.effect].iter().any(|e| matches!(e,
-                    TrackerEffect::TonePortamento(_) | TrackerEffect::TonePortaVolSlide { .. }));
-                let mapped_sample = channel.current_note.checked_sub(1)
-                    .and_then(|n| instrument.note_sample_table.get(n as usize))
-                    .and_then(|(_, s)| s.checked_sub(1)).map(usize::from);
-                if mapped_sample != channel.sample_index {
-                    let index = if porta && format.contains(nether_tracker::FormatFlags::LINK_G_MEMORY) {
-                        channel.sample_index
-                    } else { mapped_sample };
-                    if let Some(pan) = self.modules.get(raw_handle as usize).and_then(|m| m.as_ref())
-                        .and_then(|m| index.and_then(|i| m.module.samples.get(i)))
-                        .and_then(|s| s.default_pan)
-                    {
-                        channel.panning = pan.min(64) as f32 / 32.0 - 1.0;
-                        channel.surround = false;
-                    }
+                        e.points.get(e.loop_end as usize)?.0,
+                    ))
+                })
+            };
+            let vol = instrument.volume_envelope.as_ref();
+            let pan = instrument.panning_envelope.as_ref();
+            let pitch = instrument.pitch_envelope.as_ref();
+            channel.volume_envelope_end = vol.and_then(|e| e.points.last()).map(|p| p.0);
+            channel.volume_envelope_zero_end = vol
+                .and_then(|e| e.points.last())
+                .and_then(|&(tick, value)| (value == 0).then_some(tick));
+            channel.volume_envelope_enabled = vol.is_some_and(|e| e.is_enabled());
+            channel.volume_envelope_sustain_loop = vol.and_then(|e| e.sustain_ticks());
+            channel.volume_envelope_loop = loop_ticks(vol);
+            channel.panning_envelope_enabled = pan.is_some_and(|e| e.is_enabled());
+            channel.panning_envelope_sustain_loop = pan.and_then(|e| e.sustain_ticks());
+            channel.panning_envelope_loop = loop_ticks(pan);
+            channel.pitch_envelope_enabled =
+                pitch.is_some_and(|e| e.is_enabled() && !e.is_filter());
+            channel.pitch_envelope_sustain_loop = pitch.and_then(|e| e.sustain_ticks());
+            channel.pitch_envelope_loop = loop_ticks(pitch);
+            channel.reset_filter_envelope(pitch);
+            channel.apply_instrument_filter_defaults(instrument);
+            let porta = [note.volume_effect, note.effect].iter().any(|e| {
+                matches!(
+                    e,
+                    TrackerEffect::TonePortamento(_) | TrackerEffect::TonePortaVolSlide { .. }
+                )
+            });
+            let mapped_sample = channel
+                .current_note
+                .checked_sub(1)
+                .and_then(|n| instrument.note_sample_table.get(n as usize))
+                .and_then(|(_, s)| s.checked_sub(1))
+                .map(usize::from);
+            if mapped_sample != channel.sample_index {
+                let index = if porta && format.contains(nether_tracker::FormatFlags::LINK_G_MEMORY)
+                {
+                    channel.sample_index
+                } else {
+                    mapped_sample
+                };
+                if let Some(pan) = self
+                    .modules
+                    .get(raw_handle as usize)
+                    .and_then(|m| m.as_ref())
+                    .and_then(|m| index.and_then(|i| m.module.samples.get(i)))
+                    .and_then(|s| s.default_pan)
+                {
+                    channel.panning = pan.min(64) as f32 / 32.0 - 1.0;
+                    channel.surround = false;
                 }
-                if !porta || format.contains(nether_tracker::FormatFlags::LINK_G_MEMORY) {
-                    channel.volume_envelope_pos = 0;
-                    channel.panning_envelope_pos = 0;
-                    channel.pitch_envelope_pos = 0;
-                    channel.filter_envelope_pos = 0;
-                    channel.envelope_started = 0;
-                    channel.volume_fadeout = 65535;
-                }
+            }
+            if !porta || format.contains(nether_tracker::FormatFlags::LINK_G_MEMORY) {
+                channel.volume_envelope_pos = 0;
+                channel.panning_envelope_pos = 0;
+                channel.pitch_envelope_pos = 0;
+                channel.filter_envelope_pos = 0;
+                channel.envelope_started = 0;
+                channel.volume_fadeout = 65535;
             }
         }
 
@@ -1030,11 +1194,39 @@ impl TrackerEngine {
                 0, 0, 0, 0, false, 0, 0, 0, 0, 0, 0, 0, 0, 0, false, None, None, false, None, None,
             ));
 
-            let (source_tuning, source_finetune, forward_loop_start, forward_loop_limit) = if is_it { (0, 0, 0.0, 0.0) } else {
-                it_mapped_sample.as_ref().map(|(_,_,sample,_)| (sample.xm_source_tuning, sample.xm_source_finetune, sample.xm_forward_loop_start, sample.xm_forward_loop_limit))
-                    .or_else(|| self.modules.get(raw_handle as usize).and_then(|m| m.as_ref())
-                        .and_then(|m| m.module.instruments.get(incoming_instrument.checked_sub(1)? as usize))
-                        .map(|i| (i.xm_source_tuning, i.xm_source_finetune, i.xm_forward_loop_start, i.xm_forward_loop_limit))).unwrap_or((0, 0, 0.0, 0.0))
+            let (source_tuning, source_finetune, forward_loop_start, forward_loop_limit) = if is_it
+            {
+                (0, 0, 0.0, 0.0)
+            } else {
+                it_mapped_sample
+                    .as_ref()
+                    .map(|(_, _, sample, _)| {
+                        (
+                            sample.xm_source_tuning,
+                            sample.xm_source_finetune,
+                            sample.xm_forward_loop_start,
+                            sample.xm_forward_loop_limit,
+                        )
+                    })
+                    .or_else(|| {
+                        self.modules
+                            .get(raw_handle as usize)
+                            .and_then(|m| m.as_ref())
+                            .and_then(|m| {
+                                m.module
+                                    .instruments
+                                    .get(incoming_instrument.checked_sub(1)? as usize)
+                            })
+                            .map(|i| {
+                                (
+                                    i.xm_source_tuning,
+                                    i.xm_source_finetune,
+                                    i.xm_forward_loop_start,
+                                    i.xm_forward_loop_limit,
+                                )
+                            })
+                    })
+                    .unwrap_or((0, 0, 0.0, 0.0))
             };
             let channel = &mut self.channels[ch_idx];
             channel.xm_source_tuning = source_tuning;
@@ -1082,19 +1274,22 @@ impl TrackerEngine {
                 .map(|(mapped_note, _, _, _)| *mapped_note)
                 .unwrap_or(channel.current_note);
             let effective_note = (pitch_note as i16 + relative_note as i16).clamp(1, 96) as u8;
-            channel.xm_retrigger_note = if is_it {0} else {effective_note};
+            channel.xm_retrigger_note = if is_it { 0 } else { effective_note };
             channel.base_period = note_to_period(effective_note, finetune);
             if !is_it {
-                channel.xm_source_finetune = xm_sample_finetune(source_finetune, channel.xm_legacy_retrigger);
-                channel.xm_finetune_delta = i16::from(channel.xm_source_finetune) - i16::from(source_finetune);
+                channel.xm_source_finetune =
+                    xm_sample_finetune(source_finetune, channel.xm_legacy_retrigger);
+                channel.xm_finetune_delta =
+                    i16::from(channel.xm_source_finetune) - i16::from(source_finetune);
             }
-            if !is_it && note.has_note() {
-                if let TrackerEffect::SetFinetune(value) = note.effect {
-                    // E5x replaces sample finetune, not its relative-note transpose.
-                    // PCM already contains source tuning: apply only the difference.
-                    channel.xm_finetune_delta = i16::from(value) - i16::from(source_finetune);
-                    channel.xm_source_finetune = value;
-                }
+            if !is_it
+                && note.has_note()
+                && let TrackerEffect::SetFinetune(value) = note.effect
+            {
+                // E5x replaces sample finetune, not its relative-note transpose.
+                // PCM already contains source tuning: apply only the difference.
+                channel.xm_finetune_delta = i16::from(value) - i16::from(source_finetune);
+                channel.xm_source_finetune = value;
             }
             channel.base_period -= f32::from(channel.xm_finetune_delta) / 2.0;
             channel.period = channel.base_period;
@@ -1123,24 +1318,41 @@ impl TrackerEngine {
                 .and_then(|instr| instr.volume_envelope.as_ref())
                 .and_then(|env| env.points.last())
                 .and_then(|&(tick, value)| (value == 0).then_some(tick));
-            let instrument = self.modules.get(raw_handle as usize).and_then(|m| m.as_ref())
-                .and_then(|m| m.module.instruments.get(incoming_instrument.saturating_sub(1) as usize));
+            let instrument = self
+                .modules
+                .get(raw_handle as usize)
+                .and_then(|m| m.as_ref())
+                .and_then(|m| {
+                    m.module
+                        .instruments
+                        .get(incoming_instrument.saturating_sub(1) as usize)
+                });
             if is_it && !sample_mode {
-                let sample_global = self.modules.get(raw_handle as usize).and_then(|m| m.as_ref())
+                let sample_global = self
+                    .modules
+                    .get(raw_handle as usize)
+                    .and_then(|m| m.as_ref())
                     .and_then(|m| channel.sample_index.and_then(|i| m.module.samples.get(i)))
                     .map_or(64, |s| s.global_volume);
                 channel.reset_instrument_swing(instrument, sample_global, ch_idx);
                 channel.instrument_global_volume = instrument.map_or(64, |i| i.global_volume);
             }
-            channel.volume_envelope_escape_loop = !is_it && instrument
-                .and_then(|i| i.volume_envelope.as_ref())
-                .is_some_and(|e| e.has_sustain() && e.has_loop() && e.sustain_end == e.loop_end);
-            channel.panning_envelope_escape_loop = !is_it && instrument
-                .and_then(|i| i.panning_envelope.as_ref())
-                .is_some_and(|e| e.has_sustain() && e.has_loop() && e.sustain_end == e.loop_end);
+            channel.volume_envelope_escape_loop = !is_it
+                && instrument
+                    .and_then(|i| i.volume_envelope.as_ref())
+                    .is_some_and(|e| {
+                        e.has_sustain() && e.has_loop() && e.sustain_end == e.loop_end
+                    });
+            channel.panning_envelope_escape_loop = !is_it
+                && instrument
+                    .and_then(|i| i.panning_envelope.as_ref())
+                    .is_some_and(|e| {
+                        e.has_sustain() && e.has_loop() && e.sustain_end == e.loop_end
+                    });
             channel.volume_envelope_end = instrument
                 .and_then(|i| i.volume_envelope.as_ref())
-                .and_then(|e| e.points.last()).map(|&(tick, _)| tick);
+                .and_then(|e| e.points.last())
+                .map(|&(tick, _)| tick);
             // Copy envelope settings from instrument
             channel.volume_envelope_enabled = vol_env_enabled;
             channel.volume_envelope_sustain_loop = vol_env_sustain;
@@ -1153,9 +1365,15 @@ impl TrackerEngine {
 
             // The live note path must initialize pitch envelopes too; trigger_note
             // is not used here. Keep filter routing separate from pitch modulation.
-            let pitch_env = self.modules.get(raw_handle as usize)
+            let pitch_env = self
+                .modules
+                .get(raw_handle as usize)
                 .and_then(|m| m.as_ref())
-                .and_then(|m| m.module.instruments.get(incoming_instrument.saturating_sub(1) as usize))
+                .and_then(|m| {
+                    m.module
+                        .instruments
+                        .get(incoming_instrument.saturating_sub(1) as usize)
+                })
                 .and_then(|i| i.pitch_envelope.as_ref())
                 .filter(|e| !sample_mode && !e.is_filter());
             channel.pitch_envelope_enabled = pitch_env.is_some_and(|e| e.is_enabled());
@@ -1163,12 +1381,22 @@ impl TrackerEngine {
             channel.pitch_envelope_value = 0.0;
             channel.pitch_envelope_sustain_loop = pitch_env.and_then(|e| e.sustain_ticks());
             channel.pitch_envelope_loop = pitch_env.filter(|e| e.has_loop()).and_then(|e| {
-                Some((e.points.get(e.loop_begin as usize)?.0, e.points.get(e.loop_end as usize)?.0))
+                Some((
+                    e.points.get(e.loop_begin as usize)?.0,
+                    e.points.get(e.loop_end as usize)?.0,
+                ))
             });
 
-            channel.reset_filter_envelope(instrument.and_then(|i| i.pitch_envelope.as_ref()).filter(|_| !sample_mode));
+            channel.reset_filter_envelope(
+                instrument
+                    .and_then(|i| i.pitch_envelope.as_ref())
+                    .filter(|_| !sample_mode),
+            );
 
-            if is_it && !sample_mode && let Some(instrument) = instrument {
+            if is_it
+                && !sample_mode
+                && let Some(instrument) = instrument
+            {
                 channel.apply_instrument_filter_defaults(instrument);
             }
 
@@ -1187,7 +1415,8 @@ impl TrackerEngine {
             if !is_it && !channel.volume_envelope_enabled {
                 channel.note_fade = true;
                 // Unlike K00, only volume-setting commands exempt note 97 from mute.
-                if note.instrument == 0 && note.volume == 0
+                if note.instrument == 0
+                    && note.volume == 0
                     && !matches!(note.volume_effect, TrackerEffect::SetVolume(_))
                     && !matches!(note.effect, TrackerEffect::SetVolume(_))
                 {
@@ -1204,8 +1433,13 @@ impl TrackerEngine {
             self.channels[ch_idx].note_fade = true;
         }
 
-        if old_effects_off && ![note.volume_effect, note.effect].iter().any(|e| matches!(e,
-            TrackerEffect::TonePortamento(_) | TrackerEffect::TonePortaVolSlide { .. }))
+        if old_effects_off
+            && ![note.volume_effect, note.effect].iter().any(|e| {
+                matches!(
+                    e,
+                    TrackerEffect::TonePortamento(_) | TrackerEffect::TonePortaVolSlide { .. }
+                )
+            })
         {
             self.channels[ch_idx].key_off = false;
             self.channels[ch_idx].note_fade = false;
@@ -1213,50 +1447,57 @@ impl TrackerEngine {
 
         // IT applies defaults on note changes (including Gxx), not instrument-only cells.
         // Sample pan takes precedence; explicit row effects execute afterward.
-        if is_it && (note.has_note() || restarts_instrument_note) {
-            if let Some(loaded) = self
+        if is_it
+            && (note.has_note() || restarts_instrument_note)
+            && let Some(loaded) = self
                 .modules
                 .get(raw_handle as usize)
                 .and_then(|m| m.as_ref())
-            {
-                let channel = &mut self.channels[ch_idx];
-                let sample_pan = channel
-                    .sample_index
-                    .and_then(|index| loaded.module.samples.get(index))
-                    .and_then(|sample| sample.default_pan);
-                let instrument_pan = if sample_mode {
-                    None
-                } else {
-                    channel
-                        .instrument
-                        .checked_sub(1)
-                        .and_then(|index| loaded.module.instruments.get(index as usize))
-                        .and_then(|instrument| instrument.default_pan)
-                };
-                if let Some(pan) = sample_pan.or(instrument_pan) {
-                    channel.panning = pan.min(64) as f32 / 32.0 - 1.0;
-                    channel.surround = false;
-                }
+        {
+            let channel = &mut self.channels[ch_idx];
+            let sample_pan = channel
+                .sample_index
+                .and_then(|index| loaded.module.samples.get(index))
+                .and_then(|sample| sample.default_pan);
+            let instrument_pan = if sample_mode {
+                None
+            } else {
+                channel
+                    .instrument
+                    .checked_sub(1)
+                    .and_then(|index| loaded.module.instruments.get(index as usize))
+                    .and_then(|instrument| instrument.default_pan)
+            };
+            if let Some(pan) = sample_pan.or(instrument_pan) {
+                channel.panning = pan.min(64) as f32 / 32.0 - 1.0;
+                channel.surround = false;
             }
         }
 
         // FT2 reloads sample panning with an explicit instrument; row effects win.
-        if !is_it && note.instrument > 0 && !xm_pending_instrument {
-            if let Some(pan) = self.modules.get(raw_handle as usize)
+        if !is_it
+            && note.instrument > 0
+            && !xm_pending_instrument
+            && let Some(pan) = self
+                .modules
+                .get(raw_handle as usize)
                 .and_then(|m| m.as_ref())
                 .and_then(|m| {
                     if xm_mapped {
-                        self.channels[ch_idx].sample_index.and_then(|index| m.module.samples.get(index))
+                        self.channels[ch_idx]
+                            .sample_index
+                            .and_then(|index| m.module.samples.get(index))
                             .and_then(|sample| sample.default_pan)
                     } else {
-                        m.module.instruments.get(self.channels[ch_idx].instrument.saturating_sub(1) as usize)
+                        m.module
+                            .instruments
+                            .get(self.channels[ch_idx].instrument.saturating_sub(1) as usize)
                             .and_then(|instrument| instrument.default_pan)
                     }
                 })
-            {
-                self.channels[ch_idx].surround = false;
-                self.channels[ch_idx].panning = pan as f32 / 128.0 - 1.0;
-            }
+        {
+            self.channels[ch_idx].surround = false;
+            self.channels[ch_idx].panning = pan as f32 / 128.0 - 1.0;
         }
 
         // Handle volume column (TrackerNote has volume directly as 0-64)
@@ -1267,9 +1508,12 @@ impl TrackerEngine {
         // Both columns execute; volume-column commands precede the main column.
         self.process_volume_column_tick0(ch_idx, &note.volume_effect, note.note, note.instrument);
         // FT2 K00 with an instrument or volume command fades instead of muting.
-        if !is_it && note.effect == TrackerEffect::KeyOff
+        if !is_it
+            && note.effect == TrackerEffect::KeyOff
             && !self.channels[ch_idx].volume_envelope_enabled
-            && (note.instrument != 0 || note.volume > 0 || note.volume_effect != TrackerEffect::None)
+            && (note.instrument != 0
+                || note.volume > 0
+                || note.volume_effect != TrackerEffect::None)
         {
             self.channels[ch_idx].note_fade = true;
             self.channels[ch_idx].key_off = true;

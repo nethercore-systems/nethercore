@@ -429,18 +429,23 @@ impl TrackerChannel {
     pub(super) fn advance_it_modulation(&mut self, tick_zero: bool, old: bool) {
         use super::utils::it_waveform;
         if self.vibrato_active {
-            if !old || !tick_zero { self.vibrato_pos = self.vibrato_pos.wrapping_add(self.vibrato_speed << 2); }
+            if !old || !tick_zero {
+                self.vibrato_pos = self.vibrato_pos.wrapping_add(self.vibrato_speed << 2);
+            }
             let wave = it_waveform(self.vibrato_waveform, self.vibrato_pos);
             let scale = if self.it_fine_vibrato { 1 } else { 4 } * if old { 2 } else { 1 };
             let delta = (i32::from(wave) * i32::from(self.vibrato_depth) * scale) / 64;
-            self.period = (self.base_period + if old { delta as f32 } else { -(delta as f32) }).max(1.0);
+            self.period =
+                (self.base_period + if old { delta as f32 } else { -(delta as f32) }).max(1.0);
         }
         self.it_tremolo_from = self.it_tremolo_delta;
         self.it_tremolo_ramp_pos = 0;
         if self.tremolo_active {
             let wave = it_waveform(self.tremolo_waveform, self.tremolo_pos);
             self.it_tremolo_delta = f32::from(wave) * f32::from(self.tremolo_depth) / 2048.0;
-            if !tick_zero || !old { self.tremolo_pos = self.tremolo_pos.wrapping_add(self.tremolo_speed << 2); }
+            if !tick_zero || !old {
+                self.tremolo_pos = self.tremolo_pos.wrapping_add(self.tremolo_speed << 2);
+            }
         } else {
             self.it_tremolo_delta = 0.0;
             self.it_tremolo_from = 0.0;
@@ -461,28 +466,37 @@ impl TrackerChannel {
     }
 
     pub(super) fn advance_xm_retrigger(&mut self) {
-        if self.xm_legacy_retrigger { self.xm_retrigger_count = self.xm_retrigger_count.saturating_add(1); }
+        if self.xm_legacy_retrigger {
+            self.xm_retrigger_count = self.xm_retrigger_count.saturating_add(1);
+        }
         if self.xm_retrigger_count >= self.retrigger_tick {
             self.xm_retrigger_count = 0;
             self.retrigger_sample(true);
         }
-        if !self.xm_legacy_retrigger { self.xm_retrigger_count = self.xm_retrigger_count.saturating_add(1); }
+        if !self.xm_legacy_retrigger {
+            self.xm_retrigger_count = self.xm_retrigger_count.saturating_add(1);
+        }
     }
 
     pub(super) fn retrigger_sample(&mut self, xm: bool) {
         self.sample_pos = 0.0;
         self.xm_source_position = 0.0;
-        if self.xm_loop_stopped { self.xm_restart_attack = 1; }
+        if self.xm_loop_stopped {
+            self.xm_restart_attack = 1;
+        }
         self.xm_stop_tail_remaining = 0;
         self.xm_loop_stopped = false;
-        if self.retrigger_volume == 0 && !matches!(self.retrigger_mode, 6 | 7 | 14 | 15) { return; }
+        if self.retrigger_volume == 0 && !matches!(self.retrigger_mode, 6 | 7 | 14 | 15) {
+            return;
+        }
         self.volume = match self.retrigger_mode {
             6 => self.volume * if xm { 5.0 / 8.0 } else { 2.0 / 3.0 },
             7 => self.volume * 0.5,
             14 => self.volume * 1.5,
             15 => self.volume * 2.0,
             _ => self.volume + self.retrigger_volume as f32 / 64.0,
-        }.clamp(0.0, 1.0);
+        }
+        .clamp(0.0, 1.0);
         // Independently measured XM Rxy uses quarter-volume precision.
         if xm && matches!(self.retrigger_mode, 6 | 7 | 14 | 15) {
             self.volume = (self.volume * 256.0).floor() / 256.0;
@@ -510,18 +524,35 @@ impl TrackerChannel {
     }
 
     /// Original deterministic per-channel generator: stable across cold replay.
-    pub(crate) fn reset_instrument_swing(&mut self, instrument: Option<&TrackerInstrument>, sample_global: u8, channel_index: usize) {
+    pub(crate) fn reset_instrument_swing(
+        &mut self,
+        instrument: Option<&TrackerInstrument>,
+        sample_global: u8,
+        channel_index: usize,
+    ) {
         self.volume_swing = 0.0;
         self.pan_swing = 0.0;
-        let Some(instrument) = instrument else { return; };
-        if instrument.random_volume == 0 && instrument.random_pan == 0 { return; }
-        if self.swing_rng == 0 { self.swing_rng = channel_index as u32 + 1; }
+        let Some(instrument) = instrument else {
+            return;
+        };
+        if instrument.random_volume == 0 && instrument.random_pan == 0 {
+            return;
+        }
+        if self.swing_rng == 0 {
+            self.swing_rng = channel_index as u32 + 1;
+        }
         let mut next = || {
-            self.swing_rng = self.swing_rng.wrapping_mul(1664525).wrapping_add(1013904223);
+            self.swing_rng = self
+                .swing_rng
+                .wrapping_mul(1664525)
+                .wrapping_add(1013904223);
             (self.swing_rng >> 8) as f32 / 8388608.0 - 1.0
         };
         self.volume_swing = next() * instrument.random_volume.min(100) as f32 / 100.0
-            * instrument.global_volume.min(64) as f32 / 64.0 * sample_global.min(64) as f32 / 64.0;
+            * instrument.global_volume.min(64) as f32
+            / 64.0
+            * sample_global.min(64) as f32
+            / 64.0;
         self.pan_swing = next() * instrument.random_pan.min(64) as f32 / 32.0;
     }
 
@@ -624,8 +655,11 @@ impl TrackerChannel {
             // Set up filter from instrument defaults
             self.apply_instrument_filter_defaults(instr);
 
-            self.volume_envelope_end = instr.volume_envelope.as_ref()
-                .and_then(|env| env.points.last()).map(|&(tick, _)| tick);
+            self.volume_envelope_end = instr
+                .volume_envelope
+                .as_ref()
+                .and_then(|env| env.points.last())
+                .map(|&(tick, _)| tick);
             self.volume_envelope_zero_end = instr
                 .volume_envelope
                 .as_ref()
@@ -644,7 +678,6 @@ impl TrackerChannel {
                 .pitch_envelope
                 .as_ref()
                 .is_some_and(|e| e.is_enabled());
-
         }
     }
 

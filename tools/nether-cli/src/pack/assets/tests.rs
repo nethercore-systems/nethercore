@@ -16,8 +16,8 @@ mod tests {
     };
     use tempfile::tempdir;
     use zx_common::{
-        FORMAT_COLOR, FORMAT_UV, NetherZXAnimationHeader, NetherZXMeshHeader, TextureFormat,
-        vertex_stride_packed,
+        vertex_stride_packed, NetherZXAnimationHeader, NetherZXMeshHeader, TextureFormat,
+        FORMAT_COLOR, FORMAT_UV,
     };
 
     #[test]
@@ -132,21 +132,25 @@ path="empty.xm"
                     embedded[579..583].copy_from_slice(&1u32.to_le_bytes());
                     embedded.push(1);
                     std::fs::write(&path, embedded).unwrap();
-                    let error = super::super::audio::load_tracker("music", &path, &Default::default(), None).unwrap_err();
+                    let error = super::super::audio::load_tracker(
+                        "music",
+                        &path,
+                        &Default::default(),
+                        None,
+                    )
+                    .unwrap_err();
                     assert!(error.to_string().contains("Missing XM sample"));
                 }
                 if count > 0 {
                     xm.pop();
                     std::fs::write(&path, &xm).unwrap();
-                    assert!(
-                        super::super::audio::load_tracker(
-                            "music",
-                            &path,
-                            &Default::default(),
-                            None
-                        )
-                        .is_err()
-                    );
+                    assert!(super::super::audio::load_tracker(
+                        "music",
+                        &path,
+                        &Default::default(),
+                        None
+                    )
+                    .is_err());
                 }
             }
         }
@@ -237,15 +241,14 @@ path="explicit.wav"
         assert!(ids.iter().all(|id| !id.is_empty()));
         assert_ne!(ids[0], ids[1]);
         assert_eq!(ids[0], "music_sample0_");
-        assert!(
-            pack.sounds
-                .iter()
-                .find(|s| s.id == "square")
-                .unwrap()
-                .data
-                .iter()
-                .all(|s| *s == 2000)
-        );
+        assert!(pack
+            .sounds
+            .iter()
+            .find(|s| s.id == "square")
+            .unwrap()
+            .data
+            .iter()
+            .all(|s| *s == 2000));
         let ids_in_order: Vec<_> = pack.sounds.iter().map(|s| s.id.clone()).collect();
         let mut sorted = ids_in_order.clone();
         sorted.sort();

@@ -103,7 +103,8 @@ pub(super) fn convert_xm_instrument(xm_instr: &nether_xm::XmInstrument) -> Track
         // If we passed them through here, they would be applied AGAIN during playback,
         // causing notes to play way too high (often 1+ octave off).
         sample_finetune: 0,
-        xm_source_tuning: i16::from(xm_instr.sample_relative_note)*128 + i16::from(xm_instr.sample_finetune),
+        xm_source_tuning: i16::from(xm_instr.sample_relative_note) * 128
+            + i16::from(xm_instr.sample_finetune),
         xm_source_finetune: xm_instr.sample_finetune,
         xm_forward_loop_start: f64::from(xm_instr.sample_loop_start)
             * f64::from(TARGET_SAMPLE_RATE)

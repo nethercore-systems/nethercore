@@ -11,10 +11,16 @@ fn extension_containers_distinguish_empty_from_truncated_fields() {
     let base = multisample_xm();
     let original = crate::parse_xm(&base).unwrap();
     for marker in [b"STPM", b"XTPM"] {
-        let count = if marker == b"STPM" { 1 } else { usize::from(original.num_instruments) };
+        let count = if marker == b"STPM" {
+            1
+        } else {
+            usize::from(original.num_instruments)
+        };
         let mut field = b"demo\x04\x00".to_vec();
         // Marker-looking bytes inside a framed payload are opaque, not nested tags.
-        for _ in 0..count { field.extend_from_slice(b"STPM"); }
+        for _ in 0..count {
+            field.extend_from_slice(b"STPM");
+        }
         for prefix in 0..=field.len() {
             let mut data = base.clone();
             data.extend_from_slice(marker);
@@ -27,12 +33,19 @@ fn extension_containers_distinguish_empty_from_truncated_fields() {
                 let restored = crate::parse_xm_minimal(&packed).unwrap();
                 assert_eq!(restored.mix_mode, original.mix_mode);
             } else {
-                assert_eq!(crate::parse_xm(&data).unwrap_err(), crate::XmError::UnexpectedEof,
-                    "marker={marker:?} prefix={prefix}");
+                assert_eq!(
+                    crate::parse_xm(&data).unwrap_err(),
+                    crate::XmError::UnexpectedEof,
+                    "marker={marker:?} prefix={prefix}"
+                );
             }
         }
     }
-    for suffix in [b"STPMXTPMSTPM".as_slice(), b"opaque trailing data", b"XTPMdemo\x00\x00STPM"] {
+    for suffix in [
+        b"STPMXTPMSTPM".as_slice(),
+        b"opaque trailing data",
+        b"XTPMdemo\x00\x00STPM",
+    ] {
         let mut data = base.clone();
         data.extend_from_slice(suffix);
         assert!(crate::parse_xm(&data).is_ok());
@@ -44,7 +57,10 @@ fn source_channel_count_is_validated_before_narrowing() {
     for channels in [0u16, 256, 257, u16::MAX] {
         let mut bytes = multisample_xm();
         bytes[68..70].copy_from_slice(&channels.to_le_bytes());
-        assert!(crate::parse_xm(&bytes).is_err(), "accepted {channels} channels");
+        assert!(
+            crate::parse_xm(&bytes).is_err(),
+            "accepted {channels} channels"
+        );
     }
 }
 
@@ -86,7 +102,10 @@ fn measured_modern_openmpt_mix_survives_pack() {
     assert_eq!(source.mix_mode, crate::XmMixMode::Ft2);
     assert!(!source.legacy_retrigger);
     let packed = crate::pack_xm_minimal(&source).unwrap();
-    assert_eq!(crate::parse_xm_minimal(&packed).unwrap().mix_mode, crate::XmMixMode::Ft2);
+    assert_eq!(
+        crate::parse_xm_minimal(&packed).unwrap().mix_mode,
+        crate::XmMixMode::Ft2
+    );
 }
 
 #[test]
@@ -96,7 +115,11 @@ fn measured_retrigger_semantics_are_independent_of_mixer() {
             let mut data = multisample_xm();
             data[38..58].copy_from_slice(b"FastTracker v2.00   ");
             for slot in 0..2 {
-                data[336+243+slot*40+18..336+243+slot*40+40].fill(if legacy {0} else {b' '});
+                data[336 + 243 + slot * 40 + 18..336 + 243 + slot * 40 + 40].fill(if legacy {
+                    0
+                } else {
+                    b' '
+                });
             }
             if let Some(mode) = mode {
                 data.extend_from_slice(b"STPM.MMP\x04\x00");
@@ -107,9 +130,15 @@ fn measured_retrigger_semantics_are_independent_of_mixer() {
             assert_eq!(parsed.legacy_retrigger, expected);
             let packed = crate::pack_xm_minimal(&parsed).unwrap();
             assert_eq!(packed[13] & 0x40 != 0, expected);
-            assert_eq!(crate::parse_xm_minimal(&packed).unwrap().legacy_retrigger, expected);
+            assert_eq!(
+                crate::parse_xm_minimal(&packed).unwrap().legacy_retrigger,
+                expected
+            );
             let stripped = rebuild_xm_without_samples(&data, &parsed).unwrap();
-            assert_eq!(crate::parse_xm(&stripped).unwrap().legacy_retrigger, expected);
+            assert_eq!(
+                crate::parse_xm(&stripped).unwrap().legacy_retrigger,
+                expected
+            );
             let mut old = packed;
             old[13] &= !0x40;
             assert!(!crate::parse_xm_minimal(&old).unwrap().legacy_retrigger);
@@ -124,7 +153,7 @@ fn measured_empty_instrument_header_mix_survives_pack() {
             let mut data = multisample_xm();
             data[38..58].copy_from_slice(tracker);
             for slot in 0..2 {
-                data[336+243+slot*40+18..336+243+slot*40+40].fill(b' ');
+                data[336 + 243 + slot * 40 + 18..336 + 243 + slot * 40 + 40].fill(b' ');
             }
             data.truncate(data.len() - 29); // Replace the helper's existing empty instrument.
             let mut empty = vec![0; size as usize];
@@ -132,9 +161,14 @@ fn measured_empty_instrument_header_mix_survives_pack() {
             data.extend(empty);
             let expected = if tracker == b"FastTracker v2.00   " && !matches!(size, 33 | 263) {
                 crate::XmMixMode::Compatible
-            } else { crate::XmMixMode::Ft2 };
+            } else {
+                crate::XmMixMode::Ft2
+            };
             let parsed = crate::parse_xm(&data).unwrap();
-            assert_eq!(parsed.mix_mode, expected, "size={size}, tracker={tracker:?}");
+            assert_eq!(
+                parsed.mix_mode, expected,
+                "size={size}, tracker={tracker:?}"
+            );
             let packed = crate::pack_xm_minimal(&parsed).unwrap();
             assert_eq!(crate::parse_xm_minimal(&packed).unwrap().mix_mode, expected);
         }
@@ -143,32 +177,53 @@ fn measured_empty_instrument_header_mix_survives_pack() {
 
 #[test]
 fn measured_tracker_padding_survives_parse_pack_and_strip() {
-    for padding in [b' ',0] {
-      for sample_padding in [b' ',0] {
-        let mut data=multisample_xm();
-        // Isolate sample padding from the independently measured empty-header mode.
-        let empty_start = data.len() - 29;
-        data[empty_start..empty_start+4].copy_from_slice(&33u32.to_le_bytes());
-        data.extend_from_slice(&[0; 4]);
-        data[38..58].fill(padding);
-        data[38..55].copy_from_slice(b"FastTracker v2.00");
-        for slot in 0..2 { data[336+243+slot*40+18..336+243+slot*40+40].fill(sample_padding); }
-        data.extend_from_slice(b"opaque trailing bytes");
-        let expected=if padding==b' ' {if sample_padding==b' ' {crate::XmMixMode::Ft2}else{crate::XmMixMode::Legacy}}else{crate::XmMixMode::Compatible};
-        let preamp=48;
-        let parsed=crate::parse_xm(&data).unwrap();
-        assert_eq!((parsed.mix_mode,parsed.sample_preamp),(expected,preamp));
-        let packed=crate::pack_xm_minimal(&parsed).unwrap();
-        let mut conflicting=packed.clone();conflicting[13]|=0x28;
-        assert!(crate::parse_xm_minimal(&conflicting).is_err());
-        let mut old=packed.clone();old[13]&=!0x28;
-        assert_eq!(crate::parse_xm_minimal(&old).unwrap().mix_mode,crate::XmMixMode::Compatible);
-        let restored=crate::parse_xm_minimal(&packed).unwrap();
-        assert_eq!((restored.mix_mode,restored.sample_preamp),(expected,preamp));
-        let stripped=rebuild_xm_without_samples(&data,&parsed).unwrap();
-        let restored=crate::parse_xm(&stripped).unwrap();
-        assert_eq!((restored.mix_mode,restored.sample_preamp),(expected,preamp));
-      }
+    for padding in [b' ', 0] {
+        for sample_padding in [b' ', 0] {
+            let mut data = multisample_xm();
+            // Isolate sample padding from the independently measured empty-header mode.
+            let empty_start = data.len() - 29;
+            data[empty_start..empty_start + 4].copy_from_slice(&33u32.to_le_bytes());
+            data.extend_from_slice(&[0; 4]);
+            data[38..58].fill(padding);
+            data[38..55].copy_from_slice(b"FastTracker v2.00");
+            for slot in 0..2 {
+                data[336 + 243 + slot * 40 + 18..336 + 243 + slot * 40 + 40].fill(sample_padding);
+            }
+            data.extend_from_slice(b"opaque trailing bytes");
+            let expected = if padding == b' ' {
+                if sample_padding == b' ' {
+                    crate::XmMixMode::Ft2
+                } else {
+                    crate::XmMixMode::Legacy
+                }
+            } else {
+                crate::XmMixMode::Compatible
+            };
+            let preamp = 48;
+            let parsed = crate::parse_xm(&data).unwrap();
+            assert_eq!((parsed.mix_mode, parsed.sample_preamp), (expected, preamp));
+            let packed = crate::pack_xm_minimal(&parsed).unwrap();
+            let mut conflicting = packed.clone();
+            conflicting[13] |= 0x28;
+            assert!(crate::parse_xm_minimal(&conflicting).is_err());
+            let mut old = packed.clone();
+            old[13] &= !0x28;
+            assert_eq!(
+                crate::parse_xm_minimal(&old).unwrap().mix_mode,
+                crate::XmMixMode::Compatible
+            );
+            let restored = crate::parse_xm_minimal(&packed).unwrap();
+            assert_eq!(
+                (restored.mix_mode, restored.sample_preamp),
+                (expected, preamp)
+            );
+            let stripped = rebuild_xm_without_samples(&data, &parsed).unwrap();
+            let restored = crate::parse_xm(&stripped).unwrap();
+            assert_eq!(
+                (restored.mix_mode, restored.sample_preamp),
+                (expected, preamp)
+            );
+        }
     }
 }
 
@@ -185,39 +240,63 @@ fn explicit_xm_mix_properties_survive_parse_pack_and_strip() {
             data.extend_from_slice(b".APS\x04\x00");
             data.extend_from_slice(&u32::from(preamp).to_le_bytes());
             let parsed = crate::parse_xm(&data).unwrap();
-            let expected = if mode == 4 { crate::XmMixMode::Compatible } else { crate::XmMixMode::Ft2 };
+            let expected = if mode == 4 {
+                crate::XmMixMode::Compatible
+            } else {
+                crate::XmMixMode::Ft2
+            };
             assert_eq!((parsed.mix_mode, parsed.sample_preamp), (expected, preamp));
             let packed = crate::pack_xm_minimal(&parsed).unwrap();
             let restored = crate::parse_xm_minimal(&packed).unwrap();
-            assert_eq!((restored.mix_mode, restored.sample_preamp), (expected, preamp));
+            assert_eq!(
+                (restored.mix_mode, restored.sample_preamp),
+                (expected, preamp)
+            );
             let stripped = rebuild_xm_without_samples(&data, &parsed).unwrap();
             let restored = crate::parse_xm(&stripped).unwrap();
-            assert_eq!((restored.mix_mode, restored.sample_preamp), (expected, preamp));
+            assert_eq!(
+                (restored.mix_mode, restored.sample_preamp),
+                (expected, preamp)
+            );
             let mut legacy = packed;
             legacy[13] &= !(0x08 | 0x10);
             legacy[14] = 199; // Previously reserved bytes must not invent a gain override.
             let old = crate::parse_xm_minimal(&legacy).unwrap();
-            assert_eq!((old.mix_mode, old.sample_preamp), (crate::XmMixMode::Compatible, 48));
+            assert_eq!(
+                (old.mix_mode, old.sample_preamp),
+                (crate::XmMixMode::Compatible, 48)
+            );
         }
     }
 }
 
 #[test]
 fn xm_mix_extensions_reject_explicit_unsupported_values_not_creator_names() {
-    for creator in [b"OpenMPT 1.32.00.00  ".as_slice(), b"ModPlug Tracker     ".as_slice()] {
+    for creator in [
+        b"OpenMPT 1.32.00.00  ".as_slice(),
+        b"ModPlug Tracker     ".as_slice(),
+    ] {
         let mut data = multisample_xm();
         data[38..58].fill(b' ');
-        data[38..38+creator.len()].copy_from_slice(creator);
+        data[38..38 + creator.len()].copy_from_slice(creator);
         data.extend_from_slice(b"opaque trailing information");
         assert!(crate::parse_xm(&data).is_ok());
     }
-    for (tag,value) in [(b".MMP",0u32),(b".APS",300)] {
+    for (tag, value) in [(b".MMP", 0u32), (b".APS", 300)] {
         let mut data = multisample_xm();
-        data.extend_from_slice(b"STPM"); data.extend_from_slice(tag);
-        data.extend_from_slice(&4u16.to_le_bytes()); data.extend_from_slice(&value.to_le_bytes());
-        assert_eq!(crate::parse_xm(&data).unwrap_err(), crate::XmError::UnsupportedMixMetadata);
+        data.extend_from_slice(b"STPM");
+        data.extend_from_slice(tag);
+        data.extend_from_slice(&4u16.to_le_bytes());
+        data.extend_from_slice(&value.to_le_bytes());
+        assert_eq!(
+            crate::parse_xm(&data).unwrap_err(),
+            crate::XmError::UnsupportedMixMetadata
+        );
         data.pop();
-        assert_eq!(crate::parse_xm(&data).unwrap_err(), crate::XmError::UnexpectedEof);
+        assert_eq!(
+            crate::parse_xm(&data).unwrap_err(),
+            crate::XmError::UnexpectedEof
+        );
     }
 }
 
@@ -280,8 +359,7 @@ fn multisample_xm_with_16bit_sample() -> Vec<u8> {
     let second_sample_header = 336 + 243 + 40;
     xm[second_sample_header..second_sample_header + 4].copy_from_slice(&6u32.to_le_bytes());
     xm[second_sample_header + 4..second_sample_header + 8].copy_from_slice(&2u32.to_le_bytes());
-    xm[second_sample_header + 8..second_sample_header + 12]
-        .copy_from_slice(&4u32.to_le_bytes());
+    xm[second_sample_header + 8..second_sample_header + 12].copy_from_slice(&4u32.to_le_bytes());
     xm[second_sample_header + 14] = 0x11;
     xm.splice(336 + 243 + 80 + 3..336 + 243 + 80 + 3, [4, 5, 6]);
     xm
@@ -355,7 +433,10 @@ fn multisample_strip_preserves_keymap_sample_metadata_and_16bit_loops() {
     let stripped = crate::strip_xm_samples(&xm).unwrap();
     let after = crate::parse_xm(&stripped).unwrap();
 
-    assert_eq!(after.instruments[0].sample_map, before.instruments[0].sample_map);
+    assert_eq!(
+        after.instruments[0].sample_map,
+        before.instruments[0].sample_map
+    );
     for (before, after) in before.instruments[0]
         .samples
         .iter()
@@ -396,7 +477,10 @@ fn sample_loop_bytes_become_sample_positions() {
         bytes.extend_from_slice(&[0; 12]);
         let mut cursor = Cursor::new(bytes.as_slice());
         let instrument = parse_instrument(&mut cursor).unwrap();
-        assert_eq!((instrument.sample_loop_start, instrument.sample_loop_length), (start, length));
+        assert_eq!(
+            (instrument.sample_loop_start, instrument.sample_loop_length),
+            (start, length)
+        );
         assert_eq!(cursor.position(), bytes.len() as u64);
     }
 }

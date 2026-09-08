@@ -2,6 +2,19 @@
 
 ## CURRENT: XM and IT VALIDATED/WORKING for the explicit tested scopes
 
+### Commit/push closure
+
+Compatibility implementation committed as `119aef202c2d3203a6b163398046477b1d24e5fe`.
+Its hosted Format failure prompted a formatting/lint-only follow-up, not expanded
+compatibility work. Owner reran the affected all-target Clippy checks with warnings
+denied: IT, XM, tracker, ZX, core and CLI passed. Fresh serialized tests passed:
+IT 66, tracker 54, XM 76, core 458, ZX 504 (one ignored), CLI 81.
+Full local workspace Clippy is unavailable offline because `aligned v0.4.3` is
+not cached; hosted workspace CI is the independent gate. Later historical notes
+about non-green formatting/lint describe the pre-closure snapshot.
+Unrelated changes are preserved separately and must not be included in this commit.
+Only the primary worktree exists; do not create or delete it for cleanup.
+
 FINAL OWNER ACCEPTANCE: the import->pack->native-playback WITH rollback goal
 is complete for the named XM/IT inventories and historical modules below.
 No known unresolved failure remains in those accepted cases. This is not universal

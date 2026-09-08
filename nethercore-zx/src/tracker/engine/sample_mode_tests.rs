@@ -46,7 +46,10 @@ fn it_sample_mode_triggers_c5_and_retains_sample_without_instrument() {
                     instrument: 1,
                     ..Default::default()
                 }],
-                vec![TrackerNote { instrument: 1, ..Default::default() }],
+                vec![TrackerNote {
+                    instrument: 1,
+                    ..Default::default()
+                }],
             ],
         }],
         instruments: Vec::new(),
@@ -93,7 +96,10 @@ fn it_sample_mode_triggers_c5_and_retains_sample_without_instrument() {
     engine.channels[0].target_period = 123.0;
     engine.current_row = 3;
     engine.process_row_tick0_internal(handle, &sounds);
-    assert!(engine.channels[0].note_on, "instrument-only restarts stopped IT sample");
+    assert!(
+        engine.channels[0].note_on,
+        "instrument-only restarts stopped IT sample"
+    );
     assert_eq!(engine.channels[0].sample_pos, 0.0);
     assert_eq!(engine.channels[0].base_period, note_to_period(51, 0));
 }
@@ -102,26 +108,44 @@ fn it_sample_mode_triggers_c5_and_retains_sample_without_instrument() {
 fn it_sample_mode_porta_swap_resets_position_only_for_changed_sample() {
     for compatible in [false, true] {
         let note = |pitch, instrument, porta| TrackerNote {
-            note: pitch, instrument,
-            effect: if porta { nether_tracker::TrackerEffect::TonePortamento(32) }
-                else { nether_tracker::TrackerEffect::None },
+            note: pitch,
+            instrument,
+            effect: if porta {
+                nether_tracker::TrackerEffect::TonePortamento(32)
+            } else {
+                nether_tracker::TrackerEffect::None
+            },
             ..Default::default()
         };
         let module = TrackerModule {
-            name: "sample-mode porta position".into(), num_channels: 1,
-            initial_speed: 6, initial_tempo: 125, global_volume: 128,
-            mix_volume: 128, panning_separation: 128,
-            channel_pan: [32; 64], channel_vol: [64; 64],
+            name: "sample-mode porta position".into(),
+            num_channels: 1,
+            initial_speed: 6,
+            initial_tempo: 125,
+            global_volume: 128,
+            mix_volume: 128,
+            panning_separation: 128,
+            channel_pan: [32; 64],
+            channel_vol: [64; 64],
             order_table: vec![0],
-            patterns: vec![TrackerPattern { num_rows: 3, notes: vec![
-                vec![note(61, 1, false)], vec![note(68, 2, true)],
-                vec![note(61, 2, true)],
-            ] }],
-            instruments: vec![], samples: vec![TrackerSample::default(); 2],
-            format: FormatFlags::IS_IT_FORMAT | if compatible {
-                FormatFlags::LINK_G_MEMORY
-            } else { FormatFlags::empty() },
-            message: None, restart_position: 0,
+            patterns: vec![TrackerPattern {
+                num_rows: 3,
+                notes: vec![
+                    vec![note(61, 1, false)],
+                    vec![note(68, 2, true)],
+                    vec![note(61, 2, true)],
+                ],
+            }],
+            instruments: vec![],
+            samples: vec![TrackerSample::default(); 2],
+            format: FormatFlags::IS_IT_FORMAT
+                | if compatible {
+                    FormatFlags::LINK_G_MEMORY
+                } else {
+                    FormatFlags::empty()
+                },
+            message: None,
+            restart_position: 0,
         };
         let mut engine = TrackerEngine::new();
         let handle = engine.load_tracker_module(module, vec![7, 8]);
@@ -130,13 +154,22 @@ fn it_sample_mode_porta_swap_resets_position_only_for_changed_sample() {
         engine.channels[0].sample_pos = 5.5;
         engine.current_row = 1;
         engine.process_row_tick0_internal(handle, &[]);
-        assert_eq!(engine.channels[0].sample_handle, if compatible { 7 } else { 8 });
-        assert_eq!(engine.channels[0].sample_pos, if compatible { 5.5 } else { 0.0 });
+        assert_eq!(
+            engine.channels[0].sample_handle,
+            if compatible { 7 } else { 8 }
+        );
+        assert_eq!(
+            engine.channels[0].sample_pos,
+            if compatible { 5.5 } else { 0.0 }
+        );
         assert_eq!(engine.channels[0].base_period, period);
         engine.channels[0].sample_pos = 3.5;
         engine.current_row = 2;
         engine.process_row_tick0_internal(handle, &[]);
-        assert_eq!(engine.channels[0].sample_pos, 3.5, "same sample does not restart");
+        assert_eq!(
+            engine.channels[0].sample_pos, 3.5,
+            "same sample does not restart"
+        );
     }
 }
 
@@ -202,8 +235,15 @@ fn instrument_porta_sustain_case(compatible: bool) {
         patterns: vec![TrackerPattern {
             num_rows: 8,
             notes: vec![
-                vec![TrackerNote { note: 48, instrument: 1, ..Default::default() }],
-                vec![TrackerNote { note: TrackerNote::NOTE_OFF, ..Default::default() }],
+                vec![TrackerNote {
+                    note: 48,
+                    instrument: 1,
+                    ..Default::default()
+                }],
+                vec![TrackerNote {
+                    note: TrackerNote::NOTE_OFF,
+                    ..Default::default()
+                }],
                 vec![porta(51, 2)],
                 vec![porta(52, 1)],
                 vec![porta(63, 2)],
@@ -214,8 +254,13 @@ fn instrument_porta_sustain_case(compatible: bool) {
         }],
         instruments: vec![first, second],
         samples,
-        format: FormatFlags::IS_IT_FORMAT | FormatFlags::INSTRUMENTS
-            | if compatible { FormatFlags::LINK_G_MEMORY } else { FormatFlags::empty() },
+        format: FormatFlags::IS_IT_FORMAT
+            | FormatFlags::INSTRUMENTS
+            | if compatible {
+                FormatFlags::LINK_G_MEMORY
+            } else {
+                FormatFlags::empty()
+            },
         message: None,
         restart_position: 0,
     };
@@ -252,23 +297,44 @@ fn instrument_porta_sustain_case(compatible: bool) {
     engine.channels[0].sample_pos = 5.5;
     engine.current_row = 5;
     engine.process_row_tick0_internal(handle, &sounds);
-    assert_eq!(engine.channels[0].sample_pos, if compatible { 5.5 } else { 0.0 });
-    assert_eq!(engine.channels[0].sample_handle, if compatible { 7 } else { 10 });
-    assert_eq!(engine.channels[0].sample_index, Some(if compatible { 0 } else { 3 }));
+    assert_eq!(
+        engine.channels[0].sample_pos,
+        if compatible { 5.5 } else { 0.0 }
+    );
+    assert_eq!(
+        engine.channels[0].sample_handle,
+        if compatible { 7 } else { 10 }
+    );
+    assert_eq!(
+        engine.channels[0].sample_index,
+        Some(if compatible { 0 } else { 3 })
+    );
     engine.channels[0].sample_pos = 5.5;
     engine.channels[0].key_off = true;
     engine.channels[0].sample_sustain_released = true;
     engine.current_row = 6;
     engine.process_row_tick0_internal(handle, &sounds);
     // OpenMPT Snd_fx.cpp:3095 and 2080: instrument-less porta retains playback.
-    assert_eq!(engine.channels[0].sample_handle, if compatible { 7 } else { 10 });
-    assert_eq!(engine.channels[0].sample_index, Some(if compatible { 0 } else { 3 }));
+    assert_eq!(
+        engine.channels[0].sample_handle,
+        if compatible { 7 } else { 10 }
+    );
+    assert_eq!(
+        engine.channels[0].sample_index,
+        Some(if compatible { 0 } else { 3 })
+    );
     assert_eq!(engine.channels[0].sample_pos, 5.5);
     assert!(engine.channels[0].key_off);
     engine.current_row = 7;
     engine.process_row_tick0_internal(handle, &sounds);
     assert_eq!(engine.channels[0].sample_handle, 7);
     assert_eq!(engine.channels[0].sample_index, Some(0));
-    assert_eq!(engine.channels[0].sample_pos, if compatible { 5.5 } else { 0.0 });
-    assert!(engine.channels[0].key_off, "same instrument must not clear release");
+    assert_eq!(
+        engine.channels[0].sample_pos,
+        if compatible { 5.5 } else { 0.0 }
+    );
+    assert!(
+        engine.channels[0].key_off,
+        "same instrument must not clear release"
+    );
 }

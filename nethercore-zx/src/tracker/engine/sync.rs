@@ -14,7 +14,12 @@ impl TrackerEngine {
         self.sync_to_state_at_rate(state, sounds, 44100);
     }
 
-    pub fn sync_to_state_at_rate(&mut self, state: &crate::state::TrackerState, sounds: &[Option<Sound>], sample_rate: u32) {
+    pub fn sync_to_state_at_rate(
+        &mut self,
+        state: &crate::state::TrackerState,
+        sounds: &[Option<Sound>],
+        sample_rate: u32,
+    ) {
         if state.handle == 0 || (state.flags & tracker_flags::PLAYING) == 0 {
             return;
         }
@@ -55,35 +60,82 @@ impl TrackerEngine {
     }
 
     /// Cold recovery uses playback's actual clock, including slides, delays and loops.
-    fn reconstruct_playback(&mut self, target: &crate::state::TrackerState, sounds: &[Option<Sound>], sample_rate: u32) -> bool {
+    fn reconstruct_playback(
+        &mut self,
+        target: &crate::state::TrackerState,
+        sounds: &[Option<Sound>],
+        sample_rate: u32,
+    ) -> bool {
         let raw = raw_tracker_handle(target.handle);
-        let Some(loaded) = self.modules.get(raw as usize).and_then(|m| m.as_ref()) else { return false; };
+        let Some(loaded) = self.modules.get(raw as usize).and_then(|m| m.as_ref()) else {
+            return false;
+        };
         let origin = if target.rendered_samples() == 0 {
             (target.order_position, target.row)
         } else {
-            ((target._reserved[3] >> 16) as u16, target._reserved[3] as u16)
+            (
+                (target._reserved[3] >> 16) as u16,
+                target._reserved[3] as u16,
+            )
         };
-        if origin != (0, 0) && loaded.module.pattern_at_order(origin.0).is_none_or(|p| origin.1 >= p.num_rows) {
+        if origin != (0, 0)
+            && loaded
+                .module
+                .pattern_at_order(origin.0)
+                .is_none_or(|p| origin.1 >= p.num_rows)
+        {
             return false;
         }
         let mut replay = crate::state::TrackerState {
-            handle: target.handle, flags: target.flags & !tracker_flags::PAUSED,
-            speed: loaded.module.initial_speed as u16, bpm: loaded.module.initial_tempo as u16,
-            volume: target.volume, ..Default::default()
+            handle: target.handle,
+            flags: target.flags & !tracker_flags::PAUSED,
+            speed: loaded.module.initial_speed as u16,
+            bpm: loaded.module.initial_tempo as u16,
+            volume: target.volume,
+            ..Default::default()
         };
         self.reset();
         self.seek_to_position(target.handle, 0, 0, sounds);
-        let rate = if target.rendered_samples() == 0 || target._reserved[2] == 0 { sample_rate } else { target._reserved[2] };
+        let rate = if target.rendered_samples() == 0 || target._reserved[2] == 0 {
+            sample_rate
+        } else {
+            target._reserved[2]
+        };
         let mut visited = std::collections::BTreeSet::new();
-        while (replay.order_position, replay.row, replay.tick, replay.tick_sample_pos) != (origin.0, origin.1, 0, 0) {
-            if replay.flags & tracker_flags::PLAYING == 0 { return false; }
+        while (
+            replay.order_position,
+            replay.row,
+            replay.tick,
+            replay.tick_sample_pos,
+        ) != (origin.0, origin.1, 0, 0)
+        {
+            if replay.flags & tracker_flags::PLAYING == 0 {
+                return false;
+            }
             if replay.tick == 0 && replay.tick_sample_pos == 0 {
-                let loops: Vec<_> = self.channels.iter().map(|c| (c.pattern_loop_row, c.pattern_loop_count)).collect();
-                if !visited.insert((replay.order_position, replay.row, self.pattern_delay_count, self.xm_next_pattern_row, self.xm_loop_owner, loops)) { return false; }
+                let loops: Vec<_> = self
+                    .channels
+                    .iter()
+                    .map(|c| (c.pattern_loop_row, c.pattern_loop_count))
+                    .collect();
+                if !visited.insert((
+                    replay.order_position,
+                    replay.row,
+                    self.pattern_delay_count,
+                    self.xm_next_pattern_row,
+                    self.xm_loop_owner,
+                    loops,
+                )) {
+                    return false;
+                }
             }
             // Row tick zero can change tempo: cross one sample before sizing the rest.
-            let count = if replay.tick_sample_pos == 0 { 1 } else {
-                super::super::samples_per_tick(replay.bpm, rate).saturating_sub(replay.tick_sample_pos).max(1)
+            let count = if replay.tick_sample_pos == 0 {
+                1
+            } else {
+                super::super::samples_per_tick(replay.bpm, rate)
+                    .saturating_sub(replay.tick_sample_pos)
+                    .max(1)
             };
             self.advance_positions(&mut replay, sounds, count, rate);
         }
@@ -94,7 +146,8 @@ impl TrackerEngine {
             // Legacy/explicit positions can supply a tick without an elapsed clock.
             for _ in 0..target.tick {
                 self.advance_positions(&mut replay, sounds, 1, rate);
-                let rest = super::super::samples_per_tick(replay.bpm, rate).saturating_sub(replay.tick_sample_pos);
+                let rest = super::super::samples_per_tick(replay.bpm, rate)
+                    .saturating_sub(replay.tick_sample_pos);
                 self.advance_positions(&mut replay, sounds, rest, rate);
             }
             remaining = u64::from(target.tick_sample_pos);
@@ -126,7 +179,9 @@ impl TrackerEngine {
             .and_then(|m| m.as_ref())
             .is_none_or(|loaded| {
                 (target_order != 0 || target_row != 0)
-                    && loaded.module.pattern_at_order(target_order)
+                    && loaded
+                        .module
+                        .pattern_at_order(target_order)
                         .is_none_or(|pattern| target_row >= pattern.num_rows)
             })
         {

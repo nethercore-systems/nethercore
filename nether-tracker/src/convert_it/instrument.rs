@@ -40,7 +40,9 @@ pub(super) fn convert_it_instrument(it_instr: &nether_it::ItInstrument) -> Track
         default_pan: it_instr.default_pan,
         random_volume: it_instr.random_volume.min(100),
         random_pan: it_instr.random_pan.min(64),
-        note_sample_table: it_instr.note_sample_table.map(|(note, sample)| (note, u16::from(sample))),
+        note_sample_table: it_instr
+            .note_sample_table
+            .map(|(note, sample)| (note, u16::from(sample))),
         volume_envelope: it_instr.volume_envelope.as_ref().map(convert_it_envelope),
         panning_envelope: it_instr.panning_envelope.as_ref().map(convert_it_envelope),
         pitch_envelope: it_instr.pitch_envelope.as_ref().map(convert_it_envelope),

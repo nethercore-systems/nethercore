@@ -233,9 +233,13 @@ impl TrackerEnvelope {
 
     /// Resolve the authored sustain range from node indices to inclusive ticks.
     pub fn sustain_ticks(&self) -> Option<(u16, u16)> {
-        if !self.has_sustain() { return None; }
-        Some((self.points.get(self.sustain_begin as usize)?.0,
-              self.points.get(self.sustain_end as usize)?.0))
+        if !self.has_sustain() {
+            return None;
+        }
+        Some((
+            self.points.get(self.sustain_begin as usize)?.0,
+            self.points.get(self.sustain_end as usize)?.0,
+        ))
     }
 
     /// Check if this is a filter envelope (for pitch envelope type)

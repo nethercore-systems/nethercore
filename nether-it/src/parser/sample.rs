@@ -262,10 +262,8 @@ mod tests {
         let original_samples: Vec<i8> = vec![0, 10, -10, 50, -50, 127, -128, 0];
 
         // Build a minimal IT file with this sample
-        let mut it_data = Vec::new();
-
         // Create sample at offset 1000 (arbitrary)
-        it_data.resize(1000, 0);
+        let mut it_data = vec![0; 1000];
         for &sample in &original_samples {
             it_data.push(sample as u8);
         }
@@ -501,44 +499,80 @@ mod tests {
 
 /// Find the framed end without decoding or interpreting sample payload as tags.
 pub(super) fn sample_data_end(data: &[u8], info: &SampleInfo) -> Result<usize, ItError> {
-    if info.sample.length == 0 || !info.sample.flags.contains(ItSampleFlags::HAS_DATA) { return Ok(0); }
-    if info.data_offset == 0 { return Err(ItError::InvalidSampleOffset(0)); }
+    if info.sample.length == 0 || !info.sample.flags.contains(ItSampleFlags::HAS_DATA) {
+        return Ok(0);
+    }
+    if info.data_offset == 0 {
+        return Err(ItError::InvalidSampleOffset(0));
+    }
     let flags = info.sample.flags;
-    let channels = if flags.contains(ItSampleFlags::STEREO) { 2 } else { 1 };
-    let width = if flags.contains(ItSampleFlags::SAMPLE_16BIT) { 2 } else { 1 };
+    let channels = if flags.contains(ItSampleFlags::STEREO) {
+        2
+    } else {
+        1
+    };
+    let width = if flags.contains(ItSampleFlags::SAMPLE_16BIT) {
+        2
+    } else {
+        1
+    };
     let mut end = info.data_offset as usize;
     if flags.contains(ItSampleFlags::COMPRESSED) {
         for _ in 0..channels {
             let blocks = (info.sample.length as usize).div_ceil(32768 / width);
             for _ in 0..blocks {
-                let header = data.get(end..end.checked_add(2).ok_or(ItError::UnexpectedEof)?).ok_or(ItError::UnexpectedEof)?;
+                let header = data
+                    .get(end..end.checked_add(2).ok_or(ItError::UnexpectedEof)?)
+                    .ok_or(ItError::UnexpectedEof)?;
                 let length = u16::from_le_bytes([header[0], header[1]]) as usize;
                 end = end.checked_add(2 + length).ok_or(ItError::UnexpectedEof)?;
-                if end > data.len() { return Err(ItError::UnexpectedEof); }
+                if end > data.len() {
+                    return Err(ItError::UnexpectedEof);
+                }
             }
         }
     } else {
-        end = end.checked_add((info.sample.length as usize).checked_mul(width * channels).ok_or(ItError::UnexpectedEof)?).ok_or(ItError::UnexpectedEof)?;
+        end = end
+            .checked_add(
+                (info.sample.length as usize)
+                    .checked_mul(width * channels)
+                    .ok_or(ItError::UnexpectedEof)?,
+            )
+            .ok_or(ItError::UnexpectedEof)?;
     }
-    if end > data.len() { return Err(ItError::UnexpectedEof); }
+    if end > data.len() {
+        return Err(ItError::UnexpectedEof);
+    }
     Ok(end)
 }
 
 #[test]
 fn metadata_boundary_counts_pcm_width_and_compressed_stereo_blocks() {
-    let mut info=SampleInfo { data_offset:3, sample:ItSample { length:10,
-        flags:ItSampleFlags::HAS_DATA | ItSampleFlags::COMPRESSED | ItSampleFlags::STEREO,..Default::default() } };
+    let mut info = SampleInfo {
+        data_offset: 3,
+        sample: ItSample {
+            length: 10,
+            flags: ItSampleFlags::HAS_DATA | ItSampleFlags::COMPRESSED | ItSampleFlags::STEREO,
+            ..Default::default()
+        },
+    };
     // Framing only: two channels, each with its own declared compressed block.
-    let data=[0,0,0,3,0,11,22,33,2,0,44,55];
-    assert_eq!(sample_data_end(&data,&info).unwrap(),12);
-    for length in 0..data.len() { assert!(sample_data_end(&data[..length],&info).is_err()); }
-    info.sample.length=32769;
-    assert!(sample_data_end(&data,&info).is_err());
-    info.sample.length=1;
-    info.sample.flags=ItSampleFlags::HAS_DATA | ItSampleFlags::SAMPLE_16BIT | ItSampleFlags::STEREO;
-    assert_eq!(sample_data_end(&data,&info).unwrap(),7);
-    info.data_offset=0;
-    assert!(matches!(sample_data_end(&data,&info),Err(ItError::InvalidSampleOffset(0))));
-    info.sample.flags=ItSampleFlags::default();
-    assert_eq!(sample_data_end(&[],&info).unwrap(),0);
+    let data = [0, 0, 0, 3, 0, 11, 22, 33, 2, 0, 44, 55];
+    assert_eq!(sample_data_end(&data, &info).unwrap(), 12);
+    for length in 0..data.len() {
+        assert!(sample_data_end(&data[..length], &info).is_err());
+    }
+    info.sample.length = 32769;
+    assert!(sample_data_end(&data, &info).is_err());
+    info.sample.length = 1;
+    info.sample.flags =
+        ItSampleFlags::HAS_DATA | ItSampleFlags::SAMPLE_16BIT | ItSampleFlags::STEREO;
+    assert_eq!(sample_data_end(&data, &info).unwrap(), 7);
+    info.data_offset = 0;
+    assert!(matches!(
+        sample_data_end(&data, &info),
+        Err(ItError::InvalidSampleOffset(0))
+    ));
+    info.sample.flags = ItSampleFlags::default();
+    assert_eq!(sample_data_end(&[], &info).unwrap(), 0);
 }

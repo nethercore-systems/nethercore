@@ -6,17 +6,33 @@ use crate::{LoopType, TrackerEffect};
 #[test]
 fn xm_sample_maps_preserve_slots_beyond_255() {
     let instrument = nether_xm::XmInstrument {
-        num_samples: 2, sample_map: vec![1; 96],
-        samples: vec![nether_xm::XmSample { volume: 16, pan: 255, ..Default::default() }; 2],
+        num_samples: 2,
+        sample_map: vec![1; 96],
+        samples: vec![
+            nether_xm::XmSample {
+                volume: 16,
+                pan: 255,
+                ..Default::default()
+            };
+            2
+        ],
         ..Default::default()
     };
     let xm = nether_xm::XmModule {
-                mix_mode: nether_xm::XmMixMode::Compatible,
-                legacy_retrigger: false,
+        mix_mode: nether_xm::XmMixMode::Compatible,
+        legacy_retrigger: false,
         sample_preamp: 48,
-        name: String::new(), num_channels: 1, num_patterns: 0, num_instruments: 129,
-        song_length: 0, restart_position: 0, default_speed: 6, default_bpm: 125,
-        linear_frequency_table: true, order_table: vec![], patterns: vec![],
+        name: String::new(),
+        num_channels: 1,
+        num_patterns: 0,
+        num_instruments: 129,
+        song_length: 0,
+        restart_position: 0,
+        default_speed: 6,
+        default_bpm: 125,
+        linear_frequency_table: true,
+        order_table: vec![],
+        patterns: vec![],
         instruments: vec![instrument; 129],
     };
     let converted = from_xm_module(&xm);
@@ -28,9 +44,15 @@ fn xm_sample_maps_preserve_slots_beyond_255() {
 
 #[test]
 fn xm_zero_pan_slide_left_is_not_a_noop() {
-    assert_eq!(effects::convert_xm_volume_effect(0xd0), Some(TrackerEffect::PanningLeftOnTicks));
+    assert_eq!(
+        effects::convert_xm_volume_effect(0xd0),
+        Some(TrackerEffect::PanningLeftOnTicks)
+    );
     // Keep E00 identity for legacy recall; standard XM leaves it inactive.
-    assert_eq!(effects::convert_xm_volume_effect(0xe0), Some(TrackerEffect::PanningSlide { left: 0, right: 0 }));
+    assert_eq!(
+        effects::convert_xm_volume_effect(0xe0),
+        Some(TrackerEffect::PanningSlide { left: 0, right: 0 })
+    );
 }
 
 #[test]
@@ -38,13 +60,19 @@ fn xm_zero_volume_slides_do_not_recall_memory() {
     for volume in [0x60, 0x70] {
         assert_eq!(effects::convert_xm_volume_effect(volume), None);
     }
-    assert_eq!(effects::convert_xm_effect(0x0a, 0), TrackerEffect::VolumeSlide { up: 0, down: 0 });
+    assert_eq!(
+        effects::convert_xm_effect(0x0a, 0),
+        TrackerEffect::VolumeSlide { up: 0, down: 0 }
+    );
 }
 
 #[test]
 fn xm_keyoff_parameter_is_not_discarded() {
     for tick in 1..=255 {
-        assert_eq!(convert_xm_effect(nether_xm::effects::KEY_OFF, tick), TrackerEffect::KeyOffAt(tick));
+        assert_eq!(
+            convert_xm_effect(nether_xm::effects::KEY_OFF, tick),
+            TrackerEffect::KeyOffAt(tick)
+        );
     }
 }
 
@@ -173,21 +201,39 @@ fn xm_single_sample_default_pan_preserves_all_source_positions() {
             if mapped {
                 instrument.num_samples = 2;
                 instrument.sample_map = vec![1; 96];
-                instrument.samples = vec![nether_xm::XmSample { pan: expected, ..Default::default() }; 2];
+                instrument.samples = vec![
+                    nether_xm::XmSample {
+                        pan: expected,
+                        ..Default::default()
+                    };
+                    2
+                ];
             }
             let xm = nether_xm::XmModule {
                 mix_mode: nether_xm::XmMixMode::Compatible,
                 legacy_retrigger: false,
-        sample_preamp: 48,
-                name: String::new(), num_channels: 1, num_patterns: 0, num_instruments: 1,
-                song_length: 0, restart_position: 0, default_speed: 6, default_bpm: 125,
-                linear_frequency_table: true, order_table: vec![], patterns: vec![],
+                sample_preamp: 48,
+                name: String::new(),
+                num_channels: 1,
+                num_patterns: 0,
+                num_instruments: 1,
+                song_length: 0,
+                restart_position: 0,
+                default_speed: 6,
+                default_bpm: 125,
+                linear_frequency_table: true,
+                order_table: vec![],
+                patterns: vec![],
                 instruments: vec![instrument],
             };
             let packed = nether_xm::pack_xm_minimal(&xm).unwrap();
             let loaded = nether_xm::parse_xm_minimal(&packed).unwrap();
             let converted = from_xm_module(&loaded);
-            let pan = if mapped { converted.samples[1].default_pan } else { converted.instruments[0].default_pan };
+            let pan = if mapped {
+                converted.samples[1].default_pan
+            } else {
+                converted.instruments[0].default_pan
+            };
             assert_eq!(pan, Some(expected));
         }
     }
@@ -237,9 +283,21 @@ fn test_convert_xm_instrument_sample_loop() {
     assert_eq!(tracker_instr.auto_vibrato_sweep, 128);
     assert_eq!(tracker_instr.auto_vibrato_depth, 16);
     assert_eq!(tracker_instr.auto_vibrato_rate, 8);
-    for (rate, expected) in [(0, 0), (512, 1024), (4096, 8192), (32767, 65534), (65535, 65535)] {
-        let source = nether_xm::XmInstrument { volume_fadeout: rate, ..xm_instr.clone() };
-        assert_eq!(instruments::convert_xm_instrument(&source).fadeout, expected);
+    for (rate, expected) in [
+        (0, 0),
+        (512, 1024),
+        (4096, 8192),
+        (32767, 65534),
+        (65535, 65535),
+    ] {
+        let source = nether_xm::XmInstrument {
+            volume_fadeout: rate,
+            ..xm_instr.clone()
+        };
+        assert_eq!(
+            instruments::convert_xm_instrument(&source).fadeout,
+            expected
+        );
     }
 }
 
@@ -429,10 +487,21 @@ fn xm_pan_envelope_converts_to_signed_offsets_without_changing_volume() {
 
 #[test]
 fn xm_glissando_and_tremor_are_not_discarded() {
-    assert_eq!(convert_xm_effect(0x0e,0x31),TrackerEffect::SetGlissando(true));
-    assert_eq!(convert_xm_effect(0x0e,0x30),TrackerEffect::SetGlissando(false));
+    assert_eq!(
+        convert_xm_effect(0x0e, 0x31),
+        TrackerEffect::SetGlissando(true)
+    );
+    assert_eq!(
+        convert_xm_effect(0x0e, 0x30),
+        TrackerEffect::SetGlissando(false)
+    );
     for parameter in 0..=255 {
-        assert_eq!(convert_xm_effect(0x1d,parameter),TrackerEffect::Tremor {
-            ontime:parameter>>4, offtime:parameter&15 });
+        assert_eq!(
+            convert_xm_effect(0x1d, parameter),
+            TrackerEffect::Tremor {
+                ontime: parameter >> 4,
+                offtime: parameter & 15
+            }
+        );
     }
 }

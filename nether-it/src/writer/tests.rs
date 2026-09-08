@@ -1,3 +1,5 @@
+// Authored tests build defaults incrementally to isolate each control.
+#![allow(clippy::field_reassign_with_default)]
 //! Tests for IT file writer
 
 use super::*;

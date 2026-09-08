@@ -52,23 +52,20 @@ impl XmModule {
 ///
 /// Ambiguous and legacy-extension files intentionally use `Compatible`; this
 /// is not a general creator-detection heuristic.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum XmMixMode {
+    #[default]
     Compatible,
     Ft2,
     /// Measured legacy linear pan with a distinct two-thirds output scale.
     Legacy,
 }
 
-impl Default for XmMixMode {
-    fn default() -> Self {
-        Self::Compatible
-    }
-}
-
 impl XmMixMode {
     pub(crate) fn from_tracker_name(name: &[u8; 20]) -> Result<Self, crate::XmError> {
-        let text = std::str::from_utf8(name).unwrap_or("").trim_end_matches([' ', '\0']);
+        let text = std::str::from_utf8(name)
+            .unwrap_or("")
+            .trim_end_matches([' ', '\0']);
         // Authored header-padding playback: the space-padded marker uses
         // FT2 pan; the same visible text with NUL padding uses compatible pan.
         let ft2 = name == b"FastTracker v2.00   " || text == "Fasttracker II clone";
