@@ -80,7 +80,7 @@ pub fn render_debug_overlay(
                 painter.hline(
                     rect.left()..=rect.right(),
                     target_y,
-                    egui::Stroke::new(1.0, egui::Color32::from_rgb(100, 100, 100)),
+                    egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(100, 100, 100)),
                 );
 
                 // Budget bars (for game tick times in Playing mode)

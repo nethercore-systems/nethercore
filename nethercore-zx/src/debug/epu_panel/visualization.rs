@@ -198,7 +198,11 @@ impl DirectionGizmo {
     /// Draw the hemisphere outline and grid.
     fn draw_hemisphere(&self, painter: &egui::Painter, center: Pos2, radius: f32) {
         // Background circle (sphere outline)
-        painter.circle_stroke(center, radius, Stroke::new(1.5, Color32::from_gray(100)));
+        painter.circle_stroke(
+            center,
+            radius,
+            Stroke::new(1.5_f32, Color32::from_gray(100)),
+        );
 
         // Inner fill (slightly transparent)
         painter.circle_filled(
@@ -216,7 +220,7 @@ impl DirectionGizmo {
             painter.circle_stroke(
                 center,
                 circle_radius,
-                Stroke::new(0.5, Color32::from_gray(60)),
+                Stroke::new(0.5_f32, Color32::from_gray(60)),
             );
         }
 
@@ -233,11 +237,11 @@ impl DirectionGizmo {
                 center.y - sin_a * radius, // Invert Y for screen coords
             );
 
-            painter.line_segment([center, end], Stroke::new(0.5, Color32::from_gray(50)));
+            painter.line_segment([center, end], Stroke::new(0.5_f32, Color32::from_gray(50)));
         }
 
         // Draw the equator (XY plane at Z=0) as a thicker line
-        painter.circle_stroke(center, radius, Stroke::new(1.0, Color32::from_gray(70)));
+        painter.circle_stroke(center, radius, Stroke::new(1.0_f32, Color32::from_gray(70)));
     }
 
     /// Draw the direction arrow.
@@ -266,7 +270,7 @@ impl DirectionGizmo {
             Color32::from_rgb(150, 100, 200) // Purple for back hemisphere (-Z)
         };
 
-        painter.line_segment([center, end], Stroke::new(2.5, arrow_color));
+        painter.line_segment([center, end], Stroke::new(2.5_f32, arrow_color));
 
         // Draw arrowhead
         let dir_2d = Vec2::new(end_x - center.x, end_y - center.y);
@@ -464,7 +468,7 @@ pub fn draw_activity_indicator(ui: &mut Ui, state: LayerActivityState, size: f32
             painter.circle_stroke(
                 center,
                 radius + 2.0,
-                Stroke::new(1.5, Color32::from_rgba_unmultiplied(255, 200, 50, 128)),
+                Stroke::new(1.5_f32, Color32::from_rgba_unmultiplied(255, 200, 50, 128)),
             );
         }
     }
@@ -504,7 +508,7 @@ pub fn draw_layer_activity_bar(
                             Pos2::new(rect.min.x, underline_y),
                             Pos2::new(rect.max.x, underline_y),
                         ],
-                        Stroke::new(2.0, Color32::WHITE),
+                        Stroke::new(2.0_f32, Color32::WHITE),
                     );
                 }
             }

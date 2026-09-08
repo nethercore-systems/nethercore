@@ -160,7 +160,7 @@ impl ZXAssetViewer {
                         rect.left_top() + egui::vec2(0.0, waveform_height / 2.0),
                         rect.right_top() + egui::vec2(0.0, waveform_height / 2.0),
                     ],
-                    egui::Stroke::new(1.0, egui::Color32::from_gray(60)),
+                    egui::Stroke::new(1.0_f32, egui::Color32::from_gray(60)),
                 );
 
                 // Draw waveform
@@ -200,7 +200,7 @@ impl ZXAssetViewer {
                     // Draw line for this pixel column
                     painter.line_segment(
                         [egui::pos2(x_pos, min_y), egui::pos2(x_pos, max_y)],
-                        egui::Stroke::new(1.0, egui::Color32::from_rgb(100, 200, 255)),
+                        egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(100, 200, 255)),
                     );
                 }
 
@@ -212,7 +212,7 @@ impl ZXAssetViewer {
                             egui::pos2(pos_x, rect.top()),
                             egui::pos2(pos_x, rect.bottom()),
                         ],
-                        egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 100, 100)),
+                        egui::Stroke::new(2.0_f32, egui::Color32::from_rgb(255, 100, 100)),
                     );
                 }
             }
