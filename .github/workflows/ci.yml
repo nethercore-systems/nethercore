@@ -56,4 +56,6 @@ jobs:
         run: cargo clippy --workspace --all-targets --keep-going -- -D warnings
 
       - name: Tests
-        run: cargo test --workspace
+        env:
+          ALSA_CONFIG_PATH: ${{ github.workspace }}/.github/alsa-ci.conf
+        run: cargo test --workspace -- --test-threads=1

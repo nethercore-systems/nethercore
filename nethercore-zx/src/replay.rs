@@ -1050,7 +1050,8 @@ assert = "$a_b > $prev_a_b"
             minimal_rom("(loop $forever (br $forever))"),
             one_frame_script(),
             HeadlessConfig {
-                timeout_secs: 0,
+                // Leave time for init before interrupting the infinite update.
+                timeout_secs: 1,
                 ..HeadlessConfig::default()
             },
         )
