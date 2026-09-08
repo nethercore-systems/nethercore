@@ -352,7 +352,7 @@ impl PresetManager {
 
         // Sort by creation time (newest first)
         self.cached_presets
-            .sort_by(|a, b| b.created_at.cmp(&a.created_at));
+            .sort_by_key(|a| std::cmp::Reverse(a.created_at));
 
         self.cache_dirty = false;
         Ok(())

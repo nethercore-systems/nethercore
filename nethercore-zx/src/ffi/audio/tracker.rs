@@ -309,8 +309,10 @@ fn load_tracker_with_samples(
         }
 
         let handles: Vec<u32> = memory_data[sample_handles_ptr as usize..handles_end]
-            .chunks_exact(std::mem::size_of::<u32>())
-            .map(|bytes| u32::from_le_bytes(bytes.try_into().expect("chunks_exact width")))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|bytes| u32::from_le_bytes(*bytes))
             .collect();
         (module, handles)
     };
