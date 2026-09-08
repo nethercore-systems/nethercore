@@ -313,7 +313,7 @@ fn read_sample_data(
         let mut samples = Vec::with_capacity(encoded.len() / if is_16bit { 2 } else { 1 });
         if is_16bit {
             let mut old = 0i16;
-            for bytes in encoded.chunks_exact(2) {
+            for bytes in encoded.as_chunks::<2>().0.iter() {
                 let delta = i16::from_le_bytes([bytes[0], bytes[1]]);
                 old = old.wrapping_add(delta);
                 samples.push(old);

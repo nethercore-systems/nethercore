@@ -287,9 +287,13 @@ mod tests {
         };
         let converted = convert_xm_sample(&sample);
         assert_eq!(converted.len() % 2, 0);
-        assert!(converted
-            .chunks_exact(2)
-            .all(|frame| frame[0] > 0 && frame[1] < 0));
+        assert!(
+            converted
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .all(|frame| frame[0] > 0 && frame[1] < 0)
+        );
         sample.sample_rate = 8363;
         sample.loop_start = 4;
         sample.loop_length = 8;
