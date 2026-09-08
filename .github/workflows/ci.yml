@@ -47,6 +47,11 @@ jobs:
       - name: Format
         run: cargo fmt --all -- --check
 
+      - name: Verify and refresh generated bindings
+        run: |
+          cargo xtask ffi check --console zx
+          cargo xtask ffi generate
+
       - name: Clippy
         run: cargo clippy --workspace --all-targets --keep-going -- -D warnings
 

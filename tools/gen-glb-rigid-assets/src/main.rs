@@ -564,6 +564,68 @@ fn generate_animation_glb() -> Vec<u8> {
     assemble_glb(&root, buffer.data())
 }
 
+/// Create "Operate" animation for the mechanical arm
+/// Node 0 (Base): Rotates around Y
+/// Node 1 (Arm): Tilts (X rotation) and extends (Z translation)
+/// Node 2 (Claw): Opens/closes (Y translation offset)
+fn create_operate_animation(buffer: &mut BufferBuilder) -> glb_builder::AnimationAccessors {
+    let duration = FRAME_COUNT as f32 / FRAME_RATE;
+
+    let mut times = Vec::new();
+    let mut translations: Vec<Vec<[f32; 3]>> = vec![Vec::new(); NODE_COUNT];
+    let mut rotations: Vec<Vec<[f32; 4]>> = vec![Vec::new(); NODE_COUNT];
+    let mut scales: Vec<Vec<[f32; 3]>> = vec![Vec::new(); NODE_COUNT];
+
+    for frame in 0..FRAME_COUNT {
+        let t = frame as f32 / FRAME_COUNT as f32;
+        times.push(t * duration);
+
+        let anim_time = t * TAU;
+
+        // Node 0: Base - rotates around Y axis
+        {
+            let rotation_y = anim_time * 0.5; // Slow rotation
+            let half = rotation_y * 0.5;
+            translations[0].push([0.0, 0.0, 0.0]);
+            rotations[0].push([0.0, half.sin(), 0.0, half.cos()]);
+            scales[0].push([1.0, 1.0, 1.0]);
+        }
+
+        // Node 1: Arm - tilts and extends
+        {
+            // Tilt angle (X rotation)
+            let tilt = (anim_time * 1.2).sin() * 0.4;
+            let half_tilt = tilt * 0.5;
+
+            // Extension (Z translation)
+            let extension = ((anim_time * 1.5).sin() + 1.0) * 0.3;
+
+            // Position relative to base attachment point
+            translations[1].push([0.0, 0.5, extension]);
+            rotations[1].push([half_tilt.sin(), 0.0, 0.0, half_tilt.cos()]);
+            scales[1].push([1.0, 1.0, 1.0]);
+        }
+
+        // Node 2: Claw - positioned at end of arm, opens/closes
+        {
+            // Claw opening (spread in X)
+            let open_amount = ((anim_time * 2.0).sin() + 1.0) * 0.15;
+
+            // Position at end of arm segment
+            translations[2].push([open_amount, 1.0, 0.0]);
+            rotations[2].push([0.0, 0.0, 0.0, 1.0]); // Identity rotation
+            scales[2].push([1.0, 1.0, 1.0]);
+        }
+    }
+
+    AnimationBuilder::new(NODE_COUNT)
+        .times(&times)
+        .all_translations(translations)
+        .all_rotations(rotations)
+        .all_scales(scales)
+        .build(buffer)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{generate_animation_glb, generate_mesh_glb, MeshType};
@@ -632,66 +694,4 @@ mod tests {
         assert!(s.contains("\"Arm\""));
         assert!(s.contains("\"Claw\""));
     }
-}
-
-/// Create "Operate" animation for the mechanical arm
-/// Node 0 (Base): Rotates around Y
-/// Node 1 (Arm): Tilts (X rotation) and extends (Z translation)
-/// Node 2 (Claw): Opens/closes (Y translation offset)
-fn create_operate_animation(buffer: &mut BufferBuilder) -> glb_builder::AnimationAccessors {
-    let duration = FRAME_COUNT as f32 / FRAME_RATE;
-
-    let mut times = Vec::new();
-    let mut translations: Vec<Vec<[f32; 3]>> = vec![Vec::new(); NODE_COUNT];
-    let mut rotations: Vec<Vec<[f32; 4]>> = vec![Vec::new(); NODE_COUNT];
-    let mut scales: Vec<Vec<[f32; 3]>> = vec![Vec::new(); NODE_COUNT];
-
-    for frame in 0..FRAME_COUNT {
-        let t = frame as f32 / FRAME_COUNT as f32;
-        times.push(t * duration);
-
-        let anim_time = t * TAU;
-
-        // Node 0: Base - rotates around Y axis
-        {
-            let rotation_y = anim_time * 0.5; // Slow rotation
-            let half = rotation_y * 0.5;
-            translations[0].push([0.0, 0.0, 0.0]);
-            rotations[0].push([0.0, half.sin(), 0.0, half.cos()]);
-            scales[0].push([1.0, 1.0, 1.0]);
-        }
-
-        // Node 1: Arm - tilts and extends
-        {
-            // Tilt angle (X rotation)
-            let tilt = (anim_time * 1.2).sin() * 0.4;
-            let half_tilt = tilt * 0.5;
-
-            // Extension (Z translation)
-            let extension = ((anim_time * 1.5).sin() + 1.0) * 0.3;
-
-            // Position relative to base attachment point
-            translations[1].push([0.0, 0.5, extension]);
-            rotations[1].push([half_tilt.sin(), 0.0, 0.0, half_tilt.cos()]);
-            scales[1].push([1.0, 1.0, 1.0]);
-        }
-
-        // Node 2: Claw - positioned at end of arm, opens/closes
-        {
-            // Claw opening (spread in X)
-            let open_amount = ((anim_time * 2.0).sin() + 1.0) * 0.15;
-
-            // Position at end of arm segment
-            translations[2].push([open_amount, 1.0, 0.0]);
-            rotations[2].push([0.0, 0.0, 0.0, 1.0]); // Identity rotation
-            scales[2].push([1.0, 1.0, 1.0]);
-        }
-    }
-
-    AnimationBuilder::new(NODE_COUNT)
-        .times(&times)
-        .all_translations(translations)
-        .all_rotations(rotations)
-        .all_scales(scales)
-        .build(buffer)
 }

@@ -107,7 +107,7 @@ fn test_version_mismatch() {
 
 #[test]
 fn test_too_short() {
-    let bytes = [b'N', b'C', b'H', b'S'];
+    let bytes = *b"NCHS";
     let result = NchsMessage::from_bytes(&bytes);
     assert!(matches!(result, Err(NchsDecodeError::TooShort)));
 }

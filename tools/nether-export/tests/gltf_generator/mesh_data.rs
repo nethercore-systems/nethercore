@@ -49,7 +49,8 @@ pub(crate) fn create_mesh_data() -> MeshData {
         let base_vert = (seg * 24) as u16;
 
         // 6 faces, 4 vertices each = 24 vertices per segment
-        let faces: Vec<([f32; 3], [[f32; 3]; 4], [[f32; 2]; 4])> = vec![
+        type Face = ([f32; 3], [[f32; 3]; 4], [[f32; 2]; 4]);
+        let faces: Vec<Face> = vec![
             // Front (+Z)
             (
                 [0.0, 0.0, 1.0],

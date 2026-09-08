@@ -26,7 +26,7 @@ pub fn is_registered() -> bool {
 
     #[cfg(target_os = "linux")]
     {
-        return linux::is_registered();
+        linux::is_registered()
     }
 
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]

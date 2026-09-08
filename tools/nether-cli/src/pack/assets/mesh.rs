@@ -103,7 +103,9 @@ fn load_mesh_native(id: &str, path: &std::path::Path) -> Result<PackedMesh> {
 
     // Convert index bytes to u16 values
     let index_data: Vec<u16> = data[vertex_end..index_end]
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
         .collect();
 
