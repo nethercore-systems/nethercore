@@ -5,6 +5,8 @@ use thiserror::Error;
 /// XM parsing error types
 #[derive(Debug, Clone, PartialEq, Error)]
 pub enum XmError {
+    #[error("Explicit XM mixing property is unsupported; refusing to discard it")]
+    UnsupportedMixMetadata,
     /// File too small to contain header
     #[error("File too small to contain XM header")]
     TooSmall,
@@ -36,6 +38,18 @@ pub enum XmError {
     /// Instrument parsing error
     #[error("Invalid instrument at index {0}")]
     InvalidInstrument(u16),
+
+    /// XM sample volume is outside the format's 0-64 range
+    #[error("Invalid sample volume: {0} (max 64)")]
+    InvalidSampleVolume(u8),
+
+    /// A packed module cannot mix single-sample instruments with and without pan metadata.
+    #[error("Missing sample default pan in a module with pan metadata")]
+    MissingSampleDefaultPan,
+
+    /// A minimal NCXM header flag changes the layout but is not supported.
+    #[error("Unsupported NCXM flags: 0x{0:02X}")]
+    UnsupportedMinimalFlags(u8),
 
     /// Unexpected end of file
     #[error("Unexpected end of file")]

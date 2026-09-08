@@ -45,6 +45,9 @@ pub enum TrackerEffect {
     /// IT: SEx, XM: EEx
     PatternDelay(u8),
 
+    /// Raw IT Sxy, resolved by the runtime so S00 can recall S memory.
+    ItExtended(u8),
+
     /// Pattern loop
     /// IT: SBx, XM: E6x
     PatternLoop(u8),
@@ -67,7 +70,10 @@ pub enum TrackerEffect {
 
     /// Volume slide
     /// IT: Dxy, XM: Axy
-    VolumeSlide { up: u8, down: u8 },
+    VolumeSlide {
+        up: u8,
+        down: u8,
+    },
 
     /// Fine volume slide up
     FineVolumeUp(u8),
@@ -81,7 +87,10 @@ pub enum TrackerEffect {
 
     /// Global volume slide
     /// IT: Wxy, XM: Hxy
-    GlobalVolumeSlide { up: u8, down: u8 },
+    GlobalVolumeSlide {
+        up: u8,
+        down: u8,
+    },
 
     /// Fine global volume slide up (IT only)
     /// IT: WxF (tick 0 only)
@@ -97,7 +106,10 @@ pub enum TrackerEffect {
 
     /// Channel volume slide (IT only)
     /// IT: Nxy
-    ChannelVolumeSlide { up: u8, down: u8 },
+    ChannelVolumeSlide {
+        up: u8,
+        down: u8,
+    },
 
     /// Fine channel volume slide up (IT only)
     /// IT: NxF (tick 0 only)
@@ -147,7 +159,12 @@ pub enum TrackerEffect {
     // =========================================================================
     /// Vibrato
     /// IT: Hxy, XM: 4xy
-    Vibrato { speed: u8, depth: u8 },
+    /// XM volume-column Ax: set vibrato speed without activating vibrato.
+    VibratoSpeed(u8),
+    Vibrato {
+        speed: u8,
+        depth: u8,
+    },
 
     /// Vibrato + volume slide
     /// IT: Kxy, XM: 6xy
@@ -160,19 +177,31 @@ pub enum TrackerEffect {
 
     /// Fine vibrato (IT only)
     /// IT: Uxy
-    FineVibrato { speed: u8, depth: u8 },
+    FineVibrato {
+        speed: u8,
+        depth: u8,
+    },
 
     /// Tremolo
     /// IT: Rxy, XM: 7xy
-    Tremolo { speed: u8, depth: u8 },
+    Tremolo {
+        speed: u8,
+        depth: u8,
+    },
 
     /// Tremor (IT only)
     /// IT: Ixy
-    Tremor { ontime: u8, offtime: u8 },
+    Tremor {
+        ontime: u8,
+        offtime: u8,
+    },
 
     /// Arpeggio
     /// IT: Jxy, XM: 0xy
-    Arpeggio { note1: u8, note2: u8 },
+    Arpeggio {
+        note1: u8,
+        note2: u8,
+    },
 
     // =========================================================================
     // Panning Effects
@@ -183,7 +212,13 @@ pub enum TrackerEffect {
 
     /// Panning slide
     /// IT: Pxy, XM: Pxy
-    PanningSlide { left: u8, right: u8 },
+    /// XM volume-column D0: hard left on non-row ticks only.
+    PanningLeftOnTicks,
+
+    PanningSlide {
+        left: u8,
+        right: u8,
+    },
 
     /// Fine panning slide left (IT only)
     /// IT: PFx (tick 0 only)
@@ -195,7 +230,10 @@ pub enum TrackerEffect {
 
     /// Panbrello (IT only)
     /// IT: Yxy
-    Panbrello { speed: u8, depth: u8 },
+    Panbrello {
+        speed: u8,
+        depth: u8,
+    },
 
     // =========================================================================
     // Sample Effects
@@ -206,7 +244,10 @@ pub enum TrackerEffect {
 
     /// Retrigger note
     /// IT: Qxy, XM: Rxy
-    Retrigger { ticks: u8, volume_change: i8 },
+    Retrigger {
+        ticks: u8,
+        volume_change: i8,
+    },
 
     /// Note cut (cut after N ticks)
     /// IT: SCx, XM: ECx
@@ -252,9 +293,24 @@ pub enum TrackerEffect {
     /// XM: Lxx
     SetEnvelopePosition(u8),
 
+    /// IT S73-S76: action for the foreground voice when next displaced (0..3).
+    SetNewNoteAction(u8),
+    /// IT S70-S72: cut/off/fade the pattern channel's background voices.
+    PastNoteAction(u8),
+    /// IT S77/S78: pause/resume the volume envelope without resetting its position.
+    SetVolumeEnvelope(bool),
+
+    /// IT S79/S7A: disable/enable panning envelope without resetting its position.
+    SetPanningEnvelope(bool),
+
+    /// IT S7B/S7C: disable/enable pitch or filter envelope without resetting position.
+    SetPitchEnvelope(bool),
+
     /// Key off (release envelopes)
     /// XM: Kxx
     KeyOff,
+    /// XM Kxx with a nonzero tick parameter.
+    KeyOffAt(u8),
 
     /// Set glissando (IT only)
     /// IT: S1x
@@ -262,7 +318,10 @@ pub enum TrackerEffect {
 
     /// Multi retrig note (XM only)
     /// XM: Rxy
-    MultiRetrigNote { ticks: u8, volume: u8 },
+    MultiRetrigNote {
+        ticks: u8,
+        volume: u8,
+    },
 
     // =========================================================================
     // Sound Control Effects (IT S9x)
@@ -277,6 +336,50 @@ pub enum TrackerEffect {
 }
 
 impl TrackerEffect {
+    /// Convert one fully resolved IT extended command to its runtime effect.
+    pub fn from_it_extended(param: u8) -> Self {
+        let sub_cmd = param >> 4;
+        let value = param & 0x0F;
+
+        match sub_cmd {
+            nether_it::extended_effects::SET_FILTER => Self::None,
+            nether_it::extended_effects::GLISSANDO => Self::SetGlissando(value != 0),
+            nether_it::extended_effects::SET_FINETUNE => Self::SetFinetune(value as i8 - 8),
+            nether_it::extended_effects::VIBRATO_WAVEFORM => Self::VibratoWaveform(value),
+            nether_it::extended_effects::TREMOLO_WAVEFORM => Self::TremoloWaveform(value),
+            nether_it::extended_effects::PANBRELLO_WAVEFORM => Self::PanbrelloWaveform(value),
+            nether_it::extended_effects::FINE_PATTERN_DELAY => Self::FinePatternDelay(value),
+            nether_it::extended_effects::INSTRUMENT_CONTROL => match value {
+                0..=2 => Self::PastNoteAction(value),
+                3..=6 => Self::SetNewNoteAction(value - 3),
+                7 => Self::SetVolumeEnvelope(false),
+                8 => Self::SetVolumeEnvelope(true),
+                9 => Self::SetPanningEnvelope(false),
+                10 => Self::SetPanningEnvelope(true),
+                11 => Self::SetPitchEnvelope(false),
+                12 => Self::SetPitchEnvelope(true),
+                _ => Self::None,
+            },
+            nether_it::extended_effects::SET_PANNING_COARSE => {
+                Self::SetPanning(((u16::from(value) * 256 + 8) / 15 / 4) as u8)
+            }
+            nether_it::extended_effects::SOUND_CONTROL => match value {
+                0 => Self::SetSurround(false),
+                1 => Self::SetSurround(true),
+                0xE => Self::SetSampleReverse(false),
+                0xF => Self::SetSampleReverse(true),
+                _ => Self::None,
+            },
+            nether_it::extended_effects::HIGH_SAMPLE_OFFSET => Self::HighSampleOffset(value),
+            nether_it::extended_effects::PATTERN_LOOP => Self::PatternLoop(value),
+            nether_it::extended_effects::NOTE_CUT => Self::NoteCut(value.max(1)),
+            nether_it::extended_effects::NOTE_DELAY => Self::NoteDelay(value),
+            nether_it::extended_effects::PATTERN_DELAY => Self::PatternDelay(value),
+            nether_it::extended_effects::SET_ACTIVE_MACRO => Self::None,
+            _ => Self::None,
+        }
+    }
+
     /// Check if this effect modifies pitch
     pub fn affects_pitch(&self) -> bool {
         matches!(

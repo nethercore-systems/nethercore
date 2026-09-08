@@ -47,10 +47,12 @@ impl TrackerEngine {
     pub(super) fn process_duplicate_check(
         &mut self,
         num_channels: usize,
+        parent_channel: usize,
         dct: u8,
         dca: u8,
         note: u8,
         sample_handle: u32,
+        sample_index: Option<usize>,
         instrument: u8,
     ) {
         if dct == DCT_OFF {
@@ -59,7 +61,12 @@ impl TrackerEngine {
 
         // Check background channels for duplicates
         for idx in num_channels..MAX_TRACKER_CHANNELS {
-            if self.channels[idx].matches_duplicate_check(dct, note, sample_handle, instrument) {
+            if self.channels[idx].is_background
+                && self.channels[idx].parent_channel as usize == parent_channel
+                && (dct != super::super::channels::DCT_SAMPLE
+                    || (sample_index.is_some() && self.channels[idx].sample_index == sample_index))
+                && self.channels[idx].matches_duplicate_check(dct, note, sample_handle, instrument)
+            {
                 self.channels[idx].apply_dca(dca);
             }
         }
@@ -70,8 +77,8 @@ impl TrackerEngine {
     /// If the channel has a note playing and NNA is not Cut, moves the
     /// current note to a background channel before the new note takes over.
     ///
-    /// The `nna` parameter should come from the NEW instrument being triggered,
-    /// not the channel's previous state.
+    /// The `nna` parameter belongs to the displaced voice, before installing
+    /// the incoming note's instrument defaults.
     ///
     /// Returns true if NNA processing occurred (note was moved to background).
     pub(super) fn handle_nna(&mut self, ch_idx: usize, num_channels: usize, nna: u8) -> bool {
@@ -87,7 +94,7 @@ impl TrackerEngine {
         // NNA_CUT doesn't need background channel
         if nna == NNA_CUT {
             self.channels[ch_idx].note_on = false;
-            self.channels[ch_idx].volume = 0.0;
+            // The caller already selected the incoming note volume; do not erase it.
             return false;
         }
 
@@ -105,7 +112,7 @@ impl TrackerEngine {
 
         // No background channel available - fall back to cut
         self.channels[ch_idx].note_on = false;
-        self.channels[ch_idx].volume = 0.0;
+        // Preserve incoming note volume when stealing is unavailable, too.
         false
     }
 }

@@ -9,7 +9,7 @@ pub struct TrackerSample {
     pub global_volume: u8,
     /// Default volume (0-64)
     pub default_volume: u8,
-    /// Default panning (0-64), None if not set
+    /// Source default panning: IT 0-64; XM 0-255 (128 is center). None if unset.
     pub default_pan: Option<u8>,
     /// Sample length in samples
     pub length: u32,
@@ -19,8 +19,18 @@ pub struct TrackerSample {
     pub loop_end: u32,
     /// Loop type
     pub loop_type: LoopType,
+    /// Packed PCM contains interleaved left/right frames.
+    pub is_stereo: bool,
     /// C5 speed (sample rate for middle C)
     pub c5_speed: u32,
+    /// Original XM tuning in 1/128-semitones, already baked into normalized PCM.
+    pub xm_source_tuning: i16,
+    /// Original XM sample finetune, independent of relative-note transposition.
+    pub xm_source_finetune: i8,
+    /// Unrounded XM forward-loop start in normalized 22050 Hz frames.
+    pub xm_forward_loop_start: f64,
+    /// Unrounded XM forward-loop length in normalized 22050 Hz frames; zero disables.
+    pub xm_forward_loop_limit: f64,
     /// Sustain loop begin
     pub sustain_loop_begin: u32,
     /// Sustain loop end
@@ -52,7 +62,12 @@ impl Default for TrackerSample {
             loop_begin: 0,
             loop_end: 0,
             loop_type: LoopType::None,
+            is_stereo: false,
             c5_speed: 8363,
+            xm_source_tuning: 0,
+            xm_source_finetune: 0,
+            xm_forward_loop_start: 0.0,
+            xm_forward_loop_limit: 0.0,
             sustain_loop_begin: 0,
             sustain_loop_end: 0,
             sustain_loop_type: LoopType::None,

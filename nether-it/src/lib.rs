@@ -115,7 +115,7 @@ pub const NOTE_CUT: u8 = 254;
 pub const NOTE_OFF: u8 = 255;
 
 /// Note value for "note fade"
-pub const NOTE_FADE: u8 = 253;
+pub const NOTE_FADE: u8 = 246;
 
 /// Minimum valid note (C-0)
 pub const NOTE_MIN: u8 = 0;

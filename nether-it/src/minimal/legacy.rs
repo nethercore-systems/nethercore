@@ -70,5 +70,9 @@ pub fn pack_it_minimal(module: &ItModule) -> Vec<u8> {
         writer.set_message(msg);
     }
 
-    writer.write()
+    let mut bytes=writer.write();
+    if module.balance_mix {
+        bytes.extend_from_slice(b"STPM.MMP\x04\x00\x03\x00\x00\x00");
+    }
+    bytes
 }

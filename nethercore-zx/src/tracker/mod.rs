@@ -128,9 +128,17 @@ pub struct TrackerEngine {
 
     /// Samples rendered within current tick
     pub(crate) tick_samples_rendered: u32,
+    pub(crate) current_sample_clock: u64,
 
     /// Row state cache for fast rollback seeks
     pub(crate) row_cache: RowStateCache,
+    /// Exact recent audio-tick states, including within-row effect/sample state.
+    pub(crate) rollback_cache:
+        std::collections::VecDeque<(crate::state::TrackerState, TrackerEngineSnapshot)>,
+    pub(crate) sync_handle: u32,
+    /// Runtime-resolved row, retained for flow/timing passes and delayed repeats.
+    pub(crate) resolved_row_notes: Vec<(usize, nether_tracker::TrackerNote)>,
+    pub(crate) resolved_row_key: Option<(u32, u16, u16)>,
 
     /// Pattern delay (EEx) - number of times to repeat current row
     pub(crate) pattern_delay: u8,
@@ -138,7 +146,9 @@ pub struct TrackerEngine {
     pub(crate) pattern_delay_count: u8,
 
     /// Fine pattern delay (S6x) - extra ticks to add to current row
-    pub(crate) fine_pattern_delay: u8,
+    pub(crate) fine_pattern_delay: u16,
+    pub(crate) xm_next_pattern_row: u16,
+    pub(crate) xm_loop_owner: Option<usize>,
 
     /// Global volume slide memory (Hxy effect)
     pub(crate) last_global_vol_slide: u8,
@@ -169,7 +179,7 @@ pub struct LoadedModule {
 ///
 /// This captures the mutable state needed for sample generation without
 /// requiring the full engine. Used to send state to the audio thread.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TrackerEngineSnapshot {
     /// Per-channel playback state (cloned)
     pub channels: Box<[TrackerChannel; MAX_TRACKER_CHANNELS]>,
@@ -187,11 +197,14 @@ pub struct TrackerEngineSnapshot {
 
     /// Samples rendered within current tick
     pub tick_samples_rendered: u32,
+    pub current_sample_clock: u64,
 
     /// Pattern delay state
     pub pattern_delay: u8,
     pub pattern_delay_count: u8,
-    pub fine_pattern_delay: u8,
+    pub fine_pattern_delay: u16,
+    pub xm_next_pattern_row: u16,
+    pub xm_loop_owner: Option<usize>,
 
     /// Effect memory
     pub last_global_vol_slide: u8,
@@ -204,8 +217,14 @@ pub struct TrackerEngineSnapshot {
     /// Tempo slide
     pub tempo_slide: i8,
 
+    /// Identity of the module whose channel state this snapshot carries.
+    pub sync_handle: u32,
+
     /// Shared reference to loaded modules (Arc for sharing)
     pub modules: Vec<Option<Arc<LoadedModule>>>,
+    /// Runtime-resolved row, including recalled S00 commands.
+    pub resolved_row_notes: Vec<(usize, nether_tracker::TrackerNote)>,
+    pub resolved_row_key: Option<(u32, u16, u16)>,
 }
 
 impl Default for TrackerEngine {
@@ -231,10 +250,17 @@ impl TrackerEngine {
             current_row: 0,
             current_tick: 0,
             tick_samples_rendered: 0,
+            current_sample_clock: 0,
             row_cache: RowStateCache::default(),
+            rollback_cache: std::collections::VecDeque::new(),
+            sync_handle: 0,
+            resolved_row_notes: Vec::new(),
+            resolved_row_key: None,
             pattern_delay: 0,
             pattern_delay_count: 0,
             fine_pattern_delay: 0,
+            xm_next_pattern_row: 0,
+            xm_loop_owner: None,
             last_global_vol_slide: 0,
             is_it_format: false,
             old_effects_mode: false,
@@ -304,7 +330,22 @@ impl TrackerEngine {
         self.current_row = 0;
         self.current_tick = 0;
         self.tick_samples_rendered = 0;
+        self.current_sample_clock = 0;
         self.row_cache.clear();
+        self.rollback_cache.clear();
+        self.sync_handle = 0;
+        self.resolved_row_notes.clear();
+        self.resolved_row_key = None;
+        self.pattern_delay = 0;
+        self.pattern_delay_count = 0;
+        self.fine_pattern_delay = 0;
+        self.xm_next_pattern_row = 0;
+        self.xm_loop_owner = None;
+        self.last_global_vol_slide = 0;
+        self.is_it_format = false;
+        self.old_effects_mode = false;
+        self.link_g_memory = false;
+        self.tempo_slide = 0;
     }
 
     /// Create a snapshot of the current engine state for audio thread
@@ -321,15 +362,21 @@ impl TrackerEngine {
             current_row: self.current_row,
             current_tick: self.current_tick,
             tick_samples_rendered: self.tick_samples_rendered,
+            current_sample_clock: self.current_sample_clock,
             pattern_delay: self.pattern_delay,
             pattern_delay_count: self.pattern_delay_count,
             fine_pattern_delay: self.fine_pattern_delay,
+            xm_next_pattern_row: self.xm_next_pattern_row,
+            xm_loop_owner: self.xm_loop_owner,
             last_global_vol_slide: self.last_global_vol_slide,
             is_it_format: self.is_it_format,
             old_effects_mode: self.old_effects_mode,
             link_g_memory: self.link_g_memory,
             tempo_slide: self.tempo_slide,
+            sync_handle: self.sync_handle,
             modules: self.modules.clone(), // Arc clone - cheap
+            resolved_row_notes: self.resolved_row_notes.clone(),
+            resolved_row_key: self.resolved_row_key,
         }
     }
 
@@ -345,15 +392,21 @@ impl TrackerEngine {
         self.current_row = snapshot.current_row;
         self.current_tick = snapshot.current_tick;
         self.tick_samples_rendered = snapshot.tick_samples_rendered;
+        self.current_sample_clock = snapshot.current_sample_clock;
         self.pattern_delay = snapshot.pattern_delay;
         self.pattern_delay_count = snapshot.pattern_delay_count;
         self.fine_pattern_delay = snapshot.fine_pattern_delay;
+        self.xm_next_pattern_row = snapshot.xm_next_pattern_row;
+        self.xm_loop_owner = snapshot.xm_loop_owner;
         self.last_global_vol_slide = snapshot.last_global_vol_slide;
         self.is_it_format = snapshot.is_it_format;
         self.old_effects_mode = snapshot.old_effects_mode;
         self.link_g_memory = snapshot.link_g_memory;
         self.tempo_slide = snapshot.tempo_slide;
+        self.sync_handle = snapshot.sync_handle;
         self.modules = snapshot.modules.clone(); // Arc clone - cheap
+        self.resolved_row_notes = snapshot.resolved_row_notes.clone();
+        self.resolved_row_key = snapshot.resolved_row_key;
     }
 
     /// Get shared reference to loaded modules
@@ -383,6 +436,30 @@ impl TrackerEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rollback_restores_sample_and_effect_state_within_one_row() {
+        let mut engine = TrackerEngine::new();
+        let mut state = crate::state::TrackerState::default();
+        state.handle = engine.load_tracker_module(
+            nether_tracker::from_it_module(&nether_it::ItModule::default()), vec![]);
+        state.flags = crate::state::tracker_flags::PLAYING;
+        engine.sync_to_state(&state, &[]);
+        engine.rollback_cache.clear();
+        engine.channels[0].volume = 0.25;
+        engine.sync_to_state(&state, &[]);
+        let before = state;
+        engine.current_tick = 1;
+        engine.tick_samples_rendered = 120;
+        engine.channels[0].volume = 0.75;
+        state.tick = 1;
+        state.tick_sample_pos = 120;
+        engine.sync_to_state(&state, &[]);
+        engine.sync_to_state(&before, &[]);
+        assert_eq!(engine.channels[0].volume, 0.25);
+        assert_eq!((engine.current_tick, engine.tick_samples_rendered), (0, 0));
+        assert!(engine.rollback_cache.len() <= 64);
+    }
 
     #[test]
     fn test_tracker_handle_flag() {

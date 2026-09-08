@@ -4,6 +4,125 @@ use crate::error::XmError;
 use crate::module::{XmModule, XmPattern};
 use crate::{XM_MAGIC, XM_VERSION};
 
+fn read_u32_at(data: &[u8], offset: usize) -> Result<u32, XmError> {
+    let bytes = data
+        .get(offset..offset.checked_add(4).ok_or(XmError::UnexpectedEof)?)
+        .ok_or(XmError::UnexpectedEof)?;
+    Ok(u32::from_le_bytes(bytes.try_into().unwrap()))
+}
+
+fn read_u16_at(data: &[u8], offset: usize) -> Result<u16, XmError> {
+    let bytes = data
+        .get(offset..offset.checked_add(2).ok_or(XmError::UnexpectedEof)?)
+        .ok_or(XmError::UnexpectedEof)?;
+    Ok(u16::from_le_bytes(bytes.try_into().unwrap()))
+}
+
+/// Locate original sample headers before rebuilding them without their PCM.
+/// Keeping these bytes retains XM flags such as the 16-bit sample bit, which
+/// is not represented in the decoded `XmSample` metadata.
+fn original_sample_headers(
+    original_data: &[u8],
+    module: &XmModule,
+) -> Result<(Vec<Vec<[u8; 40]>>, usize), XmError> {
+    let header_size = usize::try_from(read_u32_at(original_data, 60)?)
+        .map_err(|_| XmError::UnexpectedEof)?;
+    let mut offset = 60usize
+        .checked_add(header_size)
+        .ok_or(XmError::UnexpectedEof)?;
+
+    for _ in 0..module.num_patterns {
+        let pattern_header_size = usize::try_from(read_u32_at(original_data, offset)?)
+            .map_err(|_| XmError::UnexpectedEof)?;
+        let packed_size = usize::from(read_u16_at(
+            original_data,
+            offset.checked_add(7).ok_or(XmError::UnexpectedEof)?,
+        )?);
+        offset = offset
+            .checked_add(pattern_header_size)
+            .and_then(|value| value.checked_add(packed_size))
+            .ok_or(XmError::UnexpectedEof)?;
+        if offset > original_data.len() {
+            return Err(XmError::UnexpectedEof);
+        }
+    }
+
+    let mut headers = Vec::with_capacity(module.instruments.len());
+    for (instrument_index, instrument) in module.instruments.iter().enumerate() {
+        let instrument_start = offset;
+        let instrument_header_size = usize::try_from(read_u32_at(original_data, offset)?)
+            .map_err(|_| XmError::UnexpectedEof)?;
+        let source_num_samples = usize::from(read_u16_at(
+            original_data,
+            offset.checked_add(27).ok_or(XmError::UnexpectedEof)?,
+        )?);
+        if source_num_samples != usize::from(instrument.num_samples) {
+            return Err(XmError::InvalidInstrument(instrument_index as u16));
+        }
+
+        let instrument_end = instrument_start
+            .checked_add(instrument_header_size)
+            .ok_or(XmError::UnexpectedEof)?;
+        if source_num_samples == 0 {
+            if instrument_end > original_data.len() {
+                return Err(XmError::UnexpectedEof);
+            }
+            offset = instrument_end;
+            headers.push(Vec::new());
+            continue;
+        }
+
+        let sample_header_size = usize::try_from(read_u32_at(
+            original_data,
+            instrument_start
+                .checked_add(29)
+                .ok_or(XmError::UnexpectedEof)?,
+        )?)
+        .map_err(|_| XmError::UnexpectedEof)?;
+        if sample_header_size < 40 {
+            return Err(XmError::InvalidHeaderSize);
+        }
+
+        let sample_headers_end = instrument_end
+            .checked_add(
+                sample_header_size
+                    .checked_mul(source_num_samples)
+                    .ok_or(XmError::UnexpectedEof)?,
+            )
+            .ok_or(XmError::UnexpectedEof)?;
+        let mut instrument_headers = Vec::with_capacity(source_num_samples);
+        let mut sample_data_bytes = 0usize;
+        for sample_index in 0..source_num_samples {
+            let sample_start = instrument_end
+                .checked_add(
+                    sample_header_size
+                        .checked_mul(sample_index)
+                        .ok_or(XmError::UnexpectedEof)?,
+                )
+                .ok_or(XmError::UnexpectedEof)?;
+            let sample_header: [u8; 40] = original_data
+                .get(sample_start..sample_start.checked_add(40).ok_or(XmError::UnexpectedEof)?)
+                .ok_or(XmError::UnexpectedEof)?
+                .try_into()
+                .unwrap();
+            instrument_headers.push(sample_header);
+            sample_data_bytes = sample_data_bytes
+                .checked_add(usize::try_from(u32::from_le_bytes(sample_header[..4].try_into().unwrap())).map_err(|_| XmError::UnexpectedEof)?)
+                .ok_or(XmError::UnexpectedEof)?;
+        }
+
+        offset = sample_headers_end
+            .checked_add(sample_data_bytes)
+            .ok_or(XmError::UnexpectedEof)?;
+        if offset > original_data.len() {
+            return Err(XmError::UnexpectedEof);
+        }
+        headers.push(instrument_headers);
+    }
+
+    Ok((headers, offset))
+}
+
 /// Rebuild an XM file without sample data
 ///
 /// This creates a new XM file with the same structure but with all sample data removed.
@@ -12,6 +131,7 @@ pub(crate) fn rebuild_xm_without_samples(
     original_data: &[u8],
     module: &XmModule,
 ) -> Result<Vec<u8>, XmError> {
+    let (source_sample_headers, source_tail) = original_sample_headers(original_data, module)?;
     let mut output = Vec::with_capacity(original_data.len() / 4); // Estimate smaller size
 
     // Helper to write little-endian values
@@ -101,9 +221,10 @@ pub(crate) fn rebuild_xm_without_samples(
 
     // ========== Write Instruments (WITHOUT sample data) ==========
 
-    for instrument in &module.instruments {
+    for (instrument_index, instrument) in module.instruments.iter().enumerate() {
         // Calculate instrument header size
-        let header_size = if instrument.num_samples > 0 { 243 } else { 29 };
+        let header_size = if instrument.num_samples > 0 { 243 }
+            else if module.mix_mode == crate::XmMixMode::Compatible { 29 } else { 33 };
 
         // Instrument header size (4 bytes)
         write_u32(&mut output, header_size);
@@ -120,15 +241,24 @@ pub(crate) fn rebuild_xm_without_samples(
 
         // Number of samples (2 bytes)
         write_u16(&mut output, instrument.num_samples as u16);
+        // Preserve the measured empty-header mixer distinction when stripping PCM.
+        if instrument.num_samples == 0 && header_size == 33 {
+            write_u32(&mut output, 0);
+        }
 
         if instrument.num_samples > 0 {
+            if instrument.sample_map.len() != 96
+                || instrument.sample_map.iter().any(|&sample| sample >= instrument.num_samples)
+                || instrument.samples.len() != instrument.num_samples as usize
+            {
+                return Err(XmError::InvalidInstrument(0));
+            }
+
             // Sample header size (4 bytes) - always 40
             write_u32(&mut output, 40);
 
-            // Sample number for all notes (96 bytes) - all zeros (default mapping)
-            for _ in 0..96 {
-                write_u8(&mut output, 0);
-            }
+            // Sample number for all notes (96 bytes) - retain local slot mapping.
+            write_bytes(&mut output, &instrument.sample_map);
 
             // Volume envelope points (48 bytes)
             if let Some(ref env) = instrument.volume_envelope {
@@ -268,46 +398,17 @@ pub(crate) fn rebuild_xm_without_samples(
 
             // ========== Sample Headers (WITH sample_length = 0) ==========
 
-            for _ in 0..instrument.num_samples {
-                // Sample length (4 bytes) - SET TO 0 (this is the key change!)
-                write_u32(&mut output, 0);
-
-                // Sample loop start (4 bytes) - KEEP for ROM sample playback
-                write_u32(&mut output, instrument.sample_loop_start);
-
-                // Sample loop length (4 bytes) - KEEP for ROM sample playback
-                write_u32(&mut output, instrument.sample_loop_length);
-
-                // Volume (1 byte) - default to 64
-                write_u8(&mut output, 64);
-
-                // Finetune (1 byte, signed)
-                write_u8(&mut output, instrument.sample_finetune as u8);
-
-                // Type (1 byte) - KEEP loop type
-                write_u8(&mut output, instrument.sample_loop_type);
-
-                // Panning (1 byte) - default to center (128)
-                write_u8(&mut output, 128);
-
-                // Relative note (1 byte, signed)
-                write_u8(&mut output, instrument.sample_relative_note as u8);
-
-                // Reserved (1 byte)
-                write_u8(&mut output, 0);
-
-                // Sample name (22 bytes) - copy instrument name
-                let mut sample_name = [0u8; 22];
-                let name_str = instrument.name.as_bytes();
-                let copy_len = name_str.len().min(22);
-                sample_name[..copy_len].copy_from_slice(&name_str[..copy_len]);
-                write_bytes(&mut output, &sample_name);
-
-                // NO SAMPLE DATA (sample_length = 0, so no data to write)
+            for sample_header in &source_sample_headers[instrument_index] {
+                // Preserve all original sample metadata, but strip the PCM length.
+                let mut stripped_header = *sample_header;
+                stripped_header[..4].fill(0);
+                write_bytes(&mut output, &stripped_header);
             }
         }
     }
 
+    // Keep any existing mixer extensions and other trailing XM chunks intact.
+    write_bytes(&mut output, &original_data[source_tail..]);
     Ok(output)
 }
 

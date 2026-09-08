@@ -2,11 +2,119 @@
 
 use wasmtime::Linker;
 
-use crate::console::{Console, RawInput};
+use crate::console::{AudioGenerator, Console, ConsoleRollbackState, RawInput};
 use crate::test_utils::{TestAudio, TestConsole, TestInput};
 use crate::wasm::{GameInstance, WasmEngine};
 
 use super::{Runtime, RuntimeConfig, ScriptedSyncTestConfig};
+
+#[repr(C)]
+#[derive(Clone, Copy, Default, bytemuck::Pod, bytemuck::Zeroable)]
+struct CountingAudioRollback {
+    advances: u32,
+    tick_rate: u32,
+    sample_rate: u32,
+}
+
+impl ConsoleRollbackState for CountingAudioRollback {}
+
+struct CountingAudioGenerator;
+
+impl AudioGenerator for CountingAudioGenerator {
+    type RollbackState = CountingAudioRollback;
+    type State = ();
+    type Audio = TestAudio;
+
+    fn advance_state(
+        rollback_state: &mut Self::RollbackState,
+        _state: &mut Self::State,
+        tick_rate: u32,
+        sample_rate: u32,
+    ) {
+        rollback_state.advances += 1;
+        rollback_state.tick_rate = tick_rate;
+        rollback_state.sample_rate = sample_rate;
+    }
+
+    fn default_sample_rate() -> u32 {
+        22_050
+    }
+
+    fn generate_frame(
+        _rollback_state: &mut Self::RollbackState,
+        _state: &mut Self::State,
+        _tick_rate: u32,
+        _sample_rate: u32,
+        _output: &mut Vec<f32>,
+    ) {
+    }
+
+    fn process_audio(
+        rollback_state: &mut Self::RollbackState,
+        _state: &mut Self::State,
+        audio: &mut Self::Audio,
+        _tick_rate: u32,
+        _sample_rate: u32,
+    ) {
+        audio.stop_count = rollback_state.advances;
+        audio.play_count += 1;
+    }
+}
+
+#[test]
+fn simulation_tick_advances_audio_state_at_the_canonical_rate() {
+    let engine = WasmEngine::new().unwrap();
+    let wasm = wat::parse_str(
+        r#"(module
+            (memory (export "memory") 1)
+            (func (export "update")))"#,
+    )
+    .unwrap();
+    let module = engine.load_module(&wasm).unwrap();
+    let linker = Linker::new(engine.engine());
+    let mut game =
+        GameInstance::<TestInput, (), CountingAudioRollback>::new(&engine, &module, &linker)
+            .unwrap();
+
+    super::advance_game_tick::<CountingAudioGenerator, TestInput>(
+        &mut game,
+        std::time::Duration::from_secs_f32(1.0 / 60.0),
+        60,
+        None,
+    )
+    .unwrap();
+
+    assert_eq!(game.state().tick_count, 1);
+    assert_eq!(game.rollback_state().advances, 1);
+    assert_eq!(game.rollback_state().tick_rate, 60);
+    assert_eq!(game.rollback_state().sample_rate, 22_050);
+    let mut audio = TestAudio {
+        play_count: 0,
+        stop_count: 0,
+    };
+    // Two catch-up updates each emit their pre-advance frame.
+    for _ in 0..2 {
+        super::advance_game_tick::<CountingAudioGenerator, TestInput>(
+            &mut game,
+            std::time::Duration::from_secs_f32(1.0 / 60.0),
+            60,
+            Some(&mut audio),
+        )
+        .unwrap();
+    }
+    assert_eq!((audio.play_count, audio.stop_count), (2, 2));
+    assert_eq!(game.rollback_state().advances, 3);
+    // A resimulated update advances canonical state without replaying output.
+    super::advance_game_tick::<CountingAudioGenerator, TestInput>(
+        &mut game,
+        std::time::Duration::from_secs_f32(1.0 / 60.0),
+        60,
+        None,
+    )
+    .unwrap();
+    assert_eq!(audio.play_count, 2);
+    assert_eq!(game.rollback_state().advances, 4);
+}
 
 fn test_ram_limit() -> usize {
     TestConsole::specs().ram_limit

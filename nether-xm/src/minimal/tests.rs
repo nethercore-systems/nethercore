@@ -34,6 +34,9 @@ fn create_test_module() -> XmModule {
     };
 
     let instrument = XmInstrument {
+        source_sample_bytes: None,
+        sample_map: Vec::new(),
+        samples: Vec::new(),
         name: "Test".to_string(),
         num_samples: 1,
         volume_envelope: Some(XmEnvelope {
@@ -56,10 +59,16 @@ fn create_test_module() -> XmModule {
         sample_loop_start: 0,
         sample_loop_length: 1000,
         sample_loop_type: 1,
+        sample_is_stereo: false,
+        sample_default_volume: Some(32),
+        sample_default_pan: Some(128),
     };
 
     XmModule {
-        name: "Test Module".to_string(),
+        name: "test".to_string(),
+        mix_mode: crate::XmMixMode::Compatible,
+        legacy_retrigger: false,
+        sample_preamp: 48,
         num_channels: 2,
         num_patterns: 1,
         num_instruments: 1,
@@ -72,6 +81,48 @@ fn create_test_module() -> XmModule {
         patterns: vec![pattern],
         instruments: vec![instrument],
     }
+}
+
+#[test]
+fn mapped_samples_round_trip_and_reject_truncation() {
+    let mut module = create_test_module();
+    let instrument = &mut module.instruments[0];
+    instrument.num_samples = 2;
+    instrument.sample_map = vec![0; 96];
+    instrument.sample_map[60] = 1;
+    instrument.samples = vec![
+        crate::XmSample {volume: 16, pan: 0, loop_start: 3, loop_length: 17, loop_type: 1, ..Default::default()},
+        crate::XmSample {volume: 48, pan: 255, finetune: -17, relative_note: 12, loop_type: 2, ..Default::default()},
+    ];
+    let bytes = pack_xm_minimal(&module).unwrap();
+    assert_ne!(bytes[13] & super::FLAG_SAMPLE_MAP, 0);
+    let decoded = parse_xm_minimal(&bytes).unwrap();
+    assert_eq!(decoded.instruments[0].sample_map, module.instruments[0].sample_map);
+    assert_eq!(decoded.instruments[0].samples, module.instruments[0].samples);
+    for end in 0..bytes.len() { assert!(parse_xm_minimal(&bytes[..end]).is_err()); }
+    module.instruments[0].sample_map[60] = 2;
+    assert!(pack_xm_minimal(&module).is_err());
+}
+
+#[test]
+fn stereo_sample_metadata_round_trips_without_changing_legacy_mono() {
+    let mut module = create_test_module();
+    let mono = pack_xm_minimal(&module).unwrap();
+    assert!(!parse_xm_minimal(&mono).unwrap().instruments[0].sample_is_stereo);
+
+    module.instruments[0].sample_is_stereo = true;
+    let stereo = pack_xm_minimal(&module).unwrap();
+    assert!(parse_xm_minimal(&stereo).unwrap().instruments[0].sample_is_stereo);
+
+    module.instruments[0].num_samples = 2;
+    module.instruments[0].sample_map = vec![0; 96];
+    module.instruments[0].samples = vec![crate::XmSample::default(), crate::XmSample {
+        is_stereo: true,
+        ..Default::default()
+    }];
+    let decoded = parse_xm_minimal(&pack_xm_minimal(&module).unwrap()).unwrap();
+    assert!(!decoded.instruments[0].samples[0].is_stereo);
+    assert!(decoded.instruments[0].samples[1].is_stereo);
 }
 
 #[test]
@@ -112,6 +163,7 @@ fn test_pack_and_parse_minimal() {
     assert_eq!(instr.volume_fadeout, 256);
     assert_eq!(instr.sample_loop_length, 1000);
     assert_eq!(instr.sample_loop_type, 1);
+    assert_eq!(instr.sample_default_volume, Some(32));
 
     // Verify volume envelope
     assert!(instr.volume_envelope.is_some());
@@ -129,6 +181,58 @@ fn test_pack_and_parse_minimal() {
     assert!(instr.panning_envelope.is_none());
 }
 
+#[test]
+fn test_minimal_sample_default_pan_roundtrip() {
+    for pan in [0, 128, 255] {
+        let mut module = create_test_module();
+        module.instruments[0].sample_default_pan = Some(pan);
+        let packed = pack_xm_minimal(&module).expect("packing should preserve XM pan");
+        assert_ne!(packed[13] & super::FLAG_SAMPLE_DEFAULT_PAN, 0);
+        let parsed = parse_xm_minimal(&packed).expect("roundtrip should parse");
+        assert_eq!(parsed.instruments[0].sample_default_pan, Some(pan));
+    }
+}
+
+#[test]
+fn test_legacy_ncxm_without_sample_default_pan_remains_readable() {
+    let mut module = create_test_module();
+    module.instruments[0].sample_default_pan = None;
+    let packed = pack_xm_minimal(&module).expect("legacy layout should pack");
+    assert_eq!(packed[13] & super::FLAG_SAMPLE_DEFAULT_PAN, 0);
+    let parsed = parse_xm_minimal(&packed).expect("legacy layout should parse");
+    assert_eq!(parsed.instruments[0].sample_default_pan, None);
+}
+
+#[test]
+fn test_minimal_rejects_unknown_layout_flags() {
+    let mut packed = pack_xm_minimal(&create_test_module()).unwrap();
+    packed[13] |= 0x80;
+    assert!(matches!(
+        parse_xm_minimal(&packed),
+        Err(crate::XmError::UnsupportedMinimalFlags(0x80))
+    ));
+}
+
+#[test]
+fn test_minimal_sample_default_volume_roundtrip() {
+    for volume in [0, 32, 64] {
+        let mut module = create_test_module();
+        module.instruments[0].sample_default_volume = Some(volume);
+        let packed = pack_xm_minimal(&module).expect("packing should accept 0-64");
+        let parsed = parse_xm_minimal(&packed).expect("roundtrip should parse");
+        assert_eq!(parsed.instruments[0].sample_default_volume, Some(volume));
+    }
+}
+
+#[test]
+fn test_minimal_sample_default_volume_rejects_out_of_range() {
+    let mut module = create_test_module();
+    module.instruments[0].sample_default_volume = Some(65);
+    assert!(matches!(
+        pack_xm_minimal(&module),
+        Err(crate::XmError::InvalidSampleVolume(65))
+    ));
+}
 #[test]
 fn test_minimal_format_size() {
     let module = create_test_module();

@@ -4,6 +4,45 @@ use super::mixing::{apply_pan, soft_clip};
 use super::*;
 use crate::state::{AudioPlaybackState, ChannelState, TrackerState};
 use crate::tracker::TrackerEngine;
+use nethercore_core::AudioGenerator;
+
+fn test_sound() -> Sound {
+    Sound {
+        data: Arc::new(vec![1; 22_050]),
+    }
+}
+
+#[test]
+fn audio_advance_hook_advances_canonical_state() {
+    let mut rollback = crate::state::ZRollbackState::default();
+    rollback.audio.channels[0].sound = 1;
+    let mut state = crate::state::ZXFFIState::default();
+    state.sounds = vec![None, Some(test_sound())];
+
+    ZXAudioGenerator::advance_state(&mut rollback, &mut state, 60, OUTPUT_SAMPLE_RATE);
+
+    assert!(rollback.audio.channels[0].position > 0);
+}
+
+#[test]
+fn audible_processing_does_not_advance_canonical_state() {
+    let mut rollback = crate::state::ZRollbackState::default();
+    rollback.audio.channels[0].sound = 1;
+    let before = rollback;
+    let mut state = crate::state::ZXFFIState::default();
+    state.sounds = vec![None, Some(test_sound())];
+    let mut audio = ZXAudio::new_stub();
+
+    ZXAudioGenerator::process_audio(
+        &mut rollback,
+        &mut state,
+        &mut audio,
+        60,
+        OUTPUT_SAMPLE_RATE,
+    );
+
+    assert_eq!(bytemuck::bytes_of(&rollback), bytemuck::bytes_of(&before));
+}
 
 #[test]
 fn test_apply_pan_center() {

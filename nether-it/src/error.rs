@@ -54,6 +54,9 @@ pub enum ItError {
     #[error("Unexpected end of file")]
     UnexpectedEof,
 
+    #[error("Unsupported explicit IT mixing metadata")]
+    UnsupportedMixMetadata,
+
     /// IO error during parsing
     #[error("IO error: {0}")]
     IoError(#[source] io::Error),

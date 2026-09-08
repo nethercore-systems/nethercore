@@ -16,6 +16,10 @@ mod sync;
 mod tick;
 
 #[cfg(test)]
+mod control_tests;
+#[cfg(test)]
+mod sample_mode_tests;
+#[cfg(test)]
 mod tests;
 
 // ============================================================================

@@ -84,6 +84,25 @@ fn test_mvp_shading_deduplication() {
 }
 
 #[test]
+fn repeated_draws_keep_reused_color_after_deduplication() {
+    let mut state = ZXFFIState::default();
+    for _ in 0..2 {
+        for color in [0x16C8D4FF, 0x07101DDD, 0x16C8D4FF] {
+            state.current_shading_state.color_rgba8 = color;
+            state.shading_state_dirty = true;
+            let first = state.add_shading_state();
+            assert_eq!(state.shading_pool.get(first).unwrap().color_rgba8, color);
+            // A second text/mesh draw without a color change must keep this
+            // reused state, not the last distinct state (the dark panel).
+            assert_eq!(state.add_shading_state(), first);
+            let mesh = state.add_mvp_shading_state();
+            assert_eq!(state.mvp_shading_states[mesh as usize].shading_idx, first.0);
+        }
+        state.clear_frame();
+    }
+}
+
+#[test]
 fn test_multiple_draws_share_buffer_index() {
     let mut state = ZXFFIState::default();
 

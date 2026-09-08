@@ -78,6 +78,10 @@ pub struct TrackerModule {
     pub mix_volume: u8,
     /// Panning separation (0-128, IT only - 128 = full stereo, 0 = mono)
     pub panning_separation: u8,
+    /// Initial channel pan: 0..64, 100=surround, high bit=mute (IT).
+    pub channel_pan: [u8; 64],
+    /// Initial channel volumes, 0..64.
+    pub channel_vol: [u8; 64],
     /// Pattern order table
     pub order_table: Vec<u8>,
     /// Pattern data
@@ -98,7 +102,7 @@ impl TrackerModule {
     /// Get the pattern at the given order position
     pub fn pattern_at_order(&self, order: u16) -> Option<&TrackerPattern> {
         let pattern_idx = *self.order_table.get(order as usize)? as usize;
-        if pattern_idx >= 254 {
+        if self.format.contains(FormatFlags::IS_IT_FORMAT) && pattern_idx >= 254 {
             return None; // Skip or end marker
         }
         self.patterns.get(pattern_idx)
@@ -119,7 +123,7 @@ impl TrackerModule {
         self.format.contains(FormatFlags::OLD_EFFECTS)
     }
 
-    /// Check if this module links G memory with E/F for portamento
+    /// Check the legacy-named Compatible Gxx flag (set means separate G/E/F memory).
     pub fn uses_link_g_memory(&self) -> bool {
         self.format.contains(FormatFlags::LINK_G_MEMORY)
     }
@@ -140,8 +144,14 @@ impl FormatFlags {
     pub const IS_XM_FORMAT: Self = Self(0x0008);
     /// Use old effects (S3M compatibility - affects vibrato/tremolo depth)
     pub const OLD_EFFECTS: Self = Self(0x0010);
-    /// Link G memory with E/F for portamento
+    /// IT Compatible Gxx flag; legacy name retained. Set means separate G/E/F memory.
     pub const LINK_G_MEMORY: Self = Self(0x0020);
+    /// XM was authored for the FT2-compatible square-root mix chain.
+    pub const XM_FT2_MIX: Self = Self(0x0040);
+    pub const XM_LEGACY_MIX: Self = Self(0x0100);
+    /// Measured XM legacy retrigger timing, independent of pan/gain mode.
+    pub const XM_LEGACY_RETRIGGER: Self = Self(0x0200);
+    pub const IT_BALANCE_MIX: Self = Self(0x0080);
 
     pub const fn empty() -> Self {
         Self(0)

@@ -38,7 +38,8 @@ pub fn write_instrument(output: &mut Vec<u8>, instr: &ItInstrument) {
 
     // GbV, DfP
     output.push(instr.global_volume);
-    let dfp = instr.default_pan.map(|p| p | 0x80).unwrap_or(32);
+    // Instrument DfP bit 7 disables default pan; sample DfP uses the inverse.
+    let dfp = instr.default_pan.map(|p| p.min(64)).unwrap_or(32 | 0x80);
     output.push(dfp);
 
     // RV, RP
@@ -123,7 +124,8 @@ pub fn write_sample_header(output: &mut Vec<u8>, sample: &ItSample, data_offset:
     output.push(sample.global_volume);
 
     // Flg - add SAMPLE_16BIT flag since we always write 16-bit
-    let flags = sample.flags | ItSampleFlags::SAMPLE_16BIT;
+    let flags = ItSampleFlags::from_bits(sample.flags.bits() & !ItSampleFlags::COMPRESSED.bits())
+        | ItSampleFlags::SAMPLE_16BIT;
     output.push(flags.bits());
 
     // Vol
@@ -133,7 +135,7 @@ pub fn write_sample_header(output: &mut Vec<u8>, sample: &ItSample, data_offset:
     write_string(output, &sample.name, 26);
 
     // Cvt (convert flags) - 0x01 = signed samples
-    output.push(0x01);
+    output.push(0x01); // Writer payload is decoded signed little-endian PCM.
 
     // DfP
     let dfp = sample.default_pan.map(|p| p | 0x80).unwrap_or(0);

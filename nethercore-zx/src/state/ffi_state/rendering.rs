@@ -58,13 +58,8 @@ impl ZXFFIState {
         // Sync animation state before checking
         self.sync_animation_state();
 
-        // If not dirty, return the last added state
-        if !self.shading_state_dirty && !self.shading_pool.is_empty() {
-            return self
-                .shading_pool
-                .last_index()
-                .unwrap_or(crate::graphics::ShadingStateIndex(0));
-        }
+        // Always use the pool's deduplication lookup: its last slot is not
+        // necessarily the state reused by the previous draw.
 
         // Add to pool (handles deduplication and overflow internally)
         let shading_idx = self.shading_pool.add(self.current_shading_state);

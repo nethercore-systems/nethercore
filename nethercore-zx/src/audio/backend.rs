@@ -200,6 +200,22 @@ impl nethercore_core::AudioGenerator for ZXAudioGenerator {
         OUTPUT_SAMPLE_RATE
     }
 
+    fn advance_state(
+        rollback_state: &mut Self::RollbackState,
+        state: &mut Self::State,
+        tick_rate: u32,
+        sample_rate: u32,
+    ) {
+        advance_audio_positions(
+            &mut rollback_state.audio,
+            &mut rollback_state.tracker,
+            &mut state.tracker_engine,
+            &state.sounds,
+            tick_rate,
+            sample_rate,
+        );
+    }
+
     fn generate_frame(
         rollback_state: &mut Self::RollbackState,
         state: &mut Self::State,
@@ -226,20 +242,7 @@ impl nethercore_core::AudioGenerator for ZXAudioGenerator {
         sample_rate: u32,
     ) {
         if audio.is_threaded() {
-            // Threaded mode: create snapshot and send to audio thread
-            //
-            // IMPORTANT: We must also advance the main thread's audio state!
-            // The audio thread will generate samples from the snapshot, but the
-            // main thread's rollback state must stay in sync (positions advance,
-            // finished sounds get cleared, etc.) for deterministic rollback.
-            //
-            // Flow:
-            // 1. Create snapshot with CURRENT positions (start of frame)
-            // 2. Send snapshot to audio thread (it will generate samples)
-            // 3. Advance main thread state using lightweight position-only advance
-            //
-            // The audio thread and main thread both advance positions by the same
-            // amount, staying in sync.
+            // Threaded mode sends canonical state to the output-only audio thread.
             let sounds = match &audio.cached_sounds {
                 Some(cached) if cached.len() == state.sounds.len() => Arc::clone(cached),
                 _ => {
@@ -260,25 +263,57 @@ impl nethercore_core::AudioGenerator for ZXAudioGenerator {
                 is_rollback: false, // is_rollback - main loop only calls this for confirmed frames
             };
             audio.send_snapshot(snapshot);
-
-            // Advance main thread state (lightweight - no sample generation)
-            // This is ~10-20x faster than generate_frame as it skips mixing
-            advance_audio_positions(
-                &mut rollback_state.audio,
-                &mut rollback_state.tracker,
-                &mut state.tracker_engine,
-                &state.sounds,
-                tick_rate,
-                sample_rate,
-            );
         } else {
-            // Synchronous mode: generate samples and push using reusable buffer
-            // Note: We need to take the buffer out temporarily to avoid borrow conflicts
+            // Generate output from copies so audible processing never advances
+            // checksummed state or the canonical tracker engine a second time.
             let mut buffer = std::mem::take(&mut audio.frame_buffer);
             buffer.clear();
-            Self::generate_frame(rollback_state, state, tick_rate, sample_rate, &mut buffer);
+            let mut output_state = *rollback_state;
+            let tracker_snapshot = state.tracker_engine.snapshot();
+            Self::generate_frame(
+                &mut output_state,
+                state,
+                tick_rate,
+                sample_rate,
+                &mut buffer,
+            );
+            state.tracker_engine.apply_snapshot(&tracker_snapshot);
             audio.push_samples(&buffer);
             audio.frame_buffer = buffer;
         }
+    }
+}
+
+#[cfg(test)]
+mod onset_regression {
+    use super::*;
+    use nethercore_core::AudioGenerator;
+    #[test]
+    fn sub_tick_sfx_outputs_its_onset_before_canonical_completion() {
+        let mut rollback = crate::state::ZRollbackState::default();
+        rollback.audio.channels[0].sound = 1;
+        rollback.audio.channels[0].volume = 1.0;
+        let mut state = crate::state::ZXFFIState::default();
+        state.sounds = vec![
+            None,
+            Some(Sound {
+                data: Arc::new(vec![16000; 100]),
+            }),
+        ];
+        let mut audio = ZXAudio::new_stub();
+        ZXAudioGenerator::process_audio(
+            &mut rollback,
+            &mut state,
+            &mut audio,
+            60,
+            OUTPUT_SAMPLE_RATE,
+        );
+        assert!(
+            audio.frame_buffer[0] > 0.1,
+            "the leading sample must be audible"
+        );
+        assert_eq!(rollback.audio.channels[0].position, 0);
+        ZXAudioGenerator::advance_state(&mut rollback, &mut state, 60, OUTPUT_SAMPLE_RATE);
+        assert_eq!(rollback.audio.channels[0].sound, 0);
     }
 }

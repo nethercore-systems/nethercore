@@ -19,6 +19,10 @@ use super::handle::AudioGenHandle;
 use super::metrics::{AudioMetrics, LOW_BUFFER_THRESHOLD, RING_BUFFER_CAPACITY};
 use super::snapshot::AudioGenSnapshot;
 
+#[cfg(test)]
+#[path = "tracker_control_tests.rs"]
+mod tracker_control_tests;
+
 /// Audio generation thread state
 ///
 /// Uses a **predictive generation** architecture:
@@ -286,8 +290,9 @@ impl AudioGenThread {
             self.gen_audio.music.pan = snapshot.audio.music.pan;
         }
 
-        // Tracker: detect module change (new song) and merge controllable values
-        let tracker_changed = snapshot.tracker.handle != self.gen_tracker.handle;
+        // Apply explicit restart/jump commands even when the module is unchanged.
+        let tracker_changed = snapshot.tracker.handle != self.gen_tracker.handle
+            || snapshot.tracker.control_epoch() != self.gen_tracker.control_epoch();
         if tracker_changed && snapshot.tracker.handle != 0 {
             // New tracker module started
             if self.gen_tracker.handle != 0 {

@@ -61,6 +61,7 @@ fn music_play(mut caller: Caller<'_, ZXGameContext>, handle: u32, volume: f32, l
         tracker.bpm = initial_tempo;
         tracker.volume = (clamp_safe(volume, 0.0, 1.0) * 256.0) as u16;
         tracker.tick_sample_pos = 0;
+        tracker.request_position_change();
 
         let mut flags = tracker_flags::PLAYING;
         if looping != 0 {

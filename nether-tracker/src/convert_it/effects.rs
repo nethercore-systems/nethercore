@@ -10,15 +10,8 @@ pub(super) fn convert_it_volume(vol: u8) -> u8 {
 }
 
 /// Convert IT effect to unified TrackerEffect
-pub(super) fn convert_it_effect(effect: u8, param: u8, volume: u8) -> TrackerEffect {
-    // Check volume column for volume-column effects first
-    if volume > 64
-        && let Some(vol_effect) = convert_it_volume_effect(volume)
-    {
-        return vol_effect;
-    }
-
-    // Convert main effect command
+pub(super) fn convert_it_effect(effect: u8, param: u8) -> TrackerEffect {
+    // Volume-column commands are retained separately on TrackerNote.
     match effect {
         0 => TrackerEffect::None,
 
@@ -49,31 +42,9 @@ pub(super) fn convert_it_effect(effect: u8, param: u8, volume: u8) -> TrackerEff
             }
         }
 
-        // Exx - Portamento down
-        // EEx = Extra-fine portamento down (tick 0 only)
-        // EFx = Fine portamento down (tick 0 only)
-        nether_it::effects::PORTA_DOWN => {
-            let hi = param >> 4;
-            let lo = param & 0x0F;
-            match hi {
-                0xE => TrackerEffect::ExtraFinePortaDown(lo as u16),
-                0xF => TrackerEffect::FinePortaDown(lo as u16),
-                _ => TrackerEffect::PortamentoDown(param as u16),
-            }
-        }
-
-        // Fxx - Portamento up
-        // FEx = Extra-fine portamento up (tick 0 only)
-        // FFx = Fine portamento up (tick 0 only)
-        nether_it::effects::PORTA_UP => {
-            let hi = param >> 4;
-            let lo = param & 0x0F;
-            match hi {
-                0xE => TrackerEffect::ExtraFinePortaUp(lo as u16),
-                0xF => TrackerEffect::FinePortaUp(lo as u16),
-                _ => TrackerEffect::PortamentoUp(param as u16),
-            }
-        }
+        // Preserve the complete E/F byte: E00/F00 recalls the mode nibble too.
+        nether_it::effects::PORTA_DOWN => TrackerEffect::PortamentoDown(param as u16),
+        nether_it::effects::PORTA_UP => TrackerEffect::PortamentoUp(param as u16),
 
         // Gxx - Tone portamento
         nether_it::effects::TONE_PORTA => TrackerEffect::TonePortamento(param as u16),
@@ -181,8 +152,8 @@ pub(super) fn convert_it_effect(effect: u8, param: u8, volume: u8) -> TrackerEff
             TrackerEffect::Tremolo { speed, depth }
         }
 
-        // Sxy - Extended effects
-        nether_it::effects::EXTENDED => convert_it_extended_effect(param),
+        // Sxy - retain the raw command until runtime so S00 can recall S memory.
+        nether_it::effects::EXTENDED => TrackerEffect::ItExtended(param),
 
         // Txx - Set tempo / tempo slide
         // T0x = tempo slide down by x BPM per tick
@@ -229,8 +200,8 @@ pub(super) fn convert_it_effect(effect: u8, param: u8, volume: u8) -> TrackerEff
             }
         }
 
-        // Xxx - Set panning
-        nether_it::effects::SET_PANNING => TrackerEffect::SetPanning(param / 2), // IT uses 0-128, we use 0-64
+        // Xxx - 8-bit panning: X00 = left, X80 = center, XFF = near right.
+        nether_it::effects::SET_PANNING => TrackerEffect::SetPanning(param / 4),
 
         // Yxy - Panbrello
         nether_it::effects::PANBRELLO => {
@@ -258,50 +229,15 @@ pub(super) fn convert_it_effect(effect: u8, param: u8, volume: u8) -> TrackerEff
     }
 }
 
-/// Convert IT extended effects (Sxy)
+#[cfg(test)]
 fn convert_it_extended_effect(param: u8) -> TrackerEffect {
-    let sub_cmd = param >> 4;
-    let value = param & 0x0F;
-
-    match sub_cmd {
-        nether_it::extended_effects::SET_FILTER => TrackerEffect::None, // Obsolete
-        nether_it::extended_effects::GLISSANDO => TrackerEffect::SetGlissando(value != 0),
-        // S2x - Set finetune: value 0-15 maps to -8..+7 semitones (centered at 8)
-        nether_it::extended_effects::SET_FINETUNE => TrackerEffect::SetFinetune((value as i8) - 8),
-        nether_it::extended_effects::VIBRATO_WAVEFORM => TrackerEffect::VibratoWaveform(value),
-        nether_it::extended_effects::TREMOLO_WAVEFORM => TrackerEffect::TremoloWaveform(value),
-        nether_it::extended_effects::PANBRELLO_WAVEFORM => TrackerEffect::PanbrelloWaveform(value),
-        nether_it::extended_effects::FINE_PATTERN_DELAY => TrackerEffect::FinePatternDelay(value),
-        // S7x - Instrument control (NNA/envelope) - complex, rarely used in practice
-        nether_it::extended_effects::INSTRUMENT_CONTROL => TrackerEffect::None,
-        // S8x - coarse panning: value * 4 + 2 (centers 0-15 to 2-62)
-        nether_it::extended_effects::SET_PANNING_COARSE => {
-            TrackerEffect::SetPanning((value * 4).saturating_add(2).min(64))
-        }
-        // S9x - Sound control (surround/reverse)
-        // S90 = surround off, S91 = surround on
-        // S9E = play forwards, S9F = play backwards (reverse)
-        nether_it::extended_effects::SOUND_CONTROL => match value {
-            0 => TrackerEffect::SetSurround(false),
-            1 => TrackerEffect::SetSurround(true),
-            0xE => TrackerEffect::SetSampleReverse(false),
-            0xF => TrackerEffect::SetSampleReverse(true),
-            _ => TrackerEffect::None, // S92-S9D are reserved/unused
-        },
-        nether_it::extended_effects::HIGH_SAMPLE_OFFSET => TrackerEffect::HighSampleOffset(value),
-        nether_it::extended_effects::PATTERN_LOOP => TrackerEffect::PatternLoop(value),
-        nether_it::extended_effects::NOTE_CUT => TrackerEffect::NoteCut(value),
-        nether_it::extended_effects::NOTE_DELAY => TrackerEffect::NoteDelay(value),
-        nether_it::extended_effects::PATTERN_DELAY => TrackerEffect::PatternDelay(value),
-        nether_it::extended_effects::SET_ACTIVE_MACRO => TrackerEffect::None, // MIDI macro
-        _ => TrackerEffect::None,
-    }
+    TrackerEffect::from_it_extended(param)
 }
 
 /// Convert IT volume column effects
-fn convert_it_volume_effect(vol: u8) -> Option<TrackerEffect> {
+pub(super) fn convert_it_volume_effect(vol: u8) -> Option<TrackerEffect> {
     match vol {
-        0..=64 => None, // Direct volume, not an effect
+        0..=64 => Some(TrackerEffect::SetVolume(vol)),
         65..=74 => Some(TrackerEffect::FineVolumeUp(vol - 65)),
         75..=84 => Some(TrackerEffect::FineVolumeDown(vol - 75)),
         85..=94 => Some(TrackerEffect::VolumeSlide {
@@ -312,10 +248,13 @@ fn convert_it_volume_effect(vol: u8) -> Option<TrackerEffect> {
             up: 0,
             down: vol - 95,
         }),
-        105..=114 => Some(TrackerEffect::FinePortaDown((vol - 105) as u16 * 4)),
-        115..=124 => Some(TrackerEffect::FinePortaUp((vol - 115) as u16 * 4)),
+        105..=114 => Some(TrackerEffect::PortamentoDown((vol - 105) as u16 * 4)),
+        115..=124 => Some(TrackerEffect::PortamentoUp((vol - 115) as u16 * 4)),
         128..=192 => Some(TrackerEffect::SetPanning(vol - 128)), // 0-64 panning
-        193..=202 => Some(TrackerEffect::TonePortamento((vol - 193) as u16 * 4)),
+        // IT volume G0..G9 uses the original tracker's nonlinear speed table.
+        193..=202 => Some(TrackerEffect::TonePortamento(
+            [0, 1, 4, 8, 16, 32, 64, 96, 128, 255][(vol - 193) as usize],
+        )),
         203..=212 => Some(TrackerEffect::Vibrato {
             speed: 0,
             depth: (vol - 203),
@@ -329,39 +268,136 @@ mod tests {
     use super::*;
 
     #[test]
+    fn it_extended_commands_stay_raw_until_runtime() {
+        assert_eq!(
+            convert_it_effect(nether_it::effects::EXTENDED, 0),
+            TrackerEffect::ItExtended(0)
+        );
+        assert_eq!(
+            convert_it_effect(nether_it::effects::EXTENDED, 0x62),
+            TrackerEffect::ItExtended(0x62)
+        );
+    }
+
+    #[test]
+    fn it_volume_pitch_slides_are_regular_tick_slides() {
+        assert_eq!(convert_it_extended_effect(0x7b), TrackerEffect::SetPitchEnvelope(false));
+        assert_eq!(convert_it_extended_effect(0x7c), TrackerEffect::SetPitchEnvelope(true));
+        assert_eq!(
+            convert_it_extended_effect(0x79),
+            TrackerEffect::SetPanningEnvelope(false)
+        );
+        assert_eq!(
+            convert_it_extended_effect(0x7a),
+            TrackerEffect::SetPanningEnvelope(true)
+        );
+        assert_eq!(
+            convert_it_extended_effect(0x77),
+            TrackerEffect::SetVolumeEnvelope(false)
+        );
+        assert_eq!(
+            convert_it_extended_effect(0x78),
+            TrackerEffect::SetVolumeEnvelope(true)
+        );
+        for amount in 0..=9 {
+            assert_eq!(
+                convert_it_volume_effect(105 + amount),
+                Some(TrackerEffect::PortamentoDown(amount as u16 * 4))
+            );
+            assert_eq!(
+                convert_it_volume_effect(115 + amount),
+                Some(TrackerEffect::PortamentoUp(amount as u16 * 4))
+            );
+        }
+    }
+
+    #[test]
+    fn it_volume_tone_portamento_uses_tracker_speed_table() {
+        for (digit, speed) in [0, 1, 4, 8, 16, 32, 64, 96, 128, 255]
+            .into_iter()
+            .enumerate()
+        {
+            assert_eq!(
+                convert_it_volume_effect(193 + digit as u8),
+                Some(TrackerEffect::TonePortamento(speed)),
+                "volume G{digit}"
+            );
+        }
+    }
+
+    #[test]
+    fn coarse_panning_covers_both_stereo_edges() {
+        for value in 0..16u8 {
+            let expected = ((u16::from(value) * 256 + 8) / 15 / 4) as u8;
+            assert_eq!(
+                convert_it_extended_effect(0x80 | value),
+                TrackerEffect::SetPanning(expected)
+            );
+        }
+    }
+
+    #[test]
+    fn test_convert_it_xxx_panning() {
+        // IT Xxx is 8-bit (X80 = center), quantized to our 0-64 pan scale.
+        // In particular, XA4 is ordinary IT panning, not S3M surround.
+        for (param, expected) in [
+            (0x00, 0),
+            (0x01, 0),
+            (0x03, 0),
+            (0x04, 1),
+            (0x7F, 31),
+            (0x80, 32),
+            (0x81, 32),
+            (0x83, 32),
+            (0x84, 33),
+            (0xA4, 41),
+            (0xFB, 62),
+            (0xFC, 63),
+            (0xFE, 63),
+            (0xFF, 63),
+        ] {
+            assert_eq!(
+                convert_it_effect(nether_it::effects::SET_PANNING, param),
+                TrackerEffect::SetPanning(expected),
+                "X{param:02X}"
+            );
+        }
+    }
+
+    #[test]
     fn test_convert_it_effect_speed() {
-        let effect = convert_it_effect(nether_it::effects::SET_SPEED, 6, 0);
+        let effect = convert_it_effect(nether_it::effects::SET_SPEED, 6);
         assert_eq!(effect, TrackerEffect::SetSpeed(6));
     }
 
     #[test]
     fn test_convert_it_effect_volume_slide() {
-        let effect = convert_it_effect(nether_it::effects::VOLUME_SLIDE, 0x52, 0); // Up 5, down 2
+        let effect = convert_it_effect(nether_it::effects::VOLUME_SLIDE, 0x52); // Up 5, down 2
         assert_eq!(effect, TrackerEffect::VolumeSlide { up: 5, down: 2 });
     }
 
     #[test]
     fn test_convert_it_portamento_directions() {
-        let down = convert_it_effect(nether_it::effects::PORTA_DOWN, 0x12, 0);
+        let down = convert_it_effect(nether_it::effects::PORTA_DOWN, 0x12);
         assert_eq!(down, TrackerEffect::PortamentoDown(0x12));
 
-        let up = convert_it_effect(nether_it::effects::PORTA_UP, 0x34, 0);
+        let up = convert_it_effect(nether_it::effects::PORTA_UP, 0x34);
         assert_eq!(up, TrackerEffect::PortamentoUp(0x34));
     }
 
     #[test]
     fn test_convert_it_portamento_fine_and_extrafine() {
-        let fine_down = convert_it_effect(nether_it::effects::PORTA_DOWN, 0xF3, 0);
-        assert_eq!(fine_down, TrackerEffect::FinePortaDown(3));
+        let fine_down = convert_it_effect(nether_it::effects::PORTA_DOWN, 0xF3);
+        assert_eq!(fine_down, TrackerEffect::PortamentoDown(0xF3));
 
-        let xf_down = convert_it_effect(nether_it::effects::PORTA_DOWN, 0xE7, 0);
-        assert_eq!(xf_down, TrackerEffect::ExtraFinePortaDown(7));
+        let xf_down = convert_it_effect(nether_it::effects::PORTA_DOWN, 0xE7);
+        assert_eq!(xf_down, TrackerEffect::PortamentoDown(0xE7));
 
-        let fine_up = convert_it_effect(nether_it::effects::PORTA_UP, 0xF2, 0);
-        assert_eq!(fine_up, TrackerEffect::FinePortaUp(2));
+        let fine_up = convert_it_effect(nether_it::effects::PORTA_UP, 0xF2);
+        assert_eq!(fine_up, TrackerEffect::PortamentoUp(0xF2));
 
-        let xf_up = convert_it_effect(nether_it::effects::PORTA_UP, 0xE5, 0);
-        assert_eq!(xf_up, TrackerEffect::ExtraFinePortaUp(5));
+        let xf_up = convert_it_effect(nether_it::effects::PORTA_UP, 0xE5);
+        assert_eq!(xf_up, TrackerEffect::PortamentoUp(0xE5));
     }
 
     #[test]
@@ -379,7 +415,15 @@ mod tests {
         );
 
         // Direct volume
-        assert_eq!(convert_it_volume_effect(32), None);
+        assert_eq!(
+            convert_it_volume_effect(32),
+            Some(TrackerEffect::SetVolume(32))
+        );
+        assert_eq!(
+            convert_it_volume_effect(0),
+            Some(TrackerEffect::SetVolume(0))
+        );
+        assert_eq!(convert_it_volume_effect(255), None);
     }
 
     #[test]
@@ -402,12 +446,12 @@ mod tests {
     #[test]
     fn test_convert_it_filter_effects() {
         // Filter cutoff (Zxx where xx = 00-7F)
-        let effect = convert_it_effect(nether_it::effects::MIDI_MACRO, 0x40, 0);
+        let effect = convert_it_effect(nether_it::effects::MIDI_MACRO, 0x40);
         assert_eq!(effect, TrackerEffect::SetFilterCutoff(0x40));
 
         // Filter resonance (Zxx where xx = 80-8F)
         // 0x85 = resonance 5, scaled by 8 for 0-127 range
-        let effect = convert_it_effect(nether_it::effects::MIDI_MACRO, 0x85, 0);
+        let effect = convert_it_effect(nether_it::effects::MIDI_MACRO, 0x85);
         assert_eq!(effect, TrackerEffect::SetFilterResonance(5 * 8));
     }
 

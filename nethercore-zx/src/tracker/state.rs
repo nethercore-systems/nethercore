@@ -14,15 +14,31 @@ use super::channels::TrackerChannel;
 #[derive(Debug)]
 pub struct RowStateCache {
     /// Cached channel states: (order, row) -> channels (sorted by key)
-    cache: BTreeMap<(u16, u16), CachedRowState>,
+    cache: BTreeMap<(u32, u16, u16), CachedRowState>,
     /// Maximum cache entries
     max_entries: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct CachedControlState {
+    pub channel_mutes: [bool; MAX_TRACKER_CHANNELS],
+    pub global_volume: f32,
+    pub pattern_delay: u8,
+    pub pattern_delay_count: u8,
+    pub fine_pattern_delay: u16,
+    pub xm_next_pattern_row: u16,
+    pub xm_loop_owner: Option<usize>,
+    pub last_global_vol_slide: u8,
+    pub is_it_format: bool,
+    pub old_effects_mode: bool,
+    pub link_g_memory: bool,
+    pub tempo_slide: i8,
 }
 
 #[derive(Debug, Clone)]
 pub struct CachedRowState {
     pub channels: Box<[TrackerChannel; MAX_TRACKER_CHANNELS]>,
-    pub global_volume: f32,
+    pub control: CachedControlState,
 }
 
 impl Default for RowStateCache {
@@ -43,23 +59,25 @@ impl RowStateCache {
     /// Find nearest cached state before or at target position (O(log n) with BTreeMap)
     pub fn find_nearest(
         &self,
+        handle: u32,
         target_order: u16,
         target_row: u16,
     ) -> Option<((u16, u16), &CachedRowState)> {
         // Use range query to find the greatest key <= (target_order, target_row)
         self.cache
-            .range(..=(target_order, target_row))
+            .range((handle, 0, 0)..=(handle, target_order, target_row))
             .next_back()
-            .map(|(pos, state)| (*pos, state))
+            .map(|(pos, state)| ((pos.1, pos.2), state))
     }
 
     /// Store state at row
     pub fn store(
         &mut self,
+        handle: u32,
         order: u16,
         row: u16,
         channels: &[TrackerChannel; MAX_TRACKER_CHANNELS],
-        global_volume: f32,
+        control: CachedControlState,
     ) {
         // Evict oldest entry if at capacity (BTreeMap keeps entries sorted, so first is oldest by position)
         if self.cache.len() >= self.max_entries
@@ -69,10 +87,10 @@ impl RowStateCache {
         }
 
         self.cache.insert(
-            (order, row),
+            (handle, order, row),
             CachedRowState {
                 channels: Box::new(channels.clone()),
-                global_volume,
+                control,
             },
         );
     }
@@ -104,22 +122,36 @@ mod tests {
             std::array::from_fn(|_| TrackerChannel::default());
 
         // Store some entries
-        cache.store(0, 0, &channels, 1.0);
-        cache.store(0, 4, &channels, 1.0);
-        cache.store(1, 0, &channels, 1.0);
+        let control = CachedControlState {
+            channel_mutes: [false; MAX_TRACKER_CHANNELS],
+            global_volume: 1.0,
+            pattern_delay: 0,
+            pattern_delay_count: 0,
+            fine_pattern_delay: 0,
+            xm_next_pattern_row: 0,
+            xm_loop_owner: None,
+            last_global_vol_slide: 0,
+            is_it_format: false,
+            old_effects_mode: false,
+            link_g_memory: false,
+            tempo_slide: 0,
+        };
+        cache.store(1, 0, 0, &channels, control);
+        cache.store(1, 0, 4, &channels, control);
+        cache.store(1, 1, 0, &channels, control);
 
         // Find nearest to (0, 2) should return (0, 0)
-        let result = cache.find_nearest(0, 2);
+        let result = cache.find_nearest(1, 0, 2);
         assert!(result.is_some());
         assert_eq!(result.unwrap().0, (0, 0));
 
         // Find nearest to (0, 5) should return (0, 4)
-        let result = cache.find_nearest(0, 5);
+        let result = cache.find_nearest(1, 0, 5);
         assert!(result.is_some());
         assert_eq!(result.unwrap().0, (0, 4));
 
         // Find nearest to (1, 2) should return (1, 0)
-        let result = cache.find_nearest(1, 2);
+        let result = cache.find_nearest(1, 1, 2);
         assert!(result.is_some());
         assert_eq!(result.unwrap().0, (1, 0));
     }

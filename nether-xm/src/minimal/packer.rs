@@ -8,6 +8,7 @@ use crate::parser::pack_pattern_data;
 
 use super::MAX_ENVELOPE_POINTS;
 use super::io::{write_u16, write_u32};
+use super::{FLAG_LEGACY_MIX, FLAG_SAMPLE_PREAMP, FLAG_FT2_MIX, FLAG_LINEAR_FREQUENCY, FLAG_SAMPLE_DEFAULT_PAN, FLAG_SAMPLE_MAP};
 
 /// Pack an XmModule into minimal binary format
 ///
@@ -31,6 +32,20 @@ use super::io::{write_u16, write_u32};
 /// ```
 pub fn pack_xm_minimal(module: &XmModule) -> Result<Vec<u8>, XmError> {
     let mut output = Vec::with_capacity(4096);
+    let has_sample_map = module.instruments.iter().any(|i| i.num_samples > 1 && !i.samples.is_empty());
+    let has_sample_pan = module
+        .instruments
+        .iter()
+        .any(|instrument| instrument.num_samples == 1 && instrument.sample_default_pan.is_some());
+
+    if has_sample_pan
+        && module
+            .instruments
+            .iter()
+            .any(|instrument| instrument.num_samples == 1 && instrument.sample_default_pan.is_none())
+    {
+        return Err(XmError::MissingSampleDefaultPan);
+    }
 
     // ========== Write Header ==========
     output.write_all(&[module.num_channels]).unwrap();
@@ -41,12 +56,29 @@ pub fn pack_xm_minimal(module: &XmModule) -> Result<Vec<u8>, XmError> {
     write_u16(&mut output, module.default_speed);
     write_u16(&mut output, module.default_bpm);
 
-    // Pack flags
-    let flags = if module.linear_frequency_table { 1 } else { 0 };
+    // Pack flags. The pan flag changes the instrument tail layout, so it is
+    // explicit rather than inferred from trailing bytes.
+    let mut flags = if module.linear_frequency_table {
+        FLAG_LINEAR_FREQUENCY
+    } else {
+        0
+    };
+    if has_sample_pan {
+        flags |= FLAG_SAMPLE_DEFAULT_PAN;
+    }
+    if has_sample_map {
+        flags |= FLAG_SAMPLE_MAP;
+    }
+    if matches!(module.mix_mode, crate::XmMixMode::Ft2) {
+        flags |= FLAG_FT2_MIX;
+    }
+    if matches!(module.mix_mode, crate::XmMixMode::Legacy) { flags |= FLAG_LEGACY_MIX; }
+    if module.legacy_retrigger { flags |= super::FLAG_LEGACY_RETRIGGER; }
+    if module.sample_preamp != 48 { flags |= FLAG_SAMPLE_PREAMP; }
     output.write_all(&[flags]).unwrap();
 
-    // Reserved bytes
-    output.write_all(&[0, 0]).unwrap();
+    // Tagged preamp and reserved byte
+    output.write_all(&[if flags & FLAG_SAMPLE_PREAMP != 0 { module.sample_preamp } else { 0 }, 0]).unwrap();
 
     // ========== Write Pattern Order Table (only song_length entries) ==========
     output
@@ -102,6 +134,17 @@ pub fn pack_xm_minimal(module: &XmModule) -> Result<Vec<u8>, XmError> {
 
         // Write sample metadata if instrument has samples
         if instrument.num_samples > 0 {
+            let encoded_volume = match instrument.sample_default_volume {
+                Some(volume) if volume <= 64 => {
+                    if instrument.num_samples == 1 {
+                        volume + 1
+                    } else {
+                        0
+                    }
+                }
+                Some(volume) => return Err(XmError::InvalidSampleVolume(volume)),
+                None => 0,
+            };
             write_u32(&mut output, instrument.sample_loop_start);
             write_u32(&mut output, instrument.sample_loop_length);
             output
@@ -110,8 +153,30 @@ pub fn pack_xm_minimal(module: &XmModule) -> Result<Vec<u8>, XmError> {
             output
                 .write_all(&[instrument.sample_relative_note as u8])
                 .unwrap();
-            output.write_all(&[instrument.sample_loop_type]).unwrap();
-            output.write_all(&[0]).unwrap(); // reserved
+            output.write_all(&[
+                instrument.sample_loop_type | if instrument.sample_is_stereo { super::SAMPLE_STEREO } else { 0 },
+            ]).unwrap();
+            output.write_all(&[encoded_volume]).unwrap();
+            if has_sample_pan && instrument.num_samples == 1 {
+                output.write_all(&[instrument.sample_default_pan.unwrap()]).unwrap();
+            }
+            if has_sample_map {
+                if instrument.num_samples > 63 || instrument.samples.len() != instrument.num_samples as usize
+                    || instrument.sample_map.len() != 96
+                    || instrument.sample_map.iter().any(|&s| s >= instrument.num_samples)
+                {
+                    return Err(XmError::InvalidInstrument(0));
+                }
+                output.write_all(&instrument.sample_map).unwrap();
+                for sample in &instrument.samples {
+                    if sample.volume > 64 { return Err(XmError::InvalidSampleVolume(sample.volume)); }
+                    write_u32(&mut output, sample.loop_start);
+                    write_u32(&mut output, sample.loop_length);
+                    output.write_all(&[sample.finetune as u8, sample.relative_note as u8,
+                        sample.loop_type | if sample.is_stereo { super::SAMPLE_STEREO } else { 0 },
+                        sample.volume, sample.pan]).unwrap();
+                }
+            }
         }
     }
 

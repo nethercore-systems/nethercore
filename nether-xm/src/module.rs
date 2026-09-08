@@ -21,6 +21,12 @@ pub struct XmModule {
     pub default_bpm: u16,
     /// Use linear frequency table (vs Amiga)
     pub linear_frequency_table: bool,
+    /// Source-compatible mixer mode retained from the XM header.
+    pub mix_mode: XmMixMode,
+    /// Independently measured legacy 9xx memory and E9x/Rxy timing, separate from mixer choice.
+    pub legacy_retrigger: bool,
+    /// Source sample preamp, in units of 1/128 (standard XM defaults to 48).
+    pub sample_preamp: u8,
     /// Pattern order table (which pattern to play in order)
     pub order_table: Vec<u8>,
     /// Pattern data
@@ -39,6 +45,47 @@ impl XmModule {
     /// Get total number of orders in the song
     pub fn total_orders(&self) -> u16 {
         self.song_length
+    }
+}
+
+/// XM mixer behavior selected from explicit standard tracker markers.
+///
+/// Ambiguous and legacy-extension files intentionally use `Compatible`; this
+/// is not a general creator-detection heuristic.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum XmMixMode {
+    Compatible,
+    Ft2,
+    /// Measured legacy linear pan with a distinct two-thirds output scale.
+    Legacy,
+}
+
+impl Default for XmMixMode {
+    fn default() -> Self {
+        Self::Compatible
+    }
+}
+
+impl XmMixMode {
+    pub(crate) fn from_tracker_name(name: &[u8; 20]) -> Result<Self, crate::XmError> {
+        let text = std::str::from_utf8(name).unwrap_or("").trim_end_matches([' ', '\0']);
+        // Authored header-padding playback: the space-padded marker uses
+        // FT2 pan; the same visible text with NUL padding uses compatible pan.
+        let ft2 = name == b"FastTracker v2.00   " || text == "Fasttracker II clone";
+        let milky_ft2 = text
+            .strip_prefix("MilkyTracker ")
+            .is_some_and(|version| !version.trim().is_empty());
+
+        // Unknown creators and legacy extension names retain the XM-compatible
+        // path. Only an explicit, source-defined FT2 mode selects this variant;
+        // the parser does not discard the file merely because its creator is new.
+        // Original header-only playback measured this modern marker separately.
+        let measured_openmpt = name == b"OpenMPT 1.32.00.00  ";
+        Ok(if ft2 || milky_ft2 || measured_openmpt {
+            Self::Ft2
+        } else {
+            Self::Compatible
+        })
     }
 }
 
@@ -165,6 +212,29 @@ impl XmNote {
     }
 }
 
+/// Metadata for one local XM sample slot.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct XmSample {
+    /// Original PCM byte count; absent from packed metadata.
+    pub source_sample_bytes: Option<u32>,
+    /// Default sample volume (0-64).
+    pub volume: u8,
+    /// Default sample panning (0-255).
+    pub pan: u8,
+    /// Fine pitch adjustment (-128 to 127).
+    pub finetune: i8,
+    /// Semitone transposition from C-4 (-96 to 95).
+    pub relative_note: i8,
+    /// Loop start position in decoded samples.
+    pub loop_start: u32,
+    /// Loop length in decoded samples.
+    pub loop_length: u32,
+    /// Loop type: 0=none, 1=forward, 2=ping-pong.
+    pub loop_type: u8,
+    /// Sample data has interleaved left/right frames after extraction.
+    pub is_stereo: bool,
+}
+
 /// XM instrument metadata (no sample data - that's in ROM)
 #[derive(Debug, Clone, Default)]
 pub struct XmInstrument {
@@ -172,6 +242,12 @@ pub struct XmInstrument {
     pub name: String,
     /// Number of samples in original XM (for reference)
     pub num_samples: u8,
+    /// Local sample slot selected by each of XM's 96 notes.
+    pub sample_map: Vec<u8>,
+    /// Metadata for each local sample slot, including empty slots.
+    pub samples: Vec<XmSample>,
+    /// Total embedded PCM bytes in a parsed source XM; unknown for minimal ROM metadata.
+    pub source_sample_bytes: Option<u64>,
     /// Volume envelope
     pub volume_envelope: Option<XmEnvelope>,
     /// Panning envelope
@@ -196,6 +272,12 @@ pub struct XmInstrument {
     pub sample_loop_length: u32,
     /// Sample loop type (0=none, 1=forward, 2=ping-pong)
     pub sample_loop_type: u8,
+    /// The single embedded sample is stereo.
+    pub sample_is_stereo: bool,
+    /// Default sample volume (0-64), present for single-sample XM instruments.
+    pub sample_default_volume: Option<u8>,
+    /// Default sample panning (full XM range 0-255), present for single-sample instruments.
+    pub sample_default_pan: Option<u8>,
 }
 
 impl XmInstrument {

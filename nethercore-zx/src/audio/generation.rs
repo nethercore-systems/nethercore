@@ -47,7 +47,7 @@ pub fn generate_audio_frame_with_tracker(
 
     // Sync tracker engine to state at start of frame
     if tracker_active {
-        tracker_engine.sync_to_state(tracker_state, sounds);
+        tracker_engine.sync_to_state_at_rate(tracker_state, sounds, sample_rate);
     }
 
     // Generate each output sample
@@ -99,8 +99,9 @@ pub fn generate_audio_frame_with_tracker(
 /// the actual samples from a snapshot. The main thread still needs to
 /// advance positions to maintain rollback state consistency.
 ///
-/// This is ~10-20x faster than `generate_audio_frame_with_tracker` since
-/// it skips interpolation, panning, mixing, and soft clipping.
+/// SFX and non-tracker music use position-only advancement. Active trackers
+/// currently execute mixer state transitions and discard PCM for state parity;
+/// this path does not retain the former lightweight-advance speed claim.
 pub fn advance_audio_positions(
     playback_state: &mut AudioPlaybackState,
     tracker_state: &mut TrackerState,
@@ -119,7 +120,7 @@ pub fn advance_audio_positions(
 
     // Sync tracker engine to state at start of frame
     if tracker_active {
-        tracker_engine.sync_to_state(tracker_state, sounds);
+        tracker_engine.sync_to_state_at_rate(tracker_state, sounds, sample_rate);
     }
 
     // Advance SFX channel positions

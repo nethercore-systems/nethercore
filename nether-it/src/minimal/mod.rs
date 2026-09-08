@@ -58,6 +58,10 @@ pub use parse::parse_ncit;
 /// NCIT header size in bytes
 pub(crate) const NCIT_HEADER_SIZE: usize = 24;
 
+/// NCIT pattern marker encoding version. Version 0 is the historical
+/// zero-based encoding; version 1 uses the ITTECH one-based marker.
+pub(crate) const NCIT_PATTERN_ENCODING_VERSION: u8 = 2;
+
 /// Maximum envelope points we support
 pub(crate) const MAX_ENVELOPE_POINTS: usize = 25;
 

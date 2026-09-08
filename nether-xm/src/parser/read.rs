@@ -3,8 +3,8 @@
 use std::io::{Cursor, Read, Seek, SeekFrom};
 
 use crate::error::XmError;
-use crate::module::{XmEnvelope, XmInstrument, XmModule, XmNote, XmPattern};
-use crate::{MAX_CHANNELS, MAX_PATTERN_ROWS, MAX_PATTERNS, XM_MAGIC, XM_VERSION};
+use crate::module::{XmEnvelope, XmInstrument, XmModule, XmNote, XmPattern, XmSample};
+use crate::{MAX_CHANNELS, MAX_PATTERNS, MAX_PATTERN_ROWS, XM_MAGIC, XM_VERSION};
 
 /// Parse an XM file into an XmModule
 ///
@@ -47,8 +47,9 @@ pub fn parse_xm(data: &[u8]) -> Result<XmModule, XmError> {
     // Skip 0x1A marker (1 byte)
     cursor.seek(SeekFrom::Current(1))?;
 
-    // Read tracker name (20 bytes) - skip it
-    cursor.seek(SeekFrom::Current(20))?;
+    let mut tracker_name = [0u8; 20];
+    cursor.read_exact(&mut tracker_name)?;
+    let mut mix_mode = crate::XmMixMode::from_tracker_name(&tracker_name)?;
 
     // Read version (2 bytes)
     let version = read_u16(&mut cursor)?;
@@ -68,7 +69,11 @@ pub fn parse_xm(data: &[u8]) -> Result<XmModule, XmError> {
     let restart_position = read_u16(&mut cursor)?;
 
     // Number of channels (2 bytes)
-    let num_channels = read_u16(&mut cursor)? as u8;
+    let num_channels = u8::try_from(read_u16(&mut cursor)?)
+        .map_err(|_| XmError::InvalidHeaderSize)?;
+    if num_channels == 0 {
+        return Err(XmError::InvalidHeaderSize);
+    }
     if num_channels > MAX_CHANNELS {
         return Err(XmError::TooManyChannels(num_channels));
     }
@@ -110,14 +115,50 @@ pub fn parse_xm(data: &[u8]) -> Result<XmModule, XmError> {
 
     // Parse instruments
     let mut instruments = Vec::with_capacity(num_instruments as usize);
+    let mut non_space_sample_name = false;
+    let mut compatible_empty_header = false;
     for instr_idx in 0..num_instruments {
+        let start = cursor.position() as usize;
         let instrument =
             parse_instrument(&mut cursor).map_err(|_| XmError::InvalidInstrument(instr_idx))?;
+        if instrument.num_samples == 0 {
+            let size = u32::from_le_bytes(data[start..start+4].try_into().unwrap());
+            compatible_empty_header |= !matches!(size, 33 | 263);
+        }
+        if !instrument.samples.is_empty() {
+            // Extents were validated by parse_instrument; retain only the measured
+            // raw padding distinction, not another persisted creator field.
+            let header = u32::from_le_bytes(data[start..start+4].try_into().unwrap()) as usize;
+            let stride = u32::from_le_bytes(data[start+29..start+33].try_into().unwrap()) as usize;
+            for index in 0..instrument.samples.len() {
+                let name = start + header + index * stride + 18;
+                non_space_sample_name |= data.get(name..name+22)
+                    .is_some_and(|bytes| bytes != b"                      ");
+            }
+        }
         instruments.push(instrument);
     }
+    // Original header perturbations and mixed-slot playback independently
+    // distinguish this legacy default from the space-padded FT2 sample form.
+    let legacy_sample_form = tracker_name == *b"FastTracker v2.00   " && non_space_sample_name;
+    if legacy_sample_form { mix_mode = crate::XmMixMode::Legacy; }
+    // Original empty-header/pan controls distinguish this marker-specific default.
+    // Explicit trailing mixer properties below still take precedence.
+    if tracker_name == *b"FastTracker v2.00   " && compatible_empty_header {
+        mix_mode = crate::XmMixMode::Compatible;
+    }
+
+    let mut legacy_retrigger = legacy_sample_form;
+    let sample_preamp = read_mix_metadata(
+        data.get(cursor.position() as usize..).unwrap_or_default(),
+        num_instruments, &mut mix_mode, &mut legacy_retrigger, 48,
+    )?;
 
     Ok(XmModule {
         name,
+        mix_mode,
+        legacy_retrigger,
+        sample_preamp,
         num_channels,
         num_patterns,
         num_instruments,
@@ -132,6 +173,51 @@ pub fn parse_xm(data: &[u8]) -> Result<XmModule, XmError> {
     })
 }
 
+/// Read length-framed mixer properties; never search arbitrary payload bytes for tags.
+fn read_mix_metadata(mut bytes: &[u8], instruments: u16, mode: &mut crate::XmMixMode, legacy_retrigger: &mut bool, mut preamp: u8) -> Result<u8, XmError> {
+    let mut explicit_preamp = false;
+    let mut field_multiplier = None;
+    let mut song_fields = false;
+    while !bytes.is_empty() {
+        if bytes.starts_with(b"STPM") || bytes.starts_with(b"XTPM") {
+            song_fields = bytes.starts_with(b"STPM");
+            field_multiplier = Some(if song_fields { 1 } else { usize::from(instruments) });
+            bytes = &bytes[4..];
+            continue;
+        }
+        let Some(multiplier) = field_multiplier else {
+            // Optional ordinary chunks have a four-byte length. Opaque trailing
+            // data is not itself evidence of an unsupported mixer mode.
+            if bytes.len() < 8 { break; }
+            let length = u32::from_le_bytes(bytes[4..8].try_into().unwrap()) as usize;
+            let Some(rest) = bytes.get(8..).and_then(|payload| payload.get(length..)) else { break; };
+            bytes = rest;
+            continue;
+        };
+        if bytes.len() < 6 { return Err(XmError::UnexpectedEof); }
+        let size = usize::from(u16::from_le_bytes([bytes[4], bytes[5]]));
+        let length = size.checked_mul(multiplier).ok_or(XmError::UnexpectedEof)?;
+        let payload = bytes.get(6..).and_then(|p| p.get(..length)).ok_or(XmError::UnexpectedEof)?;
+        if song_fields && matches!(&bytes[..4], b".MMP" | b".APS") {
+            let value = u32::from_le_bytes(payload.try_into().map_err(|_| XmError::UnsupportedMixMetadata)?);
+            if &bytes[..4] == b".MMP" {
+                if !explicit_preamp { preamp = 48; }
+                if value == 4 { *legacy_retrigger = true; }
+                *mode = match value {
+                    4 => crate::XmMixMode::Compatible,
+                    5 => crate::XmMixMode::Ft2,
+                    _ => return Err(XmError::UnsupportedMixMetadata),
+                };
+            } else {
+                preamp = u8::try_from(value).map_err(|_| XmError::UnsupportedMixMetadata)?;
+                explicit_preamp = true;
+            }
+        }
+        bytes = &bytes[6 + length..];
+    }
+    Ok(preamp)
+}
+
 /// Parse a single pattern from the cursor
 pub(crate) fn parse_pattern(
     cursor: &mut Cursor<&[u8]>,
@@ -141,6 +227,9 @@ pub(crate) fn parse_pattern(
     // Per XM spec, this value INCLUDES the 4-byte length field itself
     let header_start = cursor.position(); // Position BEFORE reading header_length
     let header_length = read_u32(cursor)?;
+    if header_length < 9 {
+        return Err(XmError::InvalidHeaderSize);
+    }
 
     // Packing type (1 byte) - always 0
     let _packing_type = read_u8(cursor)?;
@@ -155,7 +244,12 @@ pub(crate) fn parse_pattern(
     let packed_size = read_u16(cursor)?;
 
     // Seek to end of pattern header (header_length includes the 4-byte length field)
-    cursor.seek(SeekFrom::Start(header_start + header_length as u64))?;
+    let pattern_start = header_start + u64::from(header_length);
+    let pattern_end = pattern_start + u64::from(packed_size);
+    if pattern_end > cursor.get_ref().len() as u64 {
+        return Err(XmError::UnexpectedEof);
+    }
+    cursor.seek(SeekFrom::Start(pattern_start))?;
 
     // Unpack pattern data
     let mut notes = Vec::with_capacity(num_rows as usize);
@@ -167,13 +261,14 @@ pub(crate) fn parse_pattern(
         }
     } else {
         // Read and unpack pattern data
-        let pattern_start = cursor.position();
+        let payload = &cursor.get_ref()[pattern_start as usize..pattern_end as usize];
+        let mut packed = Cursor::new(payload);
 
         for _ in 0..num_rows {
             let mut row = Vec::with_capacity(num_channels as usize);
 
             for _ in 0..num_channels {
-                let note = unpack_note(cursor)?;
+                let note = unpack_note(&mut packed)?;
                 row.push(note);
             }
 
@@ -181,7 +276,7 @@ pub(crate) fn parse_pattern(
         }
 
         // Seek to end of pattern data (in case we didn't read it all)
-        cursor.seek(SeekFrom::Start(pattern_start + packed_size as u64))?;
+        cursor.seek(SeekFrom::Start(pattern_end))?;
     }
 
     Ok(XmPattern { num_rows, notes })
@@ -236,6 +331,12 @@ pub(crate) fn parse_instrument(cursor: &mut Cursor<&[u8]>) -> Result<XmInstrumen
     // Instrument header size (4 bytes)
     let header_size = read_u32(cursor)?;
     let header_start = cursor.position();
+    if header_size < 4 {
+        return Err(XmError::InvalidHeaderSize);
+    }
+    if header_start + header_size as u64 - 4 > cursor.get_ref().len() as u64 {
+        return Err(XmError::UnexpectedEof);
+    }
 
     if header_size < 29 {
         // Minimal header - seek past and return empty instrument
@@ -253,19 +354,37 @@ pub(crate) fn parse_instrument(cursor: &mut Cursor<&[u8]>) -> Result<XmInstrumen
 
     // Number of samples (2 bytes)
     let num_samples = read_u16(cursor)?;
+    if num_samples > u8::MAX as u16 || (num_samples > 0 && header_size < 243) {
+        return Err(XmError::InvalidHeaderSize);
+    }
 
     let mut instrument = XmInstrument {
         name,
         num_samples: num_samples as u8,
+        source_sample_bytes: Some(0),
         ..Default::default()
     };
 
     if num_samples > 0 {
         // Sample header size (4 bytes)
         let sample_header_size = read_u32(cursor)?;
+        if sample_header_size < 40 {
+            return Err(XmError::InvalidHeaderSize);
+        }
 
-        // Sample number for all notes (96 bytes) - skip
-        cursor.seek(SeekFrom::Current(96))?;
+        // Sample number for all notes (96 bytes) - retain local sample indices.
+        let mut sample_map = vec![0u8; 96];
+        cursor.read_exact(&mut sample_map)?;
+        if sample_map
+            .iter()
+            .any(|&sample_index| u16::from(sample_index) >= num_samples)
+        {
+            // XM keymap entries are local sample ordinals; never silently alias
+            // an out-of-range entry to sample zero.
+            return Err(XmError::InvalidInstrument(0));
+        }
+        instrument.sample_map = sample_map;
+
 
         // Volume envelope points (48 bytes = 12 points * 4 bytes)
         let mut vol_points = Vec::with_capacity(12);
@@ -350,32 +469,50 @@ pub(crate) fn parse_instrument(cursor: &mut Cursor<&[u8]>) -> Result<XmInstrumen
             });
         }
 
-        // Parse sample headers and skip sample data
+        // XM stores every sample header first, followed by every PCM payload.
+        // Seeking over PCM between headers desynchronizes multi-sample instruments.
+        let mut sample_data_length = 0u64;
+        let mut samples = Vec::with_capacity(num_samples as usize);
         for _ in 0..num_samples {
             // Sample length (4 bytes)
             let sample_length = read_u32(cursor)?;
 
-            // Sample loop start (4 bytes)
-            instrument.sample_loop_start = read_u32(cursor)?;
+            // Sample loop start/length are stored in bytes for 16-bit samples.
+            let raw_loop_start = read_u32(cursor)?;
+            let raw_loop_length = read_u32(cursor)?;
 
-            // Sample loop length (4 bytes)
-            instrument.sample_loop_length = read_u32(cursor)?;
-
-            // Volume (1 byte) - skip
-            cursor.seek(SeekFrom::Current(1))?;
+            // Volume (1 byte)
+            let sample_volume = read_u8(cursor)?;
+            if sample_volume > 64 {
+                return Err(XmError::InvalidSampleVolume(sample_volume));
+            }
 
             // Finetune (1 byte, signed)
-            instrument.sample_finetune = read_u8(cursor)? as i8;
+            let sample_finetune = read_u8(cursor)? as i8;
 
             // Type (1 byte)
             let sample_type = read_u8(cursor)?;
-            instrument.sample_loop_type = sample_type & 0x03;
+            let sample_loop_type = sample_type & 0x03;
+            let is_16bit = sample_type & 0x10 != 0;
+            let is_stereo = sample_type & 0x20 != 0;
+            let bytes_per_frame = (if is_16bit { 2 } else { 1 }) * (if is_stereo { 2 } else { 1 });
+            let (sample_loop_start, sample_loop_length) = if bytes_per_frame > 1 {
+                // XM stores byte offsets; metadata uses decoded frame positions.
+                let end = u64::from(raw_loop_start) + u64::from(raw_loop_length);
+                (
+                    raw_loop_start / bytes_per_frame,
+                    (end / u64::from(bytes_per_frame)
+                        - u64::from(raw_loop_start / bytes_per_frame)) as u32,
+                )
+            } else {
+                (raw_loop_start, raw_loop_length)
+            };
 
-            // Panning (1 byte) - skip
-            cursor.seek(SeekFrom::Current(1))?;
+            // Panning (1 byte)
+            let sample_pan = read_u8(cursor)?;
 
             // Relative note (1 byte, signed)
-            instrument.sample_relative_note = read_u8(cursor)? as i8;
+            let sample_relative_note = read_u8(cursor)? as i8;
 
             // Reserved (1 byte)
             cursor.seek(SeekFrom::Current(1))?;
@@ -388,9 +525,38 @@ pub(crate) fn parse_instrument(cursor: &mut Cursor<&[u8]>) -> Result<XmInstrumen
                 cursor.seek(SeekFrom::Current((sample_header_size - 40) as i64))?;
             }
 
+            samples.push(XmSample {
+                source_sample_bytes: Some(sample_length),
+                volume: sample_volume,
+                pan: sample_pan,
+                finetune: sample_finetune,
+                relative_note: sample_relative_note,
+                loop_start: sample_loop_start,
+                loop_length: sample_loop_length,
+                loop_type: sample_loop_type,
+                is_stereo,
+            });
+
             // Skip sample data (we don't need it - samples come from ROM)
-            cursor.seek(SeekFrom::Current(sample_length as i64))?;
+            sample_data_length += sample_length as u64;
         }
+        instrument.samples = samples;
+        if num_samples == 1 {
+            let sample = &instrument.samples[0];
+            instrument.sample_default_volume = Some(sample.volume);
+            instrument.sample_default_pan = Some(sample.pan);
+            instrument.sample_finetune = sample.finetune;
+            instrument.sample_relative_note = sample.relative_note;
+            instrument.sample_loop_start = sample.loop_start;
+            instrument.sample_loop_length = sample.loop_length;
+            instrument.sample_loop_type = sample.loop_type;
+            instrument.sample_is_stereo = sample.is_stereo;
+        }
+        if cursor.position() + sample_data_length > cursor.get_ref().len() as u64 {
+            return Err(XmError::UnexpectedEof);
+        }
+        instrument.source_sample_bytes = Some(sample_data_length);
+        cursor.seek(SeekFrom::Current(sample_data_length as i64))?;
     } else {
         // Seek to end of header
         cursor.seek(SeekFrom::Start(header_start + header_size as u64 - 4))?;

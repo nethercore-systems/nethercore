@@ -11,6 +11,8 @@ pub struct ItSample {
     pub global_volume: u8,
     /// Sample flags
     pub flags: ItSampleFlags,
+    /// IT Cvt flags: signed PCM, endianness, delta encoding / IT215.
+    pub convert_flags: u8,
     /// Default volume (0-64)
     pub default_volume: u8,
     /// Default panning (0-64), None if not enabled
@@ -44,6 +46,7 @@ impl Default for ItSample {
             filename: String::new(),
             global_volume: 64,
             flags: ItSampleFlags::empty(),
+            convert_flags: 1,
             default_volume: 64,
             default_pan: None,
             length: 0,
@@ -61,6 +64,15 @@ impl Default for ItSample {
 }
 
 impl ItSample {
+    /// Playback rate used by IT-compatible players; keep the raw header unchanged.
+    pub fn playback_c5_speed(&self) -> u32 {
+        if self.c5_speed == 0 {
+            8363
+        } else {
+            self.c5_speed.max(256)
+        }
+    }
+
     /// Check if sample has loop enabled
     pub fn has_loop(&self) -> bool {
         self.flags.contains(ItSampleFlags::LOOP)

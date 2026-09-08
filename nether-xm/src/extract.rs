@@ -12,12 +12,24 @@ use std::io::{Cursor, Read, Seek, SeekFrom};
 pub struct ExtractedSample {
     /// Instrument index (0-based)
     pub instrument_index: u8,
+    /// Local sample slot within the instrument (0-based).
+    pub sample_index: u8,
     /// Instrument name (used for sample ID generation)
     pub name: String,
+    /// Default sample volume (0-64).
+    pub volume: u8,
+    /// Default sample panning (0-255).
+    pub pan: u8,
+    /// Sample finetune (-128 to 127).
+    pub finetune: i8,
+    /// Sample relative note (-96 to 95).
+    pub relative_note: i8,
     /// Sample rate calculated from finetune
     pub sample_rate: u32,
     /// Bit depth (8 or 16)
     pub bit_depth: u8,
+    /// Decoded PCM is interleaved left/right when true.
+    pub is_stereo: bool,
     /// Loop start position in samples
     pub loop_start: u32,
     /// Loop length in samples
@@ -153,7 +165,10 @@ fn extract_instrument_samples(
         // Try to read sample header, but if we hit EOF (sample-less XM),
         // return what we have so far (empty Vec)
         match read_sample_header(cursor, sample_header_size) {
-            Ok(sample_info) => sample_infos.push(sample_info),
+            Ok(mut sample_info) => {
+                sample_info.sample_index = i;
+                sample_infos.push(sample_info);
+            }
             Err(XmError::UnexpectedEof) | Err(XmError::IoError(_)) if i == 0 => {
                 // Sample-less XM file - no actual sample headers/data exist
                 // (only if we fail on the first sample header)
@@ -169,16 +184,27 @@ fn extract_instrument_samples(
             continue; // Skip empty samples
         }
 
-        let sample_data = read_sample_data(cursor, sample_info.length, sample_info.is_16bit)?;
+        let sample_data = read_sample_data(
+            cursor,
+            sample_info.length,
+            sample_info.is_16bit,
+            sample_info.is_stereo,
+        )?;
 
         let sample_rate =
             ExtractedSample::calculate_sample_rate(sample_info.finetune, sample_info.relative_note);
 
         results.push(ExtractedSample {
             instrument_index: inst_idx,
+            sample_index: sample_info.sample_index,
             name: instrument.name.clone(),
+            volume: sample_info.volume,
+            pan: sample_info.pan,
+            finetune: sample_info.finetune,
+            relative_note: sample_info.relative_note,
             sample_rate,
             bit_depth: if sample_info.is_16bit { 16 } else { 8 },
+            is_stereo: sample_info.is_stereo,
             loop_start: sample_info.loop_start,
             loop_length: sample_info.loop_length,
             loop_type: sample_info.loop_type,
@@ -191,13 +217,17 @@ fn extract_instrument_samples(
 
 /// Sample header information
 struct SampleInfo {
+    sample_index: u8,
     length: u32,
     loop_start: u32,
     loop_length: u32,
+    volume: u8,
+    pan: u8,
     finetune: i8,
     loop_type: u8,
     relative_note: i8,
     is_16bit: bool,
+    is_stereo: bool,
 }
 
 /// Read a sample header
@@ -211,8 +241,8 @@ fn read_sample_header(cursor: &mut Cursor<&[u8]>, header_size: u32) -> Result<Sa
     // Sample loop length (4 bytes)
     let loop_length = read_u32(cursor)?;
 
-    // Volume (1 byte) - skip
-    cursor.seek(SeekFrom::Current(1))?;
+    // Volume (1 byte)
+    let volume = read_u8(cursor)?;
 
     // Finetune (1 byte, signed)
     let finetune = read_u8(cursor)? as i8;
@@ -221,9 +251,10 @@ fn read_sample_header(cursor: &mut Cursor<&[u8]>, header_size: u32) -> Result<Sa
     let sample_type = read_u8(cursor)?;
     let loop_type = sample_type & 0x03;
     let is_16bit = (sample_type & 0x10) != 0;
+    let is_stereo = (sample_type & 0x20) != 0;
 
-    // Panning (1 byte) - skip
-    cursor.seek(SeekFrom::Current(1))?;
+    // Panning (1 byte)
+    let pan = read_u8(cursor)?;
 
     // Relative note (1 byte, signed)
     let relative_note = read_u8(cursor)? as i8;
@@ -239,14 +270,28 @@ fn read_sample_header(cursor: &mut Cursor<&[u8]>, header_size: u32) -> Result<Sa
         cursor.seek(SeekFrom::Current((header_size - 40) as i64))?;
     }
 
+    let bytes_per_frame = (if is_16bit { 2 } else { 1 }) * (if is_stereo { 2 } else { 1 });
+    let (loop_start, loop_length) = if bytes_per_frame > 1 {
+        let end = u64::from(loop_start) + u64::from(loop_length);
+        (
+            loop_start / bytes_per_frame,
+            (end / u64::from(bytes_per_frame) - u64::from(loop_start / bytes_per_frame)) as u32,
+        )
+    } else {
+        (loop_start, loop_length)
+    };
     Ok(SampleInfo {
+        sample_index: 0,
         length,
         loop_start,
         loop_length,
+        volume,
+        pan,
         finetune,
         loop_type,
         relative_note,
         is_16bit,
+        is_stereo,
     })
 }
 
@@ -259,34 +304,39 @@ fn read_sample_data(
     cursor: &mut Cursor<&[u8]>,
     length: u32,
     is_16bit: bool,
+    is_stereo: bool,
 ) -> Result<Vec<i16>, XmError> {
-    if is_16bit {
-        // 16-bit samples: length is in bytes, we get length/2 samples
-        let num_samples = length / 2;
-        let mut samples = Vec::with_capacity(num_samples as usize);
-        let mut old = 0i16;
+    let mut encoded = vec![0; length as usize];
+    cursor.read_exact(&mut encoded)?;
 
-        for _ in 0..num_samples {
-            let delta = read_i16(cursor)?;
+    fn decode_plane(encoded: &[u8], is_16bit: bool) -> Vec<i16> {
+        let mut samples = Vec::with_capacity(encoded.len() / if is_16bit { 2 } else { 1 });
+        if is_16bit {
+        let mut old = 0i16;
+            for bytes in encoded.chunks_exact(2) {
+                let delta = i16::from_le_bytes([bytes[0], bytes[1]]);
             old = old.wrapping_add(delta);
             samples.push(old);
         }
-
-        Ok(samples)
-    } else {
-        // 8-bit samples: length is in bytes, one byte per sample
-        let mut samples = Vec::with_capacity(length as usize);
+        } else {
         let mut old = 0i8;
-
-        for _ in 0..length {
-            let delta = read_i8(cursor)?;
+            for &byte in encoded {
+                let delta = byte as i8;
             old = old.wrapping_add(delta);
-            // Convert i8 to i16 by scaling to full 16-bit range
             samples.push((old as i16) * 256);
         }
-
-        Ok(samples)
+        }
+        samples
     }
+
+    if !is_stereo {
+        return Ok(decode_plane(&encoded, is_16bit));
+    }
+
+    let (left, right) = encoded.split_at(encoded.len() / 2);
+    let left = decode_plane(left, is_16bit);
+    let right = decode_plane(right, is_16bit);
+    Ok(left.into_iter().zip(right).flat_map(|(l, r)| [l, r]).collect())
 }
 
 // =============================================================================
@@ -299,6 +349,7 @@ fn read_u8(cursor: &mut Cursor<&[u8]>) -> Result<u8, XmError> {
     Ok(buf[0])
 }
 
+#[cfg(test)]
 fn read_i8(cursor: &mut Cursor<&[u8]>) -> Result<i8, XmError> {
     Ok(read_u8(cursor)? as i8)
 }
@@ -309,10 +360,9 @@ fn read_u16(cursor: &mut Cursor<&[u8]>) -> Result<u16, XmError> {
     Ok(u16::from_le_bytes(buf))
 }
 
+#[cfg(test)]
 fn read_i16(cursor: &mut Cursor<&[u8]>) -> Result<i16, XmError> {
-    let mut buf = [0u8; 2];
-    cursor.read_exact(&mut buf)?;
-    Ok(i16::from_le_bytes(buf))
+    Ok(read_u16(cursor)? as i16)
 }
 
 fn read_u32(cursor: &mut Cursor<&[u8]>) -> Result<u32, XmError> {
@@ -441,6 +491,20 @@ mod tests {
         let min_8bit = -128i8;
         let scaled_min = (min_8bit as i16) * 256;
         assert_eq!(scaled_min, -32768); // i16::MIN
+    }
+
+    #[test]
+    fn sample_loop_bytes_become_sample_positions() {
+        for (kind, start, length) in [(1, 3, 7), (0x11, 1, 4)] {
+            let mut bytes = [0u8; 40];
+            bytes[..4].copy_from_slice(&12u32.to_le_bytes());
+            bytes[4..8].copy_from_slice(&3u32.to_le_bytes());
+            bytes[8..12].copy_from_slice(&7u32.to_le_bytes());
+            bytes[14] = kind;
+            let sample = read_sample_header(&mut Cursor::new(bytes.as_slice()), 40).unwrap();
+            assert_eq!((sample.loop_start, sample.loop_length), (start, length));
+            assert_eq!(sample.length, 12, "PCM consumption remains byte-based");
+        }
     }
 
     #[test]

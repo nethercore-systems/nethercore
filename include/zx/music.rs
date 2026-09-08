@@ -35,7 +35,24 @@ extern "C" {
     ///
     /// # Returns
     /// Tracker handle (>0) on success, 0 on failure.
+    /// Sample-bearing modules return 0 here; use `load_tracker_with_samples`.
     pub fn load_tracker(data_ptr: *const u8, data_len: u32) -> u32;
+
+    /// Load a raw XM module with supplied sound handles.
+    ///
+    /// Must be called during `init()`. `sample_handles_ptr` points to
+    /// `sample_count` one-based sound handles; zero keeps a slot silent.
+    /// Handles are ordered by instrument for ordinary XM modules and by
+    /// flattened instrument/local-sample slot for mapped multi-sample modules.
+    ///
+    /// # Returns
+    /// Tracker handle (>0) on success, 0 on failure.
+    pub fn load_tracker_with_samples(
+        data_ptr: *const u8,
+        data_len: u32,
+        sample_handles_ptr: *const u32,
+        sample_count: u32,
+    ) -> u32;
 
     /// Play music (PCM sound or tracker module).
     ///

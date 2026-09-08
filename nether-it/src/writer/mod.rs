@@ -100,7 +100,14 @@ impl ItWriter {
     pub fn add_sample(&mut self, sample: ItSample, audio_data: &[i16]) -> u8 {
         let mut sample = sample;
         sample.length = audio_data.len() as u32;
-        sample.flags = sample.flags | ItSampleFlags::HAS_DATA;
+        sample.flags = ItSampleFlags::from_bits(
+            (sample.flags.bits() & !ItSampleFlags::HAS_DATA.bits())
+                | if audio_data.is_empty() {
+                    0
+                } else {
+                    ItSampleFlags::HAS_DATA.bits()
+                },
+        );
 
         self.module.samples.push(sample);
         self.sample_data.push(audio_data.to_vec());

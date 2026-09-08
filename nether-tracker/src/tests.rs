@@ -14,6 +14,7 @@ fn test_tracker_note_methods() {
         instrument: 1,
         volume: 32,
         effect: TrackerEffect::None,
+        ..Default::default()
     };
     assert!(note.has_note());
     assert!(note.has_instrument());
@@ -92,6 +93,8 @@ fn test_tracker_module_mix_volume_default() {
         global_volume: 128,
         mix_volume: 80, // IT allows 0-128
         panning_separation: 128,
+        channel_pan: [32; 64],
+        channel_vol: [64; 64],
         order_table: vec![0],
         patterns: vec![],
         instruments: vec![],
@@ -115,6 +118,8 @@ fn test_tracker_module_panning_separation() {
         global_volume: 128,
         mix_volume: 128,
         panning_separation: 0, // Mono
+        channel_pan: [32; 64],
+        channel_vol: [64; 64],
         order_table: vec![0],
         patterns: vec![],
         instruments: vec![],
@@ -125,7 +130,9 @@ fn test_tracker_module_panning_separation() {
     };
 
     let stereo_module = TrackerModule {
-        panning_separation: 128, // Full stereo
+        panning_separation: 128,
+        channel_pan: [32; 64],
+        channel_vol: [64; 64], // Full stereo
         ..mono_module.clone()
     };
 

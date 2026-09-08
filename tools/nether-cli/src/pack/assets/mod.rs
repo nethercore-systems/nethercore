@@ -1,7 +1,7 @@
 //! Asset ingestion and packing helpers.
 
 use anyhow::{Context, Result};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use zx_common::{PackedSound, TextureFormat, ZXDataPack};
 
 use crate::manifest::AssetsSection;
@@ -202,7 +202,7 @@ pub fn load_assets(
     let explicit_sounds = sounds?;
 
     // Build sound map from explicit sounds
-    let mut sound_map: HashMap<String, PackedSound> = explicit_sounds
+    let mut sound_map: BTreeMap<String, PackedSound> = explicit_sounds
         .into_iter()
         .map(|s| (s.id.clone(), s))
         .collect();
@@ -213,6 +213,9 @@ pub fn load_assets(
         let hash = hash_sample_data(&sound.data);
         hash_to_id.insert(hash, sound.id.clone());
     }
+
+    // Preserve packed slot identity through renaming and PCM deduplication.
+    let mut extracted_tracker_ids: HashMap<String, HashMap<usize, String>> = HashMap::new();
 
     // Extract samples from ALL tracker files (both XM and IT)
     println!("  Extracting samples from tracker files...");
@@ -228,19 +231,8 @@ pub fn load_assets(
         // Try to extract samples based on format
         let extracted_samples = match format {
             Some(zx_common::TrackerFormat::Xm) => {
-                match nether_xm::extract_samples(&tracker_data) {
-                    Ok(samples) => samples,
-                    Err(e) => {
-                        // Sample-less XM file or extraction error - log and continue
-                        println!(
-                            "    Note: {} ({})",
-                            path.file_name().unwrap().to_string_lossy(),
-                            e
-                        );
-                        println!("          No samples extracted (this is expected for sample-less tracker files)");
-                        Vec::new()
-                    }
-                }
+                nether_xm::extract_samples(&tracker_data)
+                    .with_context(|| format!("Failed to extract XM samples from {}", path.display()))?
             }
             Some(zx_common::TrackerFormat::It) => {
                 // Extract samples from IT file
@@ -262,33 +254,24 @@ pub fn load_assets(
                             // Calculate hash for deduplication
                             let hash = hash_sample_data(&converted_data);
 
-                            // Sanitize name (use sample_index for IT)
-                            let sample_id =
+                            let ids = extracted_tracker_ids
+                                .entry(tracker_id.to_string())
+                                .or_default();
+                            if let Some(existing_id) = hash_to_id.get(&hash) {
+                                ids.insert(sample.sample_index as usize, existing_id.clone());
+                                continue;
+                            }
+                            let mut sample_id =
                                 sanitize_name(&sample.name, tracker_id, sample.sample_index);
-
-                            // Check for collision with explicit sounds
-                            if let Some(existing) = sound_map.get(&sample_id) {
-                                let existing_hash = hash_sample_data(&existing.data);
-                                if existing_hash != hash {
-                                    return Err(anyhow::anyhow!(
-                                        "Collision: IT sample '{}' in '{}' conflicts with explicit sound '{}' (different content)",
-                                        sample.name,
-                                        tracker_id,
-                                        sample_id
-                                    ));
+                            // Names are labels, not identity. Never replace an explicit sound
+                            // or another embedded sample that has different PCM.
+                            if sample_id.is_empty() || sound_map.contains_key(&sample_id) {
+                                sample_id = format!("{}_sample{}", tracker_id, sample.sample_index);
+                                while sound_map.contains_key(&sample_id) {
+                                    sample_id.push('_');
                                 }
-                                // Same content = deduplicated, continue
-                                continue;
                             }
-
-                            // Check for hash match (same content, different name)
-                            if let Some(existing_name) = hash_to_id.get(&hash) {
-                                println!(
-                                    "    Note: '{}' is identical to '{}', deduplicating",
-                                    sample_id, existing_name
-                                );
-                                continue;
-                            }
+                            ids.insert(sample.sample_index as usize, sample_id.clone());
 
                             // Add new sample
                             println!("    Extracted: {} from {}", sample_id, tracker_id);
@@ -305,14 +288,11 @@ pub fn load_assets(
                         Vec::new()
                     }
                     Err(e) => {
-                        // Sample-less IT file or extraction error
-                        println!(
-                            "    Note: {} ({})",
-                            path.file_name().unwrap().to_string_lossy(),
+                        return Err(anyhow::anyhow!(
+                            "IT sample extraction failed for {}: {}",
+                            path.display(),
                             e
-                        );
-                        println!("          No samples extracted (this is expected for sample-less tracker files)");
-                        Vec::new()
+                        ));
                     }
                 }
             }
@@ -337,33 +317,25 @@ pub fn load_assets(
             // Calculate hash for deduplication
             let hash = hash_sample_data(&converted_data);
 
-            // Sanitize name
-            let sample_id = sanitize_name(&sample.name, tracker_id, sample.instrument_index);
-
-            // Check for collision with explicit sounds
-            if let Some(existing) = sound_map.get(&sample_id) {
-                let existing_hash = hash_sample_data(&existing.data);
-                if existing_hash != hash {
-                    return Err(anyhow::anyhow!(
-                        "Collision: Tracker instrument '{}' in '{}' conflicts with explicit sound '{}' (different content)",
-                        sample.name,
-                        tracker_id,
-                        sample_id
-                    ));
+            let ids = extracted_tracker_ids
+                .entry(tracker_id.to_string())
+                .or_default();
+            // Preserve local slots even when earlier samples are empty.
+            let sample_slot = sample.instrument_index as usize * 256 + sample.sample_index as usize;
+            if let Some(existing_id) = hash_to_id.get(&hash) {
+                ids.entry(sample_slot)
+                    .or_insert_with(|| existing_id.clone());
+                continue;
+            }
+            let mut sample_id = sanitize_name(&sample.name, tracker_id, sample.instrument_index);
+            if sample_id.is_empty() || sound_map.contains_key(&sample_id) {
+                sample_id = format!("{}_inst{}", tracker_id, sample.instrument_index);
+                while sound_map.contains_key(&sample_id) {
+                    sample_id.push('_');
                 }
-                // Same content = deduplicated, continue
-                continue;
             }
-
-            // Check for hash match (same content, different name)
-            if let Some(existing_name) = hash_to_id.get(&hash) {
-                // Alias: same content already exists under different name
-                println!(
-                    "    Note: '{}' is identical to '{}', deduplicating",
-                    sample_id, existing_name
-                );
-                continue;
-            }
+            ids.entry(sample_slot)
+                .or_insert_with(|| sample_id.clone());
 
             // Add new sample
             println!("    Extracted: {} from {}", sample_id, tracker_id);
@@ -389,7 +361,12 @@ pub fn load_assets(
         .map(|entry| {
             let id = require_id(entry, "Tracker")?;
             let path = project_dir.join(&entry.path);
-            load_tracker(id, &path, &available_sound_ids)
+            load_tracker(
+                id,
+                &path,
+                &available_sound_ids,
+                extracted_tracker_ids.get(id),
+            )
         })
         .collect();
     let trackers = trackers?;

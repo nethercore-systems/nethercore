@@ -9,7 +9,7 @@ use crate::console::Console;
 use crate::rollback::{RollbackSession, SessionType};
 use crate::wasm::GameInstance;
 
-use super::RuntimeConfig;
+use super::{RuntimeConfig, advance_game_tick};
 
 /// Execute a single frame with optional time scaling
 ///
@@ -17,13 +17,14 @@ use super::RuntimeConfig;
 /// Returns the number of ticks executed and interpolation factor for rendering.
 pub fn execute_frame<C: Console>(
     config: &RuntimeConfig,
-    tick_duration: Duration,
     accumulator: &mut Duration,
     last_update: &mut Option<Instant>,
     game: &mut Option<GameInstance<C::Input, C::State, C::RollbackState>>,
     session: &mut Option<RollbackSession<C::Input, C::State, C::RollbackState>>,
+    audio: &mut Option<C::Audio>,
     time_scale: f32,
 ) -> Result<(u32, f32)> {
+    let tick_duration = Duration::from_secs_f64(1.0 / f64::from(config.tick_rate));
     let now = Instant::now();
 
     // Calculate delta time
@@ -79,6 +80,8 @@ pub fn execute_frame<C: Console>(
 
             // Handle all requests (SaveGameState, LoadGameState, AdvanceFrame)
             if let Some(game) = game {
+                let original_tick = game.state().tick_count;
+                let mut output_available = true;
                 let advanced_frames = session
                     .handle_requests_ordered(game, requests, |game, inputs| {
                         // Note: Audio rollback is automatic via ConsoleRollbackState.
@@ -92,8 +95,20 @@ pub fn execute_frame<C: Console>(
                         for (player_idx, (input, _status)) in inputs.iter().enumerate() {
                             game.set_input(player_idx, *input);
                         }
-                        game.update(tick_duration.as_secs_f32())
-                            .map_err(|e| crate::rollback::SessionError::Ggrs(e.to_string()))
+                        let output_audio = if game.state().tick_count >= original_tick
+                            && std::mem::take(&mut output_available)
+                        {
+                            audio.as_mut()
+                        } else {
+                            None
+                        };
+                        advance_game_tick::<C::AudioGenerator, C::Input>(
+                            game,
+                            tick_duration,
+                            config.tick_rate,
+                            output_audio,
+                        )
+                        .map_err(|e| crate::rollback::SessionError::Ggrs(e.to_string()))
                     })
                     .map_err(|e| anyhow::anyhow!("GGRS handle_requests failed: {}", e))?;
 
@@ -126,7 +141,12 @@ pub fn execute_frame<C: Console>(
             let tick_start = Instant::now();
 
             if let Some(game) = game {
-                game.update(tick_duration.as_secs_f32())?;
+                advance_game_tick::<C::AudioGenerator, C::Input>(
+                    game,
+                    tick_duration,
+                    config.tick_rate,
+                    audio.as_mut(),
+                )?;
             }
 
             *accumulator -= tick_duration;

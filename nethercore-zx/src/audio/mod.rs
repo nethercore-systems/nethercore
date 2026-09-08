@@ -31,6 +31,6 @@ pub use output::{AudioOutput, OUTPUT_SAMPLE_RATE, SOURCE_SAMPLE_RATE};
 /// Sound data (raw PCM)
 #[derive(Clone, Debug)]
 pub struct Sound {
-    /// Raw PCM data (16-bit signed, mono, 22.05kHz)
+    /// Raw PCM data (16-bit signed, 22.05kHz; tracker metadata defines channel layout)
     pub data: Arc<Vec<i16>>,
 }

@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use smallvec::SmallVec;
 
-use crate::console::{Audio, AudioGenerator, Console, ConsoleResourceManager};
+use crate::console::{Audio, Console, ConsoleResourceManager};
 
 use super::super::{FRAME_TIME_HISTORY_SIZE, GameError, GameErrorPhase, RuntimeError};
 use super::StandaloneApp;
@@ -220,28 +220,7 @@ where
             false
         };
 
-        // Process audio using the console's AudioGenerator
-        // This handles both synchronous and threaded audio modes automatically
-        if did_render {
-            let tick_rate = session.runtime.tick_rate();
-            let sample_rate = session
-                .runtime
-                .audio()
-                .map(|a| a.sample_rate())
-                .unwrap_or_else(C::AudioGenerator::default_sample_rate);
-
-            let (game_opt, audio_opt) = session.runtime.game_and_audio_mut();
-            if let (Some(game), Some(audio)) = (game_opt, audio_opt) {
-                let (ffi_state, rollback_state) = game.ffi_and_rollback_mut();
-                C::AudioGenerator::process_audio(
-                    rollback_state,
-                    ffi_state,
-                    audio,
-                    tick_rate,
-                    sample_rate,
-                );
-            }
-        }
+        // Audio is emitted once per original simulation tick by Runtime.
 
         let quit_requested = session
             .runtime

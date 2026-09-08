@@ -108,22 +108,20 @@ pub fn extract_samples(data: &[u8]) -> Result<Vec<ExtractedSample>, ItError> {
         cursor.seek(SeekFrom::Start(offset as u64))?;
 
         // Parse sample header to get metadata and data offset
-        let sample_info = match parse_sample(&mut cursor) {
-            Ok(info) => info,
-            Err(_) => continue, // Skip invalid samples
-        };
+        let sample_info = parse_sample(&mut cursor)?;
 
         // Skip empty samples
-        if sample_info.sample.length == 0 {
+        if sample_info.sample.length == 0
+            || !sample_info
+                .sample
+                .flags
+                .contains(crate::ItSampleFlags::HAS_DATA)
+        {
             continue;
         }
 
         // Load sample data (handles IT215 compression automatically)
-        let sample_data = match load_sample_data(data, sample_info.data_offset, &sample_info.sample)
-        {
-            Ok(d) => d,
-            Err(_) => continue, // Skip samples with load errors
-        };
+        let sample_data = load_sample_data(data, sample_info.data_offset, &sample_info.sample)?;
 
         // Convert to i16
         let data_i16 = match sample_data {
@@ -148,7 +146,7 @@ pub fn extract_samples(data: &[u8]) -> Result<Vec<ExtractedSample>, ItError> {
         results.push(ExtractedSample {
             sample_index: idx as u8,
             name: sample_info.sample.name.clone(),
-            sample_rate: sample_info.sample.c5_speed,
+            sample_rate: sample_info.sample.playback_c5_speed(),
             bit_depth: if sample_info.sample.is_16bit() { 16 } else { 8 },
             loop_start: sample_info.sample.loop_begin,
             loop_length: sample_info
@@ -186,7 +184,62 @@ fn read_u32(cursor: &mut Cursor<&[u8]>) -> Result<u32, ItError> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn zero_and_low_c5_rates_use_reference_playback_defaults() {
+        for (raw, expected) in [(0, 8363), (1, 256), (255, 256), (256, 256), (8363, 8363)] {
+            let mut writer = crate::ItWriter::new("C5 boundary");
+            writer.add_sample(
+                crate::ItSample {
+                    c5_speed: raw,
+                    ..Default::default()
+                },
+                &[123i16; 8],
+            );
+            let bytes = writer.write();
+            assert_eq!(crate::parse_it(&bytes).unwrap().samples[0].c5_speed, raw);
+            let samples = extract_samples(&bytes).unwrap();
+            assert_eq!(samples[0].sample_rate, expected);
+        }
+    }
+
     use super::*;
+
+    #[test]
+    fn pcm_writer_normalizes_compressed_metadata_and_extraction_rejects_truncation() {
+        let mut writer = crate::writer::ItWriter::new("PCM boundary");
+        writer.add_sample(
+            crate::ItSample {
+                flags: crate::ItSampleFlags::COMPRESSED,
+                convert_flags: 5,
+                ..Default::default()
+            },
+            &[100, -100, 32767, -32768],
+        );
+        let mut bytes = writer.write();
+        assert_eq!(
+            extract_samples(&bytes).unwrap()[0].data,
+            [100, -100, 32767, -32768]
+        );
+        bytes.pop();
+        assert!(extract_samples(&bytes).is_err());
+    }
+
+    #[test]
+    fn absent_sample_data_is_distinct_from_an_invalid_pointer() {
+        let mut writer = crate::writer::ItWriter::new("presence");
+        writer.add_sample(crate::ItSample::default(), &[12, -12]);
+        let mut bytes = writer.write();
+        let orders = u16::from_le_bytes([bytes[32], bytes[33]]) as usize;
+        let slot = 192 + orders;
+        let header = u32::from_le_bytes(bytes[slot..slot + 4].try_into().unwrap()) as usize;
+        bytes[header + 72..header + 76].fill(0);
+        assert!(matches!(
+            extract_samples(&bytes),
+            Err(ItError::InvalidSampleOffset(0))
+        ));
+        bytes[header + 18] &= !1; // Legitimate absent sample, even with stale length.
+        assert!(extract_samples(&bytes).unwrap().is_empty());
+    }
 
     #[test]
     fn test_extract_empty_data() {
@@ -242,6 +295,7 @@ mod tests {
 
         // Create a sample with known data
         let sample = ItSample {
+            convert_flags: 1,
             name: "TestKick".to_string(),
             filename: "kick.wav".to_string(),
             global_volume: 64,

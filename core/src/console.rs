@@ -55,6 +55,18 @@ pub trait AudioGenerator: Send + 'static {
         44_100 // Default to CD quality
     }
 
+    /// Advance canonical audio state by one simulated tick.
+    ///
+    /// This runs after every successful game update, including rollback replay.
+    /// It must be deterministic and must not produce audible output.
+    fn advance_state(
+        _rollback_state: &mut Self::RollbackState,
+        _state: &mut Self::State,
+        _tick_rate: u32,
+        _sample_rate: u32,
+    ) {
+    }
+
     /// Generate one frame of audio samples (synchronous mode)
     ///
     /// Called once per confirmed game frame (not during rollback).

@@ -17,11 +17,14 @@ pub struct TrackerInstrument {
     pub fadeout: u16,
     /// Global volume (0-64)
     pub global_volume: u8,
-    /// Default panning (0-64), None if not set
+    /// Source default panning: IT 0-64; XM 0-255 (128 is center). None if unset.
     pub default_pan: Option<u8>,
+    /// IT per-note random volume percentage and pan range (0-64).
+    pub random_volume: u8,
+    pub random_pan: u8,
     /// Note→sample mapping table (120 entries)
     /// Each entry: (transposed_note, sample_number)
-    pub note_sample_table: [(u8, u8); 120],
+    pub note_sample_table: [(u8, u16); 120],
     /// Volume envelope
     pub volume_envelope: Option<TrackerEnvelope>,
     /// Panning envelope
@@ -46,10 +49,22 @@ pub struct TrackerInstrument {
     pub sample_loop_end: u32,
     /// Sample loop type
     pub sample_loop_type: LoopType,
+    /// The legacy single sample contains interleaved left/right frames.
+    pub sample_is_stereo: bool,
     /// Sample finetune (-128 to 127)
     pub sample_finetune: i8,
+    /// Original XM tuning in 1/128-semitones, already baked into normalized PCM.
+    pub xm_source_tuning: i16,
+    /// Original XM sample finetune, independent of relative-note transposition.
+    pub xm_source_finetune: i8,
+    /// Unrounded XM forward-loop start in normalized 22050 Hz frames.
+    pub xm_forward_loop_start: f64,
+    /// Unrounded XM forward-loop length in normalized 22050 Hz frames; zero disables.
+    pub xm_forward_loop_limit: f64,
     /// Sample relative note (semitones offset)
     pub sample_relative_note: i8,
+    /// XM single-sample default volume (0-64); None preserves IT/default behavior.
+    pub sample_default_volume: Option<u8>,
 
     // =========================================================================
     // Auto-vibrato settings (XM feature, applied automatically to notes)
@@ -66,7 +81,7 @@ pub struct TrackerInstrument {
 
 impl Default for TrackerInstrument {
     fn default() -> Self {
-        let mut note_sample_table = [(0u8, 0u8); 120];
+        let mut note_sample_table = [(0u8, 0u16); 120];
         for (i, entry) in note_sample_table.iter_mut().enumerate() {
             entry.0 = i as u8;
             entry.1 = 1; // Sample 1
@@ -80,6 +95,8 @@ impl Default for TrackerInstrument {
             fadeout: 0,
             global_volume: 64,
             default_pan: None,
+            random_volume: 0,
+            random_pan: 0,
             note_sample_table,
             volume_envelope: None,
             panning_envelope: None,
@@ -92,8 +109,14 @@ impl Default for TrackerInstrument {
             sample_loop_start: 0,
             sample_loop_end: 0,
             sample_loop_type: LoopType::None,
+            sample_is_stereo: false,
             sample_finetune: 0,
+            xm_source_tuning: 0,
+            xm_source_finetune: 0,
+            xm_forward_loop_start: 0.0,
+            xm_forward_loop_limit: 0.0,
             sample_relative_note: 0,
+            sample_default_volume: None,
             // Auto-vibrato
             auto_vibrato_type: 0,
             auto_vibrato_sweep: 0,
@@ -105,7 +128,7 @@ impl Default for TrackerInstrument {
 
 impl TrackerInstrument {
     /// Get the sample number for a given note
-    pub fn sample_for_note(&self, note: u8) -> Option<u8> {
+    pub fn sample_for_note(&self, note: u8) -> Option<u16> {
         if note < 120 {
             let (_, sample) = self.note_sample_table[note as usize];
             if sample > 0 { Some(sample) } else { None }
@@ -206,6 +229,13 @@ impl TrackerEnvelope {
     /// Check if envelope has sustain loop
     pub fn has_sustain(&self) -> bool {
         self.flags.contains(EnvelopeFlags::SUSTAIN_LOOP)
+    }
+
+    /// Resolve the authored sustain range from node indices to inclusive ticks.
+    pub fn sustain_ticks(&self) -> Option<(u16, u16)> {
+        if !self.has_sustain() { return None; }
+        Some((self.points.get(self.sustain_begin as usize)?.0,
+              self.points.get(self.sustain_end as usize)?.0))
     }
 
     /// Check if this is a filter envelope (for pitch envelope type)

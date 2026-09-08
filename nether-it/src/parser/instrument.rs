@@ -46,8 +46,10 @@ pub(crate) fn parse_instrument(
     // GbV, DfP
     let global_volume = read_u8(cursor)?;
     let dfp = read_u8(cursor)?;
-    let default_pan = if dfp & 0x80 != 0 {
-        Some(dfp & 0x7F)
+    // Instrument DfP bit 7 DISABLES panning (opposite to sample DfP).
+    let default_pan = if dfp & 0x80 == 0 {
+        let pan = dfp & 0x7F;
+        Some(if pan <= 64 { pan } else { 32 })
     } else {
         None
     };
@@ -155,7 +157,8 @@ pub(crate) fn parse_envelope(cursor: &mut Cursor<&[u8]>) -> Result<Option<ItEnve
     // Reserved (1 byte)
     cursor.seek(SeekFrom::Current(1))?;
 
-    if num_points == 0 || !flags.contains(ItEnvelopeFlags::ENABLED) {
+    // Disabled envelopes can be enabled later by S7x; retain their nodes/flags.
+    if num_points == 0 {
         return Ok(None);
     }
 

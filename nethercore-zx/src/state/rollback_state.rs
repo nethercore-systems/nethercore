@@ -130,9 +130,35 @@ pub struct TrackerState {
     pub flags: u32,
     /// Sample-accurate position within the current tick
     pub tick_sample_pos: u32,
-    /// Reserved for future use (maintains 64-byte alignment)
-    /// Using [u32; 10] instead of [u8; 40] because Default is only impl'd for arrays <= 32
+    /// Words 0/1 hold the elapsed sample clock; word 2 holds its sample rate.
+    /// Word 3 holds the seek origin (order:row); word 4 is the game control epoch.
+    /// The existing 64-byte POD layout is unchanged.
     pub _reserved: [u32; 10],
+}
+
+impl TrackerState {
+    pub(crate) fn rendered_samples(&self) -> u64 {
+        self._reserved[0] as u64 | ((self._reserved[1] as u64) << 32)
+    }
+
+    pub(crate) fn advance_sample_clock(&mut self, sample_rate: u32) {
+        let position = self.rendered_samples().wrapping_add(1);
+        self._reserved[0] = position as u32;
+        self._reserved[1] = (position >> 32) as u32;
+        self._reserved[2] = sample_rate;
+    }
+
+    pub(crate) fn control_epoch(&self) -> u32 { self._reserved[4] }
+
+    pub(crate) fn request_position_change(&mut self) {
+        self._reserved[4] = self._reserved[4].wrapping_add(1);
+        self.reset_sample_clock();
+    }
+
+    pub(crate) fn reset_sample_clock(&mut self) {
+        self._reserved[..3].fill(0);
+        self._reserved[3] = (u32::from(self.order_position) << 16) | u32::from(self.row);
+    }
 }
 
 /// Nethercore ZX rollback state (404 bytes total)

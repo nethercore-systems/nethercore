@@ -844,7 +844,19 @@ NCZX_IMPORT uint32_t rom_tracker(const uint8_t* id_ptr, uint32_t id_len);
 /**  */
 /** # Returns */
 /** Tracker handle (>0) on success, 0 on failure. */
+/** Sample-bearing modules return 0 here; use `load_tracker_with_samples`. */
 NCZX_IMPORT uint32_t load_tracker(const uint8_t* data_ptr, uint32_t data_len);
+
+/** Load a raw XM module with supplied sound handles. */
+/**  */
+/** Must be called during `init()`. `sample_handles_ptr` points to */
+/** `sample_count` one-based sound handles; zero keeps a slot silent. */
+/** Handles are ordered by instrument for ordinary XM modules and by */
+/** flattened instrument/local-sample slot for mapped multi-sample modules. */
+/**  */
+/** # Returns */
+/** Tracker handle (>0) on success, 0 on failure. */
+NCZX_IMPORT uint32_t load_tracker_with_samples(const uint8_t* data_ptr, uint32_t data_len, const uint32_t* sample_handles_ptr, uint32_t sample_count);
 
 /** Play music (PCM sound or tracker module). */
 /**  */

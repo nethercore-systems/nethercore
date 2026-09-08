@@ -16,9 +16,295 @@ mod tests {
     };
     use tempfile::tempdir;
     use zx_common::{
-        vertex_stride_packed, NetherZXAnimationHeader, NetherZXMeshHeader, TextureFormat,
-        FORMAT_COLOR, FORMAT_UV,
+        FORMAT_COLOR, FORMAT_UV, NetherZXAnimationHeader, NetherZXMeshHeader, TextureFormat,
+        vertex_stride_packed,
     };
+
+    #[test]
+    fn xm_extracted_ids_preserve_blank_names_collisions_and_pcm_aliases() {
+        let dir = tempdir().unwrap();
+        // Small ordinary XM: four single-sample instruments, authored PCM deltas.
+        let mut xm = vec![0u8; 336];
+        xm[..17].copy_from_slice(b"Extended Module: ");
+        xm[37] = 0x1a;
+        xm[58..60].copy_from_slice(&0x0104u16.to_le_bytes());
+        xm[60..64].copy_from_slice(&276u32.to_le_bytes());
+        for (offset, value) in [(64, 1u16), (68, 1), (72, 4), (74, 1), (76, 6), (78, 125)] {
+            xm[offset..offset + 2].copy_from_slice(&value.to_le_bytes());
+        }
+        for (name, pcm) in [("", 32u8), ("Perc !", 64), ("Perc !", 192), ("Alias", 32)] {
+            let mut instrument = vec![0u8; 243];
+            instrument[..4].copy_from_slice(&243u32.to_le_bytes());
+            instrument[4..4 + name.len()].copy_from_slice(name.as_bytes());
+            instrument[27..29].copy_from_slice(&1u16.to_le_bytes());
+            instrument[29..33].copy_from_slice(&40u32.to_le_bytes());
+            xm.extend(instrument);
+            let mut sample = vec![0u8; 40];
+            sample[..4].copy_from_slice(&16u32.to_le_bytes());
+            sample[12] = 64;
+            sample[15] = 128;
+            xm.extend(sample);
+            xm.push(pcm);
+            xm.extend([0u8; 15]);
+        }
+        std::fs::write(dir.path().join("mapping.xm"), xm).unwrap();
+        let manifest = NetherManifest::parse(
+            r#"
+[game]
+id="xm-mapping"
+title="Mapping"
+author="Test"
+version="0.1.0"
+[[assets.trackers]]
+id="music"
+path="mapping.xm"
+"#,
+        )
+        .unwrap();
+        let pack = load_assets(dir.path(), &manifest.assets, TextureFormat::Rgba8).unwrap();
+        let ids = &pack.trackers[0].sample_ids;
+        assert_eq!(ids.len(), 4);
+        assert!(ids.iter().all(|id| !id.is_empty()));
+        assert_ne!(ids[1], ids[2]);
+        assert_eq!(ids[0], ids[3]);
+        for (index, positive) in [(0, true), (1, true), (2, false), (3, true)] {
+            let data = &pack
+                .sounds
+                .iter()
+                .find(|s| s.id == ids[index])
+                .unwrap()
+                .data;
+            assert!(!data.is_empty());
+            assert!(data.iter().all(|&s| if positive { s > 0 } else { s < 0 }));
+        }
+    }
+
+    #[test]
+    fn empty_xm_sample_payloads_keep_silent_slots_and_explicit_overrides() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("empty.xm");
+        for name in ["", "Empty"] {
+            for count in [0u16, 1, 2] {
+                let mut xm = vec![0u8; 336];
+                xm[..17].copy_from_slice(b"Extended Module: ");
+                xm[37] = 0x1a;
+                xm[58..60].copy_from_slice(&0x0104u16.to_le_bytes());
+                xm[60..64].copy_from_slice(&276u32.to_le_bytes());
+                for (offset, value) in [(64, 1u16), (68, 1), (72, 1), (76, 6), (78, 125)] {
+                    xm[offset..offset + 2].copy_from_slice(&value.to_le_bytes());
+                }
+                let mut instrument = vec![0u8; 243];
+                instrument[..4].copy_from_slice(&243u32.to_le_bytes());
+                instrument[4..4 + name.len()].copy_from_slice(name.as_bytes());
+                instrument[27..29].copy_from_slice(&count.to_le_bytes());
+                instrument[29..33].copy_from_slice(&40u32.to_le_bytes());
+                xm.extend(instrument);
+                xm.extend(vec![0u8; 40 * count as usize]);
+                std::fs::write(&path, &xm).unwrap();
+                let manifest = NetherManifest::parse(
+                    r#"
+[game]
+id="empty-xm"
+title="Empty"
+author="Test"
+version="0.1.0"
+[[assets.trackers]]
+id="music"
+path="empty.xm"
+"#,
+                )
+                .unwrap();
+                let pack = load_assets(dir.path(), &manifest.assets, TextureFormat::Rgba8).unwrap();
+                assert_eq!(
+                    pack.trackers[0].sample_ids,
+                    vec![String::new(); usize::from(count.max(1))],
+                    "name={name}, count={count}"
+                );
+                assert!(pack.sounds.is_empty());
+                if !name.is_empty() {
+                    let supplied = std::collections::HashSet::from([name.to_string()]);
+                    let tracker =
+                        super::super::audio::load_tracker("music", &path, &supplied, None).unwrap();
+                    assert_eq!(tracker.sample_ids, vec![name; usize::from(count.max(1))]);
+                }
+                if count == 2 {
+                    let mut embedded = xm.clone();
+                    embedded[579..583].copy_from_slice(&1u32.to_le_bytes());
+                    embedded.push(1);
+                    std::fs::write(&path, embedded).unwrap();
+                    let error = super::super::audio::load_tracker("music", &path, &Default::default(), None).unwrap_err();
+                    assert!(error.to_string().contains("Missing XM sample"));
+                }
+                if count > 0 {
+                    xm.pop();
+                    std::fs::write(&path, &xm).unwrap();
+                    assert!(
+                        super::super::audio::load_tracker(
+                            "music",
+                            &path,
+                            &Default::default(),
+                            None
+                        )
+                        .is_err()
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn named_empty_it_sample_is_silent_unless_explicitly_provided() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("empty.it");
+        let mut writer = nether_it::ItWriter::new("empty");
+        writer.add_sample(
+            nether_it::ItSample {
+                name: "Untitled".into(),
+                ..Default::default()
+            },
+            &[],
+        );
+        std::fs::write(&path, writer.write()).unwrap();
+        let empty = std::collections::HashSet::new();
+        let tracker = super::super::audio::load_tracker("music", &path, &empty, None).unwrap();
+        assert_eq!(tracker.sample_ids, vec![String::new()]);
+        let supplied = std::collections::HashSet::from(["Untitled".to_string()]);
+        let tracker = super::super::audio::load_tracker("music", &path, &supplied, None).unwrap();
+        assert_eq!(tracker.sample_ids, vec!["Untitled"]);
+    }
+
+    #[test]
+    fn it_duplicate_sample_names_and_content_keep_index_mapping() {
+        use nether_it::{ItSample, ItWriter};
+        let dir = tempdir().unwrap();
+        let mut writer = ItWriter::new("Duplicate names");
+        for (name, pcm) in [
+            ("Square", vec![1000i16; 16]),
+            ("Square", vec![-1000i16; 16]),
+            ("Alias", vec![1000i16; 16]),
+            ("...", vec![500i16; 16]),
+        ] {
+            writer.add_sample(
+                ItSample {
+                    name: name.into(),
+                    c5_speed: 22050,
+                    ..Default::default()
+                },
+                &pcm,
+            );
+        }
+        writer.add_pattern(1);
+        writer.set_orders(&[0, 255]);
+        std::fs::write(dir.path().join("duplicates.it"), writer.write()).unwrap();
+        let mut wav = b"RIFF".to_vec();
+        wav.extend_from_slice(&(36u32 + 32).to_le_bytes());
+        wav.extend_from_slice(b"WAVEfmt ");
+        wav.extend_from_slice(&16u32.to_le_bytes());
+        wav.extend_from_slice(&1u16.to_le_bytes());
+        wav.extend_from_slice(&1u16.to_le_bytes());
+        wav.extend_from_slice(&22050u32.to_le_bytes());
+        wav.extend_from_slice(&44100u32.to_le_bytes());
+        wav.extend_from_slice(&2u16.to_le_bytes());
+        wav.extend_from_slice(&16u16.to_le_bytes());
+        wav.extend_from_slice(b"data");
+        wav.extend_from_slice(&32u32.to_le_bytes());
+        for _ in 0..16 {
+            wav.extend_from_slice(&2000i16.to_le_bytes());
+        }
+        std::fs::write(dir.path().join("explicit.wav"), wav).unwrap();
+        let manifest = NetherManifest::parse(
+            r#"
+[game]
+id="mapping-test"
+title="Mapping"
+author="Test"
+version="0.1.0"
+[[assets.trackers]]
+id="music"
+path="duplicates.it"
+[[assets.sounds]]
+id="square"
+path="explicit.wav"
+[[assets.sounds]]
+id="music_sample0"
+path="explicit.wav"
+"#,
+        )
+        .unwrap();
+        let pack = load_assets(dir.path(), &manifest.assets, TextureFormat::Rgba8).unwrap();
+        let ids = &pack.trackers[0].sample_ids;
+        assert_eq!(ids.len(), 4);
+        assert!(ids.iter().all(|id| !id.is_empty()));
+        assert_ne!(ids[0], ids[1]);
+        assert_eq!(ids[0], "music_sample0_");
+        assert!(
+            pack.sounds
+                .iter()
+                .find(|s| s.id == "square")
+                .unwrap()
+                .data
+                .iter()
+                .all(|s| *s == 2000)
+        );
+        let ids_in_order: Vec<_> = pack.sounds.iter().map(|s| s.id.clone()).collect();
+        let mut sorted = ids_in_order.clone();
+        sorted.sort();
+        assert_eq!(ids_in_order, sorted);
+        assert_eq!(ids[0], ids[2]);
+        for (index, value) in [(0, 1000i16), (1, -1000), (2, 1000), (3, 500)] {
+            let sound = pack.sounds.iter().find(|s| s.id == ids[index]).unwrap();
+            assert!(sound.data.iter().all(|sample| *sample == value));
+        }
+        // A matching explicit name must not hide a corrupt embedded payload.
+        let mut bad = ItWriter::new("Truncated PCM");
+        bad.add_sample(
+            ItSample {
+                name: "square".into(),
+                ..Default::default()
+            },
+            &[1234i16; 16],
+        );
+        bad.add_pattern(1);
+        bad.set_orders(&[0, 255]);
+        let mut bytes = bad.write();
+        bytes.pop();
+        std::fs::write(dir.path().join("duplicates.it"), bytes).unwrap();
+        let error = load_assets(dir.path(), &manifest.assets, TextureFormat::Rgba8).unwrap_err();
+        assert!(error.to_string().contains("IT sample extraction"));
+    }
+
+    #[test]
+    fn it_packed_handles_follow_samples_not_instruments() {
+        use crate::pack::assets::audio::load_tracker;
+        use nether_it::{ItFlags, ItInstrument, ItSample, ItWriter};
+        for instrument_mode in [false, true] {
+            let dir = tempdir().unwrap();
+            let path = dir.path().join("mapping.it");
+            let mut writer = ItWriter::new("Sample mapping");
+            if instrument_mode {
+                writer.set_flags(ItFlags::INSTRUMENTS);
+                writer.add_instrument(ItInstrument {
+                    name: "Lead".into(),
+                    ..Default::default()
+                });
+            } else {
+                writer.set_flags(ItFlags::from_bits(0));
+            }
+            writer.add_sample(
+                ItSample {
+                    name: "Saw".into(),
+                    ..Default::default()
+                },
+                &[1, 2, 3, 4],
+            );
+            writer.add_pattern(1);
+            writer.set_orders(&[0, 255]);
+            std::fs::write(&path, writer.write()).unwrap();
+            let available = [sanitize_name("Saw", "music", 0)].into_iter().collect();
+            let packed = load_tracker("music", &path, &available, None).unwrap();
+            assert_eq!(packed.sample_ids, vec![sanitize_name("Saw", "music", 0)]);
+        }
+    }
 
     #[test]
     fn test_manifest_parsing() {

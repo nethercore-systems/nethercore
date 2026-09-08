@@ -5,8 +5,8 @@ use std::io::{Cursor, Read, Seek, SeekFrom};
 use crate::error::XmError;
 use crate::module::{XmEnvelope, XmInstrument, XmModule, XmPattern};
 
-use super::HEADER_SIZE;
 use super::io::{read_u8, read_u16, read_u32};
+use super::{FLAG_LEGACY_MIX, FLAG_SAMPLE_PREAMP, FLAG_FT2_MIX, FLAG_LINEAR_FREQUENCY, FLAG_SAMPLE_DEFAULT_PAN, FLAG_SAMPLE_MAP, HEADER_SIZE, SUPPORTED_FLAGS};
 
 /// Parse a minimal XM format into an XmModule
 ///
@@ -58,10 +58,25 @@ fn parse_ncxm(data: &[u8]) -> Result<XmModule, XmError> {
     let default_speed = read_u16(&mut cursor)?;
     let default_bpm = read_u16(&mut cursor)?;
     let flags = read_u8(&mut cursor)?;
-    let linear_frequency_table = (flags & 0x01) != 0;
+    let conflicting_mix = flags & (FLAG_FT2_MIX | FLAG_LEGACY_MIX) == (FLAG_FT2_MIX | FLAG_LEGACY_MIX);
+    let unsupported_flags = (flags & !SUPPORTED_FLAGS) | if conflicting_mix { FLAG_FT2_MIX | FLAG_LEGACY_MIX } else {0};
+    if unsupported_flags != 0 {
+        return Err(XmError::UnsupportedMinimalFlags(unsupported_flags));
+    }
+    let linear_frequency_table = (flags & FLAG_LINEAR_FREQUENCY) != 0;
+    let has_sample_pan = (flags & FLAG_SAMPLE_DEFAULT_PAN) != 0;
+    let mix_mode = if flags & FLAG_LEGACY_MIX != 0 {
+        crate::XmMixMode::Legacy
+    } else if flags & FLAG_FT2_MIX != 0 {
+        crate::XmMixMode::Ft2
+    } else {
+        crate::XmMixMode::Compatible
+    };
 
     // Skip reserved bytes
-    cursor.seek(SeekFrom::Current(2))?;
+    let encoded_preamp = read_u8(&mut cursor)?;
+    let sample_preamp = if flags & FLAG_SAMPLE_PREAMP != 0 { encoded_preamp } else { 48 };
+    cursor.seek(SeekFrom::Current(1))?;
 
     // Read pattern order table
     let mut order_table = vec![0u8; song_length as usize];
@@ -77,12 +92,15 @@ fn parse_ncxm(data: &[u8]) -> Result<XmModule, XmError> {
     // Read instruments
     let mut instruments = Vec::with_capacity(num_instruments as usize);
     for _i in 0..num_instruments {
-        let instrument = read_instrument(&mut cursor)?;
+        let instrument = read_instrument(&mut cursor, has_sample_pan, flags & FLAG_SAMPLE_MAP != 0)?;
         instruments.push(instrument);
     }
 
     Ok(XmModule {
         name: String::new(), // Not stored in minimal format
+        mix_mode,
+        legacy_retrigger: flags & super::FLAG_LEGACY_RETRIGGER != 0,
+        sample_preamp,
         num_channels,
         num_patterns,
         num_instruments,
@@ -179,7 +197,11 @@ fn unpack_note(cursor: &mut Cursor<&[u8]>) -> Result<crate::XmNote, XmError> {
 }
 
 /// Read an instrument from minimal format
-fn read_instrument(cursor: &mut Cursor<&[u8]>) -> Result<XmInstrument, XmError> {
+fn read_instrument(
+    cursor: &mut Cursor<&[u8]>,
+    has_sample_pan: bool,
+    has_sample_map: bool,
+) -> Result<XmInstrument, XmError> {
     let flags = read_u8(cursor)?;
     let has_vol_env = (flags & 0x01) != 0;
     let has_pan_env = (flags & 0x02) != 0;
@@ -215,19 +237,73 @@ fn read_instrument(cursor: &mut Cursor<&[u8]>) -> Result<XmInstrument, XmError> 
         sample_finetune,
         sample_relative_note,
         sample_loop_type,
+        sample_is_stereo,
+        sample_default_volume,
+        sample_default_pan,
     ) = if num_samples > 0 {
         let loop_start = read_u32(cursor)?;
         let loop_length = read_u32(cursor)?;
         let finetune = read_u8(cursor)? as i8;
         let relative_note = read_u8(cursor)? as i8;
-        let loop_type = read_u8(cursor)?;
-        cursor.seek(SeekFrom::Current(1))?; // skip reserved byte
-        (loop_start, loop_length, finetune, relative_note, loop_type)
+        let encoded_loop_type = read_u8(cursor)?;
+        let loop_type = encoded_loop_type & 0x03;
+        let is_stereo = encoded_loop_type & super::SAMPLE_STEREO != 0;
+        let encoded_volume = read_u8(cursor)?;
+        if encoded_volume > 65 {
+            return Err(XmError::InvalidSampleVolume(encoded_volume));
+        }
+        // NCXM legacy files used this byte as reserved; zero therefore means
+        // the old full-volume default rather than an explicit zero volume.
+        let sample_default_volume = if encoded_volume == 0 {
+            Some(64)
+        } else {
+            Some(encoded_volume - 1)
+        };
+        let sample_default_pan = if has_sample_pan && num_samples == 1 {
+            Some(read_u8(cursor)?)
+        } else {
+            None
+        };
+        (
+            loop_start,
+            loop_length,
+            finetune,
+            relative_note,
+            loop_type,
+            is_stereo,
+            sample_default_volume,
+            sample_default_pan,
+        )
     } else {
-        (0, 0, 0, 0, 0)
+        (0, 0, 0, 0, 0, false, None, None)
     };
 
+    let mut sample_map = Vec::new();
+    let mut samples = Vec::new();
+    if has_sample_map && num_samples > 0 {
+        sample_map.resize(96, 0);
+        cursor.read_exact(&mut sample_map)?;
+        if sample_map.iter().any(|&s| s >= num_samples) {
+            return Err(XmError::InvalidInstrument(0));
+        }
+        for _ in 0..num_samples {
+            let loop_start = read_u32(cursor)?;
+            let loop_length = read_u32(cursor)?;
+            let finetune = read_u8(cursor)? as i8;
+            let relative_note = read_u8(cursor)? as i8;
+            let encoded_loop_type = read_u8(cursor)?;
+            let loop_type = encoded_loop_type & 0x03;
+            let is_stereo = encoded_loop_type & super::SAMPLE_STEREO != 0;
+            let volume = read_u8(cursor)?;
+            let pan = read_u8(cursor)?;
+            if volume > 64 { return Err(XmError::InvalidSampleVolume(volume)); }
+            samples.push(crate::XmSample {source_sample_bytes: None, loop_start, loop_length, finetune, relative_note, loop_type, is_stereo, volume, pan});
+        }
+    }
     Ok(XmInstrument {
+        sample_map,
+        samples,
+        source_sample_bytes: None,
         name: String::new(), // Not stored in minimal format
         num_samples,
         volume_envelope,
@@ -242,6 +318,9 @@ fn read_instrument(cursor: &mut Cursor<&[u8]>) -> Result<XmInstrument, XmError> 
         sample_loop_start,
         sample_loop_length,
         sample_loop_type,
+        sample_is_stereo,
+        sample_default_volume,
+        sample_default_pan,
     })
 }
 

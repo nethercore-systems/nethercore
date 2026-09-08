@@ -97,7 +97,7 @@ pub fn parse_it(data: &[u8]) -> Result<ItModule, ItError> {
     let global_volume = read_u8(&mut cursor)?;
 
     // MV - Mix volume (1 byte)
-    let mix_volume = read_u8(&mut cursor)?;
+    let mut mix_volume = read_u8(&mut cursor)?;
 
     // IS - Initial speed (1 byte)
     let initial_speed = read_u8(&mut cursor)?;
@@ -130,7 +130,11 @@ pub fn parse_it(data: &[u8]) -> Result<ItModule, ItError> {
 
     // Calculate number of used channels from channel_pan
     // Channels with pan >= 128 are disabled
-    let num_channels = channel_pan.iter().take_while(|&&p| p < 128).count().max(1) as u8;
+    let num_channels = channel_pan
+        .iter()
+        .rposition(|&p| p < 128)
+        .map(|last| (last + 1) as u8)
+        .unwrap_or(1);
 
     if num_channels > MAX_CHANNELS {
         return Err(ItError::TooManyChannels(num_channels));
@@ -156,6 +160,8 @@ pub fn parse_it(data: &[u8]) -> Result<ItModule, ItError> {
         pattern_offsets.push(read_u32(&mut cursor)?);
     }
 
+    let mut payload_end = cursor.position() as usize;
+
     // Parse instruments
     let mut instruments = Vec::with_capacity(num_instruments as usize);
     for (idx, &offset) in instrument_offsets.iter().enumerate() {
@@ -167,6 +173,7 @@ pub fn parse_it(data: &[u8]) -> Result<ItModule, ItError> {
         cursor.seek(SeekFrom::Start(offset as u64))?;
         let instrument = parse_instrument(&mut cursor, compatible_with)
             .map_err(|_| ItError::InvalidInstrument(idx as u16))?;
+        payload_end = payload_end.max(cursor.position() as usize);
         instruments.push(instrument);
     }
 
@@ -181,6 +188,8 @@ pub fn parse_it(data: &[u8]) -> Result<ItModule, ItError> {
         cursor.seek(SeekFrom::Start(offset as u64))?;
         let sample_info =
             parse_sample(&mut cursor).map_err(|_| ItError::InvalidSample(idx as u16))?;
+        payload_end = payload_end.max(cursor.position() as usize);
+        payload_end = payload_end.max(sample::sample_data_end(data, &sample_info)?);
         samples.push(sample_info.sample);
     }
 
@@ -196,6 +205,7 @@ pub fn parse_it(data: &[u8]) -> Result<ItModule, ItError> {
         cursor.seek(SeekFrom::Start(offset as u64))?;
         let pattern = parse_pattern(&mut cursor, num_channels)
             .map_err(|_| ItError::InvalidPattern(idx as u16))?;
+        payload_end = payload_end.max(cursor.position() as usize);
         patterns.push(pattern);
     }
 
@@ -204,6 +214,7 @@ pub fn parse_it(data: &[u8]) -> Result<ItModule, ItError> {
         cursor.seek(SeekFrom::Start(message_offset as u64))?;
         let mut msg_bytes = vec![0u8; message_length as usize];
         if cursor.read_exact(&mut msg_bytes).is_ok() {
+            payload_end = payload_end.max(cursor.position() as usize);
             Some(read_string(&msg_bytes))
         } else {
             None
@@ -212,6 +223,7 @@ pub fn parse_it(data: &[u8]) -> Result<ItModule, ItError> {
         None
     };
 
+    let balance_mix = read_mix_metadata(data.get(payload_end..).ok_or(ItError::UnexpectedEof)?, num_instruments, &mut mix_volume)?;
     Ok(ItModule {
         name,
         num_channels,
@@ -225,6 +237,7 @@ pub fn parse_it(data: &[u8]) -> Result<ItModule, ItError> {
         special,
         global_volume,
         mix_volume,
+        balance_mix,
         initial_speed,
         initial_tempo,
         panning_separation,
@@ -249,4 +262,68 @@ pub fn get_instrument_names(data: &[u8]) -> Result<Vec<String>, ItError> {
 pub fn get_sample_names(data: &[u8]) -> Result<Vec<String>, ItError> {
     let module = parse_it(data)?;
     Ok(module.samples.iter().map(|s| s.name.clone()).collect())
+}
+
+/// Original bounded reader for explicit length-framed song mixer properties.
+fn read_mix_metadata(mut bytes: &[u8], instruments: u16, preamp: &mut u8) -> Result<bool, ItError> {
+    let mut balance = false;
+    let mut multiplier = None;
+    let mut song = false;
+    while !bytes.is_empty() {
+        if bytes.starts_with(b"XTPM") { multiplier = Some(instruments as usize); song = false; bytes = &bytes[4..]; continue; }
+        if bytes.starts_with(b"STPM") { multiplier = Some(1); song = true; bytes = &bytes[4..]; continue; }
+        let Some(multiplier) = multiplier else { break; }; // Opaque unrelated trailing data is not rejected.
+        if bytes.len() < 6 { return Err(ItError::UnexpectedEof); }
+        let size = u16::from_le_bytes([bytes[4], bytes[5]]) as usize;
+        let length = size.checked_mul(multiplier).ok_or(ItError::UnexpectedEof)?;
+        let payload = bytes.get(6..).and_then(|b| b.get(..length)).ok_or(ItError::UnexpectedEof)?;
+        if song && matches!(&bytes[..4], b".MMP" | b".APS") {
+            let value = u32::from_le_bytes(payload.try_into().map_err(|_| ItError::UnsupportedMixMetadata)?);
+            if &bytes[..4] == b".MMP" {
+                balance = match value { 3 => true, 4 => false, _ => return Err(ItError::UnsupportedMixMetadata) };
+            } else {
+                *preamp = u8::try_from(value).ok().filter(|v| *v <= 128).ok_or(ItError::UnsupportedMixMetadata)?;
+            }
+        }
+        bytes = &bytes[6 + length..];
+    }
+    Ok(balance)
+}
+
+#[cfg(test)]
+mod mixing_metadata_tests {
+    use super::*;
+    #[test]
+    fn explicit_balance_preamp_and_legacy_ncit_roundtrip() {
+        let mut writer = crate::ItWriter::new("original mix metadata regression");
+        writer.set_channels(1);
+        let pattern = writer.add_pattern(1);
+        writer.set_orders(&[pattern, 255]);
+        let mut source = writer.write();
+        let plain = parse_it(&source).unwrap();
+        assert!(!plain.balance_mix);
+        let legacy = crate::pack_ncit(&plain);
+        assert_eq!(legacy[17], 0);
+        assert!(!crate::parse_ncit(&legacy).unwrap().balance_mix);
+        source.extend_from_slice(b"XTPMtest\x01\x00STPM.MMP\x04\x00\x03\x00\x00\x00.APS\x04\x00\x18\x00\x00\x00");
+        let parsed = parse_it(&source).unwrap();
+        assert!(parsed.balance_mix);
+        assert_eq!(parsed.mix_volume,24);
+        let roundtrip = crate::parse_ncit(&crate::pack_ncit(&parsed)).unwrap();
+        assert!(roundtrip.balance_mix);
+        let stripped=crate::strip_it_samples(&source).unwrap();
+        assert!(parse_it(&stripped).unwrap().balance_mix);
+        assert_eq!(roundtrip.mix_volume,24);
+        source.pop();
+        assert!(matches!(parse_it(&source),Err(ItError::UnexpectedEof)));
+    }
+    #[test]
+    fn opaque_data_and_embedded_tags_do_not_select_a_mode() {
+        let mut preamp = 48;
+        assert!(!read_mix_metadata(b"opaqueSTPM.MMP\x04\x00\x03\x00\x00\x00", 1, &mut preamp).unwrap());
+        assert!(!read_mix_metadata(b"XTPMtest\x0e\x00STPM.MMP\x04\x00\x03\x00\x00\x00", 1, &mut preamp).unwrap());
+        assert!(read_mix_metadata(b"STPM.MMP\x04\x00\x03\x00\x00\x00XTPM.MMP\x04\x00\x04\x00\x00\x00",1,&mut preamp).unwrap());
+        assert!(read_mix_metadata(b"STPM.MMP\x04\x00\x63\x00\x00\x00",0,&mut preamp).is_err());
+        assert!(read_mix_metadata(b"STPM.APS\x04\x00\x01\x01\x00\x00",0,&mut preamp).is_err());
+    }
 }

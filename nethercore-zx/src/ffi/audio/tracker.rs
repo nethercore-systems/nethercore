@@ -2,6 +2,9 @@
 //!
 //! Handles XM/IT tracker module loading and playback control.
 
+#[cfg(test)]
+mod tests;
+
 use anyhow::Result;
 use tracing::{info, warn};
 use wasmtime::{Caller, Linker};
@@ -19,6 +22,7 @@ pub(super) fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     // Tracker loading
     linker.func_wrap("env", "rom_tracker", rom_tracker)?;
     linker.func_wrap("env", "load_tracker", load_tracker)?;
+    linker.func_wrap("env", "load_tracker_with_samples", load_tracker_with_samples)?;
 
     // Position/control functions
     linker.func_wrap("env", "music_jump", music_jump)?;
@@ -182,7 +186,8 @@ fn rom_tracker(mut caller: Caller<'_, ZXGameContext>, id_ptr: u32, id_len: u32) 
 /// Load a tracker module from raw XM data
 ///
 /// Must be called during `init()`. Returns tracker handle (u32).
-/// Note: Instruments must be pre-loaded as sounds and passed via sound handles.
+/// Sample-bearing modules require `load_tracker_with_samples`; this legacy
+/// entry point has no sample-map argument and returns 0 for them.
 ///
 /// # Parameters
 /// - `data_ptr`: Pointer to raw XM data in WASM memory
@@ -193,45 +198,33 @@ fn rom_tracker(mut caller: Caller<'_, ZXGameContext>, id_ptr: u32, id_len: u32) 
 fn load_tracker(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len: u32) -> u32 {
     guard_init_only!(caller, "load_tracker");
 
-    // Read XM data from WASM memory
-    let xm_data = {
-        let mem = match get_wasm_memory(&mut caller) {
-            Some(m) => m,
-            None => {
-                warn!("load_tracker: failed to get WASM memory");
-                return 0;
-            }
-        };
-        let data = mem.data(&caller);
-        let start = data_ptr as usize;
-        let end = start + data_len as usize;
-        if end > data.len() {
-            warn!("load_tracker: data out of bounds");
-            return 0;
-        }
-        data[start..end].to_vec()
+    let xm_data = match copy_wasm_bytes(&mut caller, data_ptr, data_len, "load_tracker") {
+        Some(data) => data,
+        None => return 0,
     };
 
     // Parse the tracker data (auto-detects NCXM minimal or standard XM format)
     let module = match nether_xm::parse_xm_minimal(&xm_data) {
-        Ok(m) => m,
+        Ok(module) => module,
         Err(e) => {
             warn!("load_tracker: failed to parse tracker data: {:?}", e);
             return 0;
         }
     };
 
-    // Capture info before moving module
+    if module.instruments.iter().any(|instrument| instrument.num_samples > 0) {
+        warn!(
+            "load_tracker: raw XM requires supplied sample handles; use load_tracker_with_samples"
+        );
+        return 0;
+    }
+
+    // A module whose instruments have no samples is valid and remains loadable.
+    let sound_handles = vec![0u32; module.instruments.len()];
     let num_patterns = module.num_patterns;
     let num_instruments = module.num_instruments;
 
     let ctx = caller.data_mut();
-
-    // For raw XM loading, we don't have instrument -> sound mapping
-    // The game would need to provide this separately or use named samples
-    let sound_handles = vec![0u32; num_instruments as usize];
-
-    // Load the module into the tracker engine
     let handle = ctx.ffi.tracker_engine.load_xm_module(module, sound_handles);
 
     info!(
@@ -241,9 +234,139 @@ fn load_tracker(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len: 
     handle
 }
 
+/// Load a raw XM module with an explicit instrument/sample-slot handle map.
+///
+/// `sample_handles_ptr` points to one-based sound handles in the same order used
+/// by the XM converter: instrument order for ordinary single-sample modules, or
+/// flattened instrument/local-sample order for mapped multi-sample modules.
+/// Zero is an intentional silent slot.
+fn load_tracker_with_samples(
+    mut caller: Caller<'_, ZXGameContext>,
+    data_ptr: u32,
+    data_len: u32,
+    sample_handles_ptr: u32,
+    sample_count: u32,
+) -> u32 {
+    guard_init_only!(caller, "load_tracker_with_samples");
+
+    let sample_bytes = match usize::try_from(sample_count)
+        .ok()
+        .and_then(|count| count.checked_mul(std::mem::size_of::<u32>()))
+    {
+        Some(bytes) => bytes,
+        None => {
+            warn!("load_tracker_with_samples: sample handle count is too large");
+            return 0;
+        }
+    };
+
+    let Some(memory) = get_wasm_memory(&mut caller) else {
+        warn!("load_tracker_with_samples: failed to get WASM memory");
+        return 0;
+    };
+
+    let (module, sound_handles) = {
+        let memory_data = memory.data(&caller);
+        let Some(data_end) = (data_ptr as usize).checked_add(data_len as usize) else {
+            warn!("load_tracker_with_samples: module data bounds overflow");
+            return 0;
+        };
+        let Some(handles_end) = (sample_handles_ptr as usize).checked_add(sample_bytes) else {
+            warn!("load_tracker_with_samples: sample handle bounds overflow");
+            return 0;
+        };
+        if data_end > memory_data.len() || handles_end > memory_data.len() {
+            warn!("load_tracker_with_samples: module or sample handles out of bounds");
+            return 0;
+        }
+
+        let module = match nether_xm::parse_xm_minimal(&memory_data[data_ptr as usize..data_end]) {
+            Ok(module) => module,
+            Err(e) => {
+                warn!("load_tracker_with_samples: failed to parse tracker data: {:?}", e);
+                return 0;
+            }
+        };
+
+        let expected_count = expected_sound_handle_count(&module);
+        if sample_count as usize != expected_count {
+            warn!(
+                "load_tracker_with_samples: expected {} sample handles, got {}",
+                expected_count,
+                sample_count as usize
+            );
+            return 0;
+        }
+
+        let handles: Vec<u32> = memory_data[sample_handles_ptr as usize..handles_end]
+            .chunks_exact(std::mem::size_of::<u32>())
+            .map(|bytes| u32::from_le_bytes(bytes.try_into().expect("chunks_exact width")))
+            .collect();
+        (module, handles)
+    };
+
+    let ctx = caller.data_mut();
+    for (index, &handle) in sound_handles.iter().enumerate() {
+        if handle != 0
+            && ctx
+                .ffi
+                .sounds
+                .get(handle as usize)
+                .and_then(|sound| sound.as_ref())
+                .is_none()
+        {
+            warn!(
+                "load_tracker_with_samples: sample handle {} at slot {} is unavailable",
+                handle, index
+            );
+            return 0;
+        }
+    }
+
+    let handle = ctx
+        .ffi
+        .tracker_engine
+        .load_xm_module(module, sound_handles);
+    info!("Loaded raw tracker with supplied samples as handle {}", handle);
+    handle
+}
+
+fn copy_wasm_bytes(
+    caller: &mut Caller<'_, ZXGameContext>,
+    data_ptr: u32,
+    data_len: u32,
+    fn_name: &str,
+) -> Option<Vec<u8>> {
+    let memory = get_wasm_memory(caller)?;
+    let data = memory.data(caller);
+    let start = data_ptr as usize;
+    let end = start.checked_add(data_len as usize)?;
+    if end > data.len() {
+        warn!("{}: data out of bounds", fn_name);
+        return None;
+    }
+    Some(data[start..end].to_vec())
+}
+
+fn expected_sound_handle_count(module: &nether_xm::XmModule) -> usize {
+    let flattened = module
+        .instruments
+        .iter()
+        .any(|instrument| instrument.num_samples > 1 && !instrument.samples.is_empty());
+    if flattened {
+        module
+            .instruments
+            .iter()
+            .map(|instrument| instrument.samples.len())
+            .sum()
+    } else {
+        module.instruments.len()
+    }
+}
+
 // ============================================================================
 // Music Position/Control Functions (tracker-specific, no-op for PCM)
-// ============================================================================
+// ===========================================================================
 
 /// Jump to a specific position (tracker only, no-op for PCM)
 ///
@@ -258,6 +381,7 @@ fn music_jump(mut caller: Caller<'_, ZXGameContext>, order: u32, row: u32) {
     tracker.row = row as u16;
     tracker.tick = 0;
     tracker.tick_sample_pos = 0;
+    tracker.request_position_change();
 }
 
 /// Get current music position

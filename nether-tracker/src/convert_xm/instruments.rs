@@ -32,12 +32,12 @@ pub fn convert_loop_points(original_rate: u32, loop_start: u32, loop_length: u32
 }
 
 pub(super) fn convert_xm_instrument(xm_instr: &nether_xm::XmInstrument) -> TrackerInstrument {
-    // XM instruments don't have per-note sample mapping like IT
-    // All notes use the same sample (sample 1)
-    let mut note_sample_table = [(0u8, 1u8); 120];
+    // Legacy NCXM instruments use one sound each; module conversion installs
+    // retained local sample maps when extended sample metadata is present.
+    let mut note_sample_table = [(0u8, 1u16); 120];
     for (i, entry) in note_sample_table.iter_mut().enumerate() {
         entry.0 = i as u8; // Note plays as itself
-        // All notes map to sample 1 (XM has simpler mapping)
+        // The module converter replaces this legacy placeholder for mapped XM.
     }
 
     // Convert sample loop type
@@ -70,12 +70,21 @@ pub(super) fn convert_xm_instrument(xm_instr: &nether_xm::XmInstrument) -> Track
         nna: NewNoteAction::Cut, // XM doesn't have NNA
         dct: DuplicateCheckType::Off,
         dca: DuplicateCheckAction::Cut,
-        fadeout: xm_instr.volume_fadeout,
+        // XM fade starts at 32768; runtime gain uses a 65535 accumulator.
+        fadeout: xm_instr.volume_fadeout.saturating_mul(2),
         global_volume: 64, // XM doesn't have global volume per instrument
-        default_pan: None, // XM doesn't have default pan per instrument
+        default_pan: xm_instr.sample_default_pan,
+        random_volume: 0,
+        random_pan: 0,
         note_sample_table,
-        volume_envelope: xm_instr.volume_envelope.as_ref().map(convert_xm_envelope),
-        panning_envelope: xm_instr.panning_envelope.as_ref().map(convert_xm_envelope),
+        volume_envelope: xm_instr
+            .volume_envelope
+            .as_ref()
+            .map(|env| convert_xm_envelope(env, 0)),
+        panning_envelope: xm_instr
+            .panning_envelope
+            .as_ref()
+            .map(|env| convert_xm_envelope(env, 32)),
         pitch_envelope: None, // XM doesn't have pitch envelope
         filter_cutoff: None,  // XM doesn't have filters
         filter_resonance: None,
@@ -88,12 +97,25 @@ pub(super) fn convert_xm_instrument(xm_instr: &nether_xm::XmInstrument) -> Track
         sample_loop_start,
         sample_loop_end: sample_loop_start + sample_loop_length,
         sample_loop_type,
+        sample_is_stereo: xm_instr.sample_is_stereo,
         // Finetune and relative_note are ZEROED because they're already baked into the
         // resampled 22050 Hz sample during ROM packing (via audio_convert::convert_xm_sample).
         // If we passed them through here, they would be applied AGAIN during playback,
         // causing notes to play way too high (often 1+ octave off).
         sample_finetune: 0,
+        xm_source_tuning: i16::from(xm_instr.sample_relative_note)*128 + i16::from(xm_instr.sample_finetune),
+        xm_source_finetune: xm_instr.sample_finetune,
+        xm_forward_loop_start: f64::from(xm_instr.sample_loop_start)
+            * f64::from(TARGET_SAMPLE_RATE)
+            / f64::from(original_sample_rate),
+        xm_forward_loop_limit: if xm_instr.sample_loop_type == 1 {
+            f64::from(xm_instr.sample_loop_length) * f64::from(TARGET_SAMPLE_RATE)
+                / f64::from(original_sample_rate)
+        } else {
+            0.0
+        },
         sample_relative_note: 0,
+        sample_default_volume: xm_instr.sample_default_volume,
 
         // Auto-vibrato settings
         auto_vibrato_type: xm_instr.vibrato_type,
@@ -103,9 +125,13 @@ pub(super) fn convert_xm_instrument(xm_instr: &nether_xm::XmInstrument) -> Track
     }
 }
 
-fn convert_xm_envelope(xm_env: &nether_xm::XmEnvelope) -> TrackerEnvelope {
+fn convert_xm_envelope(xm_env: &nether_xm::XmEnvelope, center: i8) -> TrackerEnvelope {
     TrackerEnvelope {
-        points: xm_env.points.iter().map(|&(x, y)| (x, y as i8)).collect(),
+        points: xm_env
+            .points
+            .iter()
+            .map(|&(x, y)| (x, y.min(64) as i8 - center))
+            .collect(),
         loop_begin: xm_env.loop_start,
         loop_end: xm_env.loop_end,
         sustain_begin: xm_env.sustain_point,

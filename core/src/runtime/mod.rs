@@ -9,7 +9,7 @@ use anyhow::Result;
 use ggrs::GgrsError;
 use ggrs::SessionState;
 
-use crate::console::Console;
+use crate::console::{AudioGenerator, Console, ConsoleInput};
 use crate::rollback::{RollbackSession, SessionEvent};
 use crate::wasm::GameInstance;
 
@@ -22,6 +22,29 @@ mod tests;
 
 pub use config::RuntimeConfig;
 pub use sync_test::{ScriptedSyncTestConfig, ScriptedSyncTestReport};
+
+pub(super) fn advance_game_tick<G: AudioGenerator, I: ConsoleInput>(
+    game: &mut GameInstance<I, G::State, G::RollbackState>,
+    tick_duration: Duration,
+    tick_rate: u32,
+    audio: Option<&mut G::Audio>,
+) -> Result<()> {
+    game.update(tick_duration.as_secs_f32())?;
+    let (state, rollback_state) = game.ffi_and_rollback_mut();
+    // Output this tick before canonical advancement can finish a short sound.
+    // The caller excludes re-simulated ticks; catch-up ticks each emit once.
+    if let Some(audio) = audio {
+        G::process_audio(
+            rollback_state,
+            state,
+            audio,
+            tick_rate,
+            G::default_sample_rate(),
+        );
+    }
+    G::advance_state(rollback_state, state, tick_rate, G::default_sample_rate());
+    Ok(())
+}
 
 /// Tuple of mutable references to game instance and audio, where either can be None
 type GameAndAudioMut<'a, C> = (
@@ -171,11 +194,11 @@ impl<C: Console> Runtime<C> {
     pub fn frame_with_time_scale(&mut self, time_scale: f32) -> Result<(u32, f32)> {
         game_loop::execute_frame::<C>(
             &self.config,
-            self.tick_duration,
             &mut self.accumulator,
             &mut self.last_update,
             &mut self.game,
             &mut self.session,
+            &mut self.audio,
             time_scale,
         )
     }
@@ -204,20 +227,39 @@ impl<C: Console> Runtime<C> {
                 .map_err(|e| anyhow::anyhow!("GGRS advance_frame failed: {}", e))?;
 
             if let Some(game) = &mut self.game {
+                let original_tick = game.state().tick_count;
+                let mut output_available = true;
                 let advanced_frames = session
                     .handle_requests_ordered(game, requests, |game, inputs| {
                         for (player_idx, (input, _status)) in inputs.iter().enumerate() {
                             game.set_input(player_idx, *input);
                         }
-                        game.update(self.tick_duration.as_secs_f32())
-                            .map_err(|e| crate::rollback::SessionError::Ggrs(e.to_string()))
+                        let output_audio = if game.state().tick_count >= original_tick
+                            && std::mem::take(&mut output_available)
+                        {
+                            self.audio.as_mut()
+                        } else {
+                            None
+                        };
+                        advance_game_tick::<C::AudioGenerator, C::Input>(
+                            game,
+                            self.tick_duration,
+                            self.config.tick_rate,
+                            output_audio,
+                        )
+                        .map_err(|e| crate::rollback::SessionError::Ggrs(e.to_string()))
                     })
                     .map_err(|e| anyhow::anyhow!("GGRS handle_requests failed: {}", e))?;
 
                 ticks += advanced_frames;
             }
         } else if let Some(game) = &mut self.game {
-            game.update(self.tick_duration.as_secs_f32())?;
+            advance_game_tick::<C::AudioGenerator, C::Input>(
+                game,
+                self.tick_duration,
+                self.config.tick_rate,
+                self.audio.as_mut(),
+            )?;
             ticks = 1;
         }
 

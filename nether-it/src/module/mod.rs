@@ -35,6 +35,8 @@ pub struct ItModule {
     pub global_volume: u8,
     /// Mix volume (0-128)
     pub mix_volume: u8,
+    /// Explicit OpenMPT RC3 balance mixing.
+    pub balance_mix: bool,
     /// Initial speed (ticks per row)
     pub initial_speed: u8,
     /// Initial tempo (BPM)
@@ -115,6 +117,7 @@ impl Default for ItModule {
             special: 0,
             global_volume: 128,
             mix_volume: 48,
+            balance_mix: false,
             initial_speed: 6,
             initial_tempo: 125,
             panning_separation: 128,
@@ -213,9 +216,9 @@ impl ItPattern {
 }
 
 /// Single note/command in a pattern
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ItNote {
-    /// Note value: 0-119 = C-0 to B-9, 254 = note cut, 255 = note off, 253 = note fade
+    /// Note value: 0-119 = C-0 to B-9, 254 = note cut, 255 = note off, 246 = note fade
     pub note: u8,
     /// Instrument number (1-99, 0 = none)
     pub instrument: u8,
@@ -227,7 +230,22 @@ pub struct ItNote {
     pub effect_param: u8,
 }
 
+impl Default for ItNote {
+    fn default() -> Self {
+        Self {
+            note: Self::NO_NOTE,
+            instrument: 0,
+            volume: Self::NO_VOLUME,
+            effect: 0,
+            effect_param: 0,
+        }
+    }
+}
+
 impl ItNote {
+    /// Internal absence sentinels; never emitted as present fields by writers.
+    pub const NO_NOTE: u8 = 252;
+    pub const NO_VOLUME: u8 = 255;
     /// Check if this is a note-cut (===)
     #[inline]
     pub fn is_note_cut(&self) -> bool {
@@ -261,7 +279,7 @@ impl ItNote {
     /// Check if there's a volume column value
     #[inline]
     pub fn has_volume(&self) -> bool {
-        self.volume != 0
+        self.volume != Self::NO_VOLUME
     }
 
     /// Parse volume column value
@@ -316,7 +334,7 @@ impl ItNote {
     /// let note2 = ItNote::play_note(60, 1, 64); // Same as C-5
     /// ```
     pub fn play(note_name: &str, instrument: u8, volume: u8) -> Self {
-        let note = note_from_name(note_name).unwrap_or(0);
+        let note = note_from_name(note_name).unwrap_or(Self::NO_NOTE);
         Self {
             note,
             instrument,
@@ -341,10 +359,7 @@ impl ItNote {
     pub fn off() -> Self {
         Self {
             note: crate::NOTE_OFF,
-            instrument: 0,
-            volume: 0,
-            effect: 0,
-            effect_param: 0,
+            ..Default::default()
         }
     }
 
@@ -352,10 +367,7 @@ impl ItNote {
     pub fn cut() -> Self {
         Self {
             note: crate::NOTE_CUT,
-            instrument: 0,
-            volume: 0,
-            effect: 0,
-            effect_param: 0,
+            ..Default::default()
         }
     }
 
@@ -363,10 +375,7 @@ impl ItNote {
     pub fn fade() -> Self {
         Self {
             note: crate::NOTE_FADE,
-            instrument: 0,
-            volume: 0,
-            effect: 0,
-            effect_param: 0,
+            ..Default::default()
         }
     }
 
@@ -389,14 +398,14 @@ impl ItNote {
 /// Supports formats:
 /// - "C-4" = Middle C (note 48)
 /// - "C#4" or "Db4" = C# (note 49)
-/// - "---" = No note (0)
+/// - "---" = No note (ItNote::NO_NOTE)
 ///
 /// Returns None for invalid note names
 pub fn note_from_name(name: &str) -> Option<u8> {
     let name = name.trim();
 
     if name == "---" || name.is_empty() {
-        return Some(0);
+        return Some(ItNote::NO_NOTE);
     }
 
     let name = name.replace('-', "");

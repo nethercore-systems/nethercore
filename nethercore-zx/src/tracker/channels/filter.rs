@@ -3,25 +3,85 @@
 use super::TrackerChannel;
 
 impl TrackerChannel {
+    pub(crate) fn reset_filter_envelope(
+        &mut self,
+        envelope: Option<&nether_tracker::TrackerEnvelope>,
+    ) {
+        let envelope = envelope.filter(|env| env.is_filter());
+        self.filter_envelope_enabled = envelope.is_some_and(|env| env.is_enabled());
+        self.filter_envelope_pos = 0;
+        self.filter_new_note = true;
+        self.filter_envelope_value = None;
+        self.envelope_started &= !8;
+        self.filter_dirty = true;
+        self.filter_envelope_sustain_loop = envelope.and_then(|env| env.sustain_ticks());
+        self.filter_envelope_loop = envelope.filter(|env| env.has_loop()).and_then(|env| {
+            Some((
+                env.points.get(env.loop_begin as usize)?.0,
+                env.points.get(env.loop_end as usize)?.0,
+            ))
+        });
+    }
+
+    fn effective_filter_cutoff(&self) -> f32 {
+        // OpenMPT Snd_flt.cpp: cutoff * (envModifier + 256) / 512;
+        // IT's signed -32..32 envelope is scaled by eight into envModifier.
+        self.filter_cutoff
+            * self
+                .filter_envelope_value
+                .map_or(1.0, |value| (value.clamp(-32, 32) as f32 + 32.0) / 64.0)
+    }
+
+    /// Load authored defaults; absent values preserve the current filter setting.
+    pub(crate) fn apply_instrument_filter_defaults(
+        &mut self,
+        instrument: &nether_tracker::TrackerInstrument,
+    ) {
+        if let Some(cutoff) = instrument.filter_cutoff {
+            self.filter_cutoff = cutoff as f32 / 127.0;
+            self.filter_dirty = true;
+        }
+        if let Some(resonance) = instrument.filter_resonance {
+            self.filter_resonance = resonance as f32 / 127.0;
+            self.filter_dirty = true;
+        }
+    }
+
     /// Apply resonant low-pass filter to sample (IT only)
     ///
-    /// Uses Direct Form II transposed biquad filter.
-    pub fn apply_filter(&mut self, input: f32) -> f32 {
-        // If filter is wide open (cutoff = 1.0) or disabled, bypass
-        if self.filter_cutoff >= 1.0 {
+    /// Uses the original IT two-pole recurrence with two output-history samples.
+    pub fn apply_filter(&mut self, input: f32, sample_rate: u32) -> f32 {
+        // Original IT only disables full cutoff on a note trigger. Otherwise
+        // it retains the previous coefficients, not a freshly opened filter.
+        let full = self.effective_filter_cutoff() >= 1.0 && self.filter_resonance == 0.0;
+        if full && self.filter_new_note {
+            self.filter_active = false;
+        }
+        self.filter_new_note = false;
+        if full && !self.filter_active {
             return input;
         }
+        if !full && !self.filter_active {
+            self.filter_z1 = 0.0;
+            self.filter_z2 = 0.0;
+            self.filter_active = true;
+            self.filter_dirty = true;
+        }
 
-        // Update filter coefficients if dirty
-        if self.filter_dirty {
-            self.update_filter_coefficients(22050.0); // ZX sample rate
+        // Full cutoff without a note deliberately retains the old coefficients.
+        if !full && (self.filter_dirty || self.filter_sample_rate != sample_rate) {
+            self.update_filter_coefficients(sample_rate as f32);
+            self.filter_sample_rate = sample_rate;
             self.filter_dirty = false;
         }
 
-        // Direct Form II transposed biquad
-        let output = self.filter_b0 * input + self.filter_z1;
-        self.filter_z1 = self.filter_b1 * input - self.filter_a1 * output + self.filter_z2;
-        self.filter_z2 = self.filter_b2 * input - self.filter_a2 * output;
+        // Keep output history, not coefficient-weighted state: IT permits
+        // cutoff/resonance changes while the voice continues.
+        let output = self.filter_b0 * input
+            - self.filter_a1 * self.filter_z1
+            - self.filter_a2 * self.filter_z2;
+        self.filter_z2 = self.filter_z1;
+        self.filter_z1 = output;
         output
     }
 
@@ -32,34 +92,103 @@ impl TrackerChannel {
     pub fn update_filter_coefficients(&mut self, sample_rate: f32) {
         // Convert normalized cutoff (0.0-1.0) to frequency
         // IT uses: freq = 110 * 2^((cutoff * 127)/24 + 0.25)
-        let cutoff_it = self.filter_cutoff * 127.0;
+        let cutoff_it = self.effective_filter_cutoff() * 127.0;
         let freq = 110.0 * 2.0_f32.powf(cutoff_it / 24.0 + 0.25);
 
-        // Clamp frequency to Nyquist
-        let freq = freq.min(sample_rate / 2.0 - 1.0);
+        // Original IT two-pole response (OpenMPT Snd_flt.cpp, normal range).
+        let freq = freq.clamp(120.0, 20000.0).min(sample_rate * 0.5);
+        let resonance = self.filter_resonance.clamp(0.0, 1.0) * 127.0;
+        let damping = 10.0_f32.powf(-resonance * (24.0 / 128.0 / 20.0));
+        let r = sample_rate / (2.0 * std::f32::consts::PI * freq);
+        let d = damping * r + damping - 1.0;
+        let e = r * r;
+        let denominator = 1.0 + d + e;
+        self.filter_b0 = 1.0 / denominator;
+        self.filter_b1 = 0.0;
+        self.filter_b2 = 0.0;
+        self.filter_a1 = -(d + 2.0 * e) / denominator;
+        self.filter_a2 = e / denominator;
+    }
+}
 
-        let omega = 2.0 * std::f32::consts::PI * freq / sample_rate;
-        let sin_omega = omega.sin();
-        let cos_omega = omega.cos();
+#[cfg(test)]
+mod tests {
+    use super::TrackerChannel;
 
-        // Q factor from resonance (higher resonance = lower Q denominator)
-        // IT resonance 0-127 mapped to 0.0-1.0
-        let q_denom = 1.0 + self.filter_resonance * 10.0;
-        let alpha = sin_omega / (2.0 * q_denom);
+    #[test]
+    fn it_full_cutoff_retains_until_note_and_reactivation_clears_history() {
+        let mut ch = TrackerChannel::default();
+        ch.reset();
+        ch.filter_cutoff = 0.0;
+        ch.filter_dirty = true;
+        ch.apply_filter(1.0, 44100);
+        let coefficients = (ch.filter_b0, ch.filter_a1, ch.filter_a2);
+        assert!(ch.filter_active);
+        ch.filter_cutoff = 1.0;
+        ch.filter_dirty = true;
+        let mut control = ch.clone();
+        control.filter_cutoff = 0.0;
+        assert_eq!(
+            ch.apply_filter(0.0, 44100),
+            control.apply_filter(0.0, 44100)
+        );
+        assert_eq!((ch.filter_b0, ch.filter_a1, ch.filter_a2), coefficients);
+        ch.reset_filter_envelope(None); // actual note, not just a cutoff command
+        assert_eq!(ch.apply_filter(0.25, 44100), 0.25);
+        assert!(!ch.filter_active && !ch.filter_new_note);
+        ch.filter_z1 = 123.0;
+        ch.filter_z2 = -456.0;
+        ch.filter_cutoff = 0.0;
+        ch.filter_dirty = true;
+        let mut fresh = TrackerChannel::default();
+        fresh.reset();
+        fresh.filter_cutoff = 0.0;
+        fresh.filter_dirty = true;
+        assert_eq!(ch.apply_filter(1.0, 44100), fresh.apply_filter(1.0, 44100));
+    }
 
-        // Low-pass filter coefficients
-        let b0 = (1.0 - cos_omega) / 2.0;
-        let b1 = 1.0 - cos_omega;
-        let b2 = (1.0 - cos_omega) / 2.0;
-        let a0 = 1.0 + alpha;
-        let a1 = -2.0 * cos_omega;
-        let a2 = 1.0 - alpha;
-
-        // Normalize by a0
-        self.filter_b0 = b0 / a0;
-        self.filter_b1 = b1 / a0;
-        self.filter_b2 = b2 / a0;
-        self.filter_a1 = a1 / a0;
-        self.filter_a2 = a2 / a0;
+    #[test]
+    fn it_two_pole_reference_impulses_and_live_coefficient_change() {
+        // Double-precision evaluation of pinned OpenMPT Snd_flt.cpp normal IT branch.
+        for (rate, cutoff, resonance, expected) in [
+            (
+                44100,
+                64,
+                64,
+                [0.013554184, 0.026488554, 0.038647739, 0.049891872],
+            ),
+            (
+                22050,
+                64,
+                64,
+                [0.052182470, 0.098068052, 0.135693585, 0.163661390],
+            ),
+            (
+                48000,
+                127,
+                120,
+                [0.414988938, 0.625593122, 0.560257556, 0.267485957],
+            ),
+        ] {
+            let mut ch = TrackerChannel::default();
+            ch.reset();
+            ch.filter_cutoff = cutoff as f32 / 127.0;
+            ch.filter_resonance = resonance as f32 / 127.0;
+            ch.filter_dirty = true;
+            for (i, expected) in expected.into_iter().enumerate() {
+                let actual = ch.apply_filter(if i == 0 { 1.0 } else { 0.0 }, rate);
+                assert!(
+                    (actual - expected).abs() < 0.000002,
+                    "rate={rate}: {actual} != {expected}"
+                );
+            }
+            if rate == 44100 {
+                ch.filter_cutoff = 20.0 / 127.0;
+                ch.filter_resonance = 0.0;
+                ch.filter_dirty = true;
+                let expected = 0.06070980508929703;
+                assert!((ch.apply_filter(0.0, rate) - expected).abs() < 0.000002);
+            }
+        }
     }
 }

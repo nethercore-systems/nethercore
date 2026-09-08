@@ -29,32 +29,8 @@ pub fn decompress_it215_8bit_with_size(
     compressed: &[u8],
     output_length: usize,
 ) -> Result<(Vec<i8>, usize), ItError> {
-    let mut output = Vec::with_capacity(output_length);
-    let mut reader = BitReader::new(compressed);
-
-    // IT215 processes samples in blocks of 0x8000
-    const BLOCK_SIZE: usize = 0x8000;
-    let mut remaining = output_length;
-
-    while remaining > 0 && !reader.is_exhausted() {
-        let block_len = remaining.min(BLOCK_SIZE);
-        decompress_block_8bit(&mut reader, &mut output, block_len)?;
-        remaining = remaining.saturating_sub(block_len);
-    }
-
-    // Pad with zeros if we didn't get enough samples
-    while output.len() < output_length {
-        output.push(0);
-    }
-
-    // Calculate bytes consumed (round up to next byte if we're mid-byte)
-    let bytes_consumed = if reader.bit_pos > 0 {
-        reader.byte_pos + 1
-    } else {
-        reader.byte_pos
-    };
-
-    Ok((output, bytes_consumed))
+    let (samples, used) = decompress_it(compressed, output_length, 8, true)?;
+    Ok((samples.into_iter().map(|v| v as i8).collect(), used))
 }
 
 /// Decompress IT215 16-bit sample data
@@ -83,216 +59,74 @@ pub fn decompress_it215_16bit_with_size(
     compressed: &[u8],
     output_length: usize,
 ) -> Result<(Vec<i16>, usize), ItError> {
-    let mut output = Vec::with_capacity(output_length);
-    let mut reader = BitReader::new(compressed);
-
-    // IT215 processes samples in blocks of 0x4000 for 16-bit
-    const BLOCK_SIZE: usize = 0x4000;
-    let mut remaining = output_length;
-
-    while remaining > 0 && !reader.is_exhausted() {
-        let block_len = remaining.min(BLOCK_SIZE);
-        decompress_block_16bit(&mut reader, &mut output, block_len)?;
-        remaining = remaining.saturating_sub(block_len);
-    }
-
-    // Pad with zeros if we didn't get enough samples
-    while output.len() < output_length {
-        output.push(0);
-    }
-
-    // Calculate bytes consumed (round up to next byte if we're mid-byte)
-    let bytes_consumed = if reader.bit_pos > 0 {
-        reader.byte_pos + 1
-    } else {
-        reader.byte_pos
-    };
-
-    Ok((output, bytes_consumed))
+    let (samples, used) = decompress_it(compressed, output_length, 16, true)?;
+    Ok((samples.into_iter().map(|v| v as i16).collect(), used))
 }
 
-/// Decompress a single 8-bit block
-fn decompress_block_8bit(
-    reader: &mut BitReader,
-    output: &mut Vec<i8>,
-    block_len: usize,
-) -> Result<(), ItError> {
-    // Read block header: compressed length (16 bits)
-    let _compressed_len = reader.read_bits(16)?;
-
-    let mut width = 9; // Initial bit width
-    let mut last_value: i8 = 0;
-
-    for _ in 0..block_len {
-        if reader.is_exhausted() {
-            output.push(0);
+// IT 2.14/2.15: byte-aligned bounded blocks and three width-change modes.
+// Reference: OpenMPT ITCompression.cpp, ITDecompression::Uncompress,
+// f83cedb0cd5446e4dfaa83ac97e3087107e26767.
+pub(crate) fn decompress_it(
+    data: &[u8],
+    length: usize,
+    bits: usize,
+    it215: bool,
+) -> Result<(Vec<i32>, usize), ItError> {
+    let mut output = Vec::new();
+    let mut offset = 0;
+    let max_width = bits + 1;
+    let block_size = 0x8000 / (bits / 8);
+    while output.len() < length {
+        let header = data.get(offset..offset + 2).ok_or(ItError::UnexpectedEof)?;
+        let size = u16::from_le_bytes([header[0], header[1]]) as usize;
+        offset += 2;
+        let payload = data
+            .get(offset..offset + size)
+            .ok_or(ItError::UnexpectedEof)?;
+        offset += size;
+        if size == 0 {
             continue;
         }
-
-        // Read value with current width
-        let value = reader.read_bits(width)?;
-
-        // Decode the value based on width
-        let delta = if width < 7 {
-            // For widths < 7, check for width change markers
-            let max_positive = (1i32 << (width - 1)) - 1;
-            let marker = (1u32 << width) - 1;
-
-            if value == marker {
-                // Width change: read new width
-                let new_width = reader.read_bits(3)? as usize + 1;
-                if new_width < width {
-                    width = new_width;
-                } else {
-                    width = new_width + 1;
-                }
-                continue;
+        let mut reader = BitReader::new(payload);
+        let end = output.len() + (length - output.len()).min(block_size);
+        let (mut first, mut second) = (0i32, 0i32);
+        let mut width = max_width;
+        while output.len() < end {
+            if width == 0 || width > max_width {
+                return Err(ItError::DecompressionError("invalid bit width".into()));
             }
-
-            // Sign extend
-            let signed = if value > max_positive as u32 {
-                value as i32 - (1i32 << width)
+            let value = reader.read_bits(width)? as i32;
+            let top = 1i32 << (width - 1);
+            let change = if width <= 6 && value == top {
+                Some(reader.read_bits(if bits == 8 { 3 } else { 4 })? as usize)
+            } else if width > 6
+                && width < max_width
+                && (top - bits as i32 / 2..top + bits as i32 / 2).contains(&value)
+            {
+                Some((value - (top - bits as i32 / 2)) as usize)
             } else {
-                value as i32
+                None
             };
-            signed as i8
-        } else if width < 9 {
-            // For widths 7-8, different marker handling
-            let max_val = (1u32 << width) - 1;
-            if value == max_val {
-                // Width change
-                let new_width = reader.read_bits(3)? as usize + 1;
-                if new_width < width {
-                    width = new_width;
-                } else {
-                    width = new_width + 1;
-                }
+            if let Some(new_width) = change {
+                let new_width = new_width + 1;
+                width = new_width + usize::from(new_width >= width);
                 continue;
             }
-
-            let max_positive = (1i32 << (width - 1)) - 1;
-            let signed = if value > max_positive as u32 {
-                value as i32 - (1i32 << width)
+            if width == max_width && value & top != 0 {
+                width = (value & !top) as usize + 1;
+                continue;
+            }
+            let delta = if width < max_width && value & top != 0 {
+                value - (top << 1)
             } else {
-                value as i32
+                value
             };
-            signed as i8
-        } else {
-            // Width 9: full 8-bit value with sign
-            let max_val = (1u32 << 9) - 1;
-            if value == max_val {
-                // Width change
-                let new_width = reader.read_bits(3)? as usize + 1;
-                if new_width < width {
-                    width = new_width;
-                } else {
-                    width = new_width + 1;
-                }
-                continue;
-            }
-
-            // For width 9, values 256-510 represent -256 to -2, 511 is marker
-            if value >= 256 {
-                (value as i32 - 256) as i8
-            } else {
-                value as i8
-            }
-        };
-
-        // Apply delta to get actual value
-        last_value = last_value.wrapping_add(delta);
-        output.push(last_value);
-    }
-
-    Ok(())
-}
-
-/// Decompress a single 16-bit block
-fn decompress_block_16bit(
-    reader: &mut BitReader,
-    output: &mut Vec<i16>,
-    block_len: usize,
-) -> Result<(), ItError> {
-    // Read block header: compressed length (16 bits)
-    let _compressed_len = reader.read_bits(16)?;
-
-    let mut width = 17; // Initial bit width for 16-bit samples
-    let mut last_value: i16 = 0;
-
-    for _ in 0..block_len {
-        if reader.is_exhausted() {
-            output.push(0);
-            continue;
+            first = first.wrapping_add(delta);
+            second = second.wrapping_add(first);
+            output.push(if it215 { second } else { first });
         }
-
-        // Read value with current width
-        let value = reader.read_bits(width)?;
-
-        // Decode the value based on width
-        let delta = if width < 7 {
-            let max_positive = (1i32 << (width - 1)) - 1;
-            let marker = (1u32 << width) - 1;
-
-            if value == marker {
-                let new_width = reader.read_bits(4)? as usize + 1;
-                if new_width < width {
-                    width = new_width;
-                } else {
-                    width = new_width + 1;
-                }
-                continue;
-            }
-
-            let signed = if value > max_positive as u32 {
-                value as i32 - (1i32 << width)
-            } else {
-                value as i32
-            };
-            signed as i16
-        } else if width < 17 {
-            let max_val = (1u32 << width) - 1;
-            if value == max_val {
-                let new_width = reader.read_bits(4)? as usize + 1;
-                if new_width < width {
-                    width = new_width;
-                } else {
-                    width = new_width + 1;
-                }
-                continue;
-            }
-
-            let max_positive = (1i32 << (width - 1)) - 1;
-            let signed = if value > max_positive as u32 {
-                value as i32 - (1i32 << width)
-            } else {
-                value as i32
-            };
-            signed as i16
-        } else {
-            // Width 17: full 16-bit value
-            let max_val = (1u32 << 17) - 1;
-            if value == max_val {
-                let new_width = reader.read_bits(4)? as usize + 1;
-                if new_width < width {
-                    width = new_width;
-                } else {
-                    width = new_width + 1;
-                }
-                continue;
-            }
-
-            if value >= 0x10000 {
-                (value as i32 - 0x10000) as i16
-            } else {
-                value as i16
-            }
-        };
-
-        last_value = last_value.wrapping_add(delta);
-        output.push(last_value);
     }
-
-    Ok(())
+    Ok((output, offset))
 }
 
 /// Bit reader for compressed data
@@ -311,10 +145,6 @@ impl<'a> BitReader<'a> {
         }
     }
 
-    fn is_exhausted(&self) -> bool {
-        self.byte_pos >= self.data.len()
-    }
-
     fn read_bits(&mut self, count: usize) -> Result<u32, ItError> {
         if count == 0 || count > 32 {
             return Ok(0);
@@ -325,8 +155,7 @@ impl<'a> BitReader<'a> {
 
         while bits_read < count {
             if self.byte_pos >= self.data.len() {
-                // Pad with zeros if we run out of data
-                return Ok(result);
+                return Err(ItError::UnexpectedEof);
             }
 
             let current_byte = self.data[self.byte_pos];
@@ -387,9 +216,12 @@ pub fn compress_it215_8bit(samples: &[i8]) -> Vec<u8> {
 /// Compress a single 8-bit block
 fn compress_block_8bit(samples: &[i8], writer: &mut BitWriter) {
     let mut last_value: i8 = 0;
+    let mut last_delta: i8 = 0;
 
     for &sample in samples {
-        let delta = sample.wrapping_sub(last_value);
+        let first_delta = sample.wrapping_sub(last_value);
+        let delta = first_delta.wrapping_sub(last_delta);
+        last_delta = first_delta;
 
         // For simplicity, always use width 9 (no compression)
         // A full implementation would adaptively choose widths
@@ -429,9 +261,12 @@ pub fn compress_it215_16bit(samples: &[i16]) -> Vec<u8> {
 /// Compress a single 16-bit block
 fn compress_block_16bit(samples: &[i16], writer: &mut BitWriter) {
     let mut last_value: i16 = 0;
+    let mut last_delta: i16 = 0;
 
     for &sample in samples {
-        let delta = sample.wrapping_sub(last_value);
+        let first_delta = sample.wrapping_sub(last_value);
+        let delta = first_delta.wrapping_sub(last_delta);
+        last_delta = first_delta;
 
         // For simplicity, always use width 17 (no compression)
         let value = if delta >= 0 {
@@ -498,6 +333,84 @@ impl BitWriter {
 mod tests {
     use super::*;
 
+    // Hand-packed streams, independent of our compressor. ITCompression.cpp
+    // at OpenMPT f83cedb0: mode C 0x100 | (new_width-1), then mode A.
+    #[test]
+    fn compressed_width_markers_do_not_consume_samples() {
+        let mut bits = BitWriter::new();
+        bits.write_bits(0x102, 9); // width 3
+        bits.write_bits(1, 3); // delta +1
+        bits.write_bits(4, 3); // mode A width marker
+        bits.write_bits(3, 3); // width 5 (skip current width)
+        bits.write_bits(31, 5); // delta -1
+        let payload = bits.finish();
+        let mut stream = (payload.len() as u16).to_le_bytes().to_vec();
+        stream.extend(payload);
+        // IT215 integrates twice: first differences [1,0], samples [1,1].
+        assert_eq!(decompress_it215_8bit(&stream, 2).unwrap(), [1, 1]);
+    }
+
+    #[test]
+    fn compressed_block_length_bounds_reads_and_channel_offset() {
+        let stream = [3, 0, 1, 0, 0xab, 0xde, 0xad];
+        let (samples, used) = decompress_it215_8bit_with_size(&stream, 1).unwrap();
+        assert_eq!(samples, [1]);
+        assert_eq!(used, 5); // include unused payload padding, exclude next channel
+        assert!(decompress_it215_8bit(&[1, 0, 1, 0, 0], 1).is_err());
+        assert!(decompress_it215_8bit(&[], 1).is_err());
+        assert!(decompress_it215_8bit(&[2, 0, 0, 0], usize::MAX).is_err());
+    }
+
+    #[test]
+    fn every_width_and_delta_mode_decodes_independent_streams() {
+        for bits in [8usize, 16] {
+            for target in 1..=bits {
+                let mut writer = BitWriter::new();
+                writer.write_bits((1 << bits) | (target - 1) as u32, bits + 1);
+                writer.write_bits(0, target); // one genuine sample
+                // Change back to full width through mode A or B.
+                if target <= 6 {
+                    writer.write_bits(1 << (target - 1), target);
+                    writer.write_bits((bits - 1) as u32, if bits == 8 { 3 } else { 4 });
+                } else {
+                    writer.write_bits(
+                        (1 << (target - 1)) - bits as u32 / 2 + bits as u32 - 1,
+                        target,
+                    );
+                }
+                writer.write_bits(1, bits + 1);
+                writer.write_bits(1, bits + 1);
+                let payload = writer.finish();
+                let mut stream = (payload.len() as u16).to_le_bytes().to_vec();
+                stream.extend(payload);
+                for (it215, expected) in [(false, [0, 1, 2]), (true, [0, 1, 3])] {
+                    assert_eq!(
+                        decompress_it(&stream, 3, bits, it215).unwrap().0,
+                        expected,
+                        "bits={bits} target={target} it215={it215}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn multiple_blocks_reset_integrators_and_align_to_bytes() {
+        let original8: Vec<i8> = (0..0x8003).map(|i| (i * 73) as i8).collect();
+        let data = compress_it215_8bit(&original8);
+        assert_eq!(
+            decompress_it215_8bit(&data, original8.len()).unwrap(),
+            original8
+        );
+        let original16: Vec<i16> = (0..0x4003).map(|i| (i * 997) as i16).collect();
+        let data = compress_it215_16bit(&original16);
+        assert_eq!(
+            decompress_it215_16bit(&data, original16.len()).unwrap(),
+            original16
+        );
+        assert!(decompress_it215_16bit(&[3, 0, 255, 255, 1], 1).is_err());
+    }
+
     #[test]
     fn test_bit_reader_basic() {
         let data = [0b10101010, 0b11001100];
@@ -526,7 +439,7 @@ mod tests {
         let decompressed = decompress_it215_8bit(&compressed, original.len()).unwrap();
 
         // Note: Due to simplified compression, values should match
-        assert_eq!(decompressed.len(), original.len());
+        assert_eq!(decompressed, original);
     }
 
     #[test]
@@ -535,6 +448,6 @@ mod tests {
         let compressed = compress_it215_16bit(&original);
         let decompressed = decompress_it215_16bit(&compressed, original.len()).unwrap();
 
-        assert_eq!(decompressed.len(), original.len());
+        assert_eq!(decompressed, original);
     }
 }

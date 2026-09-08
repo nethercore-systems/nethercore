@@ -1,7 +1,7 @@
 //! Audio loading (sounds and tracker modules).
 
 use anyhow::{Context, Result};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use zx_common::{PackedSound, PackedTracker, TrackerFormat};
 
 use super::utils::detect_tracker_format;
@@ -115,6 +115,7 @@ pub fn load_tracker(
     id: &str,
     path: &std::path::Path,
     available_sound_ids: &HashSet<String>,
+    extracted_sample_ids: Option<&HashMap<usize, String>>,
 ) -> Result<PackedTracker> {
     let data = std::fs::read(path)
         .with_context(|| format!("Failed to load tracker: {}", path.display()))?;
@@ -126,17 +127,50 @@ pub fn load_tracker(
     // Get instrument names and pack based on format
     let (sample_ids, pattern_data) = match format {
         TrackerFormat::Xm => {
-            // Get instrument names from XM file (for mapping to sounds)
-            let sample_ids = nether_xm::get_instrument_names(&data).with_context(|| {
-                format!("Failed to parse XM tracker instruments: {}", path.display())
-            })?;
-
-            // Validate sample references against loaded sounds
-            validate_tracker_samples(id, path, &sample_ids, available_sound_ids)?;
-
-            // Parse XM and pack to minimal format (removes all overhead)
             let module = nether_xm::parse_xm(&data)
                 .with_context(|| format!("Failed to parse XM tracker: {}", path.display()))?;
+            let mapped = module.instruments.iter().any(|i| i.num_samples > 1 && !i.samples.is_empty());
+            if mapped {
+                for (index, instrument) in module.instruments.iter().enumerate() {
+                    for (slot, sample) in instrument.samples.iter().enumerate() {
+                        if sample.source_sample_bytes.is_some_and(|bytes| bytes > 0)
+                            && extracted_sample_ids.and_then(|ids| ids.get(&(index * 256 + slot))).is_none()
+                            && !available_sound_ids.contains(&instrument.name)
+                        {
+                            anyhow::bail!("Missing XM sample {}:{} in {}", index, slot, path.display());
+                        }
+                    }
+                }
+            }
+            let sample_ids: Vec<String> = if mapped {
+                module.instruments.iter().enumerate().flat_map(|(index, instrument)| {
+                    (0..instrument.num_samples as usize).map(move |slot| {
+                        extracted_sample_ids.and_then(|ids| ids.get(&(index * 256 + slot))).cloned()
+                            .unwrap_or_else(|| if available_sound_ids.contains(&instrument.name) {
+                                instrument.name.clone()
+                            } else { String::new() })
+                    })
+                }).collect()
+            } else { module
+                .instruments
+                .iter()
+                .enumerate()
+                .map(|(index, instrument)| {
+                    if let Some(extracted_id) = extracted_sample_ids.and_then(|ids| ids.get(&(index * 256)))
+                    {
+                        extracted_id.clone()
+                    } else if available_sound_ids.contains(&instrument.name) {
+                        instrument.name.clone()
+                    } else if instrument.num_samples == 0
+                        || instrument.source_sample_bytes == Some(0)
+                    {
+                        String::new()
+                    } else {
+                        super::utils::sanitize_name(&instrument.name, id, index as u8)
+                    }
+                })
+                .collect() };
+            validate_tracker_samples(id, path, &sample_ids, available_sound_ids)?;
 
             let pattern_data = nether_xm::pack_xm_minimal(&module).with_context(|| {
                 format!(
@@ -148,18 +182,28 @@ pub fn load_tracker(
             (sample_ids, pattern_data)
         }
         TrackerFormat::It => {
-            // Get instrument names from IT file (for mapping to sounds)
-            let sample_ids = nether_it::get_instrument_names(&data).with_context(|| {
-                format!("Failed to parse IT tracker instruments: {}", path.display())
-            })?;
-
-            // Validate sample references against loaded sounds
-            validate_tracker_samples(id, path, &sample_ids, available_sound_ids)?;
-
-            // Parse IT and pack to NCIT minimal format (removes all overhead)
             let module = nether_it::parse_it(&data)
                 .with_context(|| format!("Failed to parse IT tracker: {}", path.display()))?;
-
+            // IT instrument keymaps index samples, not instrument names. Use the
+            // same IDs as extraction, while retaining explicit named sounds.
+            let sample_ids: Vec<String> = module
+                .samples
+                .iter()
+                .enumerate()
+                .map(|(index, sample)| {
+                    if let Some(extracted_id) = extracted_sample_ids.and_then(|ids| ids.get(&index))
+                    {
+                        extracted_id.clone()
+                    } else if available_sound_ids.contains(&sample.name) {
+                        sample.name.clone()
+                    } else if sample.length == 0 {
+                        String::new()
+                    } else {
+                        super::utils::sanitize_name(&sample.name, id, index as u8)
+                    }
+                })
+                .collect();
+            validate_tracker_samples(id, path, &sample_ids, available_sound_ids)?;
             let pattern_data = nether_it::pack_ncit(&module);
 
             (sample_ids, pattern_data)

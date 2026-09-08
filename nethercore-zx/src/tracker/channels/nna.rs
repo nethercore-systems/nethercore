@@ -83,15 +83,12 @@ impl TrackerChannel {
             NNA_NOTE_OFF => {
                 // Trigger key-off, then move to background
                 self.key_off = true;
+                self.sample_sustain_released = true;
                 true
             }
             NNA_NOTE_FADE => {
-                // Start fadeout (force key_off for envelope), then move to background
-                self.key_off = true;
-                // If no fadeout rate set, use a default fast fade
-                if self.instrument_fadeout_rate == 0 {
-                    self.instrument_fadeout_rate = 1024; // Fast fade
-                }
+                // Fade does not release sample or envelope sustain.
+                self.note_fade = true;
                 true
             }
             _ => false,
@@ -109,12 +106,10 @@ impl TrackerChannel {
             }
             DCA_NOTE_OFF => {
                 self.key_off = true;
+                self.sample_sustain_released = true;
             }
             DCA_NOTE_FADE => {
-                self.key_off = true;
-                if self.instrument_fadeout_rate == 0 {
-                    self.instrument_fadeout_rate = 1024;
-                }
+                self.note_fade = true;
             }
             _ => {}
         }
@@ -122,8 +117,8 @@ impl TrackerChannel {
 
     /// Check if this channel matches a duplicate check condition
     ///
-    /// - DCT_NOTE: Same note value
-    /// - DCT_SAMPLE: Same sample handle
+    /// - DCT_NOTE: Same note value and instrument
+    /// - DCT_SAMPLE: Same sample handle and instrument; engine also checks source sample index
     /// - DCT_INSTRUMENT: Same instrument number
     pub fn matches_duplicate_check(
         &self,
@@ -138,8 +133,8 @@ impl TrackerChannel {
 
         match dct {
             DCT_OFF => false,
-            DCT_NOTE => self.current_note == note,
-            DCT_SAMPLE => self.sample_handle == sample_handle,
+            DCT_NOTE => self.current_note == note && self.instrument == instrument,
+            DCT_SAMPLE => self.sample_handle == sample_handle && self.instrument == instrument,
             DCT_INSTRUMENT => self.instrument == instrument,
             _ => false,
         }

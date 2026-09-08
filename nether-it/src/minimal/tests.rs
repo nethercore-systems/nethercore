@@ -7,8 +7,41 @@ use crate::module::*;
 
 use super::legacy::pack_it_minimal;
 use super::pack::{pack_envelope, pack_note_sample_table, pack_sample};
-use super::parse::{parse_envelope, parse_note_sample_table, parse_sample};
+use super::parse::{parse_envelope, parse_note_sample_table, parse_sample, unpack_pattern_data};
 use super::{TABLE_UNIFORM, pack_ncit, parse_it_minimal, parse_ncit};
+
+#[test]
+fn ncit_rejects_oversized_channels_without_panicking() {
+    let mut data = pack_ncit(&create_test_module());
+    for channels in [65, 127, 255] {
+        data[0] = channels;
+        assert!(parse_ncit(&data).is_err());
+    }
+}
+
+#[test]
+fn ncit_rejects_invalid_legacy_channel_before_indexing() {
+    for marker in [0x40, 0x7f, 0xc0, 0xff] {
+        assert!(unpack_pattern_data(&[marker, 0, 0], 1, 1, true).is_err());
+    }
+    // Legacy channel 63 and modern channel 64 remain valid.
+    assert_eq!(
+        unpack_pattern_data(&[0xbf, 1, 60, 0], 1, 64, true).unwrap()[0][63].note,
+        60
+    );
+    assert_eq!(
+        unpack_pattern_data(&[0xc0, 1, 60, 0], 1, 64, false).unwrap()[0][63].note,
+        60
+    );
+}
+
+#[test]
+fn ncit_sparse_offsets_do_not_overflow_before_exceptions() {
+    let data = [super::TABLE_SPARSE, 24, 1, 1, 119, 119, 2];
+    let parsed = parse_note_sample_table(&mut Cursor::new(data.as_slice())).unwrap();
+    assert_eq!(parsed[0], (24, 1));
+    assert_eq!(parsed[119], (119, 2));
+}
 
 /// Create a minimal test module
 fn create_test_module() -> ItModule {
@@ -90,6 +123,52 @@ fn test_pack_and_parse_ncit() {
     assert_eq!(parsed.samples[0].c5_speed, 22050);
     assert_eq!(parsed.samples[0].loop_begin, 100);
     assert_eq!(parsed.samples[0].loop_end, 1000);
+}
+
+#[test]
+fn ncit_uses_versioned_it_channel_markers_and_reads_legacy_zero_based_data() {
+    let mut module = ItModule::default();
+    module.num_channels = 64;
+    let mut pattern = ItPattern::empty(1, 64);
+    pattern.notes[0][0].note = 60;
+    pattern.notes[0][63].note = 61;
+    module.patterns.push(pattern);
+    module.num_patterns = 1;
+
+    let ncit = pack_ncit(&module);
+    assert_eq!(ncit[16], super::NCIT_PATTERN_ENCODING_VERSION);
+    let mut v1=ncit.clone();v1[16]=1;v1[17]=255;
+    let previous=parse_ncit(&v1).unwrap();
+    assert!(!previous.balance_mix);
+    assert_eq!(previous.patterns[0].notes[0][63].note,61);
+
+    // Header (24) + 64 panning bytes + 64 volume bytes + pattern header (4).
+    assert_eq!(&ncit[156..163], &[0x81, 0x01, 60, 0xc0, 0x01, 61, 0]);
+    assert_eq!(
+        unpack_pattern_data(&ncit[156..163], 1, 64, false).unwrap()[0][63].note,
+        61
+    );
+
+    // Version 0 preserves the historical NCIT zero-based marker meaning.
+    let mut legacy = ncit;
+    legacy[16] = 0;
+    legacy[156] = 0x80;
+    legacy[159] = 0xbf;
+    let parsed = parse_ncit(&legacy).unwrap();
+    assert_eq!(parsed.patterns[0].notes[0][0].note, 60);
+    assert_eq!(parsed.patterns[0].notes[0][63].note, 61);
+}
+
+#[test]
+fn ncit_repeated_masks_and_bounded_pattern_data_follow_it_packing() {
+    let packed = [0x81, 0x09, 60, 2, 0x12, 0, 0x01, 61, 3, 0x34, 0];
+    let parsed = unpack_pattern_data(&packed, 2, 1, false).unwrap();
+
+    assert_eq!(parsed[0][0].note, 60);
+    assert_eq!(parsed[1][0].note, 61);
+    assert_eq!(parsed[1][0].effect, 3);
+    assert_eq!(parsed[1][0].effect_param, 0x34);
+    assert!(unpack_pattern_data(&[0x81], 1, 1, false).is_err());
 }
 
 #[test]
@@ -191,6 +270,7 @@ fn test_envelope_round_trip() {
 #[test]
 fn test_sample_round_trip() {
     let sample = ItSample {
+        convert_flags: 1,
         name: String::new(),
         filename: String::new(),
         global_volume: 48,
@@ -299,4 +379,30 @@ fn test_channel_and_random_settings_round_trip() {
         parsed.instruments[0].random_pan, 5,
         "Random pan should be preserved"
     );
+}
+
+#[test]
+fn ncit_v2_preserves_old_reserved_semantics_and_rejects_bad_bounds() {
+    let bytes=pack_ncit(&ItModule::default());
+    for version in [0,1] {
+        for reserved in [1,255] {
+            let mut old=bytes.clone();old[16]=version;old[17]=reserved;
+            assert!(!parse_ncit(&old).unwrap().balance_mix);
+        }
+    }
+    let mut current=bytes.clone();current[17]=255;
+    assert!(matches!(parse_ncit(&current),Err(crate::ItError::UnsupportedMixMetadata)));
+    current=bytes.clone();current[0]=0;
+    assert!(matches!(parse_ncit(&current),Err(crate::ItError::TooManyChannels(0))));
+    for (offset,value) in [(3,100u16),(5,100),(7,257)] {
+        current=bytes.clone();current[offset..offset+2].copy_from_slice(&value.to_le_bytes());
+        assert!(matches!(parse_ncit(&current),Err(crate::ItError::TooManyInstruments(_) | crate::ItError::TooManySamples(_) | crate::ItError::TooManyPatterns(_))));
+    }
+    let mut pattern=Vec::new();pattern.extend_from_slice(&201u16.to_le_bytes());pattern.extend_from_slice(&201u16.to_le_bytes());pattern.extend_from_slice(&[0;201]);
+    assert!(matches!(super::parse::parse_pattern(&mut Cursor::new(pattern.as_slice()),1,false),Err(crate::ItError::InvalidPattern(0))));
+    for marker in [0x80,0x41,0xc1,0xff] {
+        assert!(super::parse::unpack_pattern_data(&[marker,0,0],1,64,false).is_err());
+    }
+    // Legal one-based reused-mask records must not be rejected with invalid aliases.
+    assert!(super::parse::unpack_pattern_data(&[0x81,1,60,1,61,0],1,1,false).is_ok());
 }

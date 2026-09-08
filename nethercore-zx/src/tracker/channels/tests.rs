@@ -83,8 +83,26 @@ fn test_nna_note_fade() {
 
     assert!(needs_background);
     assert!(ch.note_on);
-    assert!(ch.key_off);
-    assert!(ch.instrument_fadeout_rate > 0); // Default fadeout applied
+    assert!(!ch.key_off);
+    assert!(ch.note_fade);
+    assert_eq!(ch.instrument_fadeout_rate, 0);
+}
+
+#[test]
+fn note_fade_keeps_key_and_authored_rate() {
+    for rate in [0, 128] {
+        for duplicate in [false, true] {
+            let mut ch = create_playing_channel();
+            ch.instrument_fadeout_rate = rate;
+            if duplicate {
+                ch.apply_dca(DCA_NOTE_FADE);
+            } else {
+                assert!(ch.apply_nna_action(NNA_NOTE_FADE));
+            }
+            assert!(!ch.key_off, "fade must not release sustain");
+            assert_eq!(ch.instrument_fadeout_rate, rate);
+        }
+    }
 }
 
 #[test]
@@ -107,16 +125,16 @@ fn test_duplicate_check_off() {
 #[test]
 fn test_duplicate_check_note() {
     let ch = create_playing_channel();
-    // Note matches (60), other params don't matter for DCT_NOTE
-    assert!(ch.matches_duplicate_check(DCT_NOTE, 60, 99, 99));
+    // Note and instrument match; sample handle does not matter.
+    assert!(ch.matches_duplicate_check(DCT_NOTE, 60, 99, 1));
     assert!(!ch.matches_duplicate_check(DCT_NOTE, 61, 1, 1));
 }
 
 #[test]
 fn test_duplicate_check_sample() {
     let ch = create_playing_channel();
-    // Sample matches (1), other params don't matter for DCT_SAMPLE
-    assert!(ch.matches_duplicate_check(DCT_SAMPLE, 99, 1, 99));
+    // Sample and instrument match; pitch does not matter.
+    assert!(ch.matches_duplicate_check(DCT_SAMPLE, 99, 1, 1));
     assert!(!ch.matches_duplicate_check(DCT_SAMPLE, 60, 2, 1));
 }
 
@@ -153,8 +171,9 @@ fn test_dca_note_fade() {
     ch.apply_dca(DCA_NOTE_FADE);
 
     assert!(ch.note_on);
-    assert!(ch.key_off);
-    assert!(ch.instrument_fadeout_rate > 0);
+    assert!(!ch.key_off);
+    assert!(ch.note_fade);
+    assert_eq!(ch.instrument_fadeout_rate, 0);
 }
 
 #[test]
@@ -169,6 +188,16 @@ fn test_surround_reset() {
     ch.surround = true;
     ch.reset();
     assert!(!ch.surround);
+}
+
+#[test]
+fn duplicate_note_requires_same_instrument() {
+    let mut ch = create_playing_channel();
+    ch.current_note = 61;
+    ch.instrument = 1;
+    assert!(!ch.matches_duplicate_check(DCT_SAMPLE, 61, ch.sample_handle, 2));
+    assert!(!ch.matches_duplicate_check(DCT_NOTE, 61, ch.sample_handle, 2));
+    assert!(ch.matches_duplicate_check(DCT_NOTE, 61, ch.sample_handle, 1));
 }
 
 #[test]

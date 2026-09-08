@@ -7,18 +7,18 @@ pub fn pack_pattern(pattern: &ItPattern, num_channels: u8) -> Vec<u8> {
     let mut output = Vec::new();
 
     // Previous values for compression
-    let mut prev_note = [0u8; 64];
+    let mut prev_note = [crate::ItNote::NO_NOTE; 64];
     let mut prev_instrument = [0u8; 64];
-    let mut prev_volume = [0u8; 64];
+    let mut prev_volume = [crate::ItNote::NO_VOLUME; 64];
     let mut prev_effect = [0u8; 64];
     let mut prev_effect_param = [0u8; 64];
 
     for row in &pattern.notes {
         for (channel, note) in row.iter().enumerate().take(num_channels as usize) {
             // Skip empty notes
-            if note.note == 0
+            if note.note == crate::ItNote::NO_NOTE
                 && note.instrument == 0
-                && note.volume == 0
+                && note.volume == crate::ItNote::NO_VOLUME
                 && note.effect == 0
                 && note.effect_param == 0
             {
@@ -28,10 +28,10 @@ pub fn pack_pattern(pattern: &ItPattern, num_channels: u8) -> Vec<u8> {
             // Build mask
             let mut mask = 0u8;
 
-            if note.note != 0 && note.note != prev_note[channel] {
+            if note.note != crate::ItNote::NO_NOTE && note.note != prev_note[channel] {
                 mask |= 0x01;
                 prev_note[channel] = note.note;
-            } else if note.note != 0 {
+            } else if note.note != crate::ItNote::NO_NOTE {
                 mask |= 0x10;
             }
 
@@ -42,10 +42,10 @@ pub fn pack_pattern(pattern: &ItPattern, num_channels: u8) -> Vec<u8> {
                 mask |= 0x20;
             }
 
-            if note.volume != 0 && note.volume != prev_volume[channel] {
+            if note.volume != crate::ItNote::NO_VOLUME && note.volume != prev_volume[channel] {
                 mask |= 0x04;
                 prev_volume[channel] = note.volume;
-            } else if note.volume != 0 {
+            } else if note.volume != crate::ItNote::NO_VOLUME {
                 mask |= 0x40;
             }
 
@@ -65,7 +65,8 @@ pub fn pack_pattern(pattern: &ItPattern, num_channels: u8) -> Vec<u8> {
             }
 
             // Write channel marker with mask flag
-            output.push((channel as u8) | 0x80);
+            // IT channel markers are one-based: 1..=64 map to channels 0..=63.
+            output.push((channel as u8 + 1) | 0x80);
             output.push(mask);
 
             // Write data

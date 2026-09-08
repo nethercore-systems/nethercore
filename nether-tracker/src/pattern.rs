@@ -30,20 +30,23 @@ impl TrackerPattern {
 /// Single note/command in a pattern
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct TrackerNote {
-    /// Note value (0-119 = C-0 to B-9, 254 = cut, 255 = off)
+    /// Note value (1-120 = C-0 to B-9, 253 = fade, 254 = cut, 255 = off)
     pub note: u8,
     /// Instrument number (1-based, 0 = none)
     pub instrument: u8,
     /// Volume (0-64)
     pub volume: u8,
-    /// Unified effect
+    /// Main effect column.
     pub effect: TrackerEffect,
+    /// Independent volume column, including explicit zero volume.
+    pub volume_effect: TrackerEffect,
 }
 
 impl TrackerNote {
     pub const NOTE_CUT: u8 = 254;
+    pub const NOTE_FADE: u8 = 253;
     pub const NOTE_OFF: u8 = 255;
-    pub const NOTE_MAX: u8 = 119;
+    pub const NOTE_MAX: u8 = 120;
 
     /// Check if this is a note-cut
     pub fn is_note_cut(&self) -> bool {
@@ -53,6 +56,11 @@ impl TrackerNote {
     /// Check if this is a note-off
     pub fn is_note_off(&self) -> bool {
         self.note == Self::NOTE_OFF
+    }
+
+    /// Check if this is a note-fade
+    pub fn is_note_fade(&self) -> bool {
+        self.note == Self::NOTE_FADE
     }
 
     /// Check if this has a valid note (0 = no note)
