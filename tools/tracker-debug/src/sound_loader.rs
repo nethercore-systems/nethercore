@@ -4,18 +4,18 @@
 
 use anyhow::Result;
 
-#[cfg(feature = "playback")]
+#[cfg(all(not(test), feature = "playback"))]
 use anyhow::Context;
 use std::io::{Cursor, Read, Seek, SeekFrom};
 
-#[cfg(feature = "playback")]
+#[cfg(all(not(test), feature = "playback"))]
 use std::sync::Arc;
 
-#[cfg(feature = "playback")]
+#[cfg(all(not(test), feature = "playback"))]
 use nethercore_zx::audio::Sound;
 
 /// Load samples from an XM file
-#[cfg(feature = "playback")]
+#[cfg(all(not(test), feature = "playback"))]
 pub fn load_xm_samples(data: &[u8]) -> Result<Vec<Option<Sound>>> {
     let extracted = nether_xm::extract_samples(data).context("Failed to extract XM samples")?;
 
@@ -49,7 +49,7 @@ pub fn load_xm_samples(data: &[u8]) -> Result<Vec<Option<Sound>>> {
 }
 
 /// Load samples from an IT file
-#[cfg(feature = "playback")]
+#[cfg(all(not(test), feature = "playback"))]
 pub fn load_it_samples(data: &[u8], module: &nether_it::ItModule) -> Result<Vec<Option<Sound>>> {
     // IT samples are 1-indexed, so index 0 is unused
     let mut sounds = vec![None];
@@ -119,7 +119,7 @@ fn extract_it_sample_offsets(data: &[u8]) -> Result<Vec<u32>> {
 }
 
 /// Convert IT SampleData to Vec<i16>
-#[cfg(feature = "playback")]
+#[cfg(all(not(test), feature = "playback"))]
 fn convert_sample_data_to_i16(sample_data: nether_it::SampleData) -> Vec<i16> {
     match sample_data {
         nether_it::SampleData::I8(data) => {
