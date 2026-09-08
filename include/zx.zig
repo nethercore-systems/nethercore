@@ -435,7 +435,8 @@ pub extern "C" fn load_zskeleton(data_ptr: [*]const u8, data_len: u32) u32;
 /// 
 /// Reads a 128-byte (8 x 128-bit = 16 x u64) environment configuration from WASM memory
 /// and stores it for the current render frame. The EPU compute pass runs automatically before
-/// rendering to build environment textures (EnvRadiance + SH9) for the internal slots referenced by the current frame's draws.
+/// rendering to build environment textures (EnvRadiance + SH9) for the internal slots
+/// referenced by the current frame's draws.
 /// 
 /// # Arguments
 /// * `config_ptr` — Pointer to 16 u64 values (128 bytes total) in WASM memory
@@ -511,11 +512,13 @@ pub extern "C" fn load_zskeleton(data_ptr: [*]const u8, data_len: u32) u32;
 /// 
 /// # Notes
 /// - The EPU compute pass runs automatically before rendering
-/// - To switch environments in a frame: call `epu_set(...)`, `epu_textures(...)`, or `epu_asset(...)` before the draws that should use that source
+/// - To switch environments in a frame: call `epu_set(...)`, `epu_textures(...)`, or `epu_asset(...)`
+/// before the draws that should use that source
 /// - Determinism: the EPU has no host-managed time; animate by changing instruction parameters from the game
 pub extern "C" fn epu_set(config_ptr: [*]const u64) void;
 
 /// Set the current EPU source from six already-loaded cube face textures.
+/// 
 /// Face order is `px, nx, py, ny, pz, nz`.
 pub extern "C" fn epu_textures(px: u32, nx: u32, py: u32, ny: u32, pz: u32, nz: u32) void;
 
@@ -835,12 +838,12 @@ pub extern "C" fn rom_tracker(id_ptr: [*]const u8, id_len: u32) u32;
 pub extern "C" fn load_tracker(data_ptr: [*]const u8, data_len: u32) u32;
 
 /// Load a raw XM module with supplied sound handles.
-///
+/// 
 /// Must be called during `init()`. `sample_handles_ptr` points to
 /// `sample_count` one-based sound handles; zero keeps a slot silent.
 /// Handles are ordered by instrument for ordinary XM modules and by
 /// flattened instrument/local-sample slot for mapped multi-sample modules.
-///
+/// 
 /// # Returns
 /// Tracker handle (>0) on success, 0 on failure.
 pub extern "C" fn load_tracker_with_samples(data_ptr: [*]const u8, data_len: u32, sample_handles_ptr: [*]const u32, sample_count: u32) u32;
@@ -1119,12 +1122,6 @@ pub extern "C" fn torus_tangent(major_radius: f32, minor_radius: f32, major_segm
 /// # Arguments
 /// * `color` — Color in 0xRRGGBBAA format
 pub extern "C" fn set_color(color: u32) void;
-
-/// Select the current immediate-mode EPU source for subsequent draw calls.
-///
-/// Use `epu_set(...)` for procedural configs, `epu_textures(...)` for six
-/// ordinary texture handles interpreted as cubemap faces, or `epu_asset(...)`
-/// for a packed face set from the ROM data pack.
 
 /// Set the face culling mode.
 /// 

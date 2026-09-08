@@ -448,7 +448,8 @@ NCZX_IMPORT uint32_t load_zskeleton(const uint8_t* data_ptr, uint32_t data_len);
 /**  */
 /** Reads a 128-byte (8 x 128-bit = 16 x u64) environment configuration from WASM memory */
 /** and stores it for the current render frame. The EPU compute pass runs automatically before */
-/** rendering to build environment textures (EnvRadiance + SH9) for the internal slots referenced by the current frame's draws. */
+/** rendering to build environment textures (EnvRadiance + SH9) for the internal slots */
+/** referenced by the current frame's draws. */
 /**  */
 /** # Arguments */
 /** * `config_ptr` — Pointer to 16 u64 values (128 bytes total) in WASM memory */
@@ -524,11 +525,13 @@ NCZX_IMPORT uint32_t load_zskeleton(const uint8_t* data_ptr, uint32_t data_len);
 /**  */
 /** # Notes */
 /** - The EPU compute pass runs automatically before rendering */
-/** - To switch environments in a frame: call `epu_set(...)`, `epu_textures(...)`, or `epu_asset(...)` before the draws that should use that source */
+/** - To switch environments in a frame: call `epu_set(...)`, `epu_textures(...)`, or `epu_asset(...)` */
+/** before the draws that should use that source */
 /** - Determinism: the EPU has no host-managed time; animate by changing instruction parameters from the game */
 NCZX_IMPORT void epu_set(const uint64_t* config_ptr);
 
 /** Set the current EPU source from six already-loaded cube face textures. */
+/**  */
 /** Face order is `px, nx, py, ny, pz, nz`. */
 NCZX_IMPORT void epu_textures(uint32_t px, uint32_t nx, uint32_t py, uint32_t ny, uint32_t pz, uint32_t nz);
 
@@ -1132,12 +1135,6 @@ NCZX_IMPORT uint32_t torus_tangent(float major_radius, float minor_radius, uint3
 /** # Arguments */
 /** * `color` — Color in 0xRRGGBBAA format */
 NCZX_IMPORT void set_color(uint32_t color);
-
-/** Select the current immediate-mode EPU source for subsequent draw calls. */
-/**  */
-/** Use `epu_set(...)` for procedural configs, `epu_textures(...)` for six */
-/** ordinary texture handles interpreted as cubemap faces, or `epu_asset(...)` */
-/** for a packed face set from the ROM data pack. */
 
 /** Set the face culling mode. */
 /**  */
