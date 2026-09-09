@@ -10,7 +10,7 @@
 //! - **WindowEvent**: Handle input, mark `needs_redraw = true`
 //! - **about_to_wait**: Advance simulation when tick is due; set `WaitUntil(next_tick)`;
 //!   request redraw only if `needs_redraw` is true
-//! - **RedrawRequested**: Render game + UI, clear `needs_redraw`
+//! - **RedrawRequested**: Clear `needs_redraw`, then render game + UI
 //!
 //! This ensures:
 //! - Uses `WaitUntil(next_tick)` without busy-spinning
@@ -43,7 +43,7 @@ use super::types::RuntimeError;
 ///
 /// The `needs_redraw` flag controls when redraws are requested:
 /// - Set true on input events, simulation advances, mode changes
-/// - Cleared after rendering
+/// - Cleared before rendering; render may request a recovery redraw
 pub trait ConsoleApp<C: Console>: Sized {
     // === Window lifecycle ===
 
@@ -94,7 +94,7 @@ pub trait ConsoleApp<C: Console>: Sized {
     /// Mark that a redraw is needed.
     fn mark_needs_redraw(&mut self);
 
-    /// Clear the redraw flag after rendering.
+    /// Clear the previous redraw request before rendering.
     fn clear_needs_redraw(&mut self);
 
     /// Called after a redraw has completed.
@@ -122,6 +122,13 @@ pub trait ConsoleApp<C: Console>: Sized {
     fn exit_error(&self) -> Option<String> {
         None
     }
+}
+
+fn render_redraw<C: Console>(app: &mut impl ConsoleApp<C>) {
+    // A failed surface acquire can request a retry from inside render.
+    app.clear_needs_redraw();
+    app.render();
+    app.on_redraw_completed();
 }
 
 /// Generic event loop handler for any Console implementation.
@@ -195,9 +202,7 @@ impl<C: Console, A: ConsoleApp<C>> ApplicationHandler for AppEventHandler<C, A> 
                 }
                 WindowEvent::RedrawRequested => {
                     // ONLY render here - simulation already happened in about_to_wait
-                    app.render();
-                    app.clear_needs_redraw();
-                    app.on_redraw_completed();
+                    render_redraw(app);
 
                     // Check if app wants to exit
                     if app.should_exit() {
@@ -264,4 +269,64 @@ pub fn run<C: Console, A: ConsoleApp<C>>(app: A) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_utils::TestConsole;
+
+    struct RetryApp {
+        needs_redraw: bool,
+        attempts: usize,
+    }
+
+    impl ConsoleApp<TestConsole> for RetryApp {
+        fn on_window_created(&mut self, _: Arc<Window>, _: &ActiveEventLoop) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn on_window_event(&mut self, _: &WindowEvent) -> bool {
+            false
+        }
+        fn next_tick(&self) -> Instant {
+            Instant::now()
+        }
+        fn advance_simulation(&mut self) {}
+        fn update_next_tick(&mut self) {}
+        fn render(&mut self) {
+            assert!(!self.needs_redraw, "consume the previous request first");
+            self.attempts += 1;
+            if self.attempts == 1 {
+                self.mark_needs_redraw(); // Lost/Outdated surface asks for retry.
+            }
+        }
+        fn needs_redraw(&self) -> bool {
+            self.needs_redraw
+        }
+        fn mark_needs_redraw(&mut self) {
+            self.needs_redraw = true;
+        }
+        fn clear_needs_redraw(&mut self) {
+            self.needs_redraw = false;
+        }
+        fn on_runtime_error(&mut self, _: RuntimeError) {}
+        fn should_exit(&self) -> bool {
+            false
+        }
+        fn request_exit(&mut self) {}
+        fn request_redraw(&self) {}
+    }
+
+    #[test]
+    fn redraw_retry_preserves_the_replay_barrier_until_success() {
+        let mut app = RetryApp {
+            needs_redraw: true,
+            attempts: 0,
+        };
+        render_redraw(&mut app);
+        assert!(app.needs_redraw(), "replay must retain the pending frame");
+        render_redraw(&mut app);
+        assert!(!app.needs_redraw(), "successful retry releases the frame");
+        assert_eq!(app.attempts, 2);
+    }
 }

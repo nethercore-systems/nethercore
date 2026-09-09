@@ -159,6 +159,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>
         Sock: NonBlockingSocket<String> + 'static,
     {
         let mut builder = SessionBuilder::<NethercoreConfig<I>>::new()
+            .with_desync_detection_mode(ggrs::DesyncDetection::On { interval: 60 })
             .with_num_players(config.num_players)
             .with_max_prediction_window(config.max_prediction_frames)
             .with_input_delay(config.input_delay)

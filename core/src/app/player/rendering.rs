@@ -46,6 +46,14 @@ where
 
             let surface_texture = match runner.graphics_mut().get_current_texture() {
                 Ok(tex) => tex,
+                Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                    if let Some(window) = &self.window {
+                        let size = window.inner_size();
+                        runner.resize(size.width, size.height);
+                    }
+                    self.needs_redraw = true;
+                    return;
+                }
                 Err(e) => {
                     tracing::warn!("Failed to get surface texture: {}", e);
                     return;

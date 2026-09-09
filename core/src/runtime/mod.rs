@@ -219,6 +219,9 @@ impl<C: Console> Runtime<C> {
             if let Some(state) = session.session_state()
                 && state != SessionState::Running
             {
+                // Replay-driven P2P must still exchange GGRS synchronization
+                // packets before it can advance its first scripted frame.
+                session.poll_remote_clients();
                 return Ok((0, 0.0));
             }
 
@@ -268,8 +271,28 @@ impl<C: Console> Runtime<C> {
 
     /// Render the current frame
     pub fn render(&mut self) -> Result<()> {
+        let rollback = self
+            .session
+            .as_ref()
+            .is_some_and(|session| session.session_type() != crate::rollback::SessionType::Local);
         if let Some(game) = &mut self.game {
-            game.render()?;
+            if rollback {
+                // Rendering may leave compiler scratch bytes in WASM memory. Those
+                // bytes are checksummed but render is not replayed during rollback.
+                // Preserve FFI draw commands, discard only render's memory writes.
+                // ponytail: one RAM-sized copy; reuse a buffer if profiling warrants it.
+                let snapshot = game.save_state()?;
+                // WASM memory cannot shrink: deny render-time growth so restoration
+                // remains possible, then restore the ordinary limit even after a trap.
+                let ram_limit = game.store_mut().data().ram_limit;
+                game.store_mut().data_mut().ram_limit = snapshot.len();
+                let rendered = game.render();
+                game.store_mut().data_mut().ram_limit = ram_limit;
+                game.load_state(&snapshot)?;
+                rendered?;
+            } else {
+                game.render()?;
+            }
         }
         Ok(())
     }

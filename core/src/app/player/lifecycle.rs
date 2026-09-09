@@ -4,7 +4,8 @@ use std::time::Instant;
 
 use smallvec::SmallVec;
 
-use crate::console::{Audio, Console, ConsoleResourceManager};
+use crate::console::{Audio, Console, ConsoleResourceManager, RawInput};
+use crate::rollback::SessionEvent;
 
 use super::super::{FRAME_TIME_HISTORY_SIZE, GameError, GameErrorPhase, RuntimeError};
 use super::StandaloneApp;
@@ -114,7 +115,10 @@ where
             // Replay mode: use script inputs
             if let Some(frame_inputs) = executor.current_inputs() {
                 let console = session.runtime.console().clone();
-                for (player_idx, bytes) in frame_inputs.iter().enumerate() {
+                for &player_idx in &local_players {
+                    let Some(bytes) = frame_inputs.get(player_idx) else {
+                        continue;
+                    };
                     let console_input = console.decode_replay_bytes(bytes);
                     if let Some(game) = session.runtime.game_mut() {
                         game.set_input(player_idx, console_input);
@@ -131,8 +135,9 @@ where
         } else {
             // Normal mode: use input manager
             let all_inputs = self.input_manager.get_all_inputs();
-            for &player_handle in local_players.iter() {
-                let raw_input = all_inputs[player_handle];
+            for (player_handle, raw_input) in
+                local_input_assignments(&local_players, &all_inputs).into_iter()
+            {
                 let console_input = session.runtime.console().map_input(&raw_input);
 
                 if let Some(game) = session.runtime.game_mut() {
@@ -183,6 +188,23 @@ where
         };
         let tick_elapsed = tick_start.elapsed();
 
+        for event in session.runtime.handle_session_events() {
+            match event {
+                SessionEvent::Disconnected { player_handle } => {
+                    self.should_exit = true;
+                    return Err(RuntimeError(format!(
+                        "Network peer {} disconnected",
+                        player_handle
+                    )));
+                }
+                SessionEvent::Desync { frame, .. } => {
+                    self.should_exit = true;
+                    return Err(RuntimeError(format!("Network desync at frame {}", frame)));
+                }
+                _ => {}
+            }
+        }
+
         let did_render = if ticks > 0 {
             let tick_time_ms = tick_elapsed.as_secs_f32() * 1000.0 / ticks as f32;
             self.debug_stats.game_tick_times.push_back(tick_time_ms);
@@ -193,14 +215,12 @@ where
             if let Some(game) = session.runtime.game_mut() {
                 C::clear_frame_state(game.console_state_mut());
             }
-
             let render_start = Instant::now();
             session
                 .runtime
                 .render()
                 .map_err(|e| RuntimeError(format!("Render error: {}", e)))?;
             let render_time_ms = render_start.elapsed().as_secs_f32() * 1000.0;
-
             self.debug_stats.game_render_times.push_back(render_time_ms);
             while self.debug_stats.game_render_times.len() > FRAME_TIME_HISTORY_SIZE {
                 self.debug_stats.game_render_times.pop_front();
@@ -255,5 +275,138 @@ where
             return C::clear_color_from_state(game.console_state());
         }
         [0.1, 0.1, 0.1, 1.0]
+    }
+}
+
+fn local_input_assignments(
+    local_players: &[usize],
+    all_inputs: &[RawInput; 4],
+) -> SmallVec<[(usize, RawInput); 4]> {
+    local_players
+        .iter()
+        .enumerate()
+        .map(|(local_input_slot, &player_handle)| {
+            let raw_input = all_inputs
+                .get(local_input_slot)
+                .copied()
+                .unwrap_or_default();
+            (player_handle, raw_input)
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn input_with_a(button_a: bool) -> RawInput {
+        RawInput {
+            button_a,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn local_inputs_are_indexed_by_local_slot_for_joiner() {
+        let inputs = [
+            input_with_a(true),
+            input_with_a(false),
+            input_with_a(false),
+            input_with_a(false),
+        ];
+
+        let assignments = local_input_assignments(&[1], &inputs);
+
+        assert_eq!(assignments.len(), 1);
+        assert_eq!(assignments[0].0, 1);
+        assert!(assignments[0].1.button_a);
+    }
+
+    #[test]
+    fn local_inputs_still_match_handles_for_couch_multiplayer() {
+        let inputs = [
+            input_with_a(true),
+            input_with_a(false),
+            input_with_a(false),
+            input_with_a(false),
+        ];
+
+        let assignments = local_input_assignments(&[0, 1], &inputs);
+
+        assert_eq!(assignments.len(), 2);
+        assert_eq!(assignments[0].0, 0);
+        assert!(assignments[0].1.button_a);
+        assert_eq!(assignments[1].0, 1);
+        assert!(!assignments[1].1.button_a);
+    }
+
+    #[test]
+    fn multiple_local_players_use_ordered_local_controller_slots() {
+        let inputs = [
+            input_with_a(false),
+            input_with_a(true),
+            input_with_a(false),
+            input_with_a(false),
+        ];
+
+        let assignments = local_input_assignments(&[1, 3], &inputs);
+
+        assert_eq!(assignments.len(), 2);
+        assert_eq!(assignments[0].0, 1);
+        assert!(!assignments[0].1.button_a);
+        assert_eq!(assignments[1].0, 3);
+        assert!(assignments[1].1.button_a);
+    }
+
+    #[test]
+    fn remote_only_session_submits_no_local_input() {
+        let inputs = [
+            input_with_a(true),
+            input_with_a(true),
+            input_with_a(true),
+            input_with_a(true),
+        ];
+
+        let assignments = local_input_assignments(&[], &inputs);
+
+        assert!(assignments.is_empty());
+    }
+
+    #[test]
+    fn two_local_players_can_precede_one_remote_player() {
+        let inputs = [
+            input_with_a(true),
+            input_with_a(false),
+            input_with_a(true),
+            input_with_a(false),
+        ];
+
+        let assignments = local_input_assignments(&[0, 1], &inputs);
+
+        assert_eq!(assignments.len(), 2);
+        assert_eq!(assignments[0].0, 0);
+        assert!(assignments[0].1.button_a);
+        assert_eq!(assignments[1].0, 1);
+        assert!(!assignments[1].1.button_a);
+    }
+
+    #[test]
+    fn remote_peer_can_control_three_session_players() {
+        let inputs = [
+            input_with_a(true),
+            input_with_a(false),
+            input_with_a(true),
+            input_with_a(false),
+        ];
+
+        let assignments = local_input_assignments(&[1, 2, 3], &inputs);
+
+        assert_eq!(assignments.len(), 3);
+        assert_eq!(assignments[0].0, 1);
+        assert!(assignments[0].1.button_a);
+        assert_eq!(assignments[1].0, 2);
+        assert!(!assignments[1].1.button_a);
+        assert_eq!(assignments[2].0, 3);
+        assert!(assignments[2].1.button_a);
     }
 }

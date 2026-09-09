@@ -239,16 +239,19 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>
                     // in the current design, so we use a placeholder
                     session_events.push(SessionEvent::Synchronized { player_handle: 0 });
                 }
-                GgrsEvent::Disconnected { addr: _ } => {
+                GgrsEvent::Disconnected { addr } => {
                     tracing::warn!("Peer disconnected");
-                    // Mark all remote players as disconnected (conservative approach)
-                    for (i, stats) in self.network_stats.iter_mut().enumerate() {
-                        if !self.local_players.contains(&i) {
+                    let handles = match &self.inner {
+                        SessionInner::P2P(session) => session.handles_by_address(addr),
+                        _ => Vec::new(),
+                    };
+                    for player_handle in handles {
+                        if let Some(stats) = self.network_stats.get_mut(player_handle) {
                             stats.connected = false;
                             stats.assess_quality();
                         }
+                        session_events.push(SessionEvent::Disconnected { player_handle });
                     }
-                    session_events.push(SessionEvent::Disconnected { player_handle: 0 });
                 }
                 GgrsEvent::NetworkInterrupted {
                     addr: _,
@@ -455,6 +458,11 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>
         self.total_rollback_frames += rollback_frames_this_call as u64;
 
         if rollback_frames_this_call > 0 {
+            tracing::debug!(
+                frames = rollback_frames_this_call,
+                total = self.total_rollback_frames,
+                "Rollback replayed"
+            );
             for stats in &mut self.network_stats {
                 stats.rollback_frames = stats
                     .rollback_frames

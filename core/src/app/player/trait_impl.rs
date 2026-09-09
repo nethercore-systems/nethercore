@@ -30,6 +30,14 @@ where
     }
 
     fn on_window_event(&mut self, event: &WindowEvent) -> bool {
+        // Surface lifecycle events must not be swallowed by an overlay.
+        if let WindowEvent::Resized(size) = event {
+            if let Some(runner) = &mut self.runner {
+                runner.resize(size.width, size.height);
+            }
+            self.needs_redraw = true;
+            return false;
+        }
         if let (Some(egui_state), Some(window)) = (&mut self.egui_state, &self.window) {
             let response = egui_state.on_window_event(window, event);
             if response.consumed {
@@ -146,8 +154,10 @@ where
                 }
 
                 // Advance replay executor and request screenshots
-                if did_render && let Some(ref mut executor) = self.replay_executor {
-                    if executor.needs_screenshot() {
+                if ticks > 0
+                    && let Some(ref mut executor) = self.replay_executor
+                {
+                    if did_render && executor.needs_screenshot() {
                         self.capture.request_screenshot();
                     }
                     executor.advance_frame();
@@ -164,6 +174,7 @@ where
             }
             Err(e) => {
                 let error_msg = e.0.clone();
+                tracing::error!("Game frame failed: {}", error_msg);
                 let phase = if error_msg.contains("Render error") {
                     GameErrorPhase::Render
                 } else {

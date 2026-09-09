@@ -61,6 +61,10 @@ impl AudioGenerator for CountingAudioGenerator {
     }
 }
 
+fn test_ram_limit() -> usize {
+    TestConsole::specs().ram_limit
+}
+
 #[test]
 fn simulation_tick_advances_audio_state_at_the_canonical_rate() {
     let engine = WasmEngine::new().unwrap();
@@ -116,8 +120,68 @@ fn simulation_tick_advances_audio_state_at_the_canonical_rate() {
     assert_eq!(game.rollback_state().advances, 4);
 }
 
-fn test_ram_limit() -> usize {
-    TestConsole::specs().ram_limit
+#[test]
+fn rollback_render_executes_but_restores_memory_even_on_trap() {
+    use crate::rollback::{RollbackSession, SessionConfig};
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    for (trap, grow) in [(false, false), (true, false), (false, true), (true, true)] {
+        let engine = WasmEngine::new().unwrap();
+        let wasm = wat::parse_str(format!(
+            r#"(module
+            (import "env" "draw" (func $draw))
+            (memory (export "memory") 1)
+            (func (export "render")
+                (i32.store (i32.const 1024) (i32.const 42))
+                {}
+                (call $draw) {}))"#,
+            if grow {
+                "(if (i32.ne (memory.grow (i32.const 1)) (i32.const -1)) (then unreachable))"
+            } else {
+                ""
+            },
+            if trap { "unreachable" } else { "" }
+        ))
+        .unwrap();
+        let module = engine.load_module(&wasm).unwrap();
+        let count = Arc::new(AtomicUsize::new(0));
+        let drawn = count.clone();
+        let mut linker = Linker::new(engine.engine());
+        linker
+            .func_wrap("env", "draw", move || {
+                drawn.fetch_add(1, Ordering::SeqCst);
+            })
+            .unwrap();
+        let game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
+        let mut runtime = Runtime::new(TestConsole);
+        runtime.load_game(game);
+        runtime.set_session(
+            RollbackSession::new_sync_test(
+                SessionConfig::sync_test_with_params(1, 0),
+                test_ram_limit(),
+            )
+            .unwrap(),
+        );
+        let before = runtime.game_mut().unwrap().save_state().unwrap();
+        let original_limit = runtime.game_mut().unwrap().store_mut().data().ram_limit;
+        let result = runtime.render();
+        assert_eq!(result.is_err(), trap);
+        if let Err(error) = result {
+            assert!(error.to_string().contains("unreachable"), "{error:#}");
+        }
+        assert_eq!(
+            count.load(Ordering::SeqCst),
+            1,
+            "draw must not be suppressed"
+        );
+        let game = runtime.game_mut().unwrap();
+        assert_eq!(game.save_state().unwrap(), before);
+        assert_eq!(game.store_mut().data().ram_limit, original_limit);
+        let memory = game.state().memory.unwrap();
+        assert_eq!(memory.grow(game.store_mut(), 1).unwrap(), 1);
+    }
 }
 
 // ============================================================================
