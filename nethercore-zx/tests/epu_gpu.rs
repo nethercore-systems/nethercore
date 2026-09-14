@@ -367,7 +367,7 @@ fn patches_angular_seam() {
         max_sky - min_sky > 0.1,
         "constant output cannot satisfy seam coverage"
     );
-    for (row, pair) in pixels.chunks_exact(2).enumerate() {
+    for (row, pair) in pixels.as_chunks::<2>().0.iter().enumerate() {
         if (pair[0][0] - pair[1][0])
             .abs()
             .max((pair[0][1] - pair[1][1]).abs())
@@ -412,7 +412,7 @@ fn patches_lattice_faces_and_corners() {
     let mut error = 0.0f32;
     let mut lo = [f32::INFINITY; 4];
     let mut hi = [f32::NEG_INFINITY; 4];
-    for (row, pair) in pixels.chunks_exact(2).enumerate() {
+    for (row, pair) in pixels.as_chunks::<2>().0.iter().enumerate() {
         for c in 0..4 {
             assert!(pair[0][c].is_finite() && pair[1][c].is_finite());
             if (pair[0][c] - pair[1][c]).abs() >= 0.001 {

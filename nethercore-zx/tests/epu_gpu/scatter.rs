@@ -86,7 +86,7 @@ fn fixture(seed:u32,a:u32,b:u32) -> vec4u {
     let mut global_peaks = Vec::new();
     let mut wrong_seed = 0;
     let mut max_step = 0.0f32;
-    for row in pixels.chunks_exact(256) {
+    for row in pixels.as_chunks::<256>().0.iter() {
         assert!(row.iter().flatten().all(|x| x.is_finite()));
         let mut peak = 0;
         let mut global_peak = 0;
@@ -153,7 +153,7 @@ fn scatter_variant_finite_support() {
         21,
     );
     let mut max_jump = 0.0f32;
-    for (case, row) in pixels.chunks_exact(4).enumerate() {
+    for (case, row) in pixels.as_chunks::<4>().0.iter().enumerate() {
         assert!(row.iter().flatten().all(|v| v.is_finite()));
         max_jump = max_jump.max((row[0][0] - row[1][0]).abs());
         assert_eq!(row[1][0], 0.0, "outside support case {case}");
@@ -199,7 +199,7 @@ fn scatter_angular_distribution_follows_axis() {
     for domain in 0..2 {
         let mut max_error = 0.0f32;
         let mut peak = 0.0f32;
-        for row in pixels.chunks_exact(4) {
+        for row in pixels.as_chunks::<4>().0.iter() {
             for c in 0..3 {
                 let a = row[domain * 2][c];
                 let b = row[domain * 2 + 1][c];

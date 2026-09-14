@@ -45,7 +45,7 @@ fn focused(legacy: bool) -> Vec<[f32; 4]> {
 #[test]
 fn cell_offset_fractional_hex_production_closes() {
     let p = focused(false);
-    for (row, r) in p.chunks_exact(28).enumerate() {
+    for (row, r) in p.as_chunks::<28>().0.iter().enumerate() {
         println!("OFFSET_ROW {row} {r:?}");
     }
     assert!(p.iter().flatten().all(|x| x.is_finite()));

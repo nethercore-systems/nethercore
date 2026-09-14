@@ -98,7 +98,7 @@ fn cell_chart_controls_and_audit() {
     let pixels = samples();
     assert_eq!(pixels.len(), 504 * 960);
     let mut peaks = [[0.0f32; 3]; 6];
-    for (row, p) in pixels.chunks_exact(504).enumerate() {
+    for (row, p) in pixels.as_chunks::<504>().0.iter().enumerate() {
         let variant = row / 160;
         assert!(
             p.iter().flatten().all(|v| v.is_finite()),
@@ -151,7 +151,7 @@ fn cell_grid_chart_gap_continuation() {
     let pixels = samples();
     let mut failures = Vec::new();
     let mut endpoint_sides = 0;
-    for (row, p) in pixels.chunks_exact(504).take(160).enumerate() {
+    for (row, p) in pixels.as_chunks::<504>().0.iter().take(160).enumerate() {
         let density_byte = DENSITIES[(row / 32) % 5];
         let a = p[16];
         let b = p[20];
@@ -241,7 +241,7 @@ fn cell_grid_partial_boundary_oracle() {
 fn cell_grid_partial_cut_limits() {
     let pixels = endpoint_limit_samples();
     let mut failures = Vec::new();
-    for (row, p) in pixels.chunks_exact(504).take(160).enumerate() {
+    for (row, p) in pixels.as_chunks::<504>().0.iter().take(160).enumerate() {
         let d = 4. + 60. * DENSITIES[(row / 32) % 5] as f32 / 255.;
         let last = d.ceil() - 1.;
         for side in 0..2 {
@@ -654,7 +654,7 @@ fn same_periodic_cell_continuity(endpoint_only: bool) {
     let mut limits = None;
     let mut failures = Vec::new();
     let mut checked = [0usize; 6];
-    for (row, p) in pixels.chunks_exact(504).enumerate() {
+    for (row, p) in pixels.as_chunks::<504>().0.iter().enumerate() {
         let variant = row / 160;
         let a = p[16];
         let b = p[20];

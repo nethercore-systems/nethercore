@@ -49,7 +49,7 @@ fn candidate_oracle(uv:vec2f,n:i32,seed:f32,shatter:bool,local:bool)->vec4f {
     let mut hash_jumps = 0;
     let mut positive = 0;
     let mut edges = 0;
-    for (i, group) in pixels.chunks_exact(4).enumerate() {
+    for (i, group) in pixels.as_chunks::<4>().0.iter().enumerate() {
         let p = group[0];
         assert!(p.iter().all(|x| x.is_finite()));
         if p[0] != 1. {

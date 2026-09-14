@@ -512,9 +512,9 @@ fn shared_carrier_lattice_limits() {
     let mut worst = [[0.0f32; 4]; 3];
     let mut range = [(f32::INFINITY, f32::NEG_INFINITY); 4];
     let mut failures = Vec::new();
-    for (row, samples) in pixels.chunks_exact(15).enumerate() {
+    for (row, samples) in pixels.as_chunks::<15>().0.iter().enumerate() {
         let mut previous = [0.0; 4];
-        for (level, five) in samples.chunks_exact(5).enumerate() {
+        for (level, five) in samples.as_chunks::<5>().0.iter().enumerate() {
             for c in 0..4 {
                 for p in five {
                     range[c].0 = range[c].0.min(p[c]);

@@ -170,7 +170,13 @@ fn predicate(x:f32,row:u32,kind:u32,owner:f32)->bool {
     let mut same_side = [0.0f32; 4];
     let mut parity = 0.0f32;
     let mut csv = String::from("witness,row,kind,lo,hi,pixel,r,g,b,w\n");
-    for (n, (samples, (row, kind, lo, hi))) in pixels.chunks_exact(41).zip(&witnesses).enumerate() {
+    for (n, (samples, (row, kind, lo, hi))) in pixels
+        .as_chunks::<41>()
+        .0
+        .iter()
+        .zip(&witnesses)
+        .enumerate()
+    {
         assert_eq!(samples[40][0], 1., "GPU bracket invalid {n}");
         assert_eq!(samples[40][1], 1., "boundary not demonstrated {n}");
         assert!(
@@ -193,7 +199,7 @@ fn predicate(x:f32,row:u32,kind:u32,owner:f32)->bool {
                     "nonconverging approach {n}: {jumps:?}"
                 );
             }
-            for pair in s.chunks_exact(2) {
+            for pair in s.as_chunks::<2>().0.iter() {
                 for c in 0..4 {
                     parity = parity.max((pair[0][c] - pair[1][c]).abs());
                 }

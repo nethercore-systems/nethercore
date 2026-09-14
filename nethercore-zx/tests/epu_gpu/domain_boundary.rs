@@ -81,7 +81,11 @@ fn domain_boundary_scatter_angular_limits() {
         let mut peak = 0.0f32;
         let mut core = 0.0f32;
         let mut fade = 0.0f32;
-        for row in pixels[g * 128 * 5..(g + 1) * 128 * 5].chunks_exact(5) {
+        for row in pixels[g * 128 * 5..(g + 1) * 128 * 5]
+            .as_chunks::<5>()
+            .0
+            .iter()
+        {
             assert!(
                 row.iter().flatten().all(|v| v.is_finite()),
                 "{name}: {row:?}"

@@ -583,7 +583,7 @@ fn cell_hex_2d_full_falsifier() {
     assert!(p.iter().flatten().all(|x| x.is_finite()));
     let mut failures = 0;
     let mut nonzero = 0;
-    for (i, r) in p.chunks_exact(24).enumerate() {
+    for (i, r) in p.as_chunks::<24>().0.iter().enumerate() {
         let phase = i / 54;
         let i = i % 54;
         let fill = (i / 9) % 3;

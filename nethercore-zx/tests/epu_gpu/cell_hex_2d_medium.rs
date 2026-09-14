@@ -45,11 +45,11 @@ fn cell_hex_2d_medium_controls() {
     let body = medium_body();
     let p = probe_image(&body, 32, 49);
     assert!(p.iter().flatten().all(|x| x.is_finite()));
-    for (row, r) in p.chunks_exact(32).enumerate() {
+    for (row, r) in p.as_chunks::<32>().0.iter().enumerate() {
         println!("MEDIUM row={row} {r:?}");
     }
     // Unchanged integral path and nonzero interior are hard controls.
-    for r in p.chunks_exact(32).skip(28).take(7) {
+    for r in p.as_chunks::<32>().0.iter().skip(28).take(7) {
         for c in 0..4 {
             assert_eq!(r[c * 8], r[c * 8 + 1]);
             assert_eq!(r[c * 8 + 2], r[c * 8 + 3]);

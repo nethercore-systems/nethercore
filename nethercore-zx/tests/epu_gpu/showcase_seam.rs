@@ -36,7 +36,7 @@ fn veil_variant_control_activity() {
     );
     assert!(pixels.iter().flatten().all(|x| x.is_finite()));
     let mut active_cases = 0;
-    for (case_id, rows) in pixels.chunks_exact(384 * 8).enumerate() {
+    for (case_id, rows) in pixels.as_chunks::<{ 384 * 8 }>().0.iter().enumerate() {
         let field = case_id % 4;
         let variant = (case_id / 4) % 8;
         let active = match field {
@@ -45,7 +45,9 @@ fn veil_variant_control_activity() {
             _ => variant != 1,
         };
         let peak = rows
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .flat_map(|p| (0..4).map(move |c| (p[0][c] - p[1][c]).abs()))
             .fold(0.0, f32::max);
         assert_eq!(peak > 0.002, active, "VEIL case={case_id} delta={peak}");
@@ -54,7 +56,7 @@ fn veil_variant_control_activity() {
         }
         assert!(rows.iter().any(|p| p[3] > 0.002), "blank variant {case_id}");
         if variant > 4 {
-            assert!(rows.chunks_exact(3).all(|p| p[0] == p[2]));
+            assert!(rows.as_chunks::<3>().0.iter().all(|p| p[0] == p[2]));
         }
         active_cases += usize::from(active);
     }
@@ -129,7 +131,7 @@ fn showcase_flow_identified_cell_boundaries() {
     const TOL: f32 = 0.001; // frozen absolute linear/sample budget, rgba16float readback
     let pixels = probe_image(include_str!("flow-pairs.wgsl"), 24, 1);
     let mut worst = [0.0f32; 4];
-    for (i, pair) in pixels.chunks_exact(2).enumerate() {
+    for (i, pair) in pixels.as_chunks::<2>().0.iter().enumerate() {
         assert!(pair.iter().flatten().all(|x| x.is_finite()));
         for c in 0..4 {
             worst[c] = worst[c].max((pair[0][c] - pair[1][c]).abs());
@@ -162,7 +164,7 @@ fn showcase_flow_lattice_regression() {
     let mut worst = 0.0f32;
     let mut lo = 1.0f32;
     let mut hi = -1.0f32;
-    for pair in pixels.chunks_exact(2) {
+    for pair in pixels.as_chunks::<2>().0.iter() {
         assert!(pair.iter().flatten().all(|x| x.is_finite()));
         worst = worst.max((pair[0][0] - pair[1][0]).abs());
         lo = lo.min(pair[0][0]);
@@ -195,7 +197,7 @@ textureStore(result,p.xy,vec4f(s.rgb*s.w,v));
 }"#;
     let pixels = probe_image(body, 4, 16);
     let mut max = 0.0f32;
-    for (i, pair) in pixels.chunks_exact(2).enumerate() {
+    for (i, pair) in pixels.as_chunks::<2>().0.iter().enumerate() {
         assert!(pair.iter().flatten().all(|v| v.is_finite()));
         let jump = (0..3)
             .map(|c| (pair[0][c] - pair[1][c]).abs())
@@ -238,7 +240,7 @@ fn showcase_rain_support_and_bar_transitions() {
     );
     let mut worst = 0.0f32;
     let mut active = 0;
-    for (i, pair) in pixels.chunks_exact(2).enumerate() {
+    for (i, pair) in pixels.as_chunks::<2>().0.iter().enumerate() {
         assert!(pair.iter().flatten().all(|v| v.is_finite()));
         if i < 48 {
             if (16..32).contains(&i) {
@@ -301,7 +303,7 @@ textureStore(result,p.xy,vec4f(residual,best,bar,s.w));
         9,
         5,
     );
-    for (i, row) in pixels.chunks_exact(9).enumerate() {
+    for (i, row) in pixels.as_chunks::<9>().0.iter().enumerate() {
         println!("native endpoint {i} residual/distance/bar/weight: {row:?}");
         assert!(row.iter().flatten().all(|v| v.is_finite()));
         assert!(

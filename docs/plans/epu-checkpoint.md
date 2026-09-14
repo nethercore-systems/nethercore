@@ -52,6 +52,24 @@ The GPU regression target requires a real available wgpu adapter; the headless h
 
 On this Windows checkout, retain the existing native TEMP/TMP/TMPDIR and `CARGO_TARGET_DIR=C:/Users/rdave/AppData/Local/Temp/nethercore-target` convention. Use one authoritative checkout and stop only test players you own. Do not delete ignored `tmp/epu-review/`: it contains historical source-bound receipts and before/after media, not required production dependencies or a substitute for the committed tests.
 
+## Hosted CI compatibility follow-up
+
+The first hosted run for `fd586093a75f9f4f916c0ed1f6c21f50d82e7b7b`
+passed format and binding synchronization, then stopped before tests on Rust
+1.98's new `chunks_exact_to_as_chunks` style lint. The local toolchain is Rust
+1.94.1; adding a blanket lint allowance would introduce an unknown-lint error
+there. The follow-up instead uses the standard-library fixed-array chunk views
+at exactly the 45 diagnosed sites in 19 GPU-test source files.
+
+Only test-harness iteration syntax changes: shader literals, assertions,
+thresholds, fixtures, runtime/SDK code and cartridge inputs are unchanged. The
+old/new iterators match on all 22 affected chunk sizes over 174 boundary-length
+cases, including empty inputs, remainder handling, shared storage and mutable
+writes. Workspace Clippy passes locally, and 8 representative real GPU tests
+pass (reflection/SH9 mutation, large PLANE groups, PATCHES and phased SCATTER).
+Full hosted acceptance remains the exact pushed revision's CI result below;
+no lint/test suppression, new visual repair, or performance acceptance is added.
+
 ## Verified checkpoint results
 
 - Full workspace: **1,766 tests passed, 0 failed, 50 ignored** across unit, integration and documentation targets. Included: **167 GPU tests** (2 timing probes ignored) and **539 ZX library tests** (1 timing probe ignored). Other ignored documentation tests are not performance evidence.

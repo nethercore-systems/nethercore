@@ -331,7 +331,7 @@ fn render(
     if ambient_only {
         // c0*Y00/PI = 1: uniform unit radiance, independently of roughness.
         let c0 = (std::f32::consts::PI / 0.282095).to_bits();
-        for layer in sh9.chunks_exact_mut(36) {
+        for layer in sh9.as_chunks_mut::<36>().0.iter_mut() {
             layer[..3].fill(c0);
         }
     }

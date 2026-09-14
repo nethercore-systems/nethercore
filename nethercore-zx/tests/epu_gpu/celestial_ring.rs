@@ -43,7 +43,9 @@ fn measured(legacy: bool) -> (usize, usize, usize) {
         .filter(|r| (r[0] - 1.).abs() > LIMIT)
         .count();
     let masks: HashSet<Vec<bool>> = rows
-        .chunks_exact(256)
+        .as_chunks::<256>()
+        .0
+        .iter()
         .skip(1)
         .map(|r| r.iter().map(|v| v[0] > 0.5).collect())
         .collect();

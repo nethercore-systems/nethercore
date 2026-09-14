@@ -48,7 +48,11 @@ fn aperture_plane_support_and_minimum_softness() {
         let mut interior = 0f32;
         let mut near = 0f32;
         let mut approaches = [0f32; 3];
-        for row in pixels[g * 16 * 9..(g + 1) * 16 * 9].chunks_exact(9) {
+        for row in pixels[g * 16 * 9..(g + 1) * 16 * 9]
+            .as_chunks::<9>()
+            .0
+            .iter()
+        {
             assert!(
                 row.iter().flatten().all(|v| v.is_finite()),
                 "group={g} {row:?}"
@@ -143,7 +147,9 @@ fn aperture_plane_lattice_limits() {
         let mut range = [f32::MAX, f32::MIN];
         let mut witness = 0;
         for (i, row) in pixels[g * 192 * 7..(g + 1) * 192 * 7]
-            .chunks_exact(7)
+            .as_chunks::<7>()
+            .0
+            .iter()
             .enumerate()
         {
             assert!(row.iter().flatten().all(|v| v.is_finite()));
@@ -208,7 +214,7 @@ fn aperture_plane_pavement_nearest_material_boundary() {
     let mut hard = 0f32;
     let mut interior = 0f32;
     let mut ties = 0;
-    for row in pixels.chunks_exact(9) {
+    for row in pixels.as_chunks::<9>().0.iter() {
         assert!(row.iter().flatten().all(|v| v.is_finite()));
         if row[5][3] > 0.001 {
             continue;
@@ -260,7 +266,7 @@ fn plane_pattern_gap_controls() {
         3 * 5 * 64,
     );
     let mut means = [[0f64; 5]; 3];
-    for (group, chunk) in pixels.chunks_exact(128 * 64).enumerate() {
+    for (group, chunk) in pixels.as_chunks::<{ 128 * 64 }>().0.iter().enumerate() {
         for p in chunk {
             assert!(p.iter().all(|x| x.is_finite()) && p[3] > 0.99);
             assert!(p[0] >= 0.0 && p[0] <= 1.0);

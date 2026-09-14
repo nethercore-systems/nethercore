@@ -47,7 +47,7 @@ fn trace_wrap_nonperiodic_reference_and_reserved() {
     );
     let mut max_error = 0.0f32;
     let mut peaks = [[0.0f32; 2]; 8];
-    for (i, pair) in pixels.chunks_exact(2).enumerate() {
+    for (i, pair) in pixels.as_chunks::<2>().0.iter().enumerate() {
         assert!(pair.iter().flatten().all(|v| v.is_finite()));
         let row = i / 64;
         let variant = (row / 8) % 8;
@@ -180,7 +180,9 @@ fn trace_wrap_angular_seams_and_controls() {
         let mut glow = 0.0f32;
         let mut witness = 0;
         for (row, p) in pixels[group * 128 * 18..(group + 1) * 128 * 18]
-            .chunks_exact(18)
+            .as_chunks::<18>()
+            .0
+            .iter()
             .enumerate()
         {
             assert!(p.iter().flatten().all(|v| v.is_finite()));

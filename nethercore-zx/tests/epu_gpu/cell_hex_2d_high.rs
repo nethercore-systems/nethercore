@@ -51,7 +51,7 @@ fn cell_hex_2d_high_controls() {
     let body = frozen_high_body(include_str!("fixtures/cell-hex-2d/high-prototype.wgsl"));
     let p = frozen_probe(&body, 324, 56);
     assert!(p.iter().flatten().all(|x| x.is_finite()));
-    for (row, r) in p.chunks_exact(324).enumerate() {
+    for (row, r) in p.as_chunks::<324>().0.iter().enumerate() {
         println!("HIGH_ROW {row} {r:?}");
     }
     for family in [2, 3, 4, 7] {

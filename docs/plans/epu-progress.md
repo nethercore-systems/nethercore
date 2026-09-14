@@ -2,7 +2,16 @@
 
 **Standing creative direction — retain regular RADIAL and the restored organic capability.** The shown regular result “looks fine” to Robert; WARPED_RADIAL now coexists and has the bounded technical pass recorded below. Its substantially coarser appearance still needs Robert’s verdict. Neither scoped result is whole-EPU visual acceptance.
 
-## Current checkpoint — verified working product; paused for the usage break
+## Current checkpoint — working product paused for the usage break
+
+**CI-only follow-up:** the first hosted run passed format/bindings but Rust 1.98
+Clippy rejected 45 fixed-size slice-chunk calls in the GPU harness before tests.
+The authorized repair changes only those iterator calls (19 test files), not
+runtime/SDK/shader code, fixtures or tolerances. Local workspace Clippy and 8
+representative GPU tests pass; a standard-library equivalence probe covers all
+22 chunk sizes / 174 boundary lengths. The per-commit hosted run is still the
+final CI gate. The standing goal is explicitly paused; after this CI follow-up,
+resume only on Robert's instruction. See `epu-checkpoint.md` for the bounded scope.
 
 **Resume guide: [epu-checkpoint.md](epu-checkpoint.md).** The user explicitly
 authorized a safe commit pushed to `main`, superseding the earlier no-commit /

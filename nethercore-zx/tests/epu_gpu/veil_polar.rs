@@ -5,7 +5,9 @@ fn veil_polar_poles_envelope_and_other_domains() {
     let pole = probe_image(include_str!("fixtures/veil-polar/pole.wgsl"), 68, 20);
     assert!(pole.iter().flatten().all(|x| x.is_finite()));
     let failures = pole
-        .chunks_exact(68)
+        .as_chunks::<68>()
+        .0
+        .iter()
         .filter(|row| {
             (0..4).any(|c| {
                 let samples = &row[51..68];
@@ -67,7 +69,7 @@ fn veil_polar_poles_envelope_and_other_domains() {
     let mut wrong = 0;
     let mut preserved = 0;
     let mut live = 0;
-    for (i, triplet) in values.chunks_exact(3).enumerate() {
+    for (i, triplet) in values.as_chunks::<3>().0.iter().enumerate() {
         let domain = (i / 192 / 8) % 4;
         let radius_id = (i % 192) / 8;
         assert_eq!(&triplet[0][..3], &triplet[1][..3], "RGB changed at {i}");

@@ -35,7 +35,7 @@ fn fixture(op:u32,phase:u32,depth:u32)->vec4u {
         "new instruction must emit the authored point field"
     );
     let mut peaks = std::collections::BTreeSet::new();
-    for row in pixels.chunks_exact(257) {
+    for row in pixels.as_chunks::<257>().0.iter() {
         let lo = row[..256]
             .iter()
             .map(|p| p[0])
@@ -90,7 +90,9 @@ fn phased_scatter_full_range_at_accepted_stride() {
     assert!(peaks.len() >= 16);
     let swing = |channel: usize| {
         let sums: Vec<f32> = pixels
-            .chunks_exact(960)
+            .as_chunks::<960>()
+            .0
+            .iter()
             .take(64)
             .map(|row| row.iter().map(|p| p[channel]).sum())
             .collect();
@@ -141,7 +143,7 @@ fn phased_scatter_angular_wrap_all_shapes() {
     );
     let mut maxima = [0.0f32; 3];
     let mut energy = [0.0f32; 7];
-    for (i, row) in pixels.chunks_exact(5).enumerate() {
+    for (i, row) in pixels.as_chunks::<5>().0.iter().enumerate() {
         assert!(row.iter().flatten().all(|v| v.is_finite()));
         let variant = (i / 128) % 8;
         if variant == 7 {

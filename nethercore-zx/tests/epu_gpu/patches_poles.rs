@@ -5,7 +5,9 @@ fn patches_poles_and_nonfading_domain_preservation() {
     let p = probe_image(include_str!("fixtures/patches-poles/pole.wgsl"), 204, 240);
     assert!(p.iter().flatten().all(|v| v.is_finite()));
     let failures = p
-        .chunks_exact(204)
+        .as_chunks::<204>()
+        .0
+        .iter()
         .filter(|r| {
             (0..4).any(|c| {
                 let s = &r[51..68];
@@ -16,7 +18,9 @@ fn patches_poles_and_nonfading_domain_preservation() {
         })
         .count();
     let negative = p
-        .chunks_exact(204)
+        .as_chunks::<204>()
+        .0
+        .iter()
         .filter(|r| {
             (0..4).any(|c| {
                 let s = &r[187..204];
@@ -26,7 +30,7 @@ fn patches_poles_and_nonfading_domain_preservation() {
             })
         })
         .count();
-    for row in p.chunks_exact(204) {
+    for row in p.as_chunks::<204>().0.iter() {
         for level in 0..4 {
             for az in 0..16 {
                 let v = row[68 + level * 17 + az];
@@ -69,7 +73,7 @@ fn patches_poles_and_nonfading_domain_preservation() {
     assert!(q.iter().flatten().all(|v| v.is_finite()));
     let mut preserved = 0;
     let mut changed = 0;
-    for (i, pair) in q.chunks_exact(2).enumerate() {
+    for (i, pair) in q.as_chunks::<2>().0.iter().enumerate() {
         let domain = (i / 176 / 8) % 4;
         let radius = i % 11;
         assert!(pair[0][3] > 0.23, "no cap opacity fade");
