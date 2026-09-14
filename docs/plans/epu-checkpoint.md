@@ -1,6 +1,60 @@
 # EPU working checkpoint
 
-Status: paused for the requested usage break. This is a working-product checkpoint, not completion of the full EPU correctness/open-authoring plan. Resume only when Robert asks. The commit-linked CI result is authoritative for hosted checks.
+Status: paused for the requested usage break. The local Windows/native checkpoint is verified, but hosted Vulkan GPU checks fail: this is **not a CI-green or cross-platform-accepted checkpoint**, nor completion of the EPU plan. Resume only when Robert asks. The exact hosted blocker and evidence are recorded below.
+
+## Hosted GPU CI blocker
+
+**Not CI-green; cross-backend technical acceptance remains open.** The code at
+`1c2416ac281e84ea1d68fc724d1b43561d7f5ae7` passed hosted format, generated-binding
+synchronization and Clippy. Its [completed CI run](https://github.com/nethercore-systems/nethercore/actions/runs/34871214298)
+failed the GPU target on Vulkan / `llvmpipe (LLVM 20.1.2, 256 bits)`, Mesa
+`25.2.8-0ubuntu0.24.04.2 (LLVM 20.1.2)`: **153 passed, 13 failed, 2 ignored**.
+The ZX library passed **539 tests, with 1 ignored**. Cargo stopped at the failed
+GPU target; this is not a successful full hosted workspace run.
+
+Exact failing tests:
+
+- `celestial_uv::celestial_uv_caller_maps_the_projected_disk_and_rejects_per_pixel_radius`
+- `cell_continuity::cell_grid_partial_boundary_oracle`
+- `cell_grid_zero::cell_grid_zero_width_archived_outline_rejects`
+- `cell_grid_zero::cell_grid_zero_width_archived_wrap_rejects`
+- `cell_hex_2d_high::cell_hex_2d_high_fixed_owner_falsifier`
+- `cell_hex_2d_medium::cell_hex_2d_medium_small_gap`
+- `cell_uniform::cell_hex_periodic_gate_rejects_injected_seam`
+- `cell_uniform::cell_hex_periodic_wrap_and_rows_all_density_bytes`
+- `domain_boundary::domain_boundary_patches_hard_ownership`
+- `domain_boundary::domain_boundary_scatter_angular_limits`
+- `grid_regular::grid_chart_seam_control_rejected`
+- `grid_regular::grid_regular_chart_wrap`
+- `reflection::reflection_imported_runtime_basis_switch_continuity`
+
+The failures are not yet classified as production defects versus nonportable
+probe geometry/oracles. Concrete retained examples include:
+
+- CELESTIAL's current UV evaluator has zero failures, but the archived negative
+  control rejects 36,732 records rather than the asserted 36,744.
+- A CELL boundary oracle observes `0.49975586` where it asserts exact `0.5`.
+- HEX fixtures straddle 17,874 of 18,432 requested boundaries, failing their
+  own coverage precondition; excluding the missed boundaries is not a repair.
+- The SCATTER exact-pole and imported-reflection continuity checks report NaNs.
+  Do not dismiss these as harmless rounding or claim their runtime path is safe.
+
+No assertion, tolerance, negative control, fixture, shader or runtime code was
+changed to bypass these failures. The earlier Windows/native receipts remain
+valid for their source, inputs and adapter, not as proof of Vulkan portability.
+Full job evidence is linked above; local copies and a machine-readable failure
+inventory are in `tmp/epu-review/checkpoint-20260915/` (`ci-job-104067272395-clean.log`
+and `hosted-gpu-blocker.json`). The exact cases are committed here so the restart
+does not depend on those ignored local copies.
+
+**Disposition:** the standing goal remains paused for Robert's usage break.
+Hermes resumes this GPU-portability investigation only on explicit instruction,
+before TRACE or any broader rendering work. Reproduce against the logged adapter
+and exact inputs; distinguish harness defects from production behavior before
+changing either. Preserve all thresholds, negative controls and pixel coverage.
+Do not turn failed checks into ignored tests or use an unobserved fallback adapter
+as evidence. This documentation-only update does not rerun the unchanged failing
+GPU suite; its skipped CI is not a passing result.
 
 ## Use the product
 
@@ -33,10 +87,11 @@ See the showcase README for A/B scene navigation, Start suite switching, X mesh 
 
 ## Known rough edges and next steps
 
-1. **Hermes: TRACE polar opposite-pole defect.** The retained audit found 15 failing pole rows for TRACE/POLAR variants 1–3, not a universal TRACE failure. A known case is opcode 12, domain 2, variant 1, direction 0 (TRACE's +Y default), parameters `[64,20,128,37]`. Packed GPU words are `[620757239,3225425024,572671180,1735519931]`. At -Y, 16 azimuthal approaches plus the exact pole at shrinking transverse radii `.01,.001,.0001,.00001` retain a premultiplied RGBA span `0.7529296875` against the declared `.005` limit. Start at `trace_polar_uv` and `trace_segment_distance` in `04_trace.wgsl`; turn this into the focused RED before changing production. Do not silently mirror a fade: a visibility change needs Robert's decision. Other TRACE domains are not interchangeable coordinate systems.
-2. **Hermes: reconcile remaining finite acceptance rows** in `epu-progress.md`, not an unbounded sweep of every byte combination. Preserve sealed source/input/tolerance identities. Add a mechanism only for a demonstrated expressive gap, not because a scene is unattractive.
-3. **Robert: visual/usefulness review.** Review a finite indoor/outdoor/hybrid set across the requested themes. Grove/Arcade approvals are scoped; city identity, WARPED_RADIAL coarseness and overall composition usefulness are not automatically accepted. Technical tests and model inspection cannot grant this verdict.
-4. **Hermes, after an explicit quiet-GPU window: performance acceptance.** Timestamp probes remain opt-in/ignored during shared AI rendering. No performance claim accompanies this checkpoint.
+1. **Hermes, only after Robert resumes: close the hosted GPU portability blocker above.** Preserve the exact failing cases and all existing thresholds; establish each root cause before changing probes or production. Do not start TRACE or new scene/mechanism work first.
+2. **Hermes: TRACE polar opposite-pole defect.** The retained audit found 15 failing pole rows for TRACE/POLAR variants 1–3, not a universal TRACE failure. A known case is opcode 12, domain 2, variant 1, direction 0 (TRACE's +Y default), parameters `[64,20,128,37]`. Packed GPU words are `[620757239,3225425024,572671180,1735519931]`. At -Y, 16 azimuthal approaches plus the exact pole at shrinking transverse radii `.01,.001,.0001,.00001` retain a premultiplied RGBA span `0.7529296875` against the declared `.005` limit. Start at `trace_polar_uv` and `trace_segment_distance` in `04_trace.wgsl`; turn this into the focused RED before changing production. Do not silently mirror a fade: a visibility change needs Robert's decision. Other TRACE domains are not interchangeable coordinate systems.
+3. **Hermes: reconcile remaining finite acceptance rows** in `epu-progress.md`, not an unbounded sweep of every byte combination. Preserve sealed source/input/tolerance identities. Add a mechanism only for a demonstrated expressive gap, not because a scene is unattractive.
+4. **Robert: visual/usefulness review.** Review a finite indoor/outdoor/hybrid set across the requested themes. Grove/Arcade approvals are scoped; city identity, WARPED_RADIAL coarseness and overall composition usefulness are not automatically accepted. Technical tests and model inspection cannot grant this verdict.
+5. **Hermes, after an explicit quiet-GPU window: performance acceptance.** Timestamp probes remain opt-in/ignored during shared AI rendering. No performance claim accompanies this checkpoint.
 
 ## Recheck before resuming
 
@@ -71,6 +126,8 @@ Full hosted acceptance remains the exact pushed revision's CI result below;
 no lint/test suppression, new visual repair, or performance acceptance is added.
 
 ## Verified checkpoint results
+
+**Scope: the following are retained local Windows receipts, not hosted Vulkan acceptance.**
 
 - Full workspace: **1,766 tests passed, 0 failed, 50 ignored** across unit, integration and documentation targets. Included: **167 GPU tests** (2 timing probes ignored) and **539 ZX library tests** (1 timing probe ignored). Other ignored documentation tests are not performance evidence.
 - Final Cargo target-selection fix: **82 CLI tests passed**. Its focused regression first failed on host-helper discovery, then passed; real-output ambiguity, stale output rejection and explicit overrides remain covered.

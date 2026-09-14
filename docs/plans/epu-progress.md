@@ -4,21 +4,24 @@
 
 ## Current checkpoint — working product paused for the usage break
 
-**CI-only follow-up:** the first hosted run passed format/bindings but Rust 1.98
-Clippy rejected 45 fixed-size slice-chunk calls in the GPU harness before tests.
-The authorized repair changes only those iterator calls (19 test files), not
-runtime/SDK/shader code, fixtures or tolerances. Local workspace Clippy and 8
-representative GPU tests pass; a standard-library equivalence probe covers all
-22 chunk sizes / 174 boundary lengths. The per-commit hosted run is still the
-final CI gate. The standing goal is explicitly paused; after this CI follow-up,
-resume only on Robert's instruction. See `epu-checkpoint.md` for the bounded scope.
+**CI-only follow-up:** the fixed-size chunk conversion is committed as
+`1c2416ac281e84ea1d68fc724d1b43561d7f5ae7`. Hosted format, bindings and Clippy
+now pass, but [the completed run](https://github.com/nethercore-systems/nethercore/actions/runs/34871214298)
+fails Vulkan/llvmpipe GPU checks: **153 passed / 13 failed / 2 ignored**. The ZX
+library has **539 passes / 1 ignored**. **This checkpoint is not CI-green.**
+The exact 13 cases, adapter, observed oracle/coverage mismatches and NaN failures
+are durable in [the checkpoint guide](epu-checkpoint.md#hosted-gpu-ci-blocker).
+No thresholds, assertions, fixtures or runtime/shader code were changed to hide
+these failures. Earlier Windows/native evidence is not cross-backend acceptance.
+The standing goal remains paused; after Robert explicitly resumes, Hermes must
+classify and resolve this portability gate before TRACE or broader rendering work.
 
 **Resume guide: [epu-checkpoint.md](epu-checkpoint.md).** The user explicitly
 authorized a safe commit pushed to `main`, superseding the earlier no-commit /
 no-push restriction. Work is paused until Robert resumes it; historical next-step
 rows below are not instructions to keep running unattended.
 
-Full workspace: **1,766 passed / 0 failed / 50 ignored**, including **167 GPU** and
+Prior local Windows workspace: **1,766 passed / 0 failed / 50 ignored**, including **167 GPU** and
 **539 ZX library** passes. The final packaging fix has a focused RED → GREEN and
 **82 CLI tests passing**: host tests/examples/build scripts no longer masquerade
 as game WASM targets. Both showcase and inspector build and pack normally.
