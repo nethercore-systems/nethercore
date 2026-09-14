@@ -5,10 +5,10 @@
 // variants = [CIRCLE, RECT, TEAR, VORTEX, CRACK, RIFT]
 // domains = []
 // field intensity = { label="glow", map="u8_lerp", min=0.0, max=2.0 }
-// field param_a = { label="size", map="u8_lerp", min=0.05, max=0.8 }
-// field param_b = { label="glow_width", map="u8_lerp", min=0.01, max=0.3 }
+// field param_a = { label="size", unit="tan", map="u8_lerp", min=0.05, max=0.8 }
+// field param_b = { label="glow_width", unit="tan", map="u8_lerp", min=0.01, max=0.3 }
 // field param_c = { label="roughness", map="u8_01" }
-// field param_d = { label="phase", map="u8_01" }
+// field param_d = { label="phase byte", map="u8_lerp", min=0.0, max=255.0 }
 // @epu_meta_end
 
 // ============================================================================
@@ -26,8 +26,8 @@
 //   intensity: Edge glow brightness (0..255 -> 0..2)
 //   param_a: Size (0..255 -> 0.05..0.8 tangent units)
 //   param_b: Edge glow width (0..255 -> 0.01..0.3)
-//   param_c: Edge roughness for TEAR/CRACK/RIFT (0..255 -> 0..1)
-//   param_d: Phase for VORTEX (0..255 -> 0..1)
+//   param_c: Edge roughness for TEAR/VORTEX/CRACK/RIFT (0..255 -> 0..1)
+//   param_d: Phase for VORTEX (cyclic byte/256; inactive at zero roughness)
 //   direction: Portal center (oct-u16)
 //   alpha_a: Interior alpha (0..15 -> 0..1)
 //   alpha_b: Edge glow alpha (0..15 -> 0..1)
@@ -81,11 +81,6 @@ fn portal_sdf_rect(uv: vec2f, size: f32) -> f32 {
 fn portal_sdf_tear(uv: vec2f, size: f32, roughness: f32) -> f32 {
     let noise_val = portal_noise(uv * 8.0);
     return length(uv) - size + noise_val * roughness * 0.2;
-}
-
-// VORTEX variant: Circle SDF (spiral warp applied externally to UV)
-fn portal_sdf_vortex(uv: vec2f, size: f32) -> f32 {
-    return length(uv) - size;
 }
 
 // CRACK variant: Elongated vertical line with jagged edges
@@ -148,7 +143,7 @@ fn eval_portal(
     // param_c: Edge roughness (0..255 -> 0.0..1.0)
     let roughness = u8_to_01(instr_c(instr));
 
-    // param_d: Phase for VORTEX (0..255 -> 0..1)
+    // param_d: Phase for VORTEX (cyclic byte/256; inactive at zero roughness)
     let phase = epu_loop_phase01(instr_d(instr));
 
     // Apply VORTEX warp if needed (before SDF evaluation)
@@ -170,7 +165,7 @@ fn eval_portal(
             sdf = portal_sdf_tear(warped_uv, size, roughness);
         }
         case PORTAL_VARIANT_VORTEX: {
-            sdf = portal_sdf_vortex(warped_uv, size);
+            sdf = portal_sdf_tear(warped_uv, size, roughness);
         }
         case PORTAL_VARIANT_CRACK: {
             sdf = portal_sdf_crack(warped_uv, size, roughness);
@@ -201,10 +196,12 @@ fn eval_portal(
     let alpha_a = instr_alpha_a_f32(instr);
     let alpha_b = instr_alpha_b_f32(instr);
 
-    // Blend colors: interior + edge glow
-    let rgb = color_a * interior + color_b * edge * intensity;
-
-    // Compute final weight
+    // Straight component paint; the shared blend applies coverage once.
+    let coverage = interior * alpha_a + edge * alpha_b;
+    var rgb = vec3f(0.0);
+    if coverage > 0.0 {
+        rgb = (color_a * interior * alpha_a + color_b * edge * alpha_b * intensity) / coverage;
+    }
     let w = (interior * alpha_a + edge * alpha_b) * grazing_w * region_w;
 
     return LayerSample(rgb, w);

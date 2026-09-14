@@ -99,6 +99,18 @@ const RULES: &[CapabilityRule] = &[
         &["Seed-driven scatter; not a smooth primary motion carrier"],
     ),
     rule(
+        Some(0x18),
+        None,
+        None,
+        &["Fixed points with independently phased brightness"],
+        &[
+            "Phase is param_c / 256 turns; modulation depth is alpha_b / 15. Keep seed fixed. The guest owns speed, direction and held frames.",
+        ],
+        &[
+            "Brightness motion only, not particle travel. Requires SCATTER_PHASED support; older players treat 0x18 as NOP.",
+        ],
+    ),
+    rule(
         Some(0x0B),
         None,
         None,

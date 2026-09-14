@@ -189,12 +189,17 @@ export fn render() void {
 
 PBR-inspired Blinn-Phong with metallic/roughness workflow.
 
+Roughness maps to exponent `s = 1 + 255*(1-roughness)`. Even roughness zero
+has a finite lobe, not an exact mirror. EPU reflections integrate source radiance
+with this same view-dependent lobe; diffuse ambient uses SH9 independently of
+specular shininess. See [EPU architecture](../architecture/epu-overview.md).
+
 **Features:**
 - Up to 4 dynamic lights
 - Metallic/roughness material properties
 - MRE texture support (Metallic/Roughness/Emissive)
 - Rim lighting
-- Procedural sky ambient
+- EPU diffuse ambient and reflections from procedural or imported environments
 - Energy-conserving Gotanda normalization
 
 **Texture Slots:**
@@ -211,7 +216,7 @@ PBR-inspired Blinn-Phong with metallic/roughness workflow.
 {{#tab name="Rust"}}
 ```rust
 material_metallic(0.0);    // 0 = dielectric, 1 = metal
-material_roughness(0.5);   // 0 = mirror, 1 = rough
+material_roughness(0.5);   // 0 = sharp, 1 = broad (finite lobes)
 material_emissive(0.0);    // Self-illumination
 material_rim(0.2, 0.15);   // Rim light intensity and power
 ```
@@ -220,7 +225,7 @@ material_rim(0.2, 0.15);   // Rim light intensity and power
 {{#tab name="C/C++"}}
 ```c
 material_metallic(0.0f);    // 0 = dielectric, 1 = metal
-material_roughness(0.5f);   // 0 = mirror, 1 = rough
+material_roughness(0.5f);   // 0 = sharp, 1 = broad (finite lobes)
 material_emissive(0.0f);    // Self-illumination
 material_rim(0.2f, 0.15f);  // Rim light intensity and power
 ```
@@ -229,7 +234,7 @@ material_rim(0.2f, 0.15f);  // Rim light intensity and power
 {{#tab name="Zig"}}
 ```zig
 material_metallic(0.0);    // 0 = dielectric, 1 = metal
-material_roughness(0.5);   // 0 = mirror, 1 = rough
+material_roughness(0.5);   // 0 = sharp, 1 = broad (finite lobes)
 material_emissive(0.0);    // Self-illumination
 material_rim(0.2, 0.15);   // Rim light intensity and power
 ```

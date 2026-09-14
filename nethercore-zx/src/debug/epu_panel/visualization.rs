@@ -17,14 +17,16 @@ use egui::{Color32, Pos2, Response, Sense, Stroke, Ui, Vec2};
 ///
 /// This mirrors the WGSL `decode_dir16` function in `epu_common.wgsl`.
 pub fn decode_direction_u16(encoded: u16) -> [f32; 3] {
-    let u_byte = (encoded & 0xFF) as f32;
-    let v_byte = ((encoded >> 8) & 0xFF) as f32;
-
-    // Map [0, 255] -> [-1, 1]
-    let oct_x = u_byte / 255.0 * 2.0 - 1.0;
-    let oct_y = v_byte / 255.0 * 2.0 - 1.0;
-
-    octahedral_decode(oct_x, oct_y)
+    // Keep the signed byte lattice exact, matching the shared GPU decoder.
+    let mut x = i32::from(encoded & 255) * 2 - 255;
+    let mut y = i32::from(encoded >> 8) * 2 - 255;
+    let z = 255 - x.abs() - y.abs();
+    if z < 0 {
+        let old_x = x;
+        x = (255 - y.abs()) * x.signum();
+        y = (255 - old_x.abs()) * y.signum();
+    }
+    normalize([x as f32, y as f32, z as f32])
 }
 
 /// Encode a normalized 3D direction vector to octahedral u16.
@@ -55,27 +57,6 @@ pub fn encode_direction_u16(dir: [f32; 3]) -> u16 {
     let u = ((p_x * 0.5 + 0.5) * 255.0).round().clamp(0.0, 255.0) as u16;
     let v = ((p_y * 0.5 + 0.5) * 255.0).round().clamp(0.0, 255.0) as u16;
     (u & 0xFF) | ((v & 0xFF) << 8)
-}
-
-/// Decode octahedral [-1, 1]^2 coordinates to a unit direction vector.
-///
-/// This mirrors the WGSL `octahedral_decode` function.
-/// The oct coordinates map to X and Y, with Z computed as: z = 1 - |x| - |y|.
-fn octahedral_decode(oct_x: f32, oct_y: f32) -> [f32; 3] {
-    let mut n_x = oct_x;
-    let mut n_y = oct_y;
-    let n_z = 1.0 - oct_x.abs() - oct_y.abs();
-
-    if n_z < 0.0 {
-        let sign_x = if n_x >= 0.0 { 1.0 } else { -1.0 };
-        let sign_y = if n_y >= 0.0 { 1.0 } else { -1.0 };
-        // Note: the order matters here - we need to use the original n_y for n_x calculation
-        let old_n_x = n_x;
-        n_x = (1.0 - n_y.abs()) * sign_x;
-        n_y = (1.0 - old_n_x.abs()) * sign_y;
-    }
-
-    normalize([n_x, n_y, n_z])
 }
 
 /// Normalize a 3D vector to unit length.

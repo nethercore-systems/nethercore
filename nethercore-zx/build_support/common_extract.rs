@@ -87,7 +87,9 @@ mod tests {
 
     #[test]
     fn grid_shader_keeps_axis_aligned_patterns() {
-        assert!(GRID_SHADER_SOURCE.contains("let uv = vec2f(uv0.x + scroll, uv0.y);"));
+        assert!(
+            GRID_SHADER_SOURCE.contains("let uv = vec2f(uv0.x * scale + scroll, uv0.y * scale);")
+        );
         assert!(!GRID_SHADER_SOURCE.contains("epu_wrapped_relief_uv"));
         assert!(!GRID_SHADER_SOURCE.contains("epu_relief_wave"));
         assert!(!GRID_SHADER_SOURCE.contains("line_gate_x"));

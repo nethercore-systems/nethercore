@@ -8,7 +8,7 @@
 // field param_a = { label="scale", map="u8_lerp", min=0.5, max=20.0, unit="x" }
 // field param_b = { label="contrast", map="u8_01" }
 // field param_c = { label="detail", map="u8_01" }
-// field param_d = { label="phase", map="u8_01" }
+// field param_d = { label="phase", map="u8_lerp", min=0.0, max=0.99609375, unit="turns" }
 // @epu_meta_end
 
 // ============================================================================
@@ -27,7 +27,7 @@
 //   param_a: Pattern scale (0..255 -> 0.5..20.0)
 //   param_b: Contrast (0..255 -> 0..1)
 //   param_c: Detail / warp amount (0..255 -> 0..1)
-//   param_d: Loop phase (0..255 -> 0..1) for gentle drift only
+//   param_d: Guest-owned loop phase (raw/256 turns, no duplicated endpoint)
 //   direction: Optional orientation / bias axis
 //   alpha_a: Layer alpha
 //   alpha_b: Unused

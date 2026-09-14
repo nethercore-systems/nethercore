@@ -1,7 +1,7 @@
 //! Nethercore ZX FFI Bindings
 //!
-//! This file provides all FFI function declarations for Nethercore ZX games.
-//! Import this module to access the complete Nethercore ZX API.
+//! Legacy single-file bindings, retained for older guests; not the complete current API.
+//! New guests should import include/zx/mod.rs (the canonical modular SDK).
 //!
 //! # Usage
 //!
@@ -1192,8 +1192,9 @@ extern "C" {
     /// - 2: MAX (max(dst, src * a))
     /// - 3: LERP (mix(dst, src, a))
     /// - 4: SCREEN (1 - (1-dst)*(1-src*a))
-    /// - 5: HSV_MOD (HSV shift dst by src)
-    /// - 6: MIN (min(dst, src * a))
+    /// - 5: HSV_MOD (legacy identifier for RGB Offset, not HSV modulation:
+    ///   clamp(dst + (src - 0.5) * clamp(a, 0, 1) * 2, 0, 1), per RGB component)
+    /// - 6: MIN (min(dst, mix(1, src, a)))
     /// - 7: OVERLAY (Photoshop-style overlay)
     ///
     /// Use this to set the current procedural EPU source for this frame without

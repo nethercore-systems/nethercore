@@ -65,7 +65,7 @@ pub(super) const PRESET_DESERT_MIRAGE: [[u64; 2]; 8] = [
             0x8e6a32,
             0x241208,
         ),
-        lo(244, 126, 34, 170, 12, DIR_SUN, 15, 14),
+        lo(244, 126, 34, 170, 12, DIR_DOWN, 15, 14),
     ],
     // L4: MOTTLE/RIDGE - carve ripple and basin contour into the floor so the horizon gets a stronger grounded foreground.
     [
@@ -116,17 +116,17 @@ pub(super) const PRESET_DESERT_MIRAGE: [[u64; 2]; 8] = [
 // -----------------------------------------------------------------------------
 // Preset 6: "Enchanted Grove" - Fairy tale forest
 // -----------------------------------------------------------------------------
-// Goal: a magical grove with one readable canopy arch over a grounded clearing,
-// not a dark green graphic field. Build the scene from a clearing bowl first,
-// then hang the canopy over it, then add a small believable shaft family and a
-// sunpool. No haze-first wall, no mote spam, no single giant wedge.
+// Conifer silhouettes above a moss clearing, using the unchanged FOREST shape.
+// L2 is the final full-strength bounds/paint source: its roofline must lie in
+// the default camera view, with a wall body deeper than the softened edge.
+// Earlier bounds paint is overlaid by L2; bounds masks do not crop that paint.
 //
 // Cadence: BASE LIGHT -> BOUNDS (clearing bowl) -> CANOPY -> FLOOR ->
 // LIGHT (soft shaft family + sunpool) -> SUPPORT (leaf shadow + restrained floor shimmer)
 //
 // L0: RAMP                 ALL         LERP      warm opening sky over deep understory
 // L1: SPLIT/TIER           ALL         LERP      clearing bowl with readable sky/wall/floor separation
-// L2: SILHOUETTE/FOREST    SKY|WALLS   LERP      dark canopy arch hung around the opening
+// L2: SILHOUETTE/FOREST    (bounds)    LERP      visible conifer roofline and ground split
 // L3: PLANE/GRASS          FLOOR       LERP      moss clearing floor owner
 // L4: VEIL/CURTAINS        SKY|WALLS   SCREEN    soft shaft family, localized not bar-like
 // L5: LOBE                 WALLS|FLOOR ADD       warm sunpool rooted in the clearing
@@ -151,7 +151,8 @@ pub(super) const PRESET_ENCHANTED_GROVE: [[u64; 2]; 8] = [
         ),
         lo(34, 82, 92, 118, 0, DIR_UP, 9, 0),
     ],
-    // L2: SILHOUETTE/FOREST - hang one heavier canopy arch over the clearing instead of a full-field foliage wash.
+    // L2: SILHOUETTE/FOREST - lower roofline, finite wall depth and narrow edge softness.
+    // The region bits are preserved storage, not a crop for this bounds source.
     [
         hi_meta(
             OP_SILHOUETTE,
@@ -162,7 +163,7 @@ pub(super) const PRESET_ENCHANTED_GROVE: [[u64; 2]; 8] = [
             0x081006, // dark canopy body
             0x445626, // restrained leaf-light support
         ),
-        lo(255, 164, 214, 74, 0, DIR_UP, 15, 13),
+        lo(24, 32, 214, 74, 112, DIR_UP, 15, 13),
     ],
     // L3: PLANE/GRASS - establish one obvious moss clearing floor under the opening.
     [
@@ -175,7 +176,7 @@ pub(super) const PRESET_ENCHANTED_GROVE: [[u64; 2]; 8] = [
             0x7c9642, // lit moss clearing
             0x12160a, // dark soil-shadow edge
         ),
-        lo(236, 98, 18, 152, 0, DIR_UP, 15, 14),
+        lo(236, 98, 18, 152, 0, DIR_DOWN, 15, 14),
     ],
     // L4: VEIL/CURTAINS - use a soft localized shaft family instead of rigid pillar bars.
     [
@@ -218,6 +219,6 @@ pub(super) const PRESET_ENCHANTED_GROVE: [[u64; 2]; 8] = [
     // L7: FLOW - a little floor shimmer keeps the clearing alive without becoming fog.
     [
         hi(OP_FLOW, REGION_FLOOR, BLEND_SCREEN, 0, 0xd0c56d, 0x453816),
-        lo(52, 44, 54, 0x16, 0, DIR_SUN, 6, 0),
+        lo(52, 44, 54, 0x12, 0, DIR_SUN, 6, 0),
     ],
 ];

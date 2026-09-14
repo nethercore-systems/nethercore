@@ -77,7 +77,7 @@ pub(super) const PRESET_SKY_RUINS: [[u64; 2]; 8] = [
             0xf3efe6,
             0x687284,
         ),
-        lo(246, 94, 18, 164, 0, DIR_UP, 15, 14),
+        lo(246, 94, 18, 164, 0, DIR_DOWN, 15, 14),
     ],
     // L5: MASS/SHELF - hold one broad cloud shelf behind the ruin line so the background reads as layered banks, not a blank vault.
     [
@@ -160,7 +160,7 @@ pub(super) const PRESET_COMBAT_LAB: [[u64; 2]; 8] = [
             0x25333c, // darker graphite tile surface
             0x091118, // darker grout for structure
         ),
-        lo(242, 96, 28, 20, 0, DIR_UP, 15, 12),
+        lo(242, 96, 28, 20, 0, DIR_DOWN, 15, 12),
     ],
     // L2: GRID - brighter floor grid with larger cells so it reads before the sphere reflection
     [

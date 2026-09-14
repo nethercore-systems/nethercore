@@ -37,39 +37,6 @@ fn fresnel_schlick_sg(cos_theta: f32, F0: vec3<f32>) -> vec3<f32> {
     return F0 + (1.0 - F0) * exp2((-5.55473 * cos_theta - 6.98316) * cos_theta);
 }
 
-// Approximate microfacet BRDF integration for image-based lighting (no LUT).
-//
-// We use Gotanda-normalized Blinn-Phong for *direct* lights (see `gotanda_normalization()`),
-// but environment lighting behaves differently: it needs an approximation of the BRDF
-// integral over the hemisphere, traditionally done with an EnvBRDF LUT.
-//
-// This UE4/Lazarov-style approximation returns (A, B) such that:
-//   specular_ibl ≈ prefilteredEnv * (F * A + B)
-//
-// Notes for Nethercore:
-// - This does *not* replace Gotanda normalization; it complements it for IBL only.
-// - Our EnvRadiance mip chain is a stylized blur (box-filter downsample), so this is an
-//   approximation on top of an approximation, but it avoids the "rough metals go black"
-//   failure mode from simply multiplying by (1-roughness)^2.
-fn env_brdf_approx(roughness: f32, NdotV: f32) -> vec2<f32> {
-    let r = clamp(roughness, 0.0, 1.0);
-    let NoV = clamp(NdotV, 0.0, 1.0);
-
-    let c0 = vec4<f32>(-1.0, -0.0275, -0.572, 0.022);
-    let c1 = vec4<f32>(1.0, 0.0425, 1.04, -0.04);
-    let v = r * c0 + c1;
-
-    let a004 = min(v.x * v.x, exp2(-9.28 * NoV)) * v.x + v.y;
-    let brdf = max(vec2<f32>(-1.04, 1.04) * a004 + v.zw, vec2<f32>(0.0));
-
-    // Mid/high-roughness grazing reflections can hold onto a persistent shell
-    // read on metallic probes. Compress only that regime so the BRDF gain stage
-    // stops re-amplifying the same cached env structure.
-    let grazing = 1.0 - NoV;
-    let shell_compress = 1.0 - 0.28 * smoothstep(0.3, 0.8, r) * grazing * grazing;
-    return brdf * shell_compress;
-}
-
 // Normalized Blinn-Phong specular lighting
 // Convention: light_dir = direction rays travel (negate for lighting calculations)
 // No geometry term - era-authentic, classical Blinn-Phong didn't have it
@@ -92,12 +59,7 @@ fn normalized_blinn_phong_specular(
     // Gotanda normalization for energy conservation
     let norm = gotanda_normalization(shininess);
     let spec = norm * pow(NdotH, shininess);
-    // Direct-light specular can keep reinforcing the same metallic shell read.
-    // Compress only the high-F0, mid/high-roughness regime here.
-    let metallic_direct_gate = smoothstep(0.5, 0.9, max(max(specular_color.r, specular_color.g), specular_color.b));
-    let direct_shell_compress = 1.0 - 0.24 * metallic_direct_gate * smoothstep(0.28, 0.8, roughness);
-
-    return specular_color * spec * light_color * NdotL * direct_shell_compress;
+    return specular_color * spec * light_color * NdotL;
 }
 
 // Rim lighting (edge highlights)
@@ -188,29 +150,14 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     // Diffuse ambient (normal direction) - use EPU SH9
     let diffuse_env = sample_epu_ambient(shading.environment_index, N);
 
-    // Specular reflection (reflection direction) - use EPU radiance mip pyramid
-    let R = reflect(-view_dir, N);
-    let specular_env = sample_epu_reflection(shading.environment_index, R, roughness);
+    // View-dependent integral of source mip0 under the direct BP contract.
+    let specular_env = sample_epu_reflection(shading.environment_index, N, view_dir, roughness);
 
-    // Energy conservation factor
-    let spec_norm = gotanda_normalization(shininess);
-    let ambient_factor = 1.0 / sqrt(1.0 + spec_norm);
+    // Lambert diffuse has no extra specular-normalization gain.
+    final_color += diffuse_env * albedo * diffuse_factor * diffuse_fresnel;
 
-    // Diffuse ambient
-    final_color += diffuse_env * albedo * ambient_factor * diffuse_factor * diffuse_fresnel;
-
-    // Specular environment reflection:
-    // - Roughness controls which EnvRadiance mip we sample (blur/LOD).
-    // - EnvBRDF approx controls intensity vs roughness/view angle (prevents rough metals going black).
-    let brdf = env_brdf_approx(roughness, NdotV);
-    // Metallic probes can keep a persistent shell through the env-specular path
-    // when grazing Fresnel re-amplifies the same cached reflection structure.
-    // Keep base F0 intact and only compress the extra grazing boost for high-F0,
-    // mid/high-roughness materials in this environment path.
-    let metallic_env_gate = smoothstep(0.5, 0.9, max(max(specular_color.r, specular_color.g), specular_color.b));
-    let env_shell_compress = 1.0 - 0.22 * metallic_env_gate * smoothstep(0.28, 0.8, roughness) * pow(1.0 - NdotV, 2.0);
-    let env_fresnel = specular_color + (fresnel - specular_color) * env_shell_compress;
-    final_color += specular_env * (env_fresnel * brdf.x + brdf.y);
+    // Constant specular color, exactly once, matching direct illumination.
+    final_color += specular_env * specular_color;
 
     // Track dominant light color for rim lighting coherence
     var dominant_light_color = vec3<f32>(0.0);

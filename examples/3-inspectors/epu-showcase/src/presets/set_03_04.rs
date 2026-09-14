@@ -51,7 +51,7 @@ pub(super) const PRESET_OCEAN_DEPTHS: [[u64; 2]; 8] = [
             0x061016,
             0x000102,
         ),
-        lo(255, 132, 36, 202, 0, DIR_UP, 15, 14),
+        lo(255, 132, 36, 202, 0, DIR_DOWN, 15, 14),
     ],
     // L3: MOTTLE/RIDGE - carve floor contours and side-basin breakup so the trench has a darker basin shape around the focal.
     [
@@ -102,7 +102,7 @@ pub(super) const PRESET_OCEAN_DEPTHS: [[u64; 2]; 8] = [
             0x4ba6b0,
             0x08202a,
         ),
-        lo(144, 76, 148, 0x18, 14, DIR_RIGHT, 9, 1),
+        lo(144, 76, 148, 0x10, 14, DIR_RIGHT, 9, 1),
     ],
     // L7: SCATTER/DUST - keep only sparse marine snow in the upper water and walls so the floor stays owned.
     [
@@ -180,7 +180,7 @@ pub(super) const PRESET_VOID_STATION: [[u64; 2]; 8] = [
             0x313946,
             0x04070b,
         ),
-        lo(208, 96, 20, 166, 0, DIR_UP, 15, 14),
+        lo(208, 96, 20, 166, 0, DIR_DOWN, 15, 14),
     ],
     // L4: SILHOUETTE/INDUSTRIAL - push the side machine banks harder so the room reads as machinery around a hatch.
     [

@@ -16,12 +16,6 @@ pub const EPU_MAP_SIZE: u32 = 128;
 /// Override via [`EpuRuntimeSettings`] or `NETHERCORE_EPU_MIN_MIP_SIZE`.
 pub const EPU_MIN_MIP_SIZE: u32 = 4;
 
-/// Target mip size for diffuse irradiance (SH9) extraction.
-///
-/// The SH9 pass samples many directions; using a coarser mip reduces noise and
-/// better matches "diffuse = low frequency".
-pub(super) const EPU_IRRAD_TARGET_SIZE: u32 = 16;
-
 /// Maximum number of environment states that can be processed.
 pub const MAX_ENV_STATES: u32 = 256;
 
@@ -128,18 +122,6 @@ pub(super) fn calc_mip_sizes(base_size: u32, min_size: u32) -> Vec<u32> {
     sizes
 }
 
-/// Choose the mip level to use for SH9 irradiance extraction.
-///
-/// Returns the first mip index whose size is <= target_size, or the last mip
-/// if all are larger than the target.
-pub(super) fn choose_irrad_mip_level(mip_sizes: &[u32], target_size: u32) -> u32 {
-    debug_assert!(!mip_sizes.is_empty());
-    mip_sizes
-        .iter()
-        .position(|&s| s <= target_size)
-        .unwrap_or(mip_sizes.len().saturating_sub(1)) as u32
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -150,18 +132,6 @@ mod tests {
         assert_eq!(sizes, vec![128, 64, 32, 16, 8, 4]);
         assert!(sizes.iter().all(|&s| s.is_power_of_two()));
         assert!(sizes.windows(2).all(|w| w[0] > w[1]));
-    }
-
-    #[test]
-    fn test_choose_irrad_mip_level() {
-        let sizes = calc_mip_sizes(128, 4);
-        assert_eq!(choose_irrad_mip_level(&sizes, 16), 3);
-        assert_eq!(choose_irrad_mip_level(&sizes, 8), 4);
-        assert_eq!(choose_irrad_mip_level(&sizes, 4), 5);
-        // If target is smaller than the smallest generated mip, clamp to last.
-        assert_eq!(choose_irrad_mip_level(&sizes, 2), 5);
-        // If target is larger than base, pick mip 0.
-        assert_eq!(choose_irrad_mip_level(&sizes, 256), 0);
     }
 
     #[test]

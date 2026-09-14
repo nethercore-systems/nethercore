@@ -168,7 +168,7 @@ pub(super) const PRESET_MOONLIT_GRAVEYARD: [[u64; 2]; 8] = [
             0x4a515d,
             0x12161c,
         ),
-        lo(232, 76, 30, 150, 0, DIR_UP, 15, 12),
+        lo(232, 76, 30, 150, 0, DIR_DOWN, 15, 12),
     ],
     // L3: CELL/BRICK - use dark marker-row rhythm on the walls to keep the cemetery dense and readable without abstract framing.
     [

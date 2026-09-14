@@ -100,7 +100,7 @@ export fn render() void {
 
 ### material_roughness
 
-Sets the roughness value for PBR rendering.
+Sets the roughness value for Mode 2 metallic-roughness rendering.
 
 **Signature:**
 {{#tabs global="lang"}}
@@ -129,7 +129,12 @@ pub extern fn material_roughness(value: f32) void;
 
 | Name | Type | Description |
 |------|------|-------------|
-| value | `f32` | Roughness value (0.0 = smooth/mirror, 1.0 = rough/matte) |
+| value | `f32` | Roughness value (0.0 = narrow specular lobe, 1.0 = broad specular lobe) |
+
+The Blinn–Phong exponent is `s = 1 + 255 * (1 - roughness)`. Zero roughness
+therefore has a finite lobe, not an exact mirror. EPU reflections integrate
+source radiance with that view-dependent lobe; roughness does not select a
+projection-space blurred reflection mip.
 
 **Example:**
 {{#tabs global="lang"}}
@@ -137,7 +142,7 @@ pub extern fn material_roughness(value: f32) void;
 {{#tab name="Rust"}}
 ```rust
 fn render() {
-    // Mirror-like chrome
+    // Low-roughness chrome
     material_roughness(0.1);
     draw_mesh(chrome_bumper);
 
@@ -155,7 +160,7 @@ fn render() {
 {{#tab name="C/C++"}}
 ```c
 NCZX_EXPORT void render(void) {
-    // Mirror-like chrome
+    // Low-roughness chrome
     material_roughness(0.1f);
     draw_mesh(chrome_bumper);
 
@@ -173,7 +178,7 @@ NCZX_EXPORT void render(void) {
 {{#tab name="Zig"}}
 ```zig
 export fn render() void {
-    // Mirror-like chrome
+    // Low-roughness chrome
     material_roughness(0.1);
     draw_mesh(chrome_bumper);
 
@@ -422,6 +427,11 @@ pub extern fn material_shininess(value: f32) void;
 |------|------|-------------|
 | value | `f32` | Shininess (0.0-1.0, maps to 1-256 internally) |
 
+The exponent is `s = 1 + 255 * value`. As in Mode 2, even the narrowest
+lobe is finite: this is not an exact mirror or a glass-transmission model.
+EPU reflections use the same view-dependent Blinn–Phong lobe; diffuse ambient
+is reconstructed separately from SH9 at the shading normal.
+
 **Shininess Guide:**
 
 | Value | Internal | Visual | Use For |
@@ -430,7 +440,7 @@ pub extern fn material_shininess(value: f32) void;
 | 0.2-0.4 | 52-103 | Broad | Leather, wood, rubber |
 | 0.4-0.6 | 103-154 | Medium | Plastic, painted metal |
 | 0.6-0.8 | 154-205 | Tight | Polished metal, wet surfaces |
-| 0.8-1.0 | 205-256 | Very tight | Chrome, mirrors, glass |
+| 0.8-1.0 | 205-256 | Very tight | Polished chrome, glossy surfaces |
 
 **Example:**
 {{#tabs global="lang"}}

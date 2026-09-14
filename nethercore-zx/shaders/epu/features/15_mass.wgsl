@@ -8,7 +8,7 @@
 // field param_a = { label="scale", map="u8_lerp", min=0.5, max=10.0, unit="x" }
 // field param_b = { label="coverage", map="u8_01" }
 // field param_c = { label="breakup", map="u8_01" }
-// field param_d = { label="phase", map="u8_01" }
+// field param_d = { label="phase", map="u8_lerp", min=0.0, max=0.99609375, unit="turns" }
 // @epu_meta_end
 
 // ============================================================================
@@ -27,7 +27,7 @@
 //   param_a: scale (0..255 -> 0.5..10.0)
 //   param_b: coverage / occupancy
 //   param_c: breakup / irregularity
-//   param_d: slow phase drift
+//   param_d: Guest-owned loop phase (raw/256 turns, no duplicated endpoint)
 //   direction: preferred shaping / lean axis
 //   alpha_a: layer alpha
 //   alpha_b: unused
@@ -88,7 +88,7 @@ fn eval_mass(
         }
     }
 
-    let coords_shaped = epu_body_curve_coords(coords, breakup, phase01 + 0.27);
+    let coords_shaped = epu_body_curve_coords(coords, breakup, phase01, 0.27);
     let q = coords_shaped * scale;
     let body_noise = advect_fbm3(q * 0.78 + axis * drift * 0.22, 3u) * 0.5 + 0.5;
     let edge_noise = advect_fbm3(
@@ -111,15 +111,17 @@ fn eval_mass(
         )
     ) * 0.5 + 0.5;
     let ribbing_soft = smoothstep(0.16, 0.84, ribbing);
-    let guide_relief = epu_relief_wave(vec2f(q.y * 0.27, q.z * 0.33), phase01 + drift * 0.09);
+    let guide_relief = epu_loop_relief_wave(vec2f(q.y * 0.27, q.z * 0.33), drift * 0.09, phase01);
     let body_curve = breakup * mix(0.55, 1.0, body_noise * 0.52 + billow * 0.48);
-    let lateral_relief = epu_relief_wave(
+    let lateral_relief = epu_loop_relief_wave(
         vec2f(q.x * 0.19 + q.z * 0.31, q.y * 0.27 - q.x * 0.21),
-        phase01 + drift * 0.07 + 0.41
+        drift * 0.07 + 0.41,
+        phase01
     );
-    let profile_relief = epu_relief_wave(
+    let profile_relief = epu_loop_relief_wave(
         vec2f(q.z * 0.23 - q.y * 0.17, q.x * 0.29 + q.y * 0.33),
-        phase01 + 0.63
+        0.63,
+        phase01
     );
     let front_axis = q.x
         + q.y * mix(-0.1, 0.18, body_curve)

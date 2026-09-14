@@ -111,6 +111,10 @@ pub(super) const EPU_FEATURES: &str = concat!(
     )),
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/16_scatter_phased.wgsl"
+    )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
         "/shaders/epu/epu_dispatch.wgsl"
     )),
 );
@@ -151,16 +155,5 @@ pub(super) const EPU_COMPUTE_IRRAD: &str = include_str!(concat!(
     "/shaders/epu/epu_compute_irrad.wgsl"
 ));
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn compute_env_shader_avoids_shared_bounds_retag_path() {
-        assert!(!EPU_COMPUTE_ENV.contains("shared_bounds_dir_set"));
-        assert!(!EPU_COMPUTE_ENV.contains("retag_scale"));
-        assert!(EPU_COMPUTE_ENV.contains(
-            "regions = compose_bounds_regions(regions, bounds_result.regions, bounds_result.region_mix);"
-        ));
-    }
-}
+// Evaluator semantics are exercised on the GPU in tests/epu_gpu.rs.
+// Do not assert source spellings here: the former assertion preserved a bug.

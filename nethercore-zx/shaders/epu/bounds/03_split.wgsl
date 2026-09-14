@@ -5,7 +5,7 @@
 // variants = [HALF, WEDGE, CORNER, BANDS, CROSS, PRISM, TIER, FACE]
 // domains = []
 // field intensity = { label="-", map="u8_01" }
-// field param_a = { label="blend_width", map="u8_01" }
+// field param_a = { label="blend_width", map="u8_lerp", min=0.0, max=0.2 }
 // field param_b = { label="angle", map="u8_lerp", min=0.0, max=180.0, unit="deg" }
 // field param_c = { label="sides", map="u8_lerp", min=2.0, max=16.0 }
 // field param_d = { label="offset", map="u8_01" }
@@ -17,7 +17,7 @@
 // 128-bit packed fields:
 //   color_a: Sky region base color (RGB24)
 //   color_b: Wall region base color (RGB24)
-//   param_a: Blend width (0..255 -> 0.0..1.0)
+//   param_a: Nominal blend width (0..255 -> 0.0..0.2); runtime AA floor is 0.001
 //   param_b: Wedge angle (0..255 -> 0..180 degrees) - WEDGE variant
 //   param_c: Band count (0..255 -> 2..16) - BANDS; side count - PRISM
 //   param_d: Band offset (0..255 -> 0.0..1.0) - BANDS; rotation - PRISM
@@ -97,7 +97,10 @@ fn split_bands(dir: vec3f, n0: vec3f, basis: mat3x3f, band_count: f32, band_offs
     let warp = (relief * 0.075 + secondary * 0.04 + sweep * 0.085) / max(band_count, 1.0);
     let local_bw = bw * band_count * mix(0.84, 1.2, relief * 0.5 + 0.5);
     let d = epu_periodic_centered(u * band_count + warp);
-    return regions_from_signed_distance(d, local_bw);
+    // Blend the reverse edge too, retaining signed ownership and the center profile.
+    // Overlapping broad supports meet at the quarter-band; density/relief stay authored.
+    let reverse_distance = 0.5 - abs(d);
+    return regions_from_signed_distance(sign(d) * min(abs(d), reverse_distance), local_bw);
 }
 
 // CROSS variant (4): Two perpendicular planes creating quadrants
@@ -111,8 +114,9 @@ fn split_cross(dir: vec3f, n0: vec3f, basis: mat3x3f, bw: f32) -> RegionWeights 
     return regions_from_signed_distance(d, bw);
 }
 
-// PRISM variant (5): Three planes at 120 degrees creating triangular prism regions
-fn split_prism(dir: vec3f, n0: vec3f, basis: mat3x3f, side_count: f32, rotation: f32, bw: f32) -> vec3f {
+// PRISM variant (5): Radial wall sectors with axial caps
+// Preserve the base weighting evaluation for exact unchanged region values.
+fn split_prism_legacy(dir: vec3f, n0: vec3f, basis: mat3x3f, side_count: f32, rotation: f32, bw: f32) -> vec3f {
     let t_axis = basis[0];
     let b_axis = basis[1];
 
@@ -141,18 +145,58 @@ fn split_prism(dir: vec3f, n0: vec3f, basis: mat3x3f, side_count: f32, rotation:
 
     // Determine cap vs side based on z projection
     let cap_threshold = 0.95;  // Above this is ceiling cap, below -threshold is floor cap
-    let ceiling_blend = smoothstep(cap_threshold - bw, cap_threshold + bw, z_proj);
-    let floor_blend = smoothstep(-cap_threshold + bw, -cap_threshold - bw, z_proj);
+    // Finish wide cap transitions at the reachable axial endpoint.
+    let cap_end = min(cap_threshold + bw, 1.0);
+    let ceiling_blend = smoothstep(cap_threshold - bw, cap_end, z_proj);
+    let floor_blend = 1.0 - smoothstep(-cap_end, -cap_threshold + bw, z_proj);
 
     // Assign regions:
     // w_sky = ceiling cap
     // w_wall = side faces (middle band)
     // w_floor = floor cap
-    let w_sky = ceiling_blend * sector_blend;
-    let w_floor = floor_blend * sector_blend;
+    let w_sky = ceiling_blend;
+    let w_floor = floor_blend;
     let w_wall = max(0.0, 1.0 - w_sky - w_floor) * sector_blend;
 
     return vec3f(w_sky, w_wall, w_floor);
+}
+
+fn split_prism(dir: vec3f, n0: vec3f, basis: mat3x3f, side_count: f32, rotation: f32, bw: f32) -> vec3f {
+    let legacy = split_prism_legacy(dir, n0, basis, side_count, rotation, bw);
+    let t_axis = basis[0];
+    let b_axis = basis[1];
+
+    // Project direction onto the plane perpendicular to n0
+    let t_proj = dot(dir, t_axis);
+    let b_proj = dot(dir, b_axis);
+    let z_proj = dot(dir, n0);
+
+    // Compute angle around n0 axis
+    let angle01 = fract(atan2(b_proj, t_proj) / TAU + 0.5 + rotation);
+
+    // Quantize into sectors based on side_count (clamped to 3..16)
+    let sectors = clamp(side_count, 3.0, 16.0);
+    // Outside this support no wrap image can beat a periodic distance (at most 0.5).
+    if sectors == floor(sectors) || min(angle01, 1.0 - angle01) * sectors >= 0.5 {
+        return legacy;
+    }
+    let phase_warp = (
+        sin(dot(vec2f(t_proj, b_proj), vec2f(4.1, -3.7)) + rotation * TAU)
+        + sin(dot(vec2f(t_proj, b_proj), vec2f(2.3, 5.9)) - rotation * PI)
+    ) * (0.04 / sectors);
+    let relief = epu_relief_wave(
+        vec2f(t_proj, b_proj) * vec2f(1.9, 1.35) + vec2f(z_proj * 0.75, 0.0),
+        rotation + sectors * 0.021
+    );
+    let height_shear = z_proj * mix(-0.18, 0.18, epu_hash11(rotation * 97.0 + sectors * 13.0));
+    let sector_phase = angle01 * sectors + phase_warp + height_shear + relief * (0.11 / sectors);
+    let d_sector_edge = epu_periodic_edge_distance(sector_phase);
+    let q = phase_warp + height_shear + relief * (0.11 / sectors);
+    let continued = min(angle01 * sectors + epu_periodic_edge_distance(sectors + q),
+        (1.0 - angle01) * sectors + epu_periodic_edge_distance(q));
+    if continued >= d_sector_edge { return legacy; }
+    let blend = smoothstep(0.0, bw * sectors * mix(0.88, 1.18, relief * 0.5 + 0.5), continued);
+    return vec3f(legacy.x, max(0.0, 1.0 - legacy.x - legacy.z) * blend, legacy.z);
 }
 
 // TIER variant (6): Stepped structural split with a broad middle shelf band.
@@ -278,7 +322,7 @@ fn eval_split(
             w_floor = regions.floor;
         }
         case 5u: {
-            // PRISM: Three planes at 120 degrees creating triangular prism
+            // PRISM: Radial wall sectors and axial caps
             let weights = split_prism(dir, n0, basis, band_count, band_offset, bw);
             w_sky = weights.x;
             w_wall = weights.y;

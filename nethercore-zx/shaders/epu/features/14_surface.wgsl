@@ -8,7 +8,7 @@
 // field param_a = { label="scale", map="u8_lerp", min=0.5, max=16.0, unit="x" }
 // field param_b = { label="fracture", map="u8_01" }
 // field param_c = { label="sheen", map="u8_01" }
-// field param_d = { label="phase", map="u8_01" }
+// field param_d = { label="phase", map="u8_lerp", min=0.0, max=0.99609375, unit="turns" }
 // @epu_meta_end
 
 // ============================================================================
@@ -106,6 +106,39 @@ fn surface_apply_contrast(x: f32, contrast: f32) -> f32 {
     return epu_saturate((x - 0.5) * gain + 0.5);
 }
 
+fn crust_corner_sites(p: vec2f) -> vec4f {
+    let cell = floor(p);
+    let f = fract(p);
+
+    var min_dist = 8.0;
+    var second_dist = 8.0;
+    var third_dist = 8.0;
+    var cell_hash = 0.0;
+
+    for (var j = -1; j <= 1; j++) {
+        for (var i = -1; i <= 1; i++) {
+            let neighbor = vec2f(f32(i), f32(j));
+            let offset = surface_hash22(cell + neighbor);
+            let point = neighbor + offset - f;
+            let d = dot(point, point);
+
+            if d < min_dist {
+                third_dist = second_dist;
+                second_dist = min_dist;
+                min_dist = d;
+                cell_hash = surface_hash21(cell + neighbor);
+            } else if d < second_dist {
+                third_dist = second_dist;
+                second_dist = d;
+            } else if d < third_dist {
+                third_dist = d;
+            }
+        }
+    }
+
+    return vec4f(sqrt(min_dist), second_dist - min_dist, cell_hash, third_dist - second_dist);
+}
+
 fn eval_surface(
     dir: vec3f,
     instr: vec4u,
@@ -177,12 +210,14 @@ fn eval_surface(
             coverage = epu_saturate(max(sheet, pane_body * 0.94) + stress * 0.08 - pane_seam * 0.1 + facet * 0.04);
         }
         case SURFACE_VARIANT_CRUST: {
-            let vor = surface_voronoi(uv * mix(0.95, 2.4, fracture) + vec2f(-3.0, 7.0));
-            let plate_body = smoothstep(0.08, 0.34, vor.y + fracture * 0.08);
+            let vor = crust_corner_sites(uv * mix(0.95, 2.4, fracture) + vec2f(-3.0, 7.0));
+            let corner_h = max(1.0 - vor.w / 0.04, 0.0);
+            let corner_gap = vor.y - 0.01 * corner_h * corner_h * smoothstep(0.02, 0.06, vor.y);
+            let plate_body = smoothstep(0.08, 0.34, corner_gap + fracture * 0.08);
             let seam = 1.0 - smoothstep(
                 0.02,
                 0.16,
-                vor.y + (surface_noise(uv * 1.25 + vec2f(9.0, -11.0)) - 0.5) * 0.06
+                corner_gap + (surface_noise(uv * 1.25 + vec2f(9.0, -11.0)) - 0.5) * 0.06
             );
             let powder = surface_fbm(uv * 1.35 + vec2f(-5.0, 9.0), 2u);
             let ridge = 1.0 - abs(surface_fbm(uv * vec2f(0.72, 2.4) + vec2f(13.0, -17.0), 3u) * 2.0 - 1.0);
@@ -231,5 +266,5 @@ fn eval_surface(
     let rgb = mix(base_rgb, highlight_rgb, highlight);
     let projection_gate = smoothstep(0.18, 0.56, projected_radius);
     let alpha = instr_alpha_a_f32(instr) * region_w * projection_gate * mix(0.35, 1.0, coverage);
-    return LayerSample(rgb, alpha);
+    return LayerSample(rgb, alpha * smoothstep(0.05, 0.1, d));
 }

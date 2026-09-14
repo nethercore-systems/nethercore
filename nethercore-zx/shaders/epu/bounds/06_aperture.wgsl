@@ -30,7 +30,10 @@
 // ============================================================================
 
 // Noise hash for IRREGULAR variant boundary displacement
-fn aperture_hash21(p: vec2f) -> f32 {
+fn aperture_hash21(cell: vec2f) -> f32 {
+    // All callers supply integer lattice/bar/cell IDs. Materialize the corner
+    // before floating arithmetic so adjacent cells hash the same shared point.
+    let p = vec2f(vec2i(cell));
     return fract(sin(dot(p, vec2f(127.1, 311.7))) * 43758.5453123);
 }
 
@@ -83,115 +86,75 @@ fn aperture_sdf_arch(uv: vec2f, half_w: f32, half_h: f32, rise: f32) -> f32 {
     let arch_radius = half_w;
     let to_arch = uv - arch_center;
 
-    // Only apply arch SDF above the rectangle
-    if uv.y > rect_height - arch_height && length(to_arch) > 0.001 {
-        let arch_sdf = length(to_arch) - arch_radius;
-        // Union: min of rect and negated arch constraint
-        if uv.y > 0.0 {
-            return min(rect_sdf, arch_sdf);
-        }
-    }
-
-    return rect_sdf;
+    // Intersect the arc with its existing half-planes and radial exclusion
+    // before unioning the rectangle; every constraint contributes a distance.
+    let radius = length(to_arch);
+    let arch_sdf = max(max(radius - arch_radius, 0.001 - radius),
+        max(arch_center.y - uv.y, -uv.y));
+    return min(rect_sdf, arch_sdf);
 }
 
 // SDF for bars aperture (rect with vertical bars subtracted)
 fn aperture_sdf_bars(uv: vec2f, half_w: f32, half_h: f32, bar_count: u32) -> f32 {
     let base_sdf = aperture_sdf_rect(uv, half_w, half_h);
 
-    // Inside the opening: check if we hit a bar
-    if base_sdf < 0.0 {
-        let count = max(bar_count, 1u);
-        let bar_spacing = (half_w * 2.0) / f32(count + 1u);
-        let bar_width = bar_spacing * 0.15;
-        let bar_phase = (uv.x + half_w) / bar_spacing;
-        let edge_taper = 1.0 - smoothstep(0.72, 1.0, abs(uv.x) / max(half_w, 0.001));
-        let cap_taper = 1.0 - smoothstep(0.68, 1.0, abs(uv.y) / max(half_h, 0.001));
-        let nearest_index = floor(bar_phase + 0.5);
-        var bar_dist = 1e6;
+    // Evaluate the bar distance on both sides of the rectangle boundary.
+    let count = max(bar_count, 1u);
+    let bar_spacing = (half_w * 2.0) / f32(count + 1u);
+    let bar_width = bar_spacing * 0.15;
+    let bar_phase = (uv.x + half_w) / bar_spacing;
+    let edge_taper = 1.0 - smoothstep(0.72, 1.0, abs(uv.x) / max(half_w, 0.001));
+    let cap_taper = 1.0 - smoothstep(0.68, 1.0, abs(uv.y) / max(half_h, 0.001));
+    let nearest_index = floor(bar_phase + 0.5);
+    var bar_dist = 1e6;
 
-        // Search nearby nominal bars and give each a small deterministic center
-        // offset. This preserves the barred aperture read while preventing full-
-        // height ruler-straight repeats.
-        for (var offset = -1.0; offset <= 1.0; offset += 1.0) {
-            let bar_index = nearest_index + offset;
-            if bar_index >= 1.0 && bar_index <= f32(count) {
-                let bar_seed = aperture_hash21(vec2f(bar_index, f32(count) + 13.0));
-                let center_phase = bar_index + (bar_seed - 0.5) * 0.24 * edge_taper;
-                let bar_bow = aperture_value_noise(
-                    vec2f(bar_index * 0.31 + 17.0, (uv.y / max(half_h, 0.001)) * 1.7),
-                    1.0
-                ) * 0.08 * cap_taper;
-                let local = (bar_phase - center_phase - bar_bow) * bar_spacing;
-                let bar_profile = mix(0.8, 1.08, bar_seed);
-                let tapered_half_width = bar_width * mix(0.45, 1.0, edge_taper * cap_taper) * bar_profile;
-                let y01 = uv.y / max(half_h, 0.001);
-                let segment_wave = epu_relief_wave(
-                    vec2f(bar_index * 0.29 + y01 * 1.23, y01 * 0.81 + bar_seed * 0.47),
-                    f32(count) * 0.071 + bar_seed * 0.83
-                );
-                let segment_gate = smoothstep(-0.18, 0.72, segment_wave);
-                let segment_lane = epu_relief_envelope(abs(y01), 0.0, 0.12, 0.84, 1.0);
-                // Break bar continuity before compositing by locally widening the
-                // bar SDF where the low-frequency gate closes. This keeps a bar
-                // family, but stops any one bar from surviving as a full-height
-                // chart-space rail.
-                let closure = (1.0 - segment_gate) * segment_lane * bar_width * mix(1.7, 2.4, bar_seed);
-                bar_dist = min(bar_dist, abs(local) - tapered_half_width + closure);
-            }
-        }
-
-        // Bar occludes the opening (makes it wall)
-        if bar_dist < 0.0 {
-            return -bar_dist; // Inside bar = positive SDF (outside opening)
+    // Search nearby nominal bars and give each a small deterministic center
+    // offset. This preserves the barred aperture read while preventing full-
+    // height ruler-straight repeats.
+    for (var offset = -1.0; offset <= 1.0; offset += 1.0) {
+        let bar_index = nearest_index + offset;
+        if bar_index >= 1.0 && bar_index <= f32(count) {
+            let bar_seed = aperture_hash21(vec2f(bar_index, f32(count) + 13.0));
+            let center_phase = bar_index + (bar_seed - 0.5) * 0.24 * edge_taper;
+            let bar_bow = aperture_value_noise(
+                vec2f(bar_index * 0.31 + 17.0, (uv.y / max(half_h, 0.001)) * 1.7),
+                1.0
+            ) * 0.08 * cap_taper;
+            let local = (bar_phase - center_phase - bar_bow) * bar_spacing;
+            let bar_profile = mix(0.8, 1.08, bar_seed);
+            let tapered_half_width = bar_width * mix(0.45, 1.0, edge_taper * cap_taper) * bar_profile;
+            let y01 = uv.y / max(half_h, 0.001);
+            let segment_wave = epu_relief_wave(
+                vec2f(bar_index * 0.29 + y01 * 1.23, y01 * 0.81 + bar_seed * 0.47),
+                f32(count) * 0.071 + bar_seed * 0.83
+            );
+            let segment_gate = smoothstep(-0.18, 0.72, segment_wave);
+            let segment_lane = epu_relief_envelope(abs(y01), 0.0, 0.12, 0.84, 1.0);
+            // Break bar continuity before compositing by locally widening the
+            // bar SDF where the low-frequency gate closes. This keeps a bar
+            // family, but stops any one bar from surviving as a full-height
+            // chart-space rail.
+            let closure = (1.0 - segment_gate) * segment_lane * bar_width * mix(1.7, 2.4, bar_seed);
+            bar_dist = min(bar_dist, abs(local) - tapered_half_width + closure);
         }
     }
 
-    return base_sdf;
+    // Rectangle minus seeded bars: keep a distance on both sides of each edge.
+    return max(base_sdf, -bar_dist);
 }
 
-// SDF for multi aperture (grid of smaller openings)
+// Regular finite grid in one rectangular frame. Count one is exactly RECT.
+// Removing continuous interior bar fields avoids floor-owned pieces and wrap folds.
 fn aperture_sdf_multi(uv: vec2f, half_w: f32, half_h: f32, cell_count: u32) -> f32 {
-    let count = max(cell_count, 1u);
-    let cell_w = (half_w * 2.0) / f32(count);
-    let cell_h = (half_h * 2.0) / f32(count);
-    let gap = min(cell_w, cell_h) * 0.1;
-    let cell_phase = vec2f((uv.x + half_w) / cell_w, (uv.y + half_h) / cell_h);
-    let cell_id = floor(cell_phase);
-    let border_margin = min(half_w - abs(uv.x), half_h - abs(uv.y));
-    let border_taper = smoothstep(0.0, min(cell_w, cell_h) * 0.75, border_margin);
-
-    // Transform uv into cell-local coordinates
-    let cell_seed_x = aperture_hash21(cell_id + vec2f(13.0, 37.0));
-    let cell_seed_y = aperture_hash21(cell_id.yx + vec2f(29.0, 11.0));
-    let row_sign = select(-1.0, 1.0, fract(cell_id.y * 0.5) >= 0.25);
-    let col_sign = select(-1.0, 1.0, fract(cell_id.x * 0.5) >= 0.25);
-    let stagger = vec2f(
-        row_sign * (cell_seed_x - 0.5) * 0.18 * border_taper,
-        col_sign * (cell_seed_y - 0.5) * 0.14 * border_taper
-    );
-    let shear = vec2f(
-        (fract(cell_phase.y) - 0.5) * mix(-0.12, 0.12, cell_seed_y) * border_taper,
-        (fract(cell_phase.x) - 0.5) * mix(-0.09, 0.09, cell_seed_x) * border_taper
-    );
-    let cell_uv = vec2f(
-        epu_periodic_centered(cell_phase.x + stagger.x + shear.x + (cell_seed_x - 0.5) * 0.06) * cell_w,
-        epu_periodic_centered(cell_phase.y + stagger.y + shear.y + (cell_seed_y - 0.5) * 0.06) * cell_h
-    );
-
-    // Cell-local opening SDF
-    let cell_half_w = (cell_w - gap) * 0.5 * mix(0.82, 1.0, border_taper) * mix(0.9, 1.04, cell_seed_x);
-    let cell_half_h = (cell_h - gap) * 0.5 * mix(0.82, 1.0, border_taper) * mix(0.9, 1.04, cell_seed_y);
-    let cell_sdf = aperture_sdf_rect(cell_uv, cell_half_w, cell_half_h);
-
-    // Combine with outer boundary
-    let outer_sdf = aperture_sdf_rect(uv, half_w, half_h);
-
-    // Inside outer boundary: use cell SDF; outside: use outer
-    if outer_sdf < 0.0 {
-        return cell_sdf;
-    }
-    return outer_sdf;
+    let outer = aperture_sdf_rect(uv, half_w, half_h);
+    let count = clamp(cell_count, 1u, 8u);
+    if count == 1u { return outer; }
+    let size = vec2f(2.0 * half_w, 2.0 * half_h) / f32(count);
+    let phase = (uv + vec2f(half_w, half_h)) / size;
+    let nearest = clamp(floor(phase + vec2f(0.5)), vec2f(1.0), vec2f(f32(count - 1u)));
+    let to_bar = abs((phase - nearest) * size);
+    let half_gap = min(size.x, size.y) * 0.05;
+    return max(outer, half_gap - min(to_bar.x, to_bar.y));
 }
 
 // SDF for irregular aperture (rect/circle with noise-displaced boundary)
@@ -308,7 +271,12 @@ fn eval_aperture(
 
     // frame_w: 1 in the frame band between opening edge and frame outer edge
     let frame_inner = smoothstep(-softness, softness, sdf);
-    let frame_outer = smoothstep(softness, -softness, sdf - frame_thickness);
+    var frame_distance = sdf - frame_thickness;
+    if variant == 5u {
+        // MULTI shares one outer frame; internal mullions remain wall-owned.
+        frame_distance = aperture_sdf_rect(uv, half_w, half_h) - frame_thickness;
+    }
+    let frame_outer = smoothstep(softness, -softness, frame_distance);
     let frame_w0 = frame_inner * frame_outer;
 
     // Keep zone weights normalized.

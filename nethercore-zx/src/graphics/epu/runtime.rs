@@ -28,8 +28,7 @@ use super::EpuConfig;
 use super::cache::EpuCache;
 use super::pipelines;
 use super::settings::{
-    EPU_INITIAL_LAYERS, EPU_IRRAD_TARGET_SIZE, EpuRuntimeSettings, MAX_ACTIVE_ENVS, MAX_ENV_STATES,
-    calc_mip_sizes, choose_irrad_mip_level,
+    EPU_INITIAL_LAYERS, EpuRuntimeSettings, MAX_ACTIVE_ENVS, MAX_ENV_STATES, calc_mip_sizes,
 };
 use super::types::{FrameUniforms, GpuEnvironmentState, IrradUniforms};
 
@@ -93,9 +92,6 @@ pub struct EpuRuntime {
     // Cached mip sizes for dispatch (level 0 is base resolution).
     env_mip_sizes: Vec<u32>,
 
-    // Mip level used as source for SH9 irradiance extraction.
-    irrad_source_mip: u32,
-
     // Current texture array layer capacity (grows on demand)
     env_layer_capacity: u32,
 
@@ -121,7 +117,6 @@ pub struct EpuRuntime {
     // Irradiance extraction resources
     sh9_buffer: wgpu::Buffer,
     irrad_pipeline: wgpu::ComputePipeline,
-    irrad_uniforms_buffer: wgpu::Buffer,
     irrad_bind_group_layout: wgpu::BindGroupLayout,
 
     // Dirty-state cache for skipping unchanged static environments
@@ -152,7 +147,6 @@ impl EpuRuntime {
         // Create radiance texture and views
         let env_mip_sizes = calc_mip_sizes(settings.map_size, settings.min_mip_size);
         let mip_level_count = env_mip_sizes.len() as u32;
-        let irrad_source_mip = choose_irrad_mip_level(&env_mip_sizes, EPU_IRRAD_TARGET_SIZE);
 
         let (env_radiance_texture, env_radiance_view, env_radiance_mip_views) =
             pipelines::create_radiance_texture(
@@ -188,7 +182,7 @@ impl EpuRuntime {
             pipelines::create_imported_face_mip_pipeline(device);
 
         // Create irradiance extraction pipeline
-        let (sh9_buffer, irrad_pipeline, irrad_uniforms_buffer, irrad_bind_group_layout) =
+        let (sh9_buffer, irrad_pipeline, irrad_bind_group_layout) =
             pipelines::create_irrad_pipeline(device);
 
         Self {
@@ -208,7 +202,6 @@ impl EpuRuntime {
             imported_face_size: settings.map_size,
             imported_face_mip_sizes,
             env_mip_sizes,
-            irrad_source_mip,
             env_layer_capacity: EPU_INITIAL_LAYERS,
             pipeline,
             bind_group_layout,
@@ -225,7 +218,6 @@ impl EpuRuntime {
             compute_sampler,
             sh9_buffer,
             irrad_pipeline,
-            irrad_uniforms_buffer,
             irrad_bind_group_layout,
             cache: EpuCache::new(),
         }
@@ -603,26 +595,27 @@ impl EpuRuntime {
     fn dispatch_irrad_pass(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         active_ids_buffer: &wgpu::Buffer,
         active_count: u32,
     ) {
-        // Update irrad uniforms
+        // Each encoded dispatch owns its count; queue writes to a shared buffer
+        // would make earlier passes observe the last count before submission.
         let irrad_uniforms = IrradUniforms {
             active_count,
             _pad0: 0,
             _pad1: 0,
             _pad2: 0,
         };
-        queue.write_buffer(
-            &self.irrad_uniforms_buffer,
-            0,
-            bytemuck::cast_slice(&[irrad_uniforms]),
-        );
+        let irrad_uniforms_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("EPU Irrad Uniforms"),
+            contents: bytemuck::bytes_of(&irrad_uniforms),
+            usage: wgpu::BufferUsages::UNIFORM,
+        });
 
-        // Create irrad bind group
-        let irrad_source_view = &self.env_radiance_mip_views[self.irrad_source_mip as usize];
+        // Lambert convolution must start from source radiance, independently of
+        // the specular filter and mip-chain settings, including after resize.
+        let irrad_source_view = &self.env_radiance_mip_views[0];
         let irrad_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("EPU Irrad Bind Group"),
             layout: &self.irrad_bind_group_layout,
@@ -645,7 +638,7 @@ impl EpuRuntime {
                 },
                 wgpu::BindGroupEntry {
                     binding: 7,
-                    resource: self.irrad_uniforms_buffer.as_entire_binding(),
+                    resource: irrad_uniforms_buffer.as_entire_binding(),
                 },
             ],
         });
@@ -760,14 +753,15 @@ impl EpuRuntime {
             );
         }
 
-        // Extract SH9 diffuse irradiance from a coarse radiance mip
-        self.dispatch_irrad_pass(device, queue, encoder, &self.active_env_ids_buffer, 1);
+        // Extract SH9 diffuse irradiance from source radiance (mip 0).
+        self.dispatch_irrad_pass(device, encoder, &self.active_env_ids_buffer, 1);
     }
 
     /// Build environment maps for multiple environments.
     ///
     /// This dispatches the compute shader to generate radiance (mip 0) and then
-    /// builds a downsampled mip pyramid for rough reflections and diffuse SH9.
+    /// builds a downsampled mip pyramid for rough reflections. Diffuse SH9 is
+    /// extracted independently from source radiance (mip 0).
     ///
     /// Uses dirty-state caching to skip rebuilding unchanged environments.
     ///
@@ -906,14 +900,8 @@ impl EpuRuntime {
             );
         }
 
-        // Extract SH9 diffuse irradiance from a coarse radiance mip
-        self.dispatch_irrad_pass(
-            device,
-            queue,
-            encoder,
-            &self.active_env_ids_buffer,
-            active_count,
-        );
+        // Extract SH9 diffuse irradiance from source radiance (mip 0).
+        self.dispatch_irrad_pass(device, encoder, &self.active_env_ids_buffer, active_count);
     }
 
     /// Build imported cube-face environments into EnvRadiance + SH9.
@@ -1059,7 +1047,7 @@ impl EpuRuntime {
             );
         }
 
-        self.dispatch_irrad_pass(device, queue, encoder, &active_ids_buffer, active_count);
+        self.dispatch_irrad_pass(device, encoder, &active_ids_buffer, active_count);
         _temp_buffers.push(active_ids_buffer);
     }
 

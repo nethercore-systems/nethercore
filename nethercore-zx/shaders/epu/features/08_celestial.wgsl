@@ -242,31 +242,26 @@ fn eval_celestial_ringed(
     let ring_tilt_rad = ring_tilt_deg * PI / 180.0;
     let tilt_factor = sin(ring_tilt_rad);
 
-    // Build ring plane normal (tilted from body direction)
+    // Deproject the angular annulus: 0 = edge-on, 90 = face-on.
     let hint = select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(body_dir.y) > 0.9);
     let ring_axis = normalize(cross(hint, body_dir));
-    // Rotate body_dir around ring_axis by tilt angle
-    let ring_normal = body_dir * cos(ring_tilt_rad) + cross(ring_axis, body_dir) * sin(ring_tilt_rad);
+    let body_dot = clamp(dot(dir, body_dir), -1.0, 1.0);
+    let local_dir = dir - body_dir * body_dot;
+    let minor = dot(local_dir, cross(body_dir, ring_axis));
+    let minor_fraction = clamp(minor * minor / max(dot(local_dir, local_dir), 1e-12), 0.0, 1.0);
+    // Edge-on has zero coverage; a finite metric keeps the centre/poles defined.
+    let aspect = select(1.0, tilt_factor, tilt_factor > 0.0);
+    let ring_r = r * sqrt(1.0 + minor_fraction * (1.0 / (aspect * aspect) - 1.0));
 
-    // Compute angular distance from body center
-    let body_dot = epu_saturate(dot(dir, body_dir));
-    let angle = acos(body_dot);
-
-    // Ring radii in angular units (inner at 1.5x disk, outer at 2.5x disk)
+    // Retain the angular radii, soft edges, and opaque-disk cutoff.
     let inner_r = 1.5;
     let outer_r = 2.5;
+    let ring_mask = smoothstep(inner_r - 0.1, inner_r + 0.1, ring_r) *
+                    smoothstep(outer_r + 0.1, outer_r - 0.1, ring_r);
+    let ring_visible = select(0.0, ring_mask, tilt_factor > 0.0 && r > 1.05);
 
-    // Distance from ring plane
-    let ring_plane_dist = abs(dot(dir - body_dir * body_dot, ring_normal));
-    let in_ring_plane = ring_plane_dist < angular_size_rad * 0.3 * tilt_factor;
-
-    // Ring mask: annular region
-    let ring_mask = smoothstep(inner_r - 0.1, inner_r + 0.1, r) *
-                    smoothstep(outer_r + 0.1, outer_r - 0.1, r);
-    let ring_visible = select(0.0, ring_mask, in_ring_plane && r > 1.05);
-
-    // Ring brightness varies with radius (Cassini division effect)
-    let ring_r_norm = (r - inner_r) / (outer_r - inner_r);
+    // Bands and the Cassini-like gap follow the same deprojected radius.
+    let ring_r_norm = (ring_r - inner_r) / (outer_r - inner_r);
     let ring_bands = sin(ring_r_norm * 8.0 * PI) * 0.3 + 0.7;
     // Gap at ~0.5 for Cassini-like division
     let cassini_gap = smoothstep(0.45, 0.5, ring_r_norm) * smoothstep(0.55, 0.5, ring_r_norm);
@@ -307,7 +302,7 @@ fn eval_celestial_binary(
     let secondary_dir = normalize(body_dir + offset_axis * sin(offset_angle));
 
     // Primary body
-    let primary_dot = epu_saturate(dot(dir, body_dir));
+    let primary_dot = clamp(dot(dir, body_dir), -1.0, 1.0);
     let primary_angle = acos(primary_dot);
     let primary_r = primary_angle / angular_size_rad;
     let primary_disk = smoothstep(1.05, 0.95, primary_r);
@@ -315,7 +310,7 @@ fn eval_celestial_binary(
 
     // Secondary body (smaller based on size_ratio)
     let secondary_size = angular_size_rad * size_ratio;
-    let secondary_dot = epu_saturate(dot(dir, secondary_dir));
+    let secondary_dot = clamp(dot(dir, secondary_dir), -1.0, 1.0);
     let secondary_angle = acos(secondary_dot);
     let secondary_r = secondary_angle / secondary_size;
     let secondary_disk = smoothstep(1.05, 0.95, secondary_r);
@@ -384,7 +379,7 @@ fn eval_celestial(
     let body_dir = decode_dir16(instr_dir16(instr));
 
     // Compute angular distance from body center
-    let body_dot = epu_saturate(dot(dir, body_dir));
+    let body_dot = clamp(dot(dir, body_dir), -1.0, 1.0);
     let angle = acos(body_dot);
 
     // Extract parameters
@@ -415,12 +410,13 @@ fn eval_celestial(
     let phase_axis = normalize(cross(hint, body_dir));
     let sun_dir = normalize(body_dir * cos(phase_rad) + cross(phase_axis, body_dir) * sin(phase_rad));
 
-    // Local surface normal approximation (points outward from disk center)
-    let surface_normal = normalize(dir - body_dir * body_dot + body_dir * 0.3);
-    let phase_factor = epu_saturate(dot(surface_normal, sun_dir) * 0.5 + 0.5);
-
-    // Compute surface UV for detail texturing
-    let surface_uv = celestial_surface_uv(dir, body_dir, r);
+    // Use the authored projected disk for a size-independent sphere normal.
+    let surface_uv = celestial_surface_uv(dir, body_dir, sin(angular_size_rad));
+    let normal_z = sqrt(max(0.0, 1.0 - dot(surface_uv, surface_uv)));
+    let surface_normal = normalize(phase_axis * surface_uv.x +
+        cross(body_dir, phase_axis) * surface_uv.y + body_dir * normal_z);
+    // Negative light incidence is the night side, not half-Lambert fill.
+    let phase_factor = epu_saturate(dot(surface_normal, sun_dir));
 
     // Extract colors
     let color_a = instr_color_a(instr);  // Body surface color
@@ -475,5 +471,6 @@ fn eval_celestial(
     // Apply intensity and region weight
     let final_w = sample.w * intensity * alpha_a * region_w;
 
-    return LayerSample(sample.rgb * intensity, final_w);
+    // Shared blending applies weight to RGB; intensity belongs here only once.
+    return LayerSample(sample.rgb, final_w);
 }

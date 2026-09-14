@@ -2,6 +2,8 @@
 
 ### Overview
 
+Historical, non-normative proposal. Its goals and metadata schema are retained for context; present-tense descriptions below are not current UI guarantees. Active requirements belong to [epu-correctness-and-open-authoring.md](epu-correctness-and-open-authoring.md); see the current [authoring guide](../book/src/guides/epu-environments.md) and inspector source for supported behavior.
+
 The current `epu-inspector` example exposes packed EPU fields (`param_a..d`, `meta5`, etc.) directly through the debug panel. This is powerful but too abstract for iterative preset authoring, and it makes it easy for UI hints/macros to drift from the real WGSL implementation.
 
 This plan upgrades `examples/3-inspectors/epu-inspector` into a macro-first “workbench” while preserving raw editing for debugging. It also introduces a strict, parseable WGSL metadata contract so the inspector UI stays correct as opcode implementations evolve.

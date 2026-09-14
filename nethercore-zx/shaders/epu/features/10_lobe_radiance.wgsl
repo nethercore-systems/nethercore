@@ -7,8 +7,8 @@
 // field intensity = { label="brightness", map="u8_lerp", min=0.0, max=2.0 }
 // field param_a = { label="exponent", map="u8_lerp", min=1.0, max=64.0 }
 // field param_b = { label="falloff", map="u8_lerp", min=0.5, max=4.0 }
-// field param_c = { label="waveform", map="u8_01" }
-// field param_d = { label="phase", map="u8_01" }
+// field param_c = { label="waveform code", map="u8_lerp", min=0.0, max=255.0 }
+// field param_d = { label="phase cycles", map="u8_lerp", min=0.0, max=0.99609375 }
 // @epu_meta_end
 
 // ============================================================================
@@ -26,8 +26,8 @@
 //   intensity: Brightness (0..255 -> 0.0..2.0)
 //   param_a: Exponent/sharpness (0..255 -> 1..64)
 //   param_b: Edge falloff curve (0..255 -> 0.5..4.0)
-//   param_c: Phase waveform (0=off, 1=sine, 2=triangle, 3=strobe)
-//   param_d: Phase (0..255 -> 0..1)
+//   param_c: Modulation (0=steady, 1=sine, 2=triangle, 3=four-pulse strobe; others=sine)
+//   param_d: Guest-owned cyclic phase (raw / 256); unused by steady mode
 //   direction: Lobe center direction (oct-u16)
 //   alpha_a: Coverage alpha (0..15 -> 0.0..1.0)
 //   alpha_b: Unused (set to 0)
@@ -90,12 +90,8 @@ fn eval_lobe_radiance(
     // Extract alpha_a: bits 7..4 (0..15 -> 0.0..1.0)
     let alpha_a = instr_alpha_a_f32(instr);
 
-    // Keep LOBE directional, but taper its strongest weight right at the cap
-    // so it favors a surrounding tangent ring instead of a broad rosette.
-    let cap_gate = 1.0 - 0.75 * smoothstep(0.84, 0.99, d);
-
-    // Compute final weight: w = base * intensity * anim * alpha_a * region_w
-    let w = base * cap_gate * intensity * anim * alpha_a * region_w;
+    // Ordinary centre-bright cosine-power lobe; BAND supplies explicit rings.
+    let w = base * intensity * anim * alpha_a * region_w;
 
     return LayerSample(rgb, w);
 }

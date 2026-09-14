@@ -680,7 +680,7 @@ pub extern fn draw_epu() void;
 u64 hi [bits 127..64]:
   [127:123] opcode     (5)
   [122:120] region     (3)  - SKY=4, WALLS=2, FLOOR=1, ALL=7
-  [119:117] blend      (3)  - ADD=0, MULTIPLY=1, MAX=2, LERP=3, SCREEN=4, HSV_MOD=5, MIN=6, OVERLAY=7
+  [119:117] blend      (3)  - ADD=0, MULTIPLY=1, MAX=2, LERP=3, SCREEN=4, HSV_MOD=5 (RGB Offset, legacy identifier; not HSV modulation), MIN=6, OVERLAY=7
   [116:112] meta5      (5)  - (domain_id<<3)|variant_id; use 0 when unused
   [111:88]  color_a    (24) - RGB24 primary color
   [87:64]   color_b    (24) - RGB24 secondary color
@@ -698,9 +698,9 @@ u64 lo [bits 63..0]:
 
 ### Opcodes (current shaders)
 
-`NOP=0x00, RAMP=0x01, SECTOR=0x02, SILHOUETTE=0x03, SPLIT=0x04, CELL=0x05, PATCHES=0x06, APERTURE=0x07, DECAL=0x08, GRID=0x09, SCATTER=0x0A, FLOW=0x0B, TRACE=0x0C, VEIL=0x0D, ATMOSPHERE=0x0E, PLANE=0x0F, CELESTIAL=0x10, PORTAL=0x11, LOBE=0x12, BAND=0x13.`
+`NOP=0x00, RAMP=0x01, SECTOR=0x02, SILHOUETTE=0x03, SPLIT=0x04, CELL=0x05, PATCHES=0x06, APERTURE=0x07, DECAL=0x08, GRID=0x09, SCATTER=0x0A, FLOW=0x0B, TRACE=0x0C, VEIL=0x0D, ATMOSPHERE=0x0E, PLANE=0x0F, CELESTIAL=0x10, PORTAL=0x11, LOBE=0x12, BAND=0x13, MOTTLE=0x14, ADVECT=0x15, SURFACE=0x16, MASS=0x17, SCATTER_PHASED=0x18.`
 
-See [EPU API Reference](api/epu.md) and [EPU Feature Catalog](../../../../nethercore-design/specs/epu-feature-catalog.md).
+See [EPU API Reference](api/epu.md) for the opcode inventory and packed fields; implementations are in `nethercore-zx/shaders/epu/` in the source checkout.
 
 ---
 

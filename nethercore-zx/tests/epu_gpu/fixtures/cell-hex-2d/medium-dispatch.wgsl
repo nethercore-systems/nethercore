@@ -1,0 +1,124 @@
+// ============================================================================
+// EPU LAYER DISPATCH
+// Environment Processing Unit - dispatch logic for all opcodes
+// ============================================================================
+
+// Evaluate bounds opcode - returns sample + modified regions for subsequent features
+fn medium_bounds(
+    dir: vec3f,
+    instr: vec4u,
+    opcode: u32,
+    bounds_dir: vec3f,
+    base_regions: RegionWeights
+) -> BoundsResult {
+    switch opcode {
+        case OP_RAMP: {
+            return eval_ramp(dir, instr);
+        }
+        case OP_SECTOR: {
+            return eval_sector(dir, instr, base_regions);
+        }
+        case OP_SILHOUETTE: {
+            return eval_silhouette(dir, instr, base_regions);
+        }
+        case OP_SPLIT: {
+            return eval_split(dir, instr, base_regions);
+        }
+        case OP_CELL: {
+            return eval_cell_2d(dir, instr, base_regions);
+        }
+        case OP_PATCHES: {
+            return eval_patches(dir, instr, base_regions);
+        }
+        case OP_APERTURE: {
+            return eval_aperture(dir, instr, base_regions);
+        }
+        default: {
+            return BoundsResult(LayerSample(vec3f(0.0), 0.0), base_regions, 1.0);
+        }
+    }
+}
+
+fn medium_layer(
+    dir: vec3f,
+    instr: vec4u,
+    bounds_dir: vec3f,
+    regions: RegionWeights
+) -> LayerSample {
+    let opcode = instr_opcode(instr);
+    let region_mask = instr_region(instr);
+
+    // Always compute region weight from mask - both bounds and features can use it
+    let region_w = region_weight(regions, region_mask);
+
+    switch opcode {
+        // ====================================================================
+        // Feature opcodes (0x08+) - bounds handled by medium_bounds
+        // ====================================================================
+        case OP_DECAL:   { return eval_decal(dir, instr, region_w); }
+        case OP_GRID:    { return eval_grid(dir, instr, region_w); }
+        case OP_SCATTER: { return eval_scatter(dir, instr, region_w); }
+        case OP_FLOW:    { return eval_flow(dir, instr, bounds_dir, region_w); }
+
+        // Additional radiance opcodes (0x0C..0x13)
+        case OP_TRACE: { return eval_trace(dir, instr, region_w); }
+        case OP_VEIL: { return eval_veil(dir, instr, region_w); }
+        case OP_ATMOSPHERE: {
+            return eval_atmosphere(dir, instr, bounds_dir, region_w);
+        }
+        case OP_PLANE: {
+            return eval_plane(dir, instr, region_w);
+        }
+        case OP_CELESTIAL: {
+            return eval_celestial(dir, instr, region_w);
+        }
+        case OP_PORTAL: {
+            return eval_portal(dir, instr, region_w);
+        }
+        case OP_LOBE_RADIANCE: {
+            return eval_lobe_radiance(dir, instr, region_w);
+        }
+        case OP_BAND_RADIANCE: {
+            return eval_band_radiance(dir, instr, region_w);
+        }
+        case OP_MOTTLE: {
+            return eval_mottle(dir, instr, region_w);
+        }
+        case OP_ADVECT: {
+            return eval_advect(dir, instr, region_w);
+        }
+        case OP_SURFACE: {
+            return eval_surface(dir, instr, region_w);
+        }
+        case OP_MASS: {
+            return eval_mass(dir, instr, region_w);
+        }
+
+        default: { return LayerSample(vec3f(0.0), 0.0); }
+    }
+}
+
+// Shared by direct backgrounds/reflections and the cached lighting compute pass.
+// Preserve the existing direct-render contract: each bounds opcode owns the
+// regions it returns. Modifiers receive prior regions explicitly; the evaluator
+// must not introduce another composition or leak the initial all-sky default.
+fn medium_scene(dir: vec3f, layers: array<vec4u, 8>) -> vec3f {
+    var bounds_dir = vec3f(0.0, 1.0, 0.0);
+    var regions = RegionWeights(1.0, 0.0, 0.0);
+    var radiance = vec3f(0.0);
+    for (var i = 0u; i < 8u; i++) {
+        let instr = layers[i];
+        let opcode = instr_opcode(instr);
+        if opcode == OP_NOP { continue; }
+        let blend = instr_blend(instr);
+        if opcode < OP_FEATURE_MIN {
+            bounds_dir = bounds_dir_from_layer(instr, opcode, bounds_dir);
+            let result = medium_bounds(dir, instr, opcode, bounds_dir, regions);
+            regions = result.regions;
+            radiance = apply_blend(radiance, result.sample, blend);
+        } else {
+            radiance = apply_blend(radiance, medium_layer(dir, instr, bounds_dir, regions), blend);
+        }
+    }
+    return radiance;
+}

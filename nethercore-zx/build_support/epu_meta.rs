@@ -295,7 +295,7 @@ fn generate_code(opcodes: &BTreeMap<u8, OpcodeMeta>) -> String {
                 let min_val = field.min.unwrap_or(0.0);
                 let max_val = field.max.unwrap_or(1.0);
                 code.push_str(&format!(
-                    "    FieldSpec {{ name: \"{}\", label: \"{}\", unit: {}, map: {}, min: {:.6}, max: {:.6} }},\n",
+                    "    FieldSpec {{ name: \"{}\", label: \"{}\", unit: {}, map: {}, min: {:?}, max: {:?} }},\n",
                     field.field_name, field.label, unit_str, map_kind, min_val, max_val
                 ));
             }

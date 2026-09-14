@@ -52,7 +52,7 @@ pub(super) const PRESET_NEON_METROPOLIS: [[u64; 2]; 8] = [
             0x020305,
             0x17101f,
         ),
-        lo(255, 188, 238, 0x82, 0, DIR_UP, 15, 14),
+        lo(255, 0, 238, 0x82, 128, DIR_UP, 15, 14),
     ],
     // L3: DECAL/RECT - anchor the composition with one readable vertical neon sign embedded in the tower face.
     [
@@ -70,7 +70,7 @@ pub(super) const PRESET_NEON_METROPOLIS: [[u64; 2]; 8] = [
             0x141922,
             0x06080d,
         ),
-        lo(236, 118, 22, 152, 0, DIR_UP, 15, 14),
+        lo(236, 118, 22, 152, 0, DIR_DOWN, 15, 14),
     ],
     // L5: SCATTER/WINDOWS - increase window density so the side blocks read as inhabited city walls instead of blank neon haze.
     [
@@ -166,11 +166,18 @@ pub(super) const PRESET_SAKURA_SHRINE: [[u64; 2]; 8] = [
             0x6f7061,
             0x1b1a14,
         ),
-        lo(238, 96, 24, 158, 0, DIR_UP, 15, 13),
+        lo(238, 96, 24, 158, 0, DIR_DOWN, 15, 13),
     ],
     // L4: LOBE - root the warm accent on the shrine frontage and path so the approach cue wins before petals.
     [
-        hi(OP_LOBE, REGION_WALLS | REGION_FLOOR, BLEND_ADD, 0, 0xf0c989, 0x5d3414),
+        hi(
+            OP_LOBE,
+            REGION_WALLS | REGION_FLOOR,
+            BLEND_ADD,
+            0,
+            0xf0c989,
+            0x5d3414,
+        ),
         lo(120, 182, 84, 1, 0, DIR_SUNSET, 10, 2),
     ],
     // L5: MOTTLE/DAPPLE - add branch-shadow breakup so the scene stays shrine-garden specific instead of broad warm wash.

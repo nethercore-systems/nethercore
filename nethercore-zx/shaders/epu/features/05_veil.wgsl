@@ -5,10 +5,10 @@
 // variants = [CURTAINS, PILLARS, LASER_BARS, RAIN_WALL, SHARDS]
 // domains = [DIRECT3D, AXIS_CYL, AXIS_POLAR, TANGENT_LOCAL]
 // field intensity = { label="brightness", map="u8_01" }
-// field param_a = { label="count", map="u8_lerp", min=2.0, max=32.0 }
-// field param_b = { label="thickness", map="u8_lerp", min=0.002, max=0.5 }
-// field param_c = { label="sway", map="u8_01" }
-// field param_d = { label="phase", map="u8_01" }
+// field param_a = { label="count_byte (2+floor(raw*30/255))", map="u8_lerp", min=0.0, max=255.0 }
+// field param_b = { label="thickness ratio", map="u8_01" }
+// field param_c = { label="shape", map="u8_01" }
+// field param_d = { label="phase", map="u8_lerp", min=0.0, max=0.99609375, unit="turns" }
 // @epu_meta_end
 
 // ============================================================================
@@ -20,13 +20,13 @@
 //   color_a: Ribbon/bar color (RGB24)
 //   color_b: Edge/glow color (RGB24)
 //   intensity: Brightness (0..255 -> 0..1)
-//   param_a: Ribbon count (0..255 -> 2..32)
-//   param_b: Thickness (0..255 -> 0.002..0.5/ribbon_count, scales with spacing)
-//   param_c: Curvature/sway amplitude (0..255 -> 0..1)
-//   param_d: Phase (0..255 -> 0..1, used by RAIN_WALL for animation)
+//   param_a: Integer base count = 2 + floor(raw*30/255); RAIN_WALL doubles it
+//   param_b: Base thickness = mix(0.002, max(0.05, 0.5/count), raw/255), chart units
+//   param_c: Curtain sway / rain wind / shard tilt (raw/255); ignored by PILLARS/LASER_BARS
+//   param_d: RAIN_WALL-only guest phase (raw/256 turns); stored but inactive otherwise
 //   direction: Sheet/cylinder/polar axis or tangent-local center (oct-u16)
 //   alpha_a: Ribbon alpha (0..15 -> 0..1)
-//   alpha_b: Glow alpha (0..15 -> 0..1)
+//   alpha_b: Glow weight (0..15 -> 0..1); PILLARS ignores Color B and alpha_b
 //
 // Meta (via meta5):
 //   domain_id: 0 DIRECT3D, 1 AXIS_CYL, 2 AXIS_POLAR, 3 TANGENT_LOCAL
@@ -259,7 +259,8 @@ fn eval_veil_rain_wall(
     phase: f32
 ) -> vec3f {
     var min_dist = 1000.0;
-    var best_flicker = 1.0;
+    var ribbon_mask = 0.0;
+    var glow = 0.0;
 
     // Rain wall uses more bars (multiply count by 2 for denser rain)
     let actual_count = ribbon_count * 2u;
@@ -280,29 +281,25 @@ fn eval_veil_rain_wall(
         // Per-bar v-position using deterministic phase offset
         let v01 = v * 0.5 + 0.5;
 
-        // Each bar has different fall speed and starting offset
-        let fall_speed = 0.3 + h.x * 1.4;
+        // Whole travel cycles make the guest-owned phase periodic.
+        let fall_speed = 1.0 + floor(h.x * 2.0);
         let drop_pos = fract(h.y + phase * fall_speed);
 
         // Short streak segments
         let half_len = 0.02 + h.z * 0.06;
-        let dv = abs(v01 - drop_pos);
+        let dv = abs(fract(v01 - drop_pos + 0.5) - 0.5);
         let bar_visible = 1.0 - smoothstep(half_len, half_len * 1.6, dv);
 
         let d = ribbon_dist_wrapped(u_scrolled + v * wind, center_u);
 
-        if d < min_dist && bar_visible > 0.5 {
-            min_dist = d;
-            // Per-bar intensity variation (deterministic)
-            best_flicker = 0.7 + 0.3 * sin(h.z * TAU);
-        }
+        // Keep the existing smooth axial envelope; thresholding it clipped the caps.
+        let flicker = 0.7 + 0.3 * sin(h.z * TAU);
+        let core = (1.0 - smoothstep(bar_thickness - 0.002, bar_thickness + 0.002, d)) * flicker;
+        ribbon_mask = max(ribbon_mask, core * bar_visible);
+        let bar_glow = smoothstep(bar_thickness * 2.5, bar_thickness, d) * (1.0 - clamp(core, 0.0, 1.0)) * 0.5;
+        glow = max(glow, bar_glow * bar_visible);
+        min_dist = min(min_dist, d);
     }
-
-    let aa_width = 0.002;
-    let ribbon_mask = (1.0 - smoothstep(bar_thickness - aa_width, bar_thickness + aa_width, min_dist)) * best_flicker;
-
-    // Subtle glow
-    let glow = smoothstep(bar_thickness * 2.5, bar_thickness, min_dist) * (1.0 - clamp(ribbon_mask, 0.0, 1.0)) * 0.5;
 
     return vec3f(min_dist, ribbon_mask, glow);
 }
@@ -398,8 +395,8 @@ fn eval_veil(
         }
         case VEIL_DOMAIN_AXIS_POLAR: {
             uv = veil_polar_uv(dir, axis);
-            // Axis fade near center (rad near 0)
-            domain_w = smoothstep(0.05, 0.2, uv.y);
+            // Same polar support fade at both azimuth singularities.
+                        domain_w = smoothstep(0.05, 0.2, min(uv.y, 1.0 - uv.y));
         }
         case VEIL_DOMAIN_TANGENT_LOCAL: {
             let result = veil_tangent_uv(dir, axis);

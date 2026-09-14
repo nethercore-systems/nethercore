@@ -286,8 +286,9 @@ draw_mesh(torus);
 - Procedural sources are resolved frame-locally
 - Imported face sets are cached and converted into the existing octahedral
   `EnvRadiance` + SH9 representation
-- Roughness-based reflections continue to use the same mipmapped `EnvRadiance`
-  path as procedural EPU environments
+- Imported and procedural reflections both integrate source `EnvRadiance` mip 0
+  with the view-dependent Blinn-Phong lobe; the downsample pyramid is not a
+  roughness-prefiltered reflection chain. SH9 diffuse is extracted separately from source mip 0.
 
 ### Asset pipeline
 
@@ -367,7 +368,7 @@ Normalized Blinn-Phong with energy conservation (Gotanda 2010). Uses metallic-ro
 **Lighting model:**
 ```
 // Roughness → Shininess mapping
-shininess = pow(256.0, 1.0 - roughness)  // Range: 256 (smooth) → 1 (rough)
+shininess = 1.0 + 255.0 * (1.0 - roughness)  // Range: 256 (smooth) → 1 (rough)
 
 // Specular color (F0 calculation)
 specular_color = mix(vec3(0.04), albedo, metallic)
@@ -384,8 +385,9 @@ spec = normalization × pow(max(0, dot(N, H)), shininess)
 - Slot 0: Albedo (RGB: diffuse color)
 - Slot 1: MRE (R: Metallic, G: Roughness, B: Emissive)
 - Slot 2: Unused
+- Slot 3: Normal map (UV + tangent vertex formats)
 
-**Lights:** 4 dynamic lights + sun from procedural sky
+**Lights:** 4 guest-configured dynamic lights; EPU supplies environment lighting, not an automatic sun light.
 
 **Use cases:** PBR-inspired materials, realistic surfaces, games needing physical material properties
 
@@ -403,6 +405,10 @@ Classic Blinn-Phong with explicit specular control and rim lighting. Era-authent
 - Slot 0: Albedo (RGB: diffuse color)
 - Slot 1: SSE (R: Specular damping, G: Shininess, B: Emissive)
 - Slot 2: Specular (RGB: specular highlight color)
+- Slot 3: Normal map (UV + tangent vertex formats)
+
+Normalized shininess maps linearly to exponent `1 + 255 * value`; 0 is broad,
+1 is sharp. Specular damping 0 means full specular, 1 means none.
 
 **Use cases:** Retro 3D aesthetic, artistic control over specular, character shaders with rim lighting
 

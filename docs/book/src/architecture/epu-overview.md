@@ -1,11 +1,11 @@
 # EPU Architecture Overview
 
-The Environment Processing Unit (EPU) is Nethercore ZX's GPU-driven, fully procedural environment system. This page provides an architectural overview.
+The Environment Processing Unit (EPU) is Nethercore ZX's GPU-driven environment system with procedural and imported cube-face sources. This page provides an architectural overview.
 
 For the complete specification (opcode catalog, packing rules, and shader implementations), see:
-- `nethercore-design/specs/epu-feature-catalog.md`
-- `nethercore/include/zx.rs`
-- `nethercore/nethercore-zx/shaders/epu/`
+- `nethercore-zx/shaders/epu/`
+- `include/zx/mod.rs` and `include/zx/epu.rs`
+- `nethercore-zx/src/graphics/epu/layer.rs` (opcode and packing types)
 
 For the current API reference and quick-start guide, see:
 - [EPU Environments Guide](../guides/epu-environments.md)
@@ -27,7 +27,7 @@ The system is designed around these hard constraints:
 | Config size | 128 bytes per environment state |
 | Layer count | 8 sequential instructions |
 | Instruction size | 128 bits (two u64 values) |
-| Cubemaps | None (fully procedural octahedral maps) |
+| Sources | Procedural layers or imported cube-face textures/assets |
 | Mipmaps | Yes (compute-generated downsample pyramid) |
 | Color model | Direct RGB24 x 2 per layer |
 | Aesthetic | PS1/PS2-era stylized, quantized params |
@@ -42,11 +42,11 @@ CPU (game)                                         GPU
 Call epu_set(...), epu_textures(...), or epu_asset(...)   --->   [Compute] EPU_Build(configs/imports)
 Call draw_epu() to request a background draw            - Evaluate 8-layer microprogram into EnvRadiance (mip 0)
 Capture (viewport, pass) draw requests                  - Generate mip pyramid from EnvRadiance mip 0
-                                                    - Extract SH9 from a coarse mip (e.g. 16x16)
+                                                    - Extract SH9 from source radiance (mip 0)
 
 Main render (background + objects)          --->   [Render] Sample prebuilt results
                                                   - Background: EPU environment draw per viewport/pass
-                                                  - Specular:   EnvRadiance sampled by roughness (LOD)
+                                                  - Specular:   View-dependent Blinn-Phong radiance integral
                                                   - Diffuse:    SH9 evaluated at the shading normal
 ```
 
@@ -55,8 +55,11 @@ Main render (background + objects)          --->   [Render] Sample prebuilt resu
 ## Radiance Flow
 
 The EPU produces a single directional radiance signal per environment (`EnvRadiance`, mip 0).
-From that radiance, the runtime builds a downsample mip pyramid used for continuous
-roughness-based reflections, and extracts SH9 coefficients for diffuse ambient.
+SH9 diffuse coefficients are extracted from source radiance, independently of
+material roughness. Specular integrates radiance with the material’s Blinn–Phong
+lobe. A projection-space downsample pyramid is not itself that convolution.
+
+Procedural mip 0 averages four evaluations inside each octahedral texel with normalized solid-angle weights. The background evaluates the same program directly at its pixel direction, so source-cache filtering can differ from background detail. Reflections sample source mip 0, not roughness-selected downsample mips; SH9 extraction also reads source mip 0.
 
 ---
 
@@ -113,17 +116,24 @@ bits 3..0:     alpha_b    (4)  - color_b alpha (0-15)
 | `0x08` | `DECAL` | Feature | Sharp SDF shape (disk/ring/rect/line) |
 | `0x09` | `GRID` | Feature | Repeating lines/panels |
 | `0x0A` | `SCATTER` | Feature | Point field (stars/dust/bubbles) |
-| `0x0B` | `FLOW` | Feature | Animated noise/streaks/caustics |
+| `0x0B` | `FLOW` | Feature | Looping noise/streaks/caustic patterns |
 | `0x0C` | `TRACE` | Feature | Line/crack patterns |
 | `0x0D` | `VEIL` | Feature | Curtain/ribbon effects |
-| `0x0E` | `ATMOSPHERE` | Feature | Atmospheric absorption + scattering |
+| `0x0E` | `ATMOSPHERE` | Feature | Directional gradient/halo tint; no geometry fog or world simulation |
 | `0x0F` | `PLANE` | Feature | Ground/surface textures |
 | `0x10` | `CELESTIAL` | Feature | Moon/sun/planet bodies |
 | `0x11` | `PORTAL` | Feature | Portal/vortex effects |
 | `0x12` | `LOBE` | Feature | Region-masked directional glow |
 | `0x13` | `BAND` | Feature | Region-masked horizon band |
+| `0x14` | `MOTTLE` | Feature | Abstract texture breakup / base variation |
+| `0x15` | `ADVECT` | Feature | Broad transport / mass motion carrier |
+| `0x16` | `SURFACE` | Feature | Broad material / surface response carrier |
+| `0x17` | `MASS` | Feature | Broad scene-owning body carrier |
+| `0x18` | `SCATTER_PHASED` | Feature | Fixed points with independent guest-phase brightness |
 
 ### Blend Modes (8 modes)
+
+`src` and `a` are opcode output RGB and weight. `a` and every blend result are clamped to `0..1` (RGB component-wise); these formulas omit the shared outer clamp.
 
 | Value | Name | Formula |
 |-------|------|---------|
@@ -132,8 +142,8 @@ bits 3..0:     alpha_b    (4)  - color_b alpha (0-15)
 | 2 | MAX | `max(dst, src * a)` |
 | 3 | LERP | `mix(dst, src, a)` |
 | 4 | SCREEN | `1 - (1-dst)*(1-src*a)` |
-| 5 | HSV_MOD | HSV shift dst by src |
-| 6 | MIN | `min(dst, src * a)` |
+| 5 | HSV_MOD (legacy identifier) | RGB Offset: `clamp(dst + (src - 0.5) * clamp(a, 0, 1) * 2, 0, 1)`, per RGB component; not HSV modulation. Source 0.5 is neutral. |
+| 6 | MIN | `min(dst, mix(1, src, a))` |
 | 7 | OVERLAY | Photoshop-style overlay |
 
 ---
@@ -146,14 +156,14 @@ The EPU runtime maintains these outputs per internal slot:
 
 | Output | Type | Purpose |
 |--------|------|---------|
-| `EnvRadiance[slot]` | mip-mapped octahedral 2D array | Background + roughness-based reflections |
+| `EnvRadiance[slot]` | mip-mapped octahedral 2D array | Source mip 0 for specular integration and SH9 extraction; imported-background fallback |
 | `SH9[slot]` | storage buffer | L2 diffuse irradiance (spherical harmonics) |
 
 ### Frame Execution Order
 
 1. Capture EPU draw requests (per viewport/pass) and determine active immediate-mode EPU sources
 2. Resolve those sources to internal slots, cap to `MAX_ACTIVE_ENVS`
-3. Determine which internal slots are dirty (hash or imported-face cache miss)
+3. Determine which procedural slots are dirty by configuration hash; submitted imported sources follow the import path without equivalent dirty-config filtering
 4. Dispatch compute passes:
    - Environment evaluation (build `EnvRadiance` mip 0)
    - Imported cube-face conversion when needed
@@ -172,33 +182,36 @@ Procedural EPU sources render the background by evaluating the EPU directly per
 pixel (`L_hi(dir)`), not by sampling `EnvRadiance`. This guarantees the sky is
 never limited by the `EnvRadiance` base resolution.
 
-Imported face-texture sources render the background from `EnvRadiance` mip 0
-after cube-to-octahedral conversion.
+Imported face-texture sources sample the stored cube faces directly for the
+background, with octahedral source radiance as the fallback when faces are unavailable.
 
 ### Reflection Sampling
 
-Sample `EnvRadiance` with a continuous roughness-to-LOD mapping across mip levels.
-A common mapping is:
+Environment specular uses the same half-vector Blinn–Phong equation as direct
+lighting. For normal `N`, view direction `V`, incoming direction `L`, and
+`H = normalize(V + L)`, integrate:
 
-- `lod = (roughness^2) * (mip_count - 1)`
+`radiance(L) * specular_color * C(s) * max(dot(N,H),0)^s * max(dot(N,L),0)`
 
-Then sample at that LOD (trilinear) or lerp between `floor(lod)` and `ceil(lod)`.
+Here `C(s) = 0.0397436*s + 0.0856832`. Mode 2 maps roughness to
+`s = 1 + 255*(1-roughness)`; Mode 3 uses `s = 1 + 255*value` for normalized shininess `value` in `0..1`.
+Material specular color is applied once. There is no additional split-sum Fresnel
+fit, shell suppression, or procedural high-frequency residual gain.
 
-To avoid hard cutoffs while still preserving mirror-quality reflections, add a
-high-frequency residual term that fades out with roughness:
-
-- `alpha = roughness^2`
-- `L_spec = L_lp + (1 - alpha) * (L_hi - L0)`
-  - `L_hi` is procedural EPU evaluation at the reflection direction
-  - `L0` is `EnvRadiance` sampled at mip 0
-  - `L_lp` is `EnvRadiance` sampled at the roughness-derived LOD
-
-Imported face-texture sources skip the procedural residual and use only the
-octahedral mip chain.
+The current implementation uses deterministic half-vector quadrature over source
+radiance. Both the actual view direction and shading normal matter; replacing
+this with an axial power lobe around the mirror direction is not equivalent.
+Source-cache discretization and finite quadrature limit accuracy; this does not
+promise exact mirrors or arbitrary-frequency fidelity. The source-filter repair,
+finite-case numerical acceptance, and deferred performance gate are tracked in
+the repository’s `docs/plans/epu-progress.md`; this description is not a claim
+that those gates have passed.
 
 ### Ambient Lighting
 
 Diffuse ambient is evaluated from SH9 coefficients at the shading normal `n`.
+
+Extraction integrates every source mip-0 texel with octahedral solid-angle weights, normalized to `4*pi`, then applies the Lambertian band factors `pi`, `2*pi/3`, and `pi/4`. Sampling reconstructs L2 irradiance, divides by `pi`, and clamps negative components. This is low-order diffuse approximation, not specular-prefiltered lighting or an exact arbitrary-frequency hemispherical integral.
 
 ---
 
@@ -210,7 +223,7 @@ The EPU supports multiple environments per frame through internal texture-array 
 - Renderers pass that resolved slot per draw/instance (internal)
 - No per-draw rebinding required
 
-### Recommended Caps
+### Current Runtime Limits and Defaults
 
 | Constant | Typical Value |
 |----------|---------------|
@@ -218,19 +231,22 @@ The EPU supports multiple environments per frame through internal texture-array 
 | `MAX_ACTIVE_ENVS` | 32 |
 | `EPU_MAP_SIZE` | 128 (default; override via `NETHERCORE_EPU_MAP_SIZE`) |
 | `EPU_MIN_MIP_SIZE` | 4 (default; override via `NETHERCORE_EPU_MIN_MIP_SIZE`) |
-| `EPU_IRRAD_TARGET_SIZE` | 16 |
 
 ---
 
 ## Dirty-State Caching
 
-For environments, the EPU tracks:
+For procedural environments, the EPU tracks:
 
 - `state_hash`: Hash of the 128-byte procedural config
 - `valid`: Whether the cached entry has been initialized
-- imported-face cache entries keyed by face-handle tuple or asset ID
 
-Update policy:
+Imported face-handle/asset resolution is separate from this procedural state cache.
+`EpuRuntime::build_imported_envs` processes each submitted import; it does not
+apply the procedural unchanged-config skip. Do not assume imported GPU rebuilds
+are eliminated merely because a texture handle or asset ID is reused.
+
+Procedural update policy:
 
 | Condition | Action |
 |-----------|--------|
@@ -250,9 +266,8 @@ Update policy:
 | Region | 3-bit mask (combinable) |
 | Blend modes | 8 modes |
 | Color | RGB24 × 2 per layer |
-| Emissive | Reserved (future use) |
 | Alpha | 4-bit × 2 (per-color) |
-| Parameters | 4 (+param_d) |
+| Parameters | 4 bytes (`param_a` through `param_d`) |
 
 ---
 
@@ -266,5 +281,5 @@ For complete details including:
 - Performance considerations
 
 See:
-- [EPU Feature Catalog](../../../../../nethercore-design/specs/epu-feature-catalog.md)
-- [ZX FFI Bindings](../../../../../nethercore/include/zx.rs)
+- Opcode implementation and parameter decoding: `nethercore-zx/shaders/epu/` in the source checkout.
+- Guest FFI declarations: `include/zx/mod.rs` and `include/zx/epu.rs` in the source checkout.

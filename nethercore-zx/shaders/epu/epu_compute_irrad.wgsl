@@ -1,14 +1,11 @@
 // ============================================================================
 // EPU COMPUTE: DIFFUSE IRRADIANCE EXTRACTION (SH9)
-// Extracts L2 spherical harmonics coefficients from a coarse radiance mip.
+// Extracts L2 spherical harmonics coefficients from source radiance (mip 0).
 // These coefficients are evaluated per-pixel for smooth
 // diffuse ambient lighting.
 // ============================================================================
 
 const PI: f32 = 3.141592653589793;
-const TAU: f32 = 6.283185307179586;
-const GOLDEN_RATIO_CONJ: f32 = 0.6180339887498949;
-const SH_SAMPLES: u32 = 64u;
 
 struct EpuSh9 {
     c0: vec3f, _pad0: f32,
@@ -30,33 +27,20 @@ struct IrradUniforms {
 }
 
 @group(0) @binding(2) var<storage, read> epu_active_env_ids: array<u32>;
-@group(0) @binding(4) var epu_blurred: texture_2d_array<f32>;
+@group(0) @binding(4) var epu_radiance: texture_2d_array<f32>;
 @group(0) @binding(5) var epu_samp: sampler;
 @group(0) @binding(6) var<storage, read_write> epu_sh9: array<EpuSh9>;
 @group(0) @binding(7) var<uniform> epu_irrad: IrradUniforms;
 
-// Octahedral encode for sampling - duplicated here for standalone compute shader
-// WGSL `sign()` returns 0 for 0 inputs, which breaks octahedral fold math on the
-// axes (producing visible "plus" seams). Use a non-zero sign instead.
-fn sign_not_zero(v: vec2f) -> vec2f {
-    return vec2f(select(-1.0, 1.0, v.x >= 0.0), select(-1.0, 1.0, v.y >= 0.0));
-}
-
-fn oct_encode_local(dir: vec3f) -> vec2f {
-    let n = dir / (abs(dir.x) + abs(dir.y) + abs(dir.z));
-    if n.z < 0.0 {
-        return (1.0 - abs(n.yx)) * sign_not_zero(n.xy);
+// Unnormalized octahedral surface point. The solid-angle Jacobian on each
+// octahedron face is proportional to 1 / length(point)^3.
+fn oct_surface(uv: vec2f) -> vec3f {
+    var v = vec3f(uv, 1.0 - abs(uv.x) - abs(uv.y));
+    if v.z < 0.0 {
+        let s = vec2f(select(-1.0, 1.0, v.x >= 0.0), select(-1.0, 1.0, v.y >= 0.0));
+        v = vec3f((1.0 - abs(v.yx)) * s, v.z);
     }
-    return n.xy;
-}
-
-// Uniform sphere sampling via spherical Fibonacci points (deterministic).
-fn fibonacci_dir(i: u32, n: u32) -> vec3f {
-    let k = (f32(i) + 0.5) / f32(n);
-    let z = 1.0 - 2.0 * k;
-    let r = sqrt(max(0.0, 1.0 - z * z));
-    let phi = TAU * fract((f32(i) + 0.5) * GOLDEN_RATIO_CONJ);
-    return vec3f(cos(phi) * r, sin(phi) * r, z);
+    return v;
 }
 
 @compute @workgroup_size(1, 1, 1)
@@ -77,10 +61,18 @@ fn epu_extract_sh9(@builtin(global_invocation_id) gid: vec3u) {
     var c7 = vec3f(0.0);
     var c8 = vec3f(0.0);
 
-    for (var i = 0u; i < SH_SAMPLES; i++) {
-        let dir = fibonacci_dir(i, SH_SAMPLES);
-        let uv = oct_encode_local(dir) * 0.5 + 0.5;
-        let l = textureSampleLevel(epu_blurred, epu_samp, uv, i32(env_id), 0.0).rgb;
+    // ponytail: integrate every cached texel on a dirty environment, O(map_size^2).
+    // A parallel reduction can replace this loop if the deferred cost gate requires it.
+    let size = textureDimensions(epu_radiance, 0);
+    var total_weight = 0.0;
+    for (var i = 0u; i < size.x * size.y; i++) {
+        let uv = (vec2f(f32(i % size.x), f32(i / size.x)) + 0.5) / vec2f(size);
+        let surface = oct_surface(uv * 2.0 - 1.0);
+        let inverse_length = inverseSqrt(dot(surface, surface));
+        let dir = surface * inverse_length;
+        let weight = inverse_length * inverse_length * inverse_length;
+        total_weight += weight;
+        let l = textureSampleLevel(epu_radiance, epu_samp, uv, i32(env_id), 0.0).rgb * weight;
 
         let x = dir.x;
         let y = dir.y;
@@ -107,8 +99,8 @@ fn epu_extract_sh9(@builtin(global_invocation_id) gid: vec3u) {
         c8 += l * sh8;
     }
 
-    // Convert sum to integral over sphere.
-    let w = (4.0 * PI) / f32(SH_SAMPLES);
+    // Normalize the midpoint solid-angle quadrature; constant radiance retains its energy.
+    let w = (4.0 * PI) / total_weight;
 
     // Lambertian convolution kernel (irradiance) per band.
     let a0 = PI;
@@ -124,16 +116,6 @@ fn epu_extract_sh9(@builtin(global_invocation_id) gid: vec3u) {
     c6 *= w * a2;
     c7 *= w * a2;
     c8 *= w * a2;
-
-    // The L2 band carries most of the panel/ring re-projection in the diffuse
-    // ambient path on curved surfaces. Keep the low-order ambient structure and
-    // only modestly attenuate the highest band.
-    let l2_scale = 0.78;
-    c4 *= l2_scale;
-    c5 *= l2_scale;
-    c6 *= l2_scale;
-    c7 *= l2_scale;
-    c8 *= l2_scale;
 
     var out: EpuSh9;
     out.c0 = c0;

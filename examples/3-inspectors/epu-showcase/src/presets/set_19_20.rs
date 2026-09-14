@@ -77,7 +77,7 @@ pub(super) const PRESET_WAR_ZONE: [[u64; 2]; 8] = [
             0x372b24,
             0x0d0a09,
         ),
-        lo(244, 84, 28, 170, 0, DIR_UP, 15, 11),
+        lo(244, 84, 28, 170, 0, DIR_DOWN, 15, 11),
     ],
     // L5: TRACE/LEAD_LINES - keep one main tracer rake tied to the front so motion strengthens the battle-line instead of floating freely.
     [
@@ -204,7 +204,7 @@ pub(super) const PRESET_DIGITAL_MATRIX: [[u64; 2]; 8] = [
             0x081821,
             0x01050a,
         ),
-        lo(192, 88, 20, 152, 8, DIR_UP, 14, 12),
+        lo(192, 88, 20, 152, 8, DIR_DOWN, 14, 12),
     ],
     // L6: GRID - keep only a tiny floor scan proof so the chamber stays digital without rebuilding a technical ring shell.
     [

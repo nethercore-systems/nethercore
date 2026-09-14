@@ -4,29 +4,29 @@
 // kind = radiance
 // variants = [TILES, HEX, STONE, SAND, WATER, GRATING, GRASS, PAVEMENT]
 // domains = []
-// field intensity = { label="contrast", map="u8_01" }
+// field intensity = { label="layer_gain", map="u8_01" }
 // field param_a = { label="scale", map="u8_lerp", min=0.5, max=16.0, unit="x" }
 // field param_b = { label="gap_width", map="u8_lerp", min=0.0, max=0.2 }
-// field param_c = { label="roughness", map="u8_01" }
-// field param_d = { label="phase", map="u8_01" }
+// field param_c = { label="variation", map="u8_01" }
+// field param_d = { label="phase", map="u8_lerp", min=0.0, max=0.99609375, unit="turns" }
 // @epu_meta_end
 
 // ============================================================================
 // PLANE - Ground Plane Textures
 // Opcode: 0x0F
-// Role: Radiance (additive feature layer)
+// Role: Feature layer; follows the authored blend mode
 //
 // Packed fields:
 //   color_a: Primary surface color (RGB24)
 //   color_b: Secondary/grout/gap color (RGB24)
-//   intensity: Pattern contrast/brightness (0..255 -> 0..1)
+//   intensity: Layer gain; multiplies alpha_a (0..255 -> 0..1)
 //   param_a: Pattern scale (0..255 -> 0.5..16.0)
 //   param_b: Gap width (0..255 -> 0..0.2)
-//   param_c: Roughness (0..255 -> 0..1)
-//   param_d: Phase (0..255 -> 0..1)
-//   direction: Plane normal (oct-u16)
+//   param_c: Color/pattern variation (0..255 -> 0..1); STONE/SAND/GRASS/PAVEMENT only
+//   param_d: WATER ripple phase (raw/256 turns, no duplicated endpoint); inactive in other variants
+//   direction: Toward the visible plane (oct-u16): down for floor, up for ceiling
 //   alpha_a: Pattern alpha (0..15 -> 0..1)
-//   alpha_b: Unused (set to 0)
+//   alpha_b: Unused; stored nibble preserved
 //
 // Meta (via meta5):
 //   domain_id: Ignored (always planar projection)
@@ -37,7 +37,7 @@
 const PLANE_VARIANT_TILES: u32 = 0u;      // Regular grid with grout
 const PLANE_VARIANT_HEX: u32 = 1u;        // Hexagonal cells with edges
 const PLANE_VARIANT_STONE: u32 = 2u;      // Irregular stone with noise displacement
-const PLANE_VARIANT_SAND: u32 = 3u;       // Low-freq noise + grain, optional drift
+const PLANE_VARIANT_SAND: u32 = 3u;       // Static low-freq noise + grain
 const PLANE_VARIANT_WATER: u32 = 4u;      // Layered sinusoidal ripples
 const PLANE_VARIANT_GRATING: u32 = 5u;    // Parallel bars with gaps
 const PLANE_VARIANT_GRASS: u32 = 6u;      // Noise-based with directional streaks
@@ -153,32 +153,22 @@ fn eval_plane_hex(
     uv: vec2f,
     gap: f32
 ) -> vec2f {
-    // Returns (pattern_mask, cell_hash)
-    // Hex grid constants
-    let hex_scale = vec2f(1.0, 1.7320508); // 1, sqrt(3)
-    let hex_half = hex_scale * 0.5;
+    // Compare the two triangular-lattice site families in physical UV units.
+    let lattice = vec2f(1.0, 1.7320508);
+    let cell_a = floor(uv / lattice + 0.5);
+    let cell_b = floor((uv + lattice * 0.5) / lattice + 0.5);
+    let a = uv - cell_a * lattice;
+    let b = uv + lattice * 0.5 - cell_b * lattice;
+    let use_b = dot(a, a) > dot(b, b);
+    let q = abs(select(a, b, use_b));
 
-    // Two offset grids
-    let a = (uv / hex_scale) - floor(uv / hex_scale + 0.5);
-    let b = ((uv + hex_half) / hex_scale) - floor((uv + hex_half) / hex_scale + 0.5);
+    // Same regular-hex half-planes as CELL, without its cylinder/period logic.
+    let edge_distance = 0.5 - max(q.x, 0.5 * q.x + 0.8660254 * q.y);
+    let surface_mask = smoothstep(gap - 0.01, gap + 0.01, edge_distance);
 
-    // Pick closer cell
-    let use_b = length(a) > length(b);
-    let hex_uv = select(a, b, use_b);
-    let hex_cell = select(floor(uv / hex_scale + 0.5), floor((uv + hex_half) / hex_scale + 0.5), use_b);
-
-    // Hexagonal distance (approximate)
-    let hex_dist = max(abs(hex_uv.x), abs(hex_uv.y) * 0.5 + abs(hex_uv.x) * 0.5);
-
-    // Edge mask
-    let edge_threshold = 0.5 - gap;
-    let aa_width = 0.01;
-    let edge_mask = smoothstep(edge_threshold + aa_width, edge_threshold - aa_width, hex_dist);
-
-    // Cell hash for color variation
-    let cell_hash = plane_hash21(hex_cell);
-
-    return vec2f(1.0 - edge_mask, cell_hash);
+    // Doubled site coordinates distinguish the two interleaved cell families.
+    let cell_id = select(cell_a * 2.0, cell_b * 2.0 - 1.0, use_b);
+    return vec2f(surface_mask, plane_hash21(cell_id));
 }
 
 // STONE variant: irregular stone with noise displacement
@@ -283,13 +273,13 @@ fn eval_plane_grating(
     // Returns (bar_mask, bar_index_hash)
     // Compute bar position
     let bar_width = 1.0 - gap * 5.0; // Invert gap to bar ratio
-    let bar_period = 1.0;
-
     let u_fract = fract(uv.x);
 
-    // Distance to bar center
-    let bar_mask = smoothstep(0.5 - bar_width * 0.5 - 0.01, 0.5 - bar_width * 0.5 + 0.01, abs(u_fract - 0.5));
-    let final_mask = 1.0 - bar_mask;
+    // Increasing gap shrinks the actual half-width, not its complement.
+    let half_width = bar_width * 0.5;
+    var final_mask = 1.0 - smoothstep(half_width - 0.01, half_width + 0.01, abs(u_fract - 0.5));
+    if bar_width <= 0.0 { final_mask = 0.0; }
+    if bar_width >= 1.0 { final_mask = 1.0; }
 
     // Bar index for variation
     let bar_index = floor(uv.x);

@@ -161,7 +161,7 @@ pub(crate) fn create_frame_bind_group_layout(
         // =====================================================================
 
         // Binding 11: EPU SH9 storage buffer (256 entries, 144 bytes each)
-        // Pre-computed L2 (9 coefficient) diffuse irradiance extracted from a coarse radiance mip.
+        // Pre-computed L2 (9 coefficient) diffuse irradiance extracted from source radiance (mip 0).
         wgpu::BindGroupLayoutEntry {
             binding: 11,
             visibility: wgpu::ShaderStages::FRAGMENT,

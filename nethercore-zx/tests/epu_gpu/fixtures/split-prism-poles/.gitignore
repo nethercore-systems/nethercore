@@ -1,0 +1,2 @@
+# Only this immutable stored diagnostic INPUT is source; GPU output dumps stay ignored.
+!/split-prism-poles-input.bin

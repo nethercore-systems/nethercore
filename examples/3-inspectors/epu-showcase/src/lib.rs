@@ -294,15 +294,7 @@ pub extern "C" fn render() {
 
         // Copy current scene to mutable buffer and patch animation phases.
         let mut buf = *current_scene_layers();
-        let speeds = current_anim_speeds();
-        for layer in 0..8 {
-            let spd = speeds[layer] as u32;
-            if spd > 0 {
-                let phase = ((FRAME.wrapping_mul(spd)) & 0xFF) as u64;
-                // Patch param_d: bits 31..24 of the lo word (buf[layer][1])
-                buf[layer][1] = (buf[layer][1] & !0xFF000000) | (phase << 24);
-            }
-        }
+        constants::animate_phases(&mut buf, current_anim_speeds(), FRAME);
         epu_set(buf.as_ptr() as *const u64);
 
         if SHOW_PROBE {
@@ -365,6 +357,7 @@ fn opcode_name(opcode: u8) -> &'static [u8] {
         0x15 => b"ADVECT",
         0x16 => b"SURFACE",
         0x17 => b"MASS",
+        0x18 => b"SCATTER_PHASED",
         _ => b"???",
     }
 }

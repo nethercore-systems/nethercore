@@ -110,6 +110,116 @@ pub const fn lo(
         | (alpha_b & 0xF)
 }
 
+/// Apply this showcase's phase drivers to a fresh copy of an authored program.
+/// Other guest code may deliberately animate any parameter; this helper never
+/// treats a seed, height, ring tilt or other structural field as cyclic phase.
+pub fn animate_phases(layers: &mut [[u64; 2]; 8], speeds: &[u8; 8], frame: u32) {
+    for (layer, &speed) in layers.iter_mut().zip(speeds) {
+        if speed == 0 {
+            continue;
+        }
+        let opcode = layer[0] >> 59;
+        let variant = (layer[0] >> 48) & 7;
+        let pc = (layer[1] >> 32) & 255;
+        let shift = match opcode {
+            OP_SCATTER_PHASED => 32,
+            OP_DECAL | OP_GRID | OP_BAND | OP_MOTTLE | OP_ADVECT | OP_SURFACE | OP_MASS => 24,
+            OP_FLOW if pc & 15 <= 2 => 24,
+            OP_VEIL if variant == VEIL_RAIN_WALL => 24,
+            OP_PLANE if variant == PLANE_WATER => 24,
+            OP_PORTAL if variant == PORTAL_VORTEX && pc != 0 => 24,
+            OP_LOBE if pc != 0 => 24,
+            _ => continue,
+        };
+        let initial = ((layer[1] >> shift) & 255) as u8;
+        let phase = initial.wrapping_add(frame.wrapping_mul(u32::from(speed)) as u8);
+        layer[1] = (layer[1] & !(255u64 << shift)) | (u64::from(phase) << shift);
+    }
+}
+
+#[cfg(test)]
+mod phase_tests {
+    use super::*;
+
+    #[test]
+    fn phase_only_preserves_offsets_seeds_siblings_and_counter_wrap() {
+        let cases = [
+            (OP_DECAL, 0, 0, Some(24)),
+            (OP_GRID, 0, 0, Some(24)),
+            (OP_FLOW, 0, 0x20, Some(24)),
+            (OP_FLOW, 0, 0x21, Some(24)),
+            (OP_FLOW, 0, 0x22, Some(24)),
+            (OP_FLOW, 0, 0x23, None),
+            (OP_VEIL, VEIL_RAIN_WALL, 0, Some(24)),
+            (OP_VEIL, 0, 0, None),
+            (OP_PLANE, PLANE_WATER, 0, Some(24)),
+            (OP_PLANE, 2, 0, None),
+            (OP_PORTAL, PORTAL_VORTEX, 1, Some(24)),
+            (OP_PORTAL, PORTAL_VORTEX, 0, None),
+            (OP_PORTAL, 1, 255, None),
+            (OP_LOBE, 0, 1, Some(24)),
+            (OP_LOBE, 0, 255, Some(24)),
+            (OP_LOBE, 0, 0, None),
+            (OP_BAND, 0, 0, Some(24)),
+            (OP_MOTTLE, 1, 0, Some(24)),
+            (OP_ADVECT, 1, 0, Some(24)),
+            (OP_SURFACE, 1, 0, Some(24)),
+            (OP_MASS, 1, 0, Some(24)),
+            (OP_SCATTER_PHASED, 0, 0, Some(32)),
+            (OP_SCATTER_PHASED, 1, 255, Some(32)),
+            (OP_RAMP, 0, 0, None),
+            (OP_SECTOR, 0, 0, None),
+            (OP_SILHOUETTE, 1, 0, None),
+            (OP_SPLIT, 7, 0, None),
+            (OP_CELL, 5, 0, None),
+            (OP_PATCHES, 0, 0, None),
+            (OP_APERTURE, 3, 0, None),
+            (OP_SCATTER, 1, 0, None),
+            (OP_TRACE, 2, 0, None),
+            (OP_ATMOSPHERE, 2, 0, None),
+            (OP_CELESTIAL, 4, 0, None),
+            (0, 0, 0, None),
+            (31, 7, 0, None),
+        ];
+        for (op, variant, pc, shift) in cases {
+            for initial in [0u64, 127, 192, 255] {
+                let mut base = [
+                    hi_meta(
+                        op,
+                        REGION_ALL,
+                        BLEND_LERP,
+                        DOMAIN_TANGENT_LOCAL,
+                        variant,
+                        0xabcdef,
+                        0x314159,
+                    ),
+                    lo(91, 37, 203, pc, 53, 0x2479, 7, 15),
+                ];
+                if let Some(s) = shift {
+                    base[1] = (base[1] & !(255u64 << s)) | (initial << s);
+                }
+                for frame in [0, 1, 31, 255, 256, u32::MAX] {
+                    for speed in [0u8, 1, 2, 255] {
+                        let mut layers = [base; 8];
+                        let mut expected = layers;
+                        let mut speeds = [0; 8];
+                        speeds[3] = speed;
+                        if let Some(s) = shift {
+                            let phase = (initial + u64::from(frame) * u64::from(speed)) % 256;
+                            expected[3][1] = (base[1] & !(255u64 << s)) | (phase << s);
+                        }
+                        animate_phases(&mut layers, &speeds, frame);
+                        assert_eq!(
+                            layers, expected,
+                            "op={op} variant={variant} pc={pc} frame={frame} speed={speed}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
 // =============================================================================
 // Opcodes (NOP=0; bounds=1..7; features=8..)
 // =============================================================================
@@ -145,7 +255,7 @@ pub const SPLIT_TIER: u64 = 6;
 pub const SPLIT_FACE: u64 = 7;
 
 /// CELL - Voronoi/mosaic cells
-/// Variants: 0=GRID, 1=HEX, 2=VORONOI, 3=RADIAL, 4=SHATTER, 5=BRICK
+/// Variants: 0=GRID, 1=HEX, 2=VORONOI, 3=RADIAL, 4=SHATTER, 5=BRICK, 6=WARPED_RADIAL
 pub const OP_CELL: u64 = 0x05;
 
 /// PATCHES - Noise patches
@@ -210,6 +320,9 @@ pub const OP_SURFACE: u64 = 0x16;
 /// Variants: 0=BANK, 1=SHELF, 2=PLUME, 3=VEIL
 pub const OP_MASS: u64 = 0x17;
 
+/// SCATTER_PHASED - stable points; phase is param_c, seed is param_d.
+pub const OP_SCATTER_PHASED: u64 = 0x18;
+
 // =============================================================================
 // Domain ID Constants (for meta5 encoding)
 // =============================================================================
@@ -239,6 +352,7 @@ pub const CELL_VORONOI: u64 = 2;
 pub const CELL_RADIAL: u64 = 3;
 pub const CELL_SHATTER: u64 = 4;
 pub const CELL_BRICK: u64 = 5;
+pub const CELL_WARPED_RADIAL: u64 = 6;
 
 // PATCHES variants
 pub const PATCHES_BLOBS: u64 = 0;
@@ -375,6 +489,7 @@ pub const BLEND_MULTIPLY: u64 = 1;
 pub const BLEND_MAX: u64 = 2;
 pub const BLEND_LERP: u64 = 3;
 pub const BLEND_SCREEN: u64 = 4;
+/// RGB Offset (legacy identifier): clamped signed RGB offset, not HSV modulation.
 pub const BLEND_HSV_MOD: u64 = 5;
 pub const BLEND_MIN: u64 = 6;
 pub const BLEND_OVERLAY: u64 = 7;

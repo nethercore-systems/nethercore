@@ -20,7 +20,7 @@ use crate::constants::*;
 // L4: PORTAL/RIFT            FLOOR       ADD       toxic runoff breach / waste sump
 // L5: TRACE/LEAD_LINES       WALLS|FLOOR ADD       exposed hazard piping / conduit runs
 // L6: MASS/PLUME             SKY|WALLS   SCREEN    poisonous exhaust cloud tied to the ruin
-// L7: SCATTER/DUST           ALL         ADD       sparse toxic fallout
+// L7: SCATTER_PHASED/DUST    ALL         ADD       fixed-point full-range fallout twinkle
 pub(super) const PRESET_TOXIC_WASTELAND: [[u64; 2]; 8] = [
     // L0: RAMP - start from a dirty yellow sky into a near-black yard so the scene reads as open poisoned exterior before any hazard accents.
     [
@@ -51,7 +51,7 @@ pub(super) const PRESET_TOXIC_WASTELAND: [[u64; 2]; 8] = [
             0x434733,
             0x0b0d08,
         ),
-        lo(236, 112, 34, 170, 0, DIR_UP, 15, 13),
+        lo(236, 112, 34, 170, 0, DIR_DOWN, 15, 13),
     ],
     // L3: MASS/BANK - frame the apron with collapsed outer works so the exterior gets real rubble shoulders instead of flat toxic walls.
     [
@@ -105,10 +105,10 @@ pub(super) const PRESET_TOXIC_WASTELAND: [[u64; 2]; 8] = [
         ),
         lo(124, 96, 170, 92, 0, DIR_LEFT, 8, 2),
     ],
-    // L7: SCATTER/DUST - keep fallout sparse and dirty so it supports the poisoned yard without becoming the main event.
+    // L7: SCATTER_PHASED/DUST - fixed seed 12, phase in param_c, full-range per-point brightness; no respawn.
     [
         hi_meta(
-            OP_SCATTER,
+            OP_SCATTER_PHASED,
             REGION_ALL,
             BLEND_ADD,
             DOMAIN_DIRECT3D,
@@ -116,7 +116,7 @@ pub(super) const PRESET_TOXIC_WASTELAND: [[u64; 2]; 8] = [
             0xb8cf63,
             0x62731f,
         ),
-        lo(18, 10, 18, 0x16, 12, DIR_DOWN, 4, 1),
+        lo(18, 10, 18, 0, 12, DIR_DOWN, 4, 15),
     ],
 ];
 
@@ -128,8 +128,8 @@ pub(super) const PRESET_TOXIC_WASTELAND: [[u64; 2]; 8] = [
 //
 // L0: SECTOR/BOX            ALL         LERP      interior arcade bounds
 // L1: GRID                  FLOOR       ADD       reflective floor scan lattice (animated)
-// L2: PLANE/PAVEMENT        FLOOR       LERP      glossy arcade deck
-// L3: CELL/BRICK            WALLS       LERP      clustered cabinet-row blocks
+// L2: CELL/BRICK            (bounds)    LERP      clustered cabinet-row blocks
+// L3: PLANE/PAVEMENT        ALL         LERP      projected deck after bounds paint
 // L4: DECAL/RECT            WALLS       ADD       hero glowing cabinet / marquee planes
 // L5: FLOW                  FLOOR       SCREEN    glossy floor reflection drift (animated)
 // L6: LOBE                  ALL         ADD       playful neon room glow (animated)
@@ -153,20 +153,8 @@ pub(super) const PRESET_NEON_ARCADE: [[u64; 2]; 8] = [
         hi(OP_GRID, REGION_FLOOR, BLEND_ADD, 0, 0x97ffff, 0x000000),
         lo(156, 36, 44, 0x18, 0, 0, 12, 0),
     ],
-    // L2: PLANE/PAVEMENT - darker glossy deck so the room reads through reflections, not floor brightness.
-    [
-        hi_meta(
-            OP_PLANE,
-            REGION_FLOOR,
-            BLEND_LERP,
-            DOMAIN_DIRECT3D,
-            PLANE_PAVEMENT,
-            0x1d0d30,
-            0x05030a,
-        ),
-        lo(255, 108, 10, 46, 0, DIR_UP, 15, 14),
-    ],
-    // L3: CELL/BRICK - push the cabinet-row wall rhythm harder so it clearly owns the direct background.
+    // L2: CELL/BRICK - full bounds paint, before the projected floor.
+    // Its stored region bits do not restrict this bounds evaluator.
     [
         hi_meta(
             OP_CELL,
@@ -179,6 +167,20 @@ pub(super) const PRESET_NEON_ARCADE: [[u64; 2]; 8] = [
         ),
         lo(255, 22, 232, 108, 0, DIR_FORWARD, 15, 0),
     ],
+    // L3: PLANE/PAVEMENT - project the deck after the last opaque bounds paint.
+    // ALL bypasses CELL ownership; DIR_DOWN itself confines this plane below.
+    [
+        hi_meta(
+            OP_PLANE,
+            REGION_ALL,
+            BLEND_LERP,
+            DOMAIN_DIRECT3D,
+            PLANE_PAVEMENT,
+            0x1d0d30,
+            0x05030a,
+        ),
+        lo(255, 108, 10, 46, 0, DIR_DOWN, 15, 14),
+    ],
     // L4: DECAL/RECT - support the cabinet row with restrained marquee planes instead of broad wall wash.
     [
         hi(OP_DECAL, REGION_WALLS, BLEND_ADD, 0, 0xfff29a, 0xff84cf),
@@ -187,7 +189,7 @@ pub(super) const PRESET_NEON_ARCADE: [[u64; 2]; 8] = [
     // L5: FLOW - keep a glossy floor reflection drift, but subordinate it to the wall rhythm.
     [
         hi(OP_FLOW, REGION_FLOOR, BLEND_SCREEN, 0, 0x90f8ff, 0xffa767),
-        lo(76, 40, 48, 0x1d, 0, DIR_RIGHT, 7, 2),
+        lo(76, 40, 48, 0x12, 0, DIR_RIGHT, 7, 2),
     ],
     // L6: LOBE - keep a playful room pulse, but avoid letting it overtake the cabinet wall read.
     [

@@ -8,7 +8,7 @@
 // field param_a = { label="scale", map="u8_lerp", min=0.5, max=12.0, unit="x" }
 // field param_b = { label="coverage", map="u8_01" }
 // field param_c = { label="breakup", map="u8_01" }
-// field param_d = { label="phase", map="u8_01" }
+// field param_d = { label="phase", map="u8_lerp", min=0.0, max=0.99609375, unit="turns" }
 // @epu_meta_end
 
 // ============================================================================
@@ -28,7 +28,7 @@
 //   param_a: scale (0..255 -> 0.5..12.0)
 //   param_b: coverage / slab width
 //   param_c: breakup / irregularity
-//   param_d: loop phase
+//   param_d: Guest-owned loop phase (raw/256 turns, no duplicated endpoint)
 //   direction: prevailing travel direction / wind axis
 //   alpha_a: layer alpha
 //   alpha_b: unused
@@ -81,13 +81,24 @@ fn advect_coords_direct3d(dir: vec3f, axis: vec3f) -> vec4f {
     return vec4f(coords, facing_gate);
 }
 
+// Close the undefined azimuth at either pole without fading layer coverage.
+// Within transverse radius 0.05, smoothstep(r/0.05)/r has this finite form.
+fn advect_closed_azimuth(x: f32, z: f32) -> vec2f {
+    let r = length(vec2f(x, z));
+    if r < 0.05 {
+        let scale = r * (3.0 - 2.0 * (r / 0.05)) / 0.0025;
+        return vec2f(z, x) * scale;
+    }
+    let angle = atan2(x, z);
+    return vec2f(cos(angle), sin(angle));
+}
+
 fn advect_coords_cyl(dir: vec3f, axis: vec3f) -> vec3f {
     let basis = advect_build_basis(axis);
     let x = dot(dir, basis[0]);
     let y = dot(dir, basis[1]);
     let z = dot(dir, basis[2]);
-    let angle = atan2(x, z);
-    return vec3f(cos(angle), sin(angle), y);
+    return vec3f(advect_closed_azimuth(x, z), y);
 }
 
 fn advect_coords_polar(dir: vec3f, axis: vec3f) -> vec3f {
@@ -95,9 +106,8 @@ fn advect_coords_polar(dir: vec3f, axis: vec3f) -> vec3f {
     let x = dot(dir, basis[0]);
     let y = dot(dir, basis[1]);
     let z = dot(dir, basis[2]);
-    let angle = atan2(x, z);
     let radius = acos(clamp(y, -1.0, 1.0)) / PI;
-    return vec3f(cos(angle) * radius, sin(angle) * radius, radius * 2.0 - 1.0);
+    return vec3f(advect_closed_azimuth(x, z) * radius, radius * 2.0 - 1.0);
 }
 
 fn eval_advect(
@@ -140,7 +150,7 @@ fn eval_advect(
         }
     }
 
-    let coords_shaped = epu_body_curve_coords(coords, breakup, phase01 + 0.19);
+    let coords_shaped = epu_body_curve_coords(coords, breakup, phase01, 0.19);
     let q = coords_shaped * scale;
     let body_noise = advect_fbm3(q * 0.85 + axis * travel * 0.7, 3u) * 0.5 + 0.5;
     let breakup_noise = advect_fbm3(q * 1.7 - axis * travel * 1.3 + vec3f(13.0, 7.0, 19.0), 2u) * 0.5 + 0.5;
@@ -148,7 +158,7 @@ fn eval_advect(
         vec3f(q.y * 0.75 + travel * 0.2, q.z * 0.75 - travel * 0.15, q.x * 0.35 + 9.0),
         3u
     ) * 0.5 + 0.5;
-    let guide_relief = epu_relief_wave(vec2f(q.y * 0.31, q.z * 0.23), phase01 + travel * 0.11);
+    let guide_relief = epu_loop_relief_wave(vec2f(q.y * 0.31, q.z * 0.23), travel * 0.11, phase01);
     let front_axis = q.x
         + q.y * mix(-0.1, 0.2, breakup)
         + q.z * mix(0.04, 0.16, breakup)

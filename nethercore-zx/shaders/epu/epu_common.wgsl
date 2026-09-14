@@ -45,7 +45,8 @@ const OP_MOTTLE: u32 = 0x14u;       // Abstract texture breakup / base variation
 const OP_ADVECT: u32 = 0x15u;       // Broad transport / sheet motion carrier
 const OP_SURFACE: u32 = 0x16u;      // Broad material / surface response carrier
 const OP_MASS: u32 = 0x17u;         // Broad scene-owning body carrier
-// 0x18..0x1F reserved for future feature ops
+const OP_SCATTER_PHASED: u32 = 0x18u; // Guest-phase point brightness; legacy SCATTER unchanged
+// 0x19..0x1F reserved for future feature ops
 
 // ============================================================================
 // REGION MASK CONSTANTS (3-bit bitfield)
@@ -143,17 +144,27 @@ fn epu_relief_envelope(x: f32, lo0: f32, lo1: f32, hi0: f32, hi1: f32) -> f32 {
     return smoothstep(lo0, lo1, x) * (1.0 - smoothstep(hi0, hi1, x));
 }
 
+// Keep spatial shape offsets independent from one-turn guest animation.
+// Fractional spatial frequencies remain useful; temporal harmonics must close.
+fn epu_loop_relief_wave(p: vec2f, shape_phase: f32, phase01: f32) -> f32 {
+    let theta = fract(phase01) * TAU;
+    let q0 = dot(p, vec2f(2.73, -4.11)) + shape_phase * TAU;
+    let q1 = dot(p, vec2f(-5.27, -1.93)) - shape_phase * PI;
+    let q2 = dot(p, vec2f(3.17, 6.21)) + shape_phase * TAU * 0.61803398875;
+    return (sin(q0 + theta) + sin(q1 - theta) + sin(q2 + theta)) * (1.0 / 3.0);
+}
+
 // Bend a nominal xyz body frame into a slightly curved local space so layers
 // that use x/y/z masks do not collapse back into obvious slab/panel guides.
-fn epu_body_curve_coords(p: vec3f, breakup: f32, phase: f32) -> vec3f {
+fn epu_body_curve_coords(p: vec3f, breakup: f32, phase01: f32, shape_phase: f32) -> vec3f {
     let amt = breakup * breakup;
     if amt <= 1e-5 {
         return p;
     }
 
-    let bend0 = epu_relief_wave(vec2f(p.y * 0.43, p.z * 0.31), phase + p.x * 0.19);
-    let bend1 = epu_relief_wave(vec2f(p.z * 0.37, p.x * 0.29), phase * 0.73 + p.y * 0.23);
-    let bend2 = epu_relief_wave(vec2f(p.x * 0.34, p.y * 0.27), phase * 1.21 - p.z * 0.17);
+    let bend0 = epu_loop_relief_wave(vec2f(p.y * 0.43, p.z * 0.31), shape_phase + p.x * 0.19, phase01);
+    let bend1 = epu_loop_relief_wave(vec2f(p.z * 0.37, p.x * 0.29), shape_phase * 0.73 + p.y * 0.23, phase01);
+    let bend2 = epu_loop_relief_wave(vec2f(p.x * 0.34, p.y * 0.27), shape_phase * 1.21 - p.z * 0.17, phase01);
     let bend_amt = mix(0.0, 0.34, amt);
 
     return vec3f(
@@ -206,7 +217,9 @@ fn epu_hash11(x: f32) -> f32 {
 // This is used by shared noise carriers that were exposing faint guide planes
 // in direct background views.
 fn epu_noise_hash31(p: vec3f) -> f32 {
-    var q = fract(p * vec3f(0.1031, 0.1030, 0.0973));
+    // Every caller supplies integer lattice corners. Materialize once so
+    // adjacent-cell expressions hash the same corner through the same path.
+    var q = fract(vec3f(vec3i(p)) * vec3f(0.1031, 0.1030, 0.0973));
     q += dot(q, q.yzx + 33.33);
     return fract((q.x + q.y) * q.z);
 }
@@ -293,9 +306,14 @@ fn octahedral_decode(oct: vec2f) -> vec3f {
 }
 
 fn decode_dir16(encoded: u32) -> vec3f {
-    let u = f32(encoded & 0xFFu) / 255.0 * 2.0 - 1.0;
-    let v = f32((encoded >> 8u) & 0xFFu) / 255.0 * 2.0 - 1.0;
-    return octahedral_decode(vec2f(u, v));
+    // Fold exact byte-lattice coordinates before normalization. Dividing by
+    // 255 first can turn an exact octahedron edge into a nonzero component.
+    var xy = vec2i(i32(encoded & 0xFFu), i32((encoded >> 8u) & 0xFFu)) * 2 - vec2i(255);
+    let z = 255 - abs(xy.x) - abs(xy.y);
+    if z < 0 {
+        xy = (vec2i(255) - abs(xy.yx)) * select(vec2i(1), vec2i(-1), xy < vec2i(0));
+    }
+    return normalize(vec3f(vec2f(xy), f32(z)));
 }
 
 // ============================================================================
@@ -472,25 +490,6 @@ fn sharpen_region_weights(weights: RegionWeights, exponent: f32) -> RegionWeight
     ));
 }
 
-// Compose sequential bounds passes without letting a later organizer erase the
-// floor/sky ownership established by an earlier one. This keeps multi-bounds
-// authoring usable for outdoor scenes where one layer sets a horizon contract
-// and another adds secondary structure.
-fn compose_bounds_regions(base: RegionWeights, next: RegionWeights, amount: f32) -> RegionWeights {
-    let preserved = RegionWeights(
-        max(base.sky, next.sky),
-        max(base.wall, next.wall),
-        max(base.floor, next.floor)
-    );
-    let composed = sharpen_region_weights(normalize_region_weights(preserved), 2.25);
-    let t = epu_saturate(amount);
-    return normalize_region_weights(RegionWeights(
-        mix(base.sky, composed.sky, t),
-        mix(base.wall, composed.wall, t),
-        mix(base.floor, composed.floor, t)
-    ));
-}
-
 // Extract bounds direction from a layer's instruction.
 // Bounds layers that define a direction will update bounds_dir for subsequent features.
 fn bounds_dir_from_layer(instr: vec4u, opcode: u32, prev_dir: vec3f) -> vec3f {
@@ -506,26 +505,17 @@ fn bounds_dir_from_layer(instr: vec4u, opcode: u32, prev_dir: vec3f) -> vec3f {
 // mask is a 3-bit bitfield: SKY=0b100, WALLS=0b010, FLOOR=0b001
 fn region_weight(weights: RegionWeights, mask: u32) -> f32 {
     var w = 0.0;
-    var bits = 0u;
     if (mask & REGION_SKY) != 0u {
         w += weights.sky;
-        bits += 1u;
     }
     if (mask & REGION_WALLS) != 0u {
         w += weights.wall;
-        bits += 1u;
     }
     if (mask & REGION_FLOOR) != 0u {
         w += weights.floor;
-        bits += 1u;
     }
 
-    // Dedicated single-region features should remain readable even when bounds
-    // composition softens ownership nearby. Multi-region masks already have
-    // enough coverage, so only boost the focused one-region case.
-    if bits == 1u {
-        return pow(epu_saturate(w), 0.72);
-    }
+    // Sum selected ownership without a mask-cardinality-dependent gain.
     return epu_saturate(w);
 }
 
@@ -580,9 +570,9 @@ fn apply_blend(dst: vec3f, s: LayerSample, blend: u32) -> vec3f {
             return epu_saturate3(vec3f(1.0) - (vec3f(1.0) - dst) * (vec3f(1.0) - src * a));
         }
         case BLEND_HSV_MOD: {
-            // HSV modulation placeholder - shifts hue/sat/val by src
-            // For now, approximate with additive hue shift via color rotation
-            // Full HSV would require rgb<->hsv conversion
+            // RGB Offset: signed per-component offset, clamped to [0, 1].
+            // BLEND_HSV_MOD is the legacy identifier, not HSV modulation.
+            // Source 0.5 is neutral; preserve this math for cartridge compatibility.
             let shifted = dst + (src - vec3f(0.5)) * a * 2.0;
             return epu_saturate3(shifted);
         }

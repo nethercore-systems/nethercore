@@ -44,34 +44,29 @@ fn set_clear_color(color: u32)              // Auto-clear color (0xRRGGBBAA), de
 
 Tick rate is controlled by the host/session (and baked into ROM netplay metadata for NCHS). Render mode is declared in `nether.toml` and baked into ROM metadata; it is not currently configured via FFI.
 
-### Mode 2 Migration (2025)
+### Material lighting contracts (Modes 2 and 3)
 
-**Nethercore ZX Mode 2 was migrated from PBR-lite to Metallic-Roughness Blinn-Phong:**
+Both modes use the shared normalized Blinn-Phong direct-light helper with the
+adopted coefficient fit `0.0397436 * shininess + 0.0856832`. This is not the
+complete Gotanda microfacet BRDF: direct specular uses constant specular color
+and no geometry term. Environment filtering remains a separate approximation.
 
-**What changed in the rendering:**
-- Specular model: GGX → Normalized Blinn-Phong (Gotanda 2010)
-- Environment reflections: Removed (slot 2 freed)
-- Specular color: Derived from metallic (F0=0.04 for dielectrics, albedo for metals)
-- Roughness mapping: Power curve `pow(256.0, 1.0 - roughness)` (0→256, 1→1 shininess range)
-- Rim lighting: Added as uniform-only feature (same code as Mode 3)
-- Ambient lighting: Now uses Gotanda-based energy conservation (like Mode 3)
+- Mode 2 slot 1 is MRE (metallic, roughness, emissive). Roughness maps linearly:
+  `shininess = 1 + 255 * (1 - roughness)`, not exponentially. Specular color mixes
+  dielectric 0.04 with albedo according to metallic.
+- Mode 3 slot 1 is SSE (specular damping, normalized shininess, emissive).
+  Damping 0 means full specular; 1 suppresses it. Normalized shininess maps to
+  exponent `1 + 255 * value`. Slot 2 or a uniform supplies specular color.
+  Mode 3 retains its independent Lambert diffuse response.
+- Both modes use EPU for environment lighting and reflections; reflections were
+  not removed. EPU is not a material texture slot. Slot 3 is the normal map when
+  the vertex format supplies UVs and tangents.
+- Dynamic light functions and material/rim controls remain guest-authored.
+  There is no automatic sun light inferred from an EPU layer.
 
-**What stayed the same (no API changes):**
-- FFI functions: `material_metallic()`, `material_roughness()`, `material_emissive()` work identically
-- Texture slot 1: MRE (R=Metallic, G=Roughness, B=Emissive) layout unchanged
-- Light functions: `light_set()`, `light_color()`, `light_intensity()` all work the same
-- Material workflow: Physics-based metallic-roughness still applies
-
-**Mode 3 changes (related):**
-- Texture slot 1, channel R: Changed from "Rim intensity" to "Specular intensity"
-- Rim lighting now modulated by specular intensity (both specular highlights and rim affect each other)
-
-**Migration guide for existing content:**
-- **Roughness adjustment:** If specular highlights look different, try adjusting roughness ±0.1-0.2 for similar sharpness
-- **Slot 2 matcap:** Previously optional for environment reflections — no longer sampled. Remove `texture_bind_slot(2, ...)` calls (safe no-op)
-- **Rim lighting:** Mode 2 now supports rim lighting via `material_rim(intensity, power)` FFI functions (uniform-only, no texture)
-- **Mode 3 assets:** If you have Mode 3 textures, slot 1.R now controls specular intensity instead of rim intensity
-- **Fresnel effects:** View-dependent grazing angle brightening is gone. Accept as design change or adjust roughness values
+Canonical declarations: `include/zx/mod.rs` and its modules. Shader mappings:
+`nethercore-zx/build_support/generator.rs`. These are existing parameter layouts,
+not a new cartridge migration.
 
 ### Rollback Netcode
 

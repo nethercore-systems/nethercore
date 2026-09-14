@@ -217,8 +217,77 @@ impl NetherManifest {
             anyhow::bail!("WASM file not found at specified path: {}", path.display());
         }
 
-        // 2. Auto-detect from target directory
+        // Cargo owns its target directory and output names. A local target/ may
+        // contain an old build, and shared targets contain other games' outputs.
         let profile = if debug { "debug" } else { "release" };
+        if project_dir.join("Cargo.toml").is_file() {
+            let output = std::process::Command::new("cargo")
+                .args([
+                    "metadata",
+                    "--no-deps",
+                    "--offline",
+                    "--format-version",
+                    "1",
+                ])
+                .current_dir(project_dir)
+                .output()
+                .context("Failed to resolve Cargo output; set build.wasm for a custom output")?;
+            anyhow::ensure!(
+                output.status.success(),
+                "Cargo metadata failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let metadata: serde_json::Value =
+                serde_json::from_slice(&output.stdout).context("Invalid Cargo metadata")?;
+            let manifest_path = project_dir.join("Cargo.toml").canonicalize()?;
+            let package = metadata["packages"]
+                .as_array()
+                .context("Missing Cargo packages")?
+                .iter()
+                .find(|p| {
+                    p["manifest_path"]
+                        .as_str()
+                        .and_then(|s| Path::new(s).canonicalize().ok())
+                        .as_ref()
+                        == Some(&manifest_path)
+                })
+                .context("No Cargo package at project root; set build.wasm explicitly")?;
+            let targets: Vec<_> = package["targets"]
+                .as_array()
+                .context("Missing Cargo targets")?
+                .iter()
+                .filter(|t| {
+                    // Tests, examples and build scripts can have crate_types=["bin"].
+                    // Only Cargo's target kind identifies an ordinary game output.
+                    t["kind"].as_array().is_some_and(|kinds| {
+                        kinds
+                            .iter()
+                            .any(|k| k.as_str().is_some_and(|k| k == "cdylib" || k == "bin"))
+                    })
+                })
+                .collect();
+            anyhow::ensure!(
+                targets.len() == 1,
+                "Expected one Cargo WASM target; set build.wasm explicitly"
+            );
+            let name = targets[0]["name"]
+                .as_str()
+                .context("Missing Cargo target name")?;
+            let target = Path::new(
+                metadata["target_directory"]
+                    .as_str()
+                    .context("Missing Cargo target directory")?,
+            );
+            let path = target
+                .join("wasm32-unknown-unknown")
+                .join(profile)
+                .join(format!("{name}.wasm"));
+            anyhow::ensure!(path.is_file(), "Cargo WASM output not found: {}. Run 'nether compile' or set build.wasm explicitly.", path.display());
+            return Ok(path);
+        }
+
+        // Non-Cargo projects retain the existing fallback. Explicit build.wasm
+        // above is required when a custom script chooses another output path.
         let target_dir = project_dir.join(format!("target/wasm32-unknown-unknown/{}/", profile));
 
         if !target_dir.exists() {

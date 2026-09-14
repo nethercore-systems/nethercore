@@ -131,19 +131,53 @@ impl Default for SectorParams {
     }
 }
 
-/// Parameters for SILHOUETTE bounds.
+/// Parameters for static SILHOUETTE bounds (sky, wall body and floor).
+///
+/// Historical public field names are retained for source compatibility:
+/// `drift_speed` authors wall depth; `drift_amount_q` stores inactive reserved bits.
+/// Neither field animates the silhouette; there is no time or phase input.
+///
+/// ```
+/// use nethercore_zx::graphics::epu::{epu_begin, epu_finish, SilhouetteParams};
+/// let mut builder = epu_begin();
+/// builder.silhouette_bounds(SilhouetteParams {
+///     silhouette_color: [32, 48, 64],
+///     background_color: [128, 160, 192],
+///     drift_speed: 160, // Wall depth byte, not speed: 0.05 + 1.15 * 160/255.
+///     drift_amount_q: 0, // Reserved/inactive; use zero for new authored layers.
+///     ..Default::default()
+/// });
+/// let config = epu_finish(builder);
+/// assert_eq!((config.layers[0][1] >> 24) & 255, 160);
+/// ```
 #[derive(Clone, Copy, Debug)]
 pub struct SilhouetteParams {
+    /// Up axis, packed as an octahedral u16 direction.
     pub up: Vec3,
+    /// Wall RGB; also contributes to the derived floor color.
     pub silhouette_color: [u8; 3],
+    /// Sky RGB; also contributes to the derived floor color.
     pub background_color: [u8; 3],
+    /// Edge softness: 0..255 maps to 0.005..0.1 in up-axis height space.
     pub edge_softness: u8,
+    /// Roofline height bias: 0..255 maps to -0.3..0.5.
     pub horizon_bias: u8,
+    /// Historical name for height span / relief: 0..255 maps to 0.1..1.0.
     pub roughness: u8,
+    /// MOUNTAINS octaves: low 4 bits pack into param_c[7:4]; effective count
+    /// is `1 + (octaves_q & 15) / 2` (1..8). Inactive for other variants.
     pub octaves_q: u8,
+    /// Historical name for reserved/inactive param_c[3:0], not drift amount.
+    /// The builder preserves the low 4 bits; higher bits are masked as before.
+    /// Use zero for new layers, but retain stored values when editing existing ones.
     pub drift_amount_q: u8,
+    /// Historical name for wall depth, packed unchanged into param_d (not speed).
+    /// 0..255 maps to 0.05..1.2 below the roofline in up-axis height space,
+    /// not world-space distance. The wall base is clamped to -1..1.
     pub drift_speed: u8,
+    /// Strength packed into alpha_a (low 4 bits): 0..15 maps to 0..1.
     pub strength: u8,
+    /// Low 3 bits: MOUNTAINS, CITY, FOREST, DUNES, WAVES, RUINS, INDUSTRIAL, SPIRES.
     pub variant_id: u8,
 }
 
@@ -171,6 +205,7 @@ pub struct SplitParams {
     pub axis: Vec3,
     pub sky_color: [u8; 3],
     pub wall_color: [u8; 3],
+    /// Raw byte: nominal blend width = byte / 255 * 0.2; runtime AA floor is 0.001.
     pub blend_width: u8,
     pub wedge_angle: u8,
     pub count: u8,
@@ -193,7 +228,8 @@ impl Default for SplitParams {
     }
 }
 
-/// Parameters for CELL bounds.
+/// Parameters for CELL bounds. HEX uses a regular periodic lattice with density
+/// rounded to whole columns. Gap opacity affects every opening, not region ownership.
 #[derive(Clone, Copy, Debug)]
 pub struct CellParams {
     pub axis: Vec3,
@@ -204,6 +240,7 @@ pub struct CellParams {
     pub fill_ratio: u8,
     pub gap_width: u8,
     pub seed: u8,
+    /// 0..15 opacity of gaps AND unfilled cells, applied once during blending.
     pub gap_alpha: u8,
     pub outline_alpha: u8,
     pub variant_id: u8,
@@ -358,9 +395,9 @@ pub struct ScatterParams {
     pub intensity: u8,
     /// Point density (0..255 maps to 1..256)
     pub density: u8,
-    /// Point size (0..255 maps to 0.001..0.05 rad)
+    /// Raw point-size control (0..255); radius depends on density and variant.
     pub size: u8,
-    /// Twinkle amount (0..15)
+    /// Static per-point brightness variation (0..15); legacy name, not an animation phase.
     pub twinkle_q: u8,
     /// Random seed (0..255)
     pub seed: u8,
@@ -392,15 +429,16 @@ pub struct GridParams {
     pub color: [u8; 3],
     /// Brightness (0..255)
     pub intensity: u8,
-    /// Grid scale (0..255 maps to 1..64)
+    /// Nearest whole repeats (1..64); checker rounds to an even count (2..64).
     pub scale: u8,
     /// Line thickness (0..255 maps to 0.001..0.1)
     pub thickness: u8,
     /// Pattern type
     pub pattern: GridPattern,
-    /// Scroll speed (0..15 maps to 0..2)
+    /// Whole pattern cycles per phase loop (0..15); zero is stationary.
+    /// Checker uses two cells per cycle. Historical rates intentionally change.
     pub scroll_q: u8,
-    /// Looping animation phase (0..255 maps to 0..1).
+    /// Guest cyclic phase: raw / 256. Byte 255 precedes wrap, not a duplicate endpoint.
     ///
     /// Advance this from your game (deterministic) to animate scrolling.
     pub phase: u8,
@@ -601,6 +639,72 @@ impl Default for SurfaceParams {
     }
 }
 
+/// Variants for MASS feature bodies.
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum MassVariant {
+    /// Dense wall-attached front body
+    #[default]
+    Bank = 0,
+    /// Suspended overhang / storm shelf
+    Shelf = 1,
+    /// Rising or leaning lifted body
+    Plume = 2,
+    /// Soft diffuse suspended mass
+    Veil = 3,
+}
+
+/// Parameters for MASS feature.
+#[derive(Clone, Copy, Debug)]
+pub struct MassParams {
+    /// Region mask
+    pub region: EpuRegion,
+    /// Blend mode
+    pub blend: EpuBlend,
+    /// Preferred shaping / lean axis
+    pub dir: Vec3,
+    /// Rim / lit edge tint
+    pub color: [u8; 3],
+    /// Core / recess tint
+    pub color_b: [u8; 3],
+    /// Body density / alpha
+    pub intensity: u8,
+    /// Body scale
+    pub scale: u8,
+    /// Coverage / occupancy
+    pub coverage: u8,
+    /// Breakup / irregularity
+    pub breakup: u8,
+    /// Slow phase drift (0..255 maps to 0..1)
+    pub phase: u8,
+    /// Layer alpha (0-15)
+    pub alpha: u8,
+    /// Domain selection (0=DIRECT3D, 1=AXIS_CYL, 2=AXIS_POLAR)
+    pub domain_id: u8,
+    /// Variant selection
+    pub variant: MassVariant,
+}
+
+impl Default for MassParams {
+    fn default() -> Self {
+        Self {
+            region: EpuRegion::All,
+            blend: EpuBlend::Lerp,
+            dir: Vec3::X,
+            color: [255, 255, 255],
+            color_b: [96, 96, 96],
+            intensity: 160,
+            scale: 48,
+            coverage: 144,
+            breakup: 128,
+            phase: 0,
+            alpha: 12,
+            domain_id: 0,
+            variant: MassVariant::Bank,
+        }
+    }
+}
+
 /// Parameters for LOBE_RADIANCE feature.
 #[derive(Clone, Copy, Debug)]
 pub struct LobeRadianceParams {
@@ -651,9 +755,10 @@ pub struct BandRadianceParams {
     pub width: u8,
     pub offset: u8,
     pub softness: u8,
-    /// Looping modulation phase (0..255 maps to 0..1).
+    /// Cyclic modulation position (byte / 256); zero is a position, not off.
     ///
-    /// Advance this from your game (deterministic) to scroll the modulation around the band.
+    /// Advance in deterministic game update. Use `band_radiance_with_depth` with
+    /// nonzero depth for motion; `band_radiance` keeps a plain ring at every phase.
     pub phase: u8,
     pub alpha: u8,
 }

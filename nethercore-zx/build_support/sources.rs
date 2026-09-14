@@ -112,6 +112,10 @@ pub(crate) const COMMON: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/shaders/epu/features/15_mass.wgsl"
     )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/shaders/epu/features/16_scatter_phased.wgsl"
+    )),
     // Layer dispatch
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -191,6 +195,7 @@ const RERUN_IF_CHANGED_FILES: &[&str] = &[
     "shaders/epu/features/13_advect.wgsl",
     "shaders/epu/features/14_surface.wgsl",
     "shaders/epu/features/15_mass.wgsl",
+    "shaders/epu/features/16_scatter_phased.wgsl",
     // EPU compute shaders
     "shaders/epu/epu_compute_env.wgsl",
     "shaders/epu/epu_compute_blur.wgsl",

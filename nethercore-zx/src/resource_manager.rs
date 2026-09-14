@@ -411,6 +411,14 @@ impl ConsoleResourceManager for ZResourceManager {
         let active = crate::graphics::epu::collect_active_envs(&env_ids);
 
         if !active.unique_ids.is_empty() {
+            // Growth discards radiance and invalidates procedural caches. Size for
+            // both sources before either build can dispatch or skip cached work.
+            let required_layers = active.unique_ids.iter().copied().max().unwrap() + 1;
+            let device = graphics.device().clone();
+            graphics
+                .epu_runtime_mut()
+                .ensure_layer_capacity(&device, required_layers);
+
             let default_config: EpuConfig = default_environment();
             let mut procedural_refs: Vec<(u32, &EpuConfig)> =
                 Vec::with_capacity(active.unique_ids.len());

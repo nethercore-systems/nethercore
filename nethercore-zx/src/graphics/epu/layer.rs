@@ -67,6 +67,8 @@ pub enum EpuOpcode {
     Surface = 0x16,
     /// Broad scene-owning body carrier
     Mass = 0x17,
+    /// Fixed point field with independent, guest-phase-controlled brightness
+    ScatterPhased = 0x18,
 }
 
 // =============================================================================
@@ -122,7 +124,8 @@ pub enum EpuBlend {
     Lerp = 3,
     /// 1 - (1-dst)*(1-src*a) (screen blend)
     Screen = 4,
-    /// HSV shift dst by src
+    /// RGB Offset: clamp(dst + (src - 0.5) * clamp(a, 0, 1) * 2, 0, 1).
+    /// Legacy HSV_MOD identifier; not HSV modulation. Encoding remains 5.
     HsvMod = 5,
     /// dst = min(dst, src * a)
     Min = 6,

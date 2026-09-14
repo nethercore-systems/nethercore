@@ -8,7 +8,7 @@
 // field param_a = { label="wall_r", map="u8_01" }
 // field param_b = { label="wall_g", map="u8_01" }
 // field param_c = { label="wall_b", map="u8_01" }
-// field param_d = { label="thresholds", map="u8_01" }
+// field param_d = { label="thresholds (advanced packed: ceiling high / floor low)", map="u8_lerp", min=0.0, max=255.0 }
 // @epu_meta_end
 
 // ============================================================================
@@ -69,12 +69,7 @@ fn eval_ramp(
     let w_floor = smoothstep(floor_y + soft, floor_y - soft, y);
     let w_wall = 1.0 - w_sky - w_floor;
 
-    // Keep wall weights as structural organizers, but soften the visible wall
-    // paint in strong wall bands so RAMP reads less like a full-shell coat.
-    let organizer_rgb = sky * w_sky + floor * w_floor;
-    let wall_paint_soften = 0.35 * smoothstep(0.2, 0.85, w_wall);
-    let wall_rgb = mix(wall, organizer_rgb, wall_paint_soften);
-    let rgb = sky * w_sky + wall_rgb * w_wall + floor * w_floor;
+    let rgb = sky * w_sky + wall * w_wall + floor * w_floor;
 
     let paint_alpha = instr_alpha_a_f32(instr);
 

@@ -47,38 +47,36 @@ pub static PRESETS: [Preset; PRESET_COUNT] = [
 ];
 
 /// Animation speeds per layer per preset.
-/// Each value is the phase increment per frame (0 = static, 1 = slow, 2 = medium, 4 = fast).
-/// Phase wraps at 256 (one full cycle = 256/speed frames).
-/// Only meaningful for opcodes that read param_d as phase:
-/// FLOW, LOBE, GRID, PLANE, PORTAL, BAND, DECAL.
-/// For SCATTER, patching param_d changes the seed — produces shimmer/respawn, not smooth motion.
-/// Variant-specific note:
-/// treat phase support as a property of the authored variant, not the opcode family.
-/// In this showcase, reliable movers include FLOW, LOBE, GRID, BAND, DECAL,
-/// PLANE/WATER, VEIL/RAIN_WALL, and PORTAL/VORTEX.
-/// PORTAL/RECT stays static, and SCATTER still uses `param_d` as a seed rather than smooth phase.
+/// Each value is the parameter-byte increment per simulation update (0 = static).
+/// The byte wraps modulo 256; its sequence repeats after 256/gcd(256, speed)
+/// updates for nonzero speed. This does not guarantee a visually seamless loop.
+/// `animate_phases` adds each increment to the authored starting phase, using
+/// param_c for SCATTER_PHASED and param_d for supported phase-driven variants.
+/// Seeds, bounds, material patterns and static variants are preserved. Legacy
+/// SCATTER stays static; use SCATTER_PHASED for fixed-point per-point modulation.
+/// These are editable guest recipes, not engine-owned animation restrictions.
 pub static ANIM_SPEEDS: [[u8; 8]; PRESET_COUNT] = [
     //                                   L0 L1 L2 L3 L4 L5 L6 L7
-    [0, 0, 0, 1, 2, 0, 1, 1], // 0: Neon Metropolis (rain streaks slow)
-    [0, 0, 1, 1, 1, 0, 0, 0], // 1: Sakura Shrine (gentle)
-    [0, 0, 3, 0, 0, 4, 0, 0], // 2: Ocean Depths (caustic drift + biolum vent need obvious motion)
-    [0, 1, 0, 0, 0, 0, 0, 1], // 3: Void Station
-    [0, 0, 1, 1, 1, 1, 0, 0], // 4: Desert Mirage (slow heat shimmer)
-    [0, 0, 1, 1, 1, 0, 0, 1], // 5: Enchanted Grove (slow light shafts)
-    [0, 0, 1, 0, 0, 1, 1, 0], // 6: Astral Void (very subtle)
-    [0, 0, 0, 0, 0, 0, 0, 0], // 7: Hell Core (STATIC - no seizures!)
-    [0, 0, 0, 1, 1, 1, 1, 1], // 8: Sky Ruins
-    [0, 0, 4, 4, 4, 0, 2, 4], // 9: Combat Lab (floor scan + wall bay scan + projection field pulse)
-    [0, 0, 3, 5, 0, 1, 1, 0], // 10: Frozen Tundra (two bounds set the ridge/face first; SURFACE glaze/crust then carry the ice bed while ADVECT stays subordinate)
-    [0, 6, 1, 2, 0, 4, 8, 0], // 11: Storm Front (MASS owns the shelf; ADVECT carries subordinate internal transport)
-    [0, 0, 0, 1, 1, 0, 0, 1], // 12: Crystal Cavern (veins + shard shimmer + cold lobe)
-    [0, 0, 0, 0, 1, 0, 0, 1], // 13: Moonlit Graveyard (mist + haze drift)
-    [0, 0, 0, 0, 1, 1, 0, 1], // 14: Alien Jungle (humid haze + spores + canopy drift)
-    [0, 0, 0, 0, 0, 0, 0, 1], // 15: Gothic Cathedral (restrained incense drift only)
-    [0, 0, 0, 0, 0, 1, 0, 1], // 16: Toxic Wasteland (chemical ground shimmer + hazard lobe)
-    [0, 0, 0, 1, 0, 1, 1, 1], // 17: Neon Arcade (scan cadence + CRT drift + glow pulse)
-    [0, 0, 0, 0, 1, 0, 0, 1], // 18: War Zone (smoke drift + flare pulse)
-    [0, 0, 0, 0, 0, 1, 1, 1], // 19: Digital Matrix (code drift + partition band motion)
+    [0, 0, 0, 1, 0, 0, 1, 1], // 0: Neon Metropolis
+    [0, 0, 0, 0, 1, 0, 0, 0], // 1: Sakura Shrine
+    [0, 0, 0, 0, 0, 4, 0, 0], // 2: Ocean Depths
+    [0, 0, 0, 0, 0, 0, 0, 1], // 3: Void Station
+    [0, 0, 0, 0, 1, 1, 0, 0], // 4: Desert Mirage
+    [0, 0, 0, 0, 0, 0, 0, 1], // 5: Enchanted Grove
+    [0, 0, 1, 0, 0, 1, 1, 0], // 6: Astral Void
+    [0, 0, 0, 0, 0, 0, 0, 0], // 7: Hell Core
+    [0, 0, 0, 0, 0, 1, 1, 1], // 8: Sky Ruins
+    [0, 0, 4, 4, 4, 0, 2, 4], // 9: Combat Lab
+    [0, 0, 3, 5, 0, 1, 1, 0], // 10: Frozen Tundra
+    [0, 6, 1, 2, 0, 4, 8, 0], // 11: Storm Front
+    [0, 0, 0, 1, 0, 0, 0, 1], // 12: Crystal Cavern
+    [0, 0, 0, 0, 0, 0, 0, 1], // 13: Moonlit Graveyard
+    [0, 0, 0, 0, 0, 1, 0, 1], // 14: Alien Jungle
+    [0, 0, 0, 0, 0, 0, 0, 1], // 15: Gothic Cathedral
+    [0, 0, 0, 0, 0, 0, 0, 1], // 16: Toxic Wasteland
+    [0, 0, 0, 0, 0, 1, 1, 1], // 17: Neon Arcade
+    [0, 0, 0, 0, 0, 0, 0, 1], // 18: War Zone
+    [0, 0, 0, 0, 0, 0, 1, 1], // 19: Digital Matrix
 ];
 
 /// Preset names for display

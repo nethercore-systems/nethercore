@@ -1,0 +1,4 @@
+# Historical shader inputs are hash-bound evidence; preserve original line endings.
+*.wgsl -text whitespace=cr-at-eol
+# This exact rejected-kernel fixture includes its original final blank line.
+celestial-ring/legacy-ringed.wgsl whitespace=-blank-at-eof

@@ -61,7 +61,8 @@ New to Nethercore? Follow this progression:
 | **mode1-inspector** | Interactive Mode 1 (Matcap) explorer |
 | **mode2-inspector** | Interactive Mode 2 (PBR) explorer |
 | **mode3-inspector** | Interactive Mode 3 (Blinn-Phong) explorer |
-| **epu-showcase** | Curated preset environments + interactive layer controls (F4) |
+| **epu-showcase** | Optional editable compositions + seven capability benchmarks; all 24 active EPU opcodes and guest-owned phase |
+| **epu-inspector** | Packed eight-layer instruction explorer; use the native F4 EPU editor for semantic controls and LOCK/export |
 
 ### 4. Animation & Skinning
 

@@ -64,7 +64,7 @@ fn fs(in: EnvVertexOut) -> @location(0) vec4<f32> {
     let view_ray_cam = normalize(vec3<f32>(view_ray_x, view_ray_y, -1.0));
     let view_ray = cam_right * view_ray_cam.x + cam_up * view_ray_cam.y + cam_back * view_ray_cam.z;
 
-    // Sample background from EPU precomputed octahedral map
+    // Sample procedural EPU directly; imported environments use their source path.
     let env_color = sample_epu_background(env_index, normalize(view_ray));
 
     return env_color;

@@ -4,13 +4,13 @@
 //! answer "can the current EPU surface do this at all?" before agents burn
 //! full-roster passes trying to infer system truth from final scenes.
 
+use crate::SceneRig;
 #[allow(unused_imports)]
 use crate::constants::*;
-use crate::SceneRig;
 
 pub type Benchmark = [[u64; 2]; 8];
 
-pub const BENCHMARK_COUNT: usize = 6;
+pub const BENCHMARK_COUNT: usize = 7;
 
 pub static BENCHMARKS: [Benchmark; BENCHMARK_COUNT] = [
     BENCHMARK_OPEN_HORIZON,
@@ -19,15 +19,17 @@ pub static BENCHMARKS: [Benchmark; BENCHMARK_COUNT] = [
     BENCHMARK_TRANSPORT_SWEEP,
     BENCHMARK_FRONT_MASS,
     BENCHMARK_FROZEN_BED,
+    BENCHMARK_SKY_OWNERSHIP,
 ];
 
 pub static BENCHMARK_ANIM_SPEEDS: [[u8; 8]; BENCHMARK_COUNT] = [
     [0, 0, 0, 2, 0, 1, 0, 0], // Open Horizon
     [0, 0, 0, 3, 0, 0, 0, 0], // Region Isolation
-    [0, 0, 4, 3, 4, 2, 0, 0], // Projection Bay
+    [0, 0, 4, 3, 0, 2, 0, 0], // Projection Bay
     [0, 0, 4, 0, 0, 0, 0, 0], // Transport Sweep
     [0, 0, 0, 0, 0, 0, 4, 2], // Front Mass
     [0, 0, 0, 0, 0, 0, 4, 0], // Frozen Bed
+    [0, 2, 0, 0, 0, 0, 0, 0], // Sky Ownership: per-point phase, never seed
 ];
 
 pub static BENCHMARK_RIGS: [SceneRig; BENCHMARK_COUNT] = [
@@ -37,6 +39,7 @@ pub static BENCHMARK_RIGS: [SceneRig; BENCHMARK_COUNT] = [
     SceneRig::new(6.0, 11.0, 58.0, 0.86), // Transport Sweep
     SceneRig::new(6.2, 10.0, 56.0, 0.82), // Front Mass
     SceneRig::new(6.2, 10.0, 56.0, 0.82), // Frozen Bed
+    SceneRig::new(6.0, 11.0, 58.0, 0.86), // Sky Ownership
 ];
 
 pub const BENCHMARK_NAMES: [&str; BENCHMARK_COUNT] = [
@@ -46,6 +49,7 @@ pub const BENCHMARK_NAMES: [&str; BENCHMARK_COUNT] = [
     "Benchmark: Transport Sweep",
     "Benchmark: Front Mass",
     "Benchmark: Frozen Bed",
+    "Benchmark: Sky Ownership",
 ];
 
 // -----------------------------------------------------------------------------
@@ -168,7 +172,7 @@ pub(super) const BENCHMARK_REGION_ISOLATION: Benchmark = [
             0xa6b4be,
             0x50606e,
         ),
-        lo(176, 54, 0, 0, 0, DIR_UP, 12, 0),
+        lo(176, 54, 0, 0, 0, DIR_DOWN, 12, 0),
     ],
     [
         hi(OP_FLOW, REGION_FLOOR, BLEND_SCREEN, 0, 0xe7eff6, 0x748594),
@@ -332,7 +336,7 @@ pub(super) const BENCHMARK_FRONT_MASS: Benchmark = [
             0x364149,
             0x0d141b,
         ),
-        lo(246, 94, 24, 164, 0, DIR_UP, 15, 13),
+        lo(246, 94, 24, 164, 0, DIR_DOWN, 15, 13),
     ],
     [
         hi_meta(
@@ -382,7 +386,10 @@ pub(super) const BENCHMARK_FRONT_MASS: Benchmark = [
         ),
         lo(176, 54, 124, 98, 0, DIR_LEFT, 10, 0),
     ],
-    [hi(OP_FLOW, REGION_FLOOR, BLEND_SCREEN, 0, 0xafbfcc, 0x3b4a56), lo(84, 14, 20, 0x21, 0, DIR_RIGHT, 5, 0)],
+    [
+        hi(OP_FLOW, REGION_FLOOR, BLEND_SCREEN, 0, 0xafbfcc, 0x3b4a56),
+        lo(84, 14, 20, 0x21, 0, DIR_RIGHT, 5, 0),
+    ],
 ];
 
 // -----------------------------------------------------------------------------
@@ -423,7 +430,7 @@ pub(super) const BENCHMARK_FROZEN_BED: Benchmark = [
             0x54616a,
             0x131a21,
         ),
-        lo(248, 104, 20, 168, 0, DIR_UP, 15, 14),
+        lo(248, 104, 20, 168, 0, DIR_DOWN, 15, 14),
     ],
     [
         hi(
@@ -482,4 +489,40 @@ pub(super) const BENCHMARK_FROZEN_BED: Benchmark = [
         ),
         lo(22, 82, 118, 94, 0, DIR_FORWARD, 4, 0),
     ],
+];
+
+// 7. Sky Ownership: retained opaque-CITY / fixed-star recipe.
+// Full modulation, fixed seed 53. Initial phase 192 makes update 32 cross the wrap
+// at speed 2; this is an ordinary editable guest-authored phase, not a host clock.
+pub(super) const BENCHMARK_SKY_OWNERSHIP: Benchmark = [
+    [
+        hi_meta(
+            OP_SILHOUETTE,
+            REGION_ALL,
+            BLEND_LERP,
+            DOMAIN_DIRECT3D,
+            SILHOUETTE_CITY,
+            0x0c111c,
+            0x020409,
+        ),
+        lo(0, 64, 160, 0, 255, DIR_UP, 15, 0),
+    ],
+    [
+        hi_meta(
+            OP_SCATTER_PHASED,
+            REGION_SKY,
+            BLEND_ADD,
+            DOMAIN_DIRECT3D,
+            SCATTER_STARS,
+            0xffffff,
+            0xffffff,
+        ),
+        lo(180, 23, 16, 192, 53, DIR_FORWARD, 15, 15),
+    ],
+    [0, 0],
+    [0, 0],
+    [0, 0],
+    [0, 0],
+    [0, 0],
+    [0, 0],
 ];

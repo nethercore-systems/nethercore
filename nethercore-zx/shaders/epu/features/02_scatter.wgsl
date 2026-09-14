@@ -6,9 +6,9 @@
 // domains = [DIRECT3D, AXIS_CYL, AXIS_POLAR, TANGENT_LOCAL]
 // field intensity = { label="brightness", map="u8_01" }
 // field param_a = { label="density", map="u8_lerp", min=1.0, max=256.0 }
-// field param_b = { label="size", map="u8_lerp", min=0.001, max=0.05, unit="rad" }
-// field param_c = { label="twinkle", map="u8_01" }
-// field param_d = { label="seed", map="u8_01" }
+// field param_b = { label="size (advanced raw: radius depends on density and variant)", map="u8_lerp", min=0.0, max=255.0 }
+// field param_c = { label="static brightness variation (advanced packed: high nibble / 15; low nibble reserved; WINDOWS inactive)", map="u8_lerp", min=0.0, max=255.0 }
+// field param_d = { label="seed (raw byte)", map="u8_lerp", min=0.0, max=255.0 }
 // @epu_meta_end
 
 // ============================================================================
@@ -19,7 +19,7 @@
 //   intensity: Brightness (0..255 -> 0..1)
 //   param_a: Density (0..255 -> 1..256)
 //   param_b: Point size (0..255 -> 0.001..0.5/density rad, scales with cell spacing)
-//   param_c[7:4]: Twinkle amount (0..15 -> 0..1)
+//   param_c[7:4]: Static brightness variation (0..15 -> 0..1; not an animation phase)
 //   param_c[3:0]: Reserved (set to 0)
 //   param_d: Seed for randomization (0..255)
 //   direction: Axis direction (oct-u16) for AXIS_CYL/AXIS_POLAR domains (set to 0 for DIRECT3D)
@@ -34,9 +34,9 @@ const SCATTER_DOMAIN_AXIS_POLAR: u32 = 2u;   // Polar (angle, radius from axis)
 const SCATTER_DOMAIN_TANGENT_LOCAL: u32 = 3u; // Tangent plane at direction
 
 // Variant IDs - visual style variations
-const SCATTER_VARIANT_STARS: u32 = 0u;       // Bright pinpoints, twinkling
-const SCATTER_VARIANT_DUST: u32 = 1u;        // Larger, dimmer, slower motion
-const SCATTER_VARIANT_WINDOWS: u32 = 2u;     // Rectangular, no twinkle
+const SCATTER_VARIANT_STARS: u32 = 0u;       // Bright pinpoints
+const SCATTER_VARIANT_DUST: u32 = 1u;        // Larger, dimmer points
+const SCATTER_VARIANT_WINDOWS: u32 = 2u;     // Rectangular; packed brightness variation inactive
 const SCATTER_VARIANT_BUBBLES: u32 = 3u;     // Round, slow drift up
 const SCATTER_VARIANT_EMBERS: u32 = 4u;      // Elongated, upward drift, fade
 const SCATTER_VARIANT_RAIN: u32 = 5u;        // Vertical streaks, fast
@@ -93,7 +93,7 @@ fn scatter_size_mult(variant: u32) -> f32 {
     }
 }
 
-// Variant-specific twinkle modulation
+// Variant-specific static brightness modulation (no clock)
 fn scatter_twinkle_mod(variant: u32, twinkle_amount: f32, h: f32) -> f32 {
     if twinkle_amount <= 0.001 {
         return 1.0;
@@ -101,11 +101,11 @@ fn scatter_twinkle_mod(variant: u32, twinkle_amount: f32, h: f32) -> f32 {
 
     switch variant {
         case SCATTER_VARIANT_WINDOWS: {
-            // No twinkle for windows
+            // No packed brightness variation for windows
             return 1.0;
         }
         case SCATTER_VARIANT_DUST: {
-            // Subtle twinkle
+            // Subtle static brightness variation
             let tw = 0.8 + 0.2 * sin(h * TAU);
             return mix(1.0, tw, twinkle_amount * 0.5);
         }
@@ -129,7 +129,7 @@ fn scatter_twinkle_mod(variant: u32, twinkle_amount: f32, h: f32) -> f32 {
             return mix(1.0, tw, twinkle_amount * 0.3);
         }
         default: {
-            // STARS: standard twinkle
+            // STARS: standard static brightness variation
             let tw = 0.5 + 0.5 * sin(h * TAU);
             return mix(1.0, tw, twinkle_amount);
         }
@@ -202,6 +202,8 @@ fn eval_scatter(
 
     // Apply domain transform for point distribution
     var sample_coords = dir_s * density;
+    var tangent_right = vec3f(0.0);
+    var tangent_forward = vec3f(0.0);
 
     switch domain_id {
         case SCATTER_DOMAIN_AXIS_CYL: {
@@ -219,9 +221,15 @@ fn eval_scatter(
             domain_w = smoothstep(0.05, 0.2, uv.y);
         }
         case SCATTER_DOMAIN_TANGENT_LOCAL: {
-            // Tangent plane: project onto plane perpendicular to axis
-            let proj = dir_s - axis * dot(dir_s, axis);
-            sample_coords = proj * density + vec3f(seed);
+            // Orthographic coordinates in the authored axis's tangent frame.
+            tangent_right = cross(axis, vec3f(0.0, 0.0, 1.0));
+            if length(tangent_right) < 0.01 {
+                tangent_right = cross(axis, vec3f(1.0, 0.0, 0.0));
+            }
+            tangent_right = normalize(tangent_right);
+            tangent_forward = cross(tangent_right, axis);
+            sample_coords = vec3f(dot(dir_s, tangent_right) * density,
+                dot(dir_s, tangent_forward) * density, seed);
             // Localize to a patch around axis direction.
             // Near the axis: dot ~= 1 -> domain_w ~= 1. Far from it: domain_w -> 0.
             domain_w = smoothstep(0.8, 0.95, dot(dir_s, axis));
@@ -237,22 +245,75 @@ fn eval_scatter(
     let point_rgb = instr_color_a(instr);
     let var_rgb = instr_color_b(instr);
 
+    var first = vec3i(-1);
+    var last = vec3i(1);
+    if domain_id == SCATTER_DOMAIN_TANGENT_LOCAL {
+        if domain_w <= 0.0 { return LayerSample(vec3f(0.0), 0.0); }
+        var support = size;
+        if variant_id == SCATTER_VARIANT_RAIN { support *= 3.0; }
+        if variant_id == SCATTER_VARIANT_EMBERS { support *= 2.0; }
+        // Projection cannot increase a spherical chord's length. Include every
+        // cell whose half-cell jitter can place a point within that footprint.
+        let reach = 2.0 * sin(min(support, PI) * 0.5) * density;
+        first = vec3i(vec2i(ceil(sample_coords.xy - reach - 0.5) - cell.xy), 0);
+        last = vec3i(vec2i(floor(sample_coords.xy + reach + 0.5) - cell.xy), 0);
+    }
     var accum = 0.0;
     var accum_rgb = vec3f(0.0);
-    for (var dz = -1i; dz <= 1i; dz++) {
-        for (var dy = -1i; dy <= 1i; dy++) {
-            for (var dx = -1i; dx <= 1i; dx++) {
+    for (var dz = first.z; dz <= last.z; dz++) {
+        for (var dy = first.y; dy <= last.y; dy++) {
+            for (var dx = first.x; dx <= last.x; dx++) {
                 let neighbor = cell + vec3f(f32(dx), f32(dy), f32(dz));
-                let h = hash3(neighbor + vec3f(seed));
+                var hash_cell = neighbor;
+                if domain_id == SCATTER_DOMAIN_AXIS_CYL || domain_id == SCATTER_DOMAIN_AXIS_POLAR {
+                    // One turn has exactly param_a + 1 cells. Hash the periodic
+                    // identity, but retain unwrapped coordinates for placement.
+                    let period = f32(instr_a(instr) + 1u);
+                    hash_cell.x -= floor(hash_cell.x / period) * period;
+                }
+                let h = hash3(hash_cell + vec3f(seed));
                 let point_offset = h.xyz * 2.0 - 1.0;
                 var v = neighbor + point_offset * 0.5;
                 if length(v) < 1e-5 {
                     v = vec3f(1.0, 0.0, 0.0);
                 }
-                let point_dir = normalize(v);
-                let dist = acos(epu_saturate(dot(dir_s, point_dir)));
+                var point_dir = normalize(v);
+                if domain_id == SCATTER_DOMAIN_AXIS_CYL || domain_id == SCATTER_DOMAIN_AXIS_POLAR {
+                    // Angular domains contain 2D cells, not world-space XYZ points.
+                    // The seed identifies a field; it is not a spatial coordinate.
+                    if dz != 0i { continue; }
+                    let uv = v.xy / density;
+                    var height = uv.y * 2.0;
+                    if domain_id == SCATTER_DOMAIN_AXIS_POLAR {
+                        if uv.y < 0.0 || uv.y > 1.0 { continue; }
+                        height = sqrt(max(0.0, 1.0 - uv.y * uv.y));
+                        height *= select(-1.0, 1.0, dot(dir_s, axis) >= 0.0);
+                    } else if abs(height) > 1.0 { continue; }
+                    var right = cross(axis, vec3f(0.0, 0.0, 1.0));
+                    if length(right) < 0.01 {
+                        right = cross(axis, vec3f(1.0, 0.0, 0.0));
+                    }
+                    right = normalize(right);
+                    let forward = cross(right, axis);
+                    let angle = uv.x * TAU;
+                    point_dir = axis * height + sqrt(max(0.0, 1.0 - height * height))
+                        * (right * cos(angle) + forward * sin(angle));
+                }
+                if domain_id == SCATTER_DOMAIN_TANGENT_LOCAL {
+                    if dz != 0i { continue; }
+                    let uv = v.xy / density;
+                    let radius_sq = dot(uv, uv);
+                    if radius_sq > 1.0 { continue; }
+                    point_dir = tangent_right * uv.x + tangent_forward * uv.y
+                        + axis * sqrt(max(0.0, 1.0 - radius_sq));
+                }
+                // atan2 avoids acos cancellation near a point center.
+                let dist = atan2(length(cross(dir_s, point_dir)), dot(dir_s, point_dir));
                 let point = scatter_point_shape(variant_id, dist, size, h);
-                let tw = scatter_twinkle_mod(variant_id, twinkle, h.w);
+                var tw = scatter_twinkle_mod(variant_id, twinkle, h.w);
+                if instr_opcode(instr) == OP_SCATTER_PHASED {
+                    tw = mix(1.0, scatter_phased_mod(h, f32(pc) / 256.0), instr_alpha_b_f32(instr));
+                }
                 let rgb = mix(point_rgb, var_rgb, h.x);
                 accum += point * tw;
                 accum_rgb += rgb * point * tw;

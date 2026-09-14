@@ -9,7 +9,7 @@
 //! The EPU produces a single directional environment signal per environment.
 //! That signal is stored in `EnvRadiance` (mip 0) and then downsampled into
 //! a true mip pyramid for roughness-based reflections. Diffuse ambient uses
-//! SH9 coefficients extracted from a coarse mip level.
+//! SH9 coefficients extracted independently from source radiance (mip 0).
 //!
 //! # Format (128-bit instructions)
 //!
@@ -63,6 +63,6 @@ pub use builder::{EpuBuilder, epu_begin, epu_finish};
 pub use params::{
     AdvectParams, AdvectVariant, ApertureParams, AtmosphereParams, BandRadianceParams, CellParams,
     DecalParams, DecalShape, FlowParams, FlowPattern, GridParams, GridPattern, LobeRadianceParams,
-    PatchesParams, PhaseWaveform, RampParams, ScatterParams, SectorParams, SilhouetteParams,
-    SplitParams, SurfaceParams, SurfaceVariant,
+    MassParams, MassVariant, PatchesParams, PhaseWaveform, RampParams, ScatterParams, SectorParams,
+    SilhouetteParams, SplitParams, SurfaceParams, SurfaceVariant,
 };

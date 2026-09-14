@@ -423,6 +423,30 @@ fn test_builder_lobe_radiance() {
 }
 
 #[test]
+fn test_builder_band_depth_preserves_all_other_fields() {
+    for phase in 0..=255u8 {
+        let p = BandRadianceParams {
+            phase,
+            alpha: 7,
+            ..Default::default()
+        };
+        let mut plain = epu_begin();
+        plain.band_radiance(p);
+        let expected = epu_finish(plain).layers[0];
+        assert_eq!(expected[1] & 15, 0);
+        for depth in 0..=255u8 {
+            let mut builder = epu_begin();
+            builder.band_radiance_with_depth(p, depth);
+            let actual = epu_finish(builder).layers[0];
+            assert_eq!(
+                actual,
+                [expected[0], expected[1] | u64::from(depth.min(15))]
+            );
+        }
+    }
+}
+
+#[test]
 fn test_builder_band_radiance() {
     let mut builder = epu_begin();
     builder.band_radiance(BandRadianceParams {

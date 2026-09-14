@@ -79,44 +79,7 @@ fn sample_epu_imported_cube(env_index: u32, direction: vec3f) -> vec3f {
 
 // Sample background from the procedural EPU state.
 fn epu_eval_hi(env_index: u32, direction: vec3<f32>) -> vec3f {
-    let dir = normalize(direction);
-    let st = epu_states[env_index];
-
-    // Procedural evaluation path used by:
-    // - the sky/background draw (never limited by EnvRadiance resolution)
-    // - the high-frequency residual used in specular reflections
-    //
-    // Must match the compute shader's evaluation semantics (multi-bounds).
-
-    // Start with default bounds direction (will be updated by bounds layers)
-    var bounds_dir = vec3f(0.0, 1.0, 0.0);
-    // Default regions: all-sky (bounds layers will compute their own regions)
-    var regions = RegionWeights(1.0, 0.0, 0.0);
-
-    var radiance = vec3f(0.0);
-    for (var i = 0u; i < 8u; i++) {
-        let instr = st.layers[i];
-        let opcode = instr_opcode(instr);
-        if opcode == OP_NOP { continue; }
-
-        let is_bounds = opcode < OP_FEATURE_MIN;
-        let blend = instr_blend(instr);
-
-        if is_bounds {
-            // Bounds opcode: update bounds_dir, evaluate bounds, and feed its
-            // output regions into subsequent feature layers.
-            bounds_dir = bounds_dir_from_layer(instr, opcode, bounds_dir);
-            let bounds_result = evaluate_bounds_layer(dir, instr, opcode, bounds_dir, regions);
-            regions = bounds_result.regions;
-            radiance = apply_blend(radiance, bounds_result.sample, blend);
-        } else {
-            // Feature opcode: evaluate using the current bounds_dir + region weights.
-            let sample = evaluate_layer(dir, instr, bounds_dir, regions);
-            radiance = apply_blend(radiance, sample, blend);
-        }
-    }
-
-    return radiance;
+    return evaluate_epu_layers(normalize(direction), epu_states[env_index].layers);
 }
 fn sample_epu_background(env_index: u32, direction: vec3<f32>) -> vec4<f32> {
     if epu_source_kind(env_index) == EPU_SOURCE_IMPORTED {
@@ -126,58 +89,43 @@ fn sample_epu_background(env_index: u32, direction: vec3<f32>) -> vec4<f32> {
 }
 
 // ============================================================================
-// EPU REFLECTION SAMPLING (Continuous Roughness -> LOD)
+// EPU REFLECTION SAMPLING (View-dependent Blinn-Phong integral)
 // ============================================================================
-// Sample from the mip-mapped EnvRadiance texture for roughness-based reflections.
-// Roughness is mapped continuously across the available mip levels.
-
-fn sample_epu_reflection(env_id: u32, refl_dir: vec3f, roughness: f32) -> vec3f {
-    let uv = epu_octahedral_encode(normalize(refl_dir)) * 0.5 + 0.5;
-    let imported = epu_source_kind(env_id) == EPU_SOURCE_IMPORTED;
-
-    // Use roughness^2 for a perceptually linear blur ramp, then add a modest
-    // mid/high-roughness bias so metallic probes stop reprojecting such crisp
-    // shell structure in the middle of the roughness range.
-    let r = epu_saturate(roughness);
-    let max_lod = max(0.0, f32(textureNumLevels(epu_env_radiance) - 1));
-    let lod_bias = 0.75 * smoothstep(0.28, 0.75, r);
-    let lod = min((r * r) * max_lod + lod_bias, max_lod);
-
-    // Manual mip lerp (keeps results smooth even if sampler mipmap_filter is Nearest).
-    let lod0 = floor(lod);
-    let lod1 = min(lod0 + 1.0, max_lod);
-    let t = lod - lod0;
-
-    let c0 = textureSampleLevel(epu_env_radiance, epu_sampler, uv, i32(env_id), lod0).rgb;
-    let c1 = textureSampleLevel(epu_env_radiance, epu_sampler, uv, i32(env_id), lod1).rgb;
-    let l_lp = mix(c0, c1, t);
-
-    // Residual blend: add back a small amount of high-frequency energy that the
-    // low-pass cache cannot represent. Keep this correction confined to the
-    // very-smooth band so it does not rebuild broad probe-shell structure.
-    let l0 = textureSampleLevel(epu_env_radiance, epu_sampler, uv, i32(env_id), 0.0).rgb;
-    let l_hi = select(epu_eval_hi(env_id, refl_dir), sample_epu_imported_cube(env_id, refl_dir), imported);
-    let alpha = r * r;
-    let residual_fade = 1.0 - smoothstep(0.04, 0.18, r);
-
-    if imported {
-        // Imported environments have a true sharp source in the copied face
-        // cache, so very-smooth reflections should blend directly from that
-        // source into the mip chain instead of inheriting octa mip0 artifacts.
-        let direct_weight = (1.0 - alpha) * residual_fade;
-        return max(mix(l_lp, l_hi, direct_weight), vec3f(0.0));
+// Unit-specular-color integral of the existing direct BP contract. The caller
+// multiplies by material specular_color once; there is no angular Fresnel term.
+fn sample_epu_reflection(env_id: u32, world_n: vec3f, view_dir: vec3f, roughness: f32) -> vec3f {
+    let N = normalize(world_n);
+    let V = normalize(view_dir);
+    let s = 1.0 + 255.0 * (1.0 - clamp(roughness, 0.0, 1.0));
+    var integral = vec3f(0.0);
+    // p(H)=(s+1)/(2*pi)*(N.H)^s; dL=4*(V.H)*dH.
+    // Blend two overlapping frames instead of abruptly rotating finite quadrature.
+    // Each frame's weight vanishes at its own singular axis; their sum is >= 1.
+    // ponytail: up to 256 source fetches/pixel; performance gate DEFERRED.
+    var weight_sum = 0.0;
+    for (var frame = 0u; frame < 2u; frame++) {
+        let up = select(vec3f(0.0, 1.0, 0.0), vec3f(0.0, 0.0, 1.0), frame == 1u);
+        let tangent = cross(up, N);
+        let weight = dot(tangent, tangent);
+        weight_sum += weight;
+        if (weight == 0.0) { continue; }
+        let T = tangent / sqrt(weight);
+        let B = cross(N, T);
+        for (var i = 0u; i < 128u; i++) {
+            let mass = (f32(i) + 0.5) / 128.0;
+            let z = pow(mass, 1.0 / (s + 1.0));
+            let phi = 2.0 * PI * fract((f32(i) + 0.5) * 0.6180339887498949);
+            let radius = sqrt(max(1.0 - z * z, 0.0));
+            let H = T * (radius * cos(phi)) + B * (radius * sin(phi)) + N * z;
+            let VoH = dot(V, H);
+            let L = 2.0 * VoH * H - V;
+            let uv = epu_octahedral_encode(normalize(L)) * 0.5 + 0.5;
+            let radiance = textureSampleLevel(epu_env_radiance, epu_sampler, uv, i32(env_id), 0.0).rgb;
+            integral += weight * radiance * max(VoH, 0.0) * max(dot(N, L), 0.0);
+        }
     }
-
-    // NOTE: In practice `l0` can slightly overshoot `l_hi` due to finite EnvRadiance resolution
-    // and sampler filtering, producing negative residuals. On fully metallic materials this can
-    // manifest as "peppered" black pixels at mid roughness when the residual is clamped.
-    // Treat the residual as additive energy only.
-    let residual_raw = max(l_hi - l0, vec3f(0.0));
-    let residual_cap = l_lp * 0.35;
-    let residual = min(residual_raw, residual_cap);
-    let l_spec = l_lp + (1.0 - alpha) * residual_fade * residual;
-
-    return max(l_spec, vec3f(0.0));
+    let normalization = s * 0.0397436 + 0.0856832;
+    return integral * (normalization * 8.0 * PI / (s + 1.0) / 128.0 / weight_sum);
 }
 
 // ============================================================================

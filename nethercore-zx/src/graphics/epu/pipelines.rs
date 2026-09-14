@@ -9,7 +9,7 @@ use super::shaders::{
     EPU_BOUNDS, EPU_COMMON, EPU_COMPUTE_BLUR, EPU_COMPUTE_COPY_CUBE_FACES, EPU_COMPUTE_ENV,
     EPU_COMPUTE_IMPORT_CUBE, EPU_COMPUTE_IMPORTED_FACE_MIP, EPU_COMPUTE_IRRAD, EPU_FEATURES,
 };
-use super::types::{EpuSh9, FrameUniforms, GpuEnvironmentState, IrradUniforms};
+use super::types::{EpuSh9, FrameUniforms, GpuEnvironmentState};
 use wgpu::util::DeviceExt;
 
 /// Create GPU buffers for environment states, active IDs, and frame uniforms.
@@ -720,25 +720,12 @@ pub(super) fn create_imported_face_mip_pipeline(
 /// Create the irradiance extraction pipeline.
 pub(super) fn create_irrad_pipeline(
     device: &wgpu::Device,
-) -> (
-    wgpu::Buffer,
-    wgpu::ComputePipeline,
-    wgpu::Buffer,
-    wgpu::BindGroupLayout,
-) {
+) -> (wgpu::Buffer, wgpu::ComputePipeline, wgpu::BindGroupLayout) {
     // SH9 storage buffer (MAX_ENV_STATES * 144 bytes)
     let sh9_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("EPU SH9"),
         size: (MAX_ENV_STATES as usize * std::mem::size_of::<EpuSh9>()) as u64,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-        mapped_at_creation: false,
-    });
-
-    // Irrad uniforms buffer (16 bytes)
-    let irrad_uniforms_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("EPU Irrad Uniforms"),
-        size: std::mem::size_of::<IrradUniforms>() as u64,
-        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
 
@@ -756,7 +743,7 @@ pub(super) fn create_irrad_pipeline(
                 },
                 count: None,
             },
-            // @binding(4) epu_blurred: texture_2d_array<f32> (coarse EnvRadiance mip)
+            // @binding(4) source radiance: texture_2d_array<f32> (EnvRadiance mip 0)
             wgpu::BindGroupLayoutEntry {
                 binding: 4,
                 visibility: wgpu::ShaderStages::COMPUTE,
@@ -819,10 +806,5 @@ pub(super) fn create_irrad_pipeline(
         cache: None,
     });
 
-    (
-        sh9_buffer,
-        pipeline,
-        irrad_uniforms_buffer,
-        bind_group_layout,
-    )
+    (sh9_buffer, pipeline, bind_group_layout)
 }

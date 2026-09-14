@@ -6,8 +6,9 @@
 use super::{
     AdvectParams, ApertureParams, AtmosphereParams, BandRadianceParams, CellParams, DecalParams,
     EpuBlend, EpuConfig, EpuLayer, EpuOpcode, FlowParams, GridParams, LobeRadianceParams,
-    PatchesParams, REGION_ALL, RampParams, ScatterParams, SectorParams, SilhouetteParams,
-    SplitParams, SurfaceParams, encode_direction_u16, pack_meta5, pack_thresholds,
+    MassParams, PatchesParams, REGION_ALL, RampParams, ScatterParams, SectorParams,
+    SilhouetteParams, SplitParams, SurfaceParams, encode_direction_u16, pack_meta5,
+    pack_thresholds,
 };
 
 // =============================================================================
@@ -123,7 +124,9 @@ impl EpuBuilder {
         });
     }
 
-    /// Apply a SILHOUETTE bounds modifier.
+    /// Apply static SILHOUETTE bounds. See [`SilhouetteParams`] for current semantics:
+    /// historical `drift_speed` is wall depth; `drift_amount_q` is reserved/inactive.
+    /// Packs both fields unchanged within their existing byte/nibble widths.
     pub fn silhouette_bounds(&mut self, p: SilhouetteParams) {
         let param_c = ((p.octaves_q & 0x0F) << 4) | (p.drift_amount_q & 0x0F);
         self.push_bounds(EpuLayer {
@@ -332,8 +335,16 @@ impl EpuBuilder {
         });
     }
 
-    /// Add a horizon band (BAND_RADIANCE).
+    /// Add a plain horizon band (BAND_RADIANCE, zero modulation depth).
+    /// Use [`Self::band_radiance_with_depth`] for cyclic azimuthal modulation.
     pub fn band_radiance(&mut self, p: BandRadianceParams) {
+        self.band_radiance_with_depth(p, 0);
+    }
+
+    /// Add a band with explicit modulation depth (clamped to 0..15).
+    /// Zero is plain; 15 retains the four-wave 40..100% profile. Phase is cyclic.
+    /// Depth uses existing Color B alpha; no packed-layout or parameter-struct change.
+    pub fn band_radiance_with_depth(&mut self, p: BandRadianceParams, depth: u8) {
         self.push_feature(EpuLayer {
             opcode: EpuOpcode::BandRadiance,
             region_mask: p.region.to_mask(),
@@ -342,7 +353,7 @@ impl EpuBuilder {
             color_a: p.color,
             color_b: p.edge_color,
             alpha_a: p.alpha,
-            alpha_b: 0,
+            alpha_b: depth.min(15),
             intensity: p.intensity,
             param_a: p.width,
             param_b: p.offset,
@@ -410,5 +421,81 @@ impl EpuBuilder {
             param_d: p.phase,
             direction: encode_direction_u16(p.dir),
         });
+    }
+
+    /// Add a broad scene-owning body (MASS).
+    pub fn mass(&mut self, p: MassParams) {
+        self.push_feature(EpuLayer {
+            opcode: EpuOpcode::Mass,
+            region_mask: p.region.to_mask(),
+            blend: p.blend,
+            meta5: pack_meta5(p.domain_id, p.variant as u8),
+            color_a: p.color,
+            color_b: p.color_b,
+            alpha_a: p.alpha,
+            alpha_b: 0,
+            intensity: p.intensity,
+            param_a: p.scale,
+            param_b: p.coverage,
+            param_c: p.breakup,
+            param_d: p.phase,
+            direction: encode_direction_u16(p.dir),
+        });
+    }
+}
+
+#[cfg(test)]
+mod mass_tests {
+    use super::super::{
+        EpuBlend, EpuLayer, EpuOpcode, EpuRegion, MassParams, MassVariant, epu_begin, epu_finish,
+    };
+    use glam::Vec3;
+
+    #[test]
+    fn mass_builder_packs_nondefault_and_default() {
+        let mut builder = epu_begin();
+        builder.mass(MassParams {
+            region: EpuRegion::Walls,
+            blend: EpuBlend::Overlay,
+            dir: Vec3::X,
+            color: [0x12, 0x34, 0x56],
+            color_b: [0xA1, 0xB2, 0xC3],
+            intensity: 0xD4,
+            scale: 0xE5,
+            coverage: 0xF6,
+            breakup: 0x17,
+            phase: 0x28,
+            alpha: 0x09,
+            domain_id: 2,
+            variant: MassVariant::Plume,
+        });
+        let config = epu_finish(builder);
+        let expected = EpuLayer {
+            opcode: EpuOpcode::Mass,
+            region_mask: EpuRegion::Walls.to_mask(),
+            blend: EpuBlend::Overlay,
+            meta5: 18,
+            color_a: [0x12, 0x34, 0x56],
+            color_b: [0xA1, 0xB2, 0xC3],
+            alpha_a: 0x09,
+            alpha_b: 0,
+            intensity: 0xD4,
+            param_a: 0xE5,
+            param_b: 0xF6,
+            param_c: 0x17,
+            param_d: 0x28,
+            direction: 0x80FF,
+        };
+        assert_eq!(config.layers[0], expected.encode());
+        assert_eq!(config.layers[0], [0xBAF2123456A1B2C3, 0xD4E5F6172880FF90]);
+        assert_eq!((config.layers[0][0] >> 59) & 0x1F, EpuOpcode::Mass as u64);
+
+        let mut default_builder = epu_begin();
+        default_builder.mass(MassParams::default());
+        let default_config = epu_finish(default_builder);
+        assert_eq!(
+            (default_config.layers[0][0] >> 59) & 0x1F,
+            EpuOpcode::Mass as u64
+        );
     }
 }

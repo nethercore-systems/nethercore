@@ -31,8 +31,10 @@
 
 // 3D hash for noise functions (deterministic, rollback-safe)
 fn patches_hash31(p: vec3f) -> f32 {
-    let h = dot(p, vec3f(127.1, 311.7, 74.7));
-    return fract(sin(h) * 43758.5453123);
+    // All callers supply integer lattice corners. Materialize them before
+    // floating hashing so adjacent-cell expressions share the same input path.
+    // Preserve the hash family; do not blur edges or reseed the field.
+    return epu_noise_hash31(vec3f(vec3i(p)));
 }
 
 // 3D value noise for PATCHES (trilinear interpolation)
@@ -152,6 +154,23 @@ fn patches_axis_polar_uv(dir: vec3f, axis: vec3f) -> vec2f {
     return vec2f(angle01, radius01);
 }
 
+// Embed the angular coordinate on a circle before sampling ordinary 3D noise.
+// Circumference = scale, preserving local angular frequency without treating
+// u=0 and u=1 as unrelated noise positions. Seed/variant shaping follows this.
+fn patches_periodic_coords(uv: vec2f, scale: f32, dir: vec3f, axis: vec3f) -> vec3f {
+    let angle = uv.x * TAU;
+    let radius = scale / TAU;
+    let basis = advect_build_basis(axis);
+    let t = dot(dir, basis[0]);
+    let b = dot(dir, normalize(basis[2]));
+    if length(vec2f(t, b)) < 0.05 {
+        // Close coordinates, not coverage; retain the original chart elsewhere.
+        let circle = -advect_closed_azimuth(b, t);
+        return vec3f(circle.x * radius, uv.y * scale, circle.y * radius);
+    }
+    return vec3f(cos(angle) * radius, uv.y * scale, sin(angle) * radius);
+}
+
 fn eval_patches(
     dir: vec3f,
     instr: vec4u,
@@ -180,12 +199,12 @@ fn eval_patches(
         case 1u: {
             // AXIS_CYL: cylindrical UV mapping around axis
             let uv = cell_axis_cylinder_uv(dir, axis);
-            p = vec3f(uv * scale, 0.0);
+            p = patches_periodic_coords(uv, scale, dir, axis);
         }
         case 2u: {
             // AXIS_POLAR: polar UV mapping on sphere
             let uv = patches_axis_polar_uv(dir, axis);
-            p = vec3f(uv * scale, 0.0);
+            p = patches_periodic_coords(uv, scale, dir, axis);
         }
         default: {
             p = dir * scale;

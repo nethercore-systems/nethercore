@@ -48,7 +48,7 @@ pub(super) const PRESET_ALIEN_JUNGLE: [[u64; 2]; 8] = [
             0x122a26,
             0x601276,
         ),
-        lo(204, 84, 28, 140, 0, DIR_UP, 15, 11),
+        lo(204, 84, 28, 140, 0, DIR_DOWN, 15, 11),
     ],
     // L3: ATMOSPHERE/ALIEN - toxic humidity stays present but not so strong that it buries foliage shape.
     [
@@ -87,7 +87,7 @@ pub(super) const PRESET_ALIEN_JUNGLE: [[u64; 2]; 8] = [
             0x34ecac,
             0x561076,
         ),
-        lo(184, 108, 72, 0x2a, 200, DIR_RIGHT, 11, 6),
+        lo(184, 108, 72, 0x20, 200, DIR_RIGHT, 11, 6),
     ],
     // L6: SCATTER/DUST - glowing spores, brighter and stranger than fireflies.
     [
@@ -182,7 +182,7 @@ pub(super) const PRESET_GOTHIC_CATHEDRAL: [[u64; 2]; 8] = [
             0x66656d,
             0x1c171c,
         ),
-        lo(232, 80, 24, 150, 0, DIR_UP, 15, 12),
+        lo(232, 80, 24, 150, 0, DIR_DOWN, 15, 12),
     ],
     // L5: PORTAL/RECT - use one stained clerestory/window event instead of a family of bright rails.
     [

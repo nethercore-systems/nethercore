@@ -8,7 +8,7 @@
 // field param_a = { label="shape+soft", map="u8_01" }
 // field param_b = { label="size", map="u8_lerp", min=0.0, max=0.5, unit="rad" }
 // field param_c = { label="glow_soft", map="u8_lerp", min=0.0, max=0.2 }
-// field param_d = { label="phase", map="u8_01" }
+// field param_d = { label="phase", map="u8_lerp", min=0.0, max=0.99609375, unit="turns" }
 // @epu_meta_end
 
 // ============================================================================
@@ -21,7 +21,7 @@
 //   param_a[3:0]: Edge softness (0..15 -> 0.001..0.05 rad)
 //   param_b: Size (0..255 -> 0..0.5 rad)
 //   param_c: Softness for glow (0..255 -> 0..0.2)
-//   param_d: Phase (0..255 -> 0..1)
+//   param_d: Guest-owned loop phase (raw/256 turns, no duplicated endpoint)
 //   direction: Shape center direction (oct-u16)
 // ============================================================================
 
@@ -46,6 +46,8 @@ fn eval_decal(
     if region_w < 0.001 { return LayerSample(vec3f(0.0), 0.0); }
 
     let center = decode_dir16(instr_dir16(instr));
+    // A directional stamp has no backward copy from its tangent projection.
+    if dot(dir, center) <= 0.0 { return LayerSample(vec3f(0.0), 0.0); }
     let angle = acos(epu_saturate(dot(dir, center)));
 
     let pa = instr_a(instr);
@@ -91,8 +93,13 @@ fn eval_decal(
     let glow_rgb = instr_color_b(instr);
     let fill_alpha = instr_alpha_a_f32(instr);
     let glow_alpha = instr_alpha_b_f32(instr);
-    let rgb = fill_rgb * edge * fill_alpha + glow_rgb * glow * glow_alpha;
+    let coverage = edge * fill_alpha + glow * glow_alpha;
+    // LayerSample stores straight paint; the blend applies coverage once.
+    var rgb = vec3f(0.0);
+    if coverage > 0.0 {
+        rgb = (fill_rgb * edge * fill_alpha + glow_rgb * glow * glow_alpha) / coverage;
+    }
 
     let intensity = u8_to_01(instr_intensity(instr));
-    return LayerSample(rgb, (edge * fill_alpha + glow * glow_alpha) * intensity * anim * region_w);
+    return LayerSample(rgb, coverage * intensity * anim * region_w);
 }

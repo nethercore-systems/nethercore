@@ -990,6 +990,7 @@ unsafe fn draw_ui() {
 /// Returns: (name, intensity hint, param_a hint, param_b hint, param_c hint, param_d hint)
 fn get_opcode_hints(
     opcode: u8,
+    variant_id: u8,
 ) -> (
     &'static [u8],
     &'static [u8],
@@ -1060,17 +1061,25 @@ fn get_opcode_hints(
         0x09 => (
             b"GRID",
             b"brightness",
-            b"scale",
+            b"repeat raw",
             b"thickness",
-            b"pat+scroll",
-            b"phase",
+            b"pat+cycles",
+            b"phase/256",
         ),
         0x0A => (
             b"SCATTER",
             b"brightness",
             b"density",
             b"size",
-            b"twinkle",
+            b"static var",
+            b"seed",
+        ),
+        0x18 => (
+            b"SCATTER_PHASED",
+            b"brightness",
+            b"density",
+            b"size",
+            b"phase/256",
             b"seed",
         ),
         0x0B => (
@@ -1092,18 +1101,18 @@ fn get_opcode_hints(
         0x0D => (
             b"VEIL",
             b"brightness",
-            b"count",
-            b"thickness",
-            b"sway",
-            b"phase",
+            b"count byte",
+            b"width ratio",
+            if matches!(variant_id, 1 | 2) { b"unused" } else if variant_id == 3 { b"wind" } else if variant_id == 4 { b"tilt" } else { b"sway" },
+            if variant_id == 3 { b"phase/256" } else { b"unused" },
         ),
         0x0E => (
             b"ATMOSPHERE",
             b"strength",
-            b"falloff",
-            b"horizon_y",
-            b"mie_conc",
-            b"mie_exp",
+            b"falloff !2",
+            b"horizon !2",
+            b"Mie 2/3",
+            b"exp 2/3",
         ),
         0x0F => (
             b"PLANE",
@@ -1112,6 +1121,10 @@ fn get_opcode_hints(
             b"gap_width",
             b"roughness",
             b"phase",
+        ),
+        0x10 if variant_id == 4 => (
+            b"CELESTIAL", b"brightness", b"ang_size", b"limb_dark",
+            b"unused (retained)", b"tilt: byte/255*90deg",
         ),
         0x10 => (
             b"CELESTIAL",
@@ -1124,26 +1137,27 @@ fn get_opcode_hints(
         0x11 => (
             b"PORTAL",
             b"glow",
-            b"size",
-            b"glow_width",
-            b"roughness",
-            b"phase",
+            b"tan_size",
+            b"tan_glow",
+            b"rough 2-5",
+            b"phase/256",
         ),
         0x12 => (
             b"LOBE",
             b"brightness",
             b"exponent",
             b"falloff",
-            b"waveform",
-            b"phase",
+            b"wave 0/1/2/3",
+            b"phase/256",
         ),
+        // BAND alpha_b is modulation depth (0 = plain ring), alpha_a is opacity.
         0x13 => (
             b"BAND",
             b"brightness",
             b"width",
             b"y_offset",
             b"softness",
-            b"phase",
+            b"phase/256",
         ),
         0x14 => (
             b"MOTTLE",
@@ -1179,7 +1193,7 @@ fn get_blend_name(blend: u8) -> &'static [u8] {
         2 => b"MAX",
         3 => b"LERP",
         4 => b"SCREEN",
-        5 => b"HSV_MOD",
+        5 => b"RGB Offset", // Legacy HSV_MOD encoding; display name only.
         6 => b"MIN",
         7 => b"OVERLAY",
         _ => b"?",
@@ -1187,7 +1201,7 @@ fn get_blend_name(blend: u8) -> &'static [u8] {
 }
 
 unsafe fn draw_hints() {
-    let (_name, hint_i, hint_a, hint_b, hint_c, hint_d) = get_opcode_hints(EDITOR.opcode);
+    let (_name, hint_i, hint_a, hint_b, hint_c, hint_d) = get_opcode_hints(EDITOR.opcode, EDITOR.variant_id);
     let opcode_name = epu_meta::opcode_name(EDITOR.opcode).as_bytes();
 
     let y_base = 60.0;

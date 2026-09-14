@@ -83,6 +83,22 @@ fn dist_to_segment(p: vec2f, a: vec2f, b: vec2f) -> f32 {
     return length(pa - ba * h);
 }
 
+// Angular charts repeat the query, never individual vertices. Include every
+// integer image over the segment's horizontal span plus its two neighbors.
+// Images farther outside that span cannot be closer to any point on the segment.
+// Generated segments span <1 period (at most three images), even when a whole
+// crack/filament chain or its branches travel several periods from the origin.
+fn trace_segment_distance(p: vec2f, a: vec2f, b: vec2f, periodic: bool) -> f32 {
+    if !periodic { return dist_to_segment(p, a, b); }
+    let first = i32(floor(min(a.x, b.x) - p.x));
+    let last = i32(ceil(max(a.x, b.x) - p.x));
+    var distance = 1000.0;
+    for (var k = first; k <= last; k++) {
+        distance = min(distance, dist_to_segment(p + vec2f(f32(k), 0.0), a, b));
+    }
+    return distance;
+}
+
 // Map direction to cylindrical UV with axis
 fn trace_cyl_uv(dir: vec3f, axis: vec3f) -> vec2f {
     // Build tangent basis perpendicular to axis
@@ -141,7 +157,7 @@ fn trace_tangent_uv(dir: vec3f, center: vec3f) -> vec3f {
 }
 
 // Generate a lightning bolt segment chain
-fn lightning_trace(uv: vec2f, seed: f32, trace_idx: f32, branch_count: u32, jitter: f32, thickness: f32) -> vec2f {
+fn lightning_trace(uv: vec2f, seed: f32, trace_idx: f32, branch_count: u32, jitter: f32, periodic: bool) -> vec2f {
     // Returns (line_dist, glow_dist)
     var min_dist = 1000.0;
 
@@ -178,7 +194,7 @@ fn lightning_trace(uv: vec2f, seed: f32, trace_idx: f32, branch_count: u32, jitt
         let next = prev + jittered_dir * seg_len;
 
         // Distance to this segment
-        let d = dist_to_segment(uv, prev, next);
+        let d = trace_segment_distance(uv, prev, next, periodic);
         min_dist = min(min_dist, d);
 
         // Branching at certain segments
@@ -197,7 +213,7 @@ fn lightning_trace(uv: vec2f, seed: f32, trace_idx: f32, branch_count: u32, jitt
 
                 let branch_len = seg_len * (0.5 + branch_hash.y * 0.5);
                 let branch_end = prev + branch_dir * branch_len;
-                let bd = dist_to_segment(uv, prev, branch_end);
+                let bd = trace_segment_distance(uv, prev, branch_end, periodic);
                 min_dist = min(min_dist, bd);
 
                 // Secondary branch
@@ -211,7 +227,7 @@ fn lightning_trace(uv: vec2f, seed: f32, trace_idx: f32, branch_count: u32, jitt
                         branch_dir.x * ss + branch_dir.y * sc
                     );
                     let sub_end = branch_end + sub_dir * branch_len * 0.5;
-                    let sd = dist_to_segment(uv, branch_end, sub_end);
+                    let sd = trace_segment_distance(uv, branch_end, sub_end, periodic);
                     min_dist = min(min_dist, sd);
                 }
             }
@@ -224,7 +240,7 @@ fn lightning_trace(uv: vec2f, seed: f32, trace_idx: f32, branch_count: u32, jitt
 }
 
 // Generate crack pattern (radial stress lines)
-fn crack_trace(uv: vec2f, seed: f32, trace_idx: f32, seg_count: u32, jitter: f32, thickness: f32) -> vec2f {
+fn crack_trace(uv: vec2f, seed: f32, trace_idx: f32, seg_count: u32, jitter: f32, periodic: bool) -> vec2f {
     var min_dist = 1000.0;
 
     let base_hash = trace_hash23(vec2f(seed * 19.3, trace_idx * 37.7));
@@ -251,7 +267,7 @@ fn crack_trace(uv: vec2f, seed: f32, trace_idx: f32, seg_count: u32, jitter: f32
         let dir = vec2f(cos(current_angle), sin(current_angle));
         let next = prev + dir * seg_len;
 
-        let d = dist_to_segment(uv, prev, next);
+        let d = trace_segment_distance(uv, prev, next, periodic);
         min_dist = min(min_dist, d);
 
         // Occasionally branch
@@ -261,7 +277,7 @@ fn crack_trace(uv: vec2f, seed: f32, trace_idx: f32, seg_count: u32, jitter: f32
             let branch_dir = vec2f(cos(branch_angle), sin(branch_angle));
             let branch_len = seg_len * (0.5 + branch_hash.y * 0.5);
             let branch_end = prev + branch_dir * branch_len;
-            let bd = dist_to_segment(uv, prev, branch_end);
+            let bd = trace_segment_distance(uv, prev, branch_end, periodic);
             min_dist = min(min_dist, bd);
         }
 
@@ -272,7 +288,7 @@ fn crack_trace(uv: vec2f, seed: f32, trace_idx: f32, seg_count: u32, jitter: f32
 }
 
 // Generate lead lines (stained glass polygons)
-fn lead_lines_trace(uv: vec2f, seed: f32, trace_idx: f32, vertex_count: u32, jitter: f32, thickness: f32) -> vec2f {
+fn lead_lines_trace(uv: vec2f, seed: f32, trace_idx: f32, vertex_count: u32, jitter: f32, periodic: bool) -> vec2f {
     var min_dist = 1000.0;
 
     let base_hash = trace_hash23(vec2f(seed * 23.1, trace_idx * 41.3));
@@ -298,7 +314,7 @@ fn lead_lines_trace(uv: vec2f, seed: f32, trace_idx: f32, vertex_count: u32, jit
         let vertex = center + vec2f(cos(angle), sin(angle)) * r;
 
         if v > 0u {
-            let d = dist_to_segment(uv, prev_vertex, vertex);
+            let d = trace_segment_distance(uv, prev_vertex, vertex, periodic);
             min_dist = min(min_dist, d);
         }
 
@@ -309,7 +325,7 @@ fn lead_lines_trace(uv: vec2f, seed: f32, trace_idx: f32, vertex_count: u32, jit
 }
 
 // Generate filament (organic spline curve)
-fn filament_trace(uv: vec2f, seed: f32, trace_idx: f32, point_count: u32, jitter: f32, thickness: f32) -> vec2f {
+fn filament_trace(uv: vec2f, seed: f32, trace_idx: f32, point_count: u32, jitter: f32, periodic: bool) -> vec2f {
     var min_dist = 1000.0;
 
     let base_hash = trace_hash23(vec2f(seed * 29.7, trace_idx * 47.3));
@@ -337,7 +353,7 @@ fn filament_trace(uv: vec2f, seed: f32, trace_idx: f32, point_count: u32, jitter
 
         // For smooth filaments, we approximate with line segments
         // A proper implementation would use Catmull-Rom or Bezier
-        let d = dist_to_segment(uv, prev, next);
+        let d = trace_segment_distance(uv, prev, next, periodic);
         min_dist = min(min_dist, d);
 
         prev = next;
@@ -409,6 +425,8 @@ fn eval_trace(
         }
     }
 
+    let periodic = domain_id == TRACE_DOMAIN_AXIS_CYL || domain_id == TRACE_DOMAIN_AXIS_POLAR;
+
     // Accumulate minimum distance across all traces
     var min_line_dist = 1000.0;
 
@@ -419,22 +437,22 @@ fn eval_trace(
             case TRACE_VARIANT_LIGHTNING: {
                 // shape_q controls branch count (0..15 -> 0..8)
                 let branch_count = (shape_q * 8u) / 15u;
-                trace_dists = lightning_trace(uv, seed, f32(i), branch_count, jitter, thickness);
+                trace_dists = lightning_trace(uv, seed, f32(i), branch_count, jitter, periodic);
             }
             case TRACE_VARIANT_CRACKS: {
                 // shape_q controls segment count (0..15 -> 3..18)
                 let seg_count = 3u + shape_q;
-                trace_dists = crack_trace(uv, seed, f32(i), seg_count, jitter, thickness);
+                trace_dists = crack_trace(uv, seed, f32(i), seg_count, jitter, periodic);
             }
             case TRACE_VARIANT_LEAD_LINES: {
                 // shape_q controls vertex count (0..15 -> 3..18)
                 let vertex_count = 3u + shape_q;
-                trace_dists = lead_lines_trace(uv, seed, f32(i), vertex_count, jitter, thickness);
+                trace_dists = lead_lines_trace(uv, seed, f32(i), vertex_count, jitter, periodic);
             }
             case TRACE_VARIANT_FILAMENTS: {
                 // shape_q controls control point count (0..15 -> 2..17)
                 let point_count = 2u + shape_q;
-                trace_dists = filament_trace(uv, seed, f32(i), point_count, jitter, thickness);
+                trace_dists = filament_trace(uv, seed, f32(i), point_count, jitter, periodic);
             }
             default: {
                 // Reserved/unknown variants: no output.

@@ -70,7 +70,12 @@ pub fn generate_zig_bindings(model: &FfiModel, console: &str) -> Result<String> 
         // Documentation comment
         if !func.doc_comment.is_empty() {
             for line in func.doc_comment.lines() {
-                writeln!(output, "/// {}", line.trim())?;
+                let line = line.trim();
+                if line.is_empty() {
+                    writeln!(output, "///")?;
+                } else {
+                    writeln!(output, "/// {}", line)?;
+                }
             }
         }
 
@@ -162,7 +167,7 @@ mod tests {
                     ty: Type::new("u32"),
                 }],
                 return_type: Type::new("f32"),
-                doc_comment: "Test function".to_string(),
+                doc_comment: "Test function\n\nNext paragraph\n   \nLast paragraph  ".to_string(),
                 category: "System".to_string(),
             }],
             constants: vec![],
@@ -173,6 +178,9 @@ mod tests {
 
         assert!(zig.contains("pub extern \"C\" fn test_fn(x: u32) f32;"));
         assert!(zig.contains("/// Test function"));
+        assert!(
+            zig.contains("/// Test function\n///\n/// Next paragraph\n///\n/// Last paragraph\n")
+        );
     }
 
     #[test]

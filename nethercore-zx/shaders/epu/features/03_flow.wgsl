@@ -5,10 +5,10 @@
 // variants = []
 // domains = []
 // field intensity = { label="brightness", map="u8_01" }
-// field param_a = { label="scale", map="u8_lerp", min=1.0, max=16.0 }
+// field param_a = { label="frequency (advanced raw: 1+floor(raw*15/255))", map="u8_lerp", min=0.0, max=255.0 }
 // field param_b = { label="turbulence", map="u8_01" }
-// field param_c = { label="oct+pat", map="u8_01" }
-// field param_d = { label="phase", map="u8_01" }
+// field param_c = { label="advanced packed: octaves high (clamp 4; inactive for patterns 2..15), pattern low (0 Noise / 1 Streaks / 2 Caustic; 3..15 static fallback)", map="u8_lerp", min=0.0, max=255.0 }
+// field param_d = { label="cyclic phase (advanced raw: raw/256 turns; inactive for patterns 3..15)", map="u8_lerp", min=0.0, max=255.0 }
 // @epu_meta_end
 
 // ============================================================================
@@ -27,8 +27,9 @@
 // ============================================================================
 
 fn epu_hash21(p: vec2f) -> f32 {
-    let h = dot(p, vec2f(127.1, 311.7));
-    return fract(sin(h) * 43758.5453123);
+    // Every caller supplies integer lattice/lane IDs. Reuse the materialized
+    // corner hash so the same ID cannot round differently across owners.
+    return epu_hash31(vec3f(p, 0.0));
 }
 
 fn value_noise(p: vec2f) -> f32 {
@@ -43,7 +44,10 @@ fn value_noise(p: vec2f) -> f32 {
 }
 
 fn epu_hash31(p: vec3f) -> f32 {
-    let h = dot(p, vec3f(127.1, 311.7, 74.7));
+    // All callers pass lattice corners. Form the decimal dot in integer space
+    // so adjacent cells cannot round the same corner differently before sin().
+    let cell = vec3i(p);
+    let h = f32(cell.x * 1271 + cell.y * 3117 + cell.z * 747) * 0.1;
     return fract(sin(h) * 43758.5453123);
 }
 
@@ -184,29 +188,32 @@ fn eval_flow(
             let across = floor_uv.x * lane_freq;
             let lane = floor(across);
 
-            // Per-lane variation (deterministic, cheap).
-            let h0 = epu_hash21(vec2f(lane, f32(scale_i) * 17.0));
-            let h1 = epu_hash21(vec2f(lane, f32(octaves) * 23.0));
+            // A lane's finite streak footprint can cross its owner-cell edge.
+            // Keep adjacent candidates, and mix their colours continuously.
+            var weight_sum = 0.0;
+            var colour_sum = 0.0;
+            for (var offset: i32 = -1; offset <= 1; offset++) {
+                let candidate = i32(lane) + offset;
+                let h0 = epu_hash21(vec2f(f32(candidate), f32(scale_i) * 17.0));
+                let h1 = epu_hash21(vec2f(f32(candidate), f32(octaves) * 23.0));
+                let width = mix(0.05, 0.11, h0);
+                let centre = f32(candidate) + fract(0.5 - h0);
+                let line = 1.0 - smoothstep(width, width * 1.7, abs(across - centre));
 
-            // Thin line mask (lanes).
-            let width = mix(0.05, 0.11, h0);
-            let xf = abs(fract(across + h0) - 0.5);
-            let line = 1.0 - smoothstep(width, width * 1.7, xf);
-
-            // Periodic droplet modulation along the projected flow axis. Use a cosine bump so
-            // the wrap boundary is always zero (no visible "cut off" points).
-            let seg_freq_lane = seg_freq * mix(0.65, 1.35, h1);
-            let seg_cycles = 1.0 + floor(h0 * 3.0);
-            let along = floor_uv.y * seg_freq_lane - phase01 * seg_cycles + h1;
-            let phase = fract(along);
-            let bump = 0.5 - 0.5 * cos(phase * TAU);
-            // Wider bumps read as streaks instead of pinpoint dots.
-            let seg = pow(bump, mix(0.85, 2.1, h1));
-
-            // Slight lateral wobble so streaks aren't perfectly rigid.
-            let wobble = floor_uv.x * (1.5 + h1 * 4.0) + floor_uv.y * 0.35;
-            pat = line * seg * (0.88 + 0.12 * sin(wobble + t * 2.0)) * floor_fade;
-            color_mix = h0;
+                let seg_freq_lane = seg_freq * mix(0.65, 1.35, h1);
+                let seg_cycles = 1.0 + floor(h0 * 3.0);
+                let along = floor_uv.y * seg_freq_lane - phase01 * seg_cycles + h1;
+                let phase = fract(along);
+                let bump = 0.5 - 0.5 * cos(phase * TAU);
+                let seg = pow(bump, mix(0.85, 2.1, h1));
+                let wobble = floor_uv.x * (1.5 + h1 * 4.0) + floor_uv.y * 0.35;
+                let weight = line * seg * (0.88 + 0.12 * sin(wobble + t * 2.0));
+                pat = max(pat, weight);
+                weight_sum += weight;
+                colour_sum += h0 * weight;
+            }
+            if weight_sum > 0.0 { color_mix = colour_sum / weight_sum; }
+            pat *= floor_fade;
         }
         case 2u: { // CAUSTIC
             // Build a basis around flow_dir so caustics don't lock to world axes.

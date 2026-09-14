@@ -1,5 +1,7 @@
 # EPU Capability Audit And Next-Surface Spec
 
+Historical, non-normative audit/proposal: statements about runtime truth and visual results below describe the recorded experiments, not the current supported contract. Active scope and unresolved requirements are owned by [epu-correctness-and-open-authoring.md](../plans/epu-correctness-and-open-authoring.md); current behavior is documented in the [EPU API](../book/src/api/epu.md) and live shaders. Retained proposals are not implementation or human-acceptance claims.
+
 ## Purpose
 
 This document replaces the earlier speculative expansion draft with an audit grounded in current code and the deterministic showcase loops completed through `2026-03-11-epu-showcase-12preset-replay-41`.

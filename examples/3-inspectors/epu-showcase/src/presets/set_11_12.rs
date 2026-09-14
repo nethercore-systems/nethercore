@@ -168,7 +168,7 @@ pub(super) const PRESET_STORM_FRONT: [[u64; 2]; 8] = [
             0x2a3d4b,
             0x091017,
         ),
-        lo(255, 54, 0, 0, 0, DIR_UP, 15, 0),
+        lo(255, 54, 0, 0, 0, DIR_DOWN, 15, 0),
     ],
     // L2: MASS/SHELF - let one explicit body carrier own the storm shelf instead of asking texture breakup to fake the front
     [

@@ -25,79 +25,38 @@ struct FrameUniforms {
 @group(0) @binding(3) var epu_out_sharp: texture_storage_2d_array<rgba16float, write>;
 
 fn evaluate_env_radiance(dir: vec3f, st: PackedEnvironmentState) -> vec3f {
-    // Start with default bounds direction (will be updated by bounds layers)
-    var bounds_dir = vec3f(0.0, 1.0, 0.0);
-    // Default regions: all-sky (bounds layers will compute their own regions)
-    var regions = RegionWeights(1.0, 0.0, 0.0);
+    return evaluate_epu_layers(dir, st.layers);
+}
 
+// Linear source filtering boundary, before runtime storage saturation.
+fn evaluate_env_texel(pixel: vec2u, map_size: u32, st: PackedEnvironmentState) -> vec3f {
+    // Integrate inside the angular cell, rather than sampling its center or
+    // blending selected fold neighbors. The oct solid-angle Jacobian is
+    // 1/length(oct_surface)^3 = (abs(dir.x)+abs(dir.y)+abs(dir.z))^3.
     var radiance = vec3f(0.0);
-
-    for (var i = 0u; i < 8u; i++) {
-        let instr = st.layers[i];
-        let opcode = instr_opcode(instr);
-        if opcode == OP_NOP { continue; }
-
-        let is_bounds = opcode < OP_FEATURE_MIN;
-
-        let blend = instr_blend(instr);
-
-        if is_bounds {
-            // Bounds opcode: update bounds_dir, get sample + output regions.
-            bounds_dir = bounds_dir_from_layer(instr, opcode, bounds_dir);
-            let bounds_result = evaluate_bounds_layer(dir, instr, opcode, bounds_dir, regions);
-            regions = compose_bounds_regions(regions, bounds_result.regions, bounds_result.region_mix);
-            radiance = apply_blend(radiance, bounds_result.sample, blend);
-        } else {
-            // Feature opcode: just get sample using current regions
-            let sample = evaluate_layer(dir, instr, bounds_dir, regions);
-            radiance = apply_blend(radiance, sample, blend);
+    var weight_sum = 0.0;
+    // ponytail: four evaluations per source texel; cost acceptance is deferred.
+    for (var y = 0u; y < 2u; y++) {
+        for (var x = 0u; x < 2u; x++) {
+            let offset = (vec2f(f32(x), f32(y)) + 0.5) / 2.0;
+            let oct = 2.0 * (vec2f(pixel) + offset) / f32(map_size) - 1.0;
+            let dir = octahedral_decode(oct);
+            let l1 = dot(abs(dir), vec3f(1.0));
+            let weight = l1 * l1 * l1;
+            radiance += evaluate_env_radiance(dir, st) * weight;
+            weight_sum += weight;
         }
     }
-
-    return radiance;
+    return radiance / weight_sum;
 }
 
 @compute @workgroup_size(8, 8, 1)
 fn epu_build(@builtin(global_invocation_id) gid: vec3u) {
-    let env_slot = gid.z;
-    if env_slot >= epu_frame.active_count { return; }
-
-    let env_id = epu_active_env_ids[env_slot];
+    if gid.z >= epu_frame.active_count { return; }
+    let env_id = epu_active_env_ids[gid.z];
     let map_size = epu_frame.map_size;
     if gid.x >= map_size || gid.y >= map_size { return; }
-
-    // Texel -> oct coord -> direction
-    let uv = (vec2f(gid.xy) + 0.5) / vec2f(f32(map_size));
-    let oct = uv * 2.0 - 1.0;
-    let dir = octahedral_decode(oct);
-
-    let st = epu_states[env_id];
-    let radiance = evaluate_env_radiance(dir, st);
-    let oct_l1 = abs(oct.x) + abs(oct.y);
-    let fold_stress = 1.0 - smoothstep(0.025, 0.11, abs(oct_l1 - 1.0));
-    let corner_stress =
-        smoothstep(0.74, 0.95, max(abs(oct.x), abs(oct.y)))
-        * smoothstep(1.02, 1.32, oct_l1);
-    let oct_stress = max(fold_stress, corner_stress);
-
-    var final_radiance = radiance;
-    if oct_stress > 0.001 {
-        let oct_step = 2.0 / f32(map_size);
-        let sample_axis = select(
-            vec2f(oct_step, 0.0),
-            vec2f(0.0, oct_step),
-            abs(oct.x) > abs(oct.y)
-        );
-        let dir_a = octahedral_decode(clamp(oct + sample_axis, vec2f(-1.0), vec2f(1.0)));
-        let dir_b = octahedral_decode(clamp(oct - sample_axis, vec2f(-1.0), vec2f(1.0)));
-        let avg_radiance = (
-            radiance
-            + evaluate_env_radiance(dir_a, st)
-            + evaluate_env_radiance(dir_b, st)
-        ) / 3.0;
-        final_radiance = mix(radiance, avg_radiance, oct_stress * 0.35);
-    }
-
+    let final_radiance = evaluate_env_texel(gid.xy, map_size, epu_states[env_id]);
     textureStore(
         epu_out_sharp,
         vec2u(gid.xy),

@@ -2,7 +2,7 @@
 // opcode = 0x05
 // name = CELL
 // kind = bounds
-// variants = [GRID, HEX, VORONOI, RADIAL, SHATTER, BRICK]
+// variants = [GRID, HEX, VORONOI, RADIAL, SHATTER, BRICK, WARPED_RADIAL]
 // domains = []
 // field intensity = { label="outline", map="u8_01" }
 // field param_a = { label="density", map="u8_lerp", min=4.0, max=64.0 }
@@ -12,36 +12,44 @@
 // @epu_meta_end
 
 // ============================================================================
-// CELL - Voronoi Cell Enclosure Source (0x05)
+// CELL - Tiled Cell Enclosure Source (0x05)
 // Tessellates the sphere into discrete cells for mosaic/crystalline enclosures.
 // 128-bit packed fields:
 //   color_a: Sky (gap) base color (RGB24)
 //   color_b: Wall (solid) base color (RGB24)
 //   intensity: Outline brightness (0..255 -> 0.0..1.0)
-//   param_a: Cell density (0..255 -> 4..64 cells per unit)
+//   param_a: Cell density (0..255 -> 4..64); HEX/BRICK/VORONOI/SHATTER use whole columns
 //   param_b: Fill ratio (0..255 -> 0.0..1.0, fraction of solid cells)
 //   param_c: Gap width (0..255 -> 0.0..0.2)
 //   param_d: Seed for randomization (0..255)
 //   direction: Alignment axis (oct-u16)
-//   alpha_a: Gap alpha (0..15 -> 0.0..1.0)
+//   alpha_a: Opacity of all gaps and unfilled cells (0..15 -> 0.0..1.0)
 //   alpha_b: Outline alpha (0..15 -> 0.0..1.0)
-//   variant_id: 0=GRID, 1=HEX, 2=VORONOI, 3=RADIAL, 4=SHATTER, 5=BRICK
+//   variant_id: 0=GRID, 1=HEX, 2=VORONOI, 3=RADIAL, 4=SHATTER, 5=BRICK, 6=WARPED_RADIAL
 // ============================================================================
 
-// Hash function for cell id (deterministic, rollback-safe)
-fn cell_hash2(cell: vec2f, seed: f32) -> f32 {
-    let p = cell + vec2f(seed * 17.3, seed * 31.7);
-    return fract(sin(dot(p, vec2f(127.1, 311.7))) * 43758.5453123);
+// Hash all input bits, preserving fractional seeds/density and canonicalizing zero.
+// Integer mixing avoids constant/dynamic sine approximations changing occupancy.
+fn cell_hash_bits(cell: vec2f, seed: f32, salt: u32) -> u32 {
+    let c = bitcast<vec2u>(select(cell, vec2f(0.0), cell == vec2f(0.0)));
+    let s = bitcast<u32>(select(seed, 0.0, seed == 0.0));
+    var h = c.x * 0x9e3779b9u + c.y * 0x85ebca6bu + s * 0xc2b2ae35u + salt;
+    h ^= h >> 16u;
+    h *= 0x7feb352du;
+    h ^= h >> 15u;
+    h *= 0x846ca68bu;
+    return h ^ (h >> 16u);
 }
 
-// 2D hash returning vec2 for Voronoi jitter
+fn cell_hash2(cell: vec2f, seed: f32) -> f32 {
+    return f32(cell_hash_bits(cell, seed, 0u) >> 8u) / 16777216.0;
+}
+
 fn cell_hash2_vec2(cell: vec2f, seed: f32) -> vec2f {
-    let p = cell + vec2f(seed * 17.3, seed * 31.7);
-    let h = vec2f(
-        dot(p, vec2f(127.1, 311.7)),
-        dot(p, vec2f(269.5, 183.3))
-    );
-    return fract(sin(h) * 43758.5453123);
+    return vec2f(
+        f32(cell_hash_bits(cell, seed, 0u) >> 8u),
+        f32(cell_hash_bits(cell, seed, 0x9e3779b9u) >> 8u)
+    ) / 16777216.0;
 }
 
 fn wrap_periodic_x(x: f32, period: f32) -> f32 {
@@ -70,7 +78,15 @@ fn cell_axis_cylinder_uv(dir: vec3f, axis: vec3f) -> vec2f {
     return vec2f(u01, v01);
 }
 
-// GRID variant: regular rectangular cells
+// Exact packed scale: 4 + 60*byte/255 = 4 + 4*byte/17.
+// Keep integral counts exact before ceil/floor; do not round fractional densities.
+fn cell_density(byte: u32) -> f32 {
+    let steps = byte * 4u;
+    return 4.0 + f32(steps / 17u) + f32(steps % 17u) / 17.0;
+}
+
+// GRID variant: rectangular cells; fractional density leaves a partial last column.
+// Callers supply canonical cylinder u in [0,1); close that column at scaled.x=density.
 fn cell_grid(uv: vec2f, density: f32) -> vec3f {
     let scaled = uv * density;
     let cell_id = floor(scaled);
@@ -82,158 +98,244 @@ fn cell_grid(uv: vec2f, density: f32) -> vec3f {
         min(cell_fract.y, 1.0 - cell_fract.y)
     );
 
-    return vec3f(cell_id, d_edge);
+    return vec3f(cell_id, min(d_edge, density - scaled.x));
 }
 
-// HEX variant: hexagonal cells with offset rows
+// Offset cells straddling an integral circumference share one identity.
+// Fractional inputs pass through; periodic production callers use whole columns.
+// Wrap the integer ID, not local geometry or fractional hash/seed inputs.
+fn cell_offset_id_x(x: f32, density: f32) -> f32 {
+    // Only the identity period is integral; keep density/row seeds untouched.
+    // Allow f32 decode error, far below one packed fractional-density step.
+    let period = round(density);
+    if abs(density - period) <= 0.00001 {
+        // Keep remainder operands nonnegative: the tested GPU path mishandles
+        // signed negative remainders (for example -1 at period 34).
+        let n = u32(period);
+        let remainder = u32(abs(x)) % n;
+        return f32(select(remainder, n - remainder, x < 0.0 && remainder != 0u));
+    }
+    return x;
+}
+
+// HEX: whole cells on a periodic triangular lattice; no partial last column.
+// Density selects 4..64 whole columns. The nearest 3x3 sites cover every
+// hexagon that can affect a sample, including its existing edge band.
+// Filled-cell distance is independent of which site owns the sample.
+fn cell_hex_fields(uv: vec2f, density: f32, seed: f32, fill: f32) -> vec4f {
+    let count = round(density);
+    let row_height = 0.8660254037844386;
+    let p = uv * count;
+    let base_row = i32(floor(p.y / row_height));
+    var nearest = 1e20;
+    var owner = vec2f(0.0);
+    var all_edge = -100.0;
+    var solid_edge = -100.0;
+    for (var dy = -1; dy <= 1; dy += 1) {
+        let row = base_row + dy;
+        let shift = select(0.0, 0.5, (row & 1) == 0);
+        let base_col = i32(floor(p.x + shift));
+        for (var dx = -1; dx <= 1; dx += 1) {
+            let col = base_col + dx;
+            let center = vec2f(f32(col) + 0.5 - shift, (f32(row) + 0.5) * row_height);
+            let delta = p - center;
+            let id = vec2f(cell_offset_id_x(f32(col), count), f32(row));
+            let distance = dot(delta, delta);
+            if distance < nearest { nearest = distance; owner = id; }
+            let q = abs(delta);
+            let edge = 0.5 - max(q.x, 0.5 * q.x + row_height * q.y);
+            all_edge = max(all_edge, edge);
+            if cell_hash2(id, seed) < fill { solid_edge = max(solid_edge, edge); }
+        }
+    }
+    return vec4f(owner, all_edge, solid_edge);
+}
 fn cell_hex(uv: vec2f, density: f32) -> vec3f {
-    let scaled = uv * density;
-
-    // Offset even rows by 0.5 for hex pattern
-    let row = floor(scaled.y);
-    var offset_x = scaled.x;
-    if fract(row * 0.5) < 0.25 {
-        offset_x += 0.5;
-    }
-
-    let cell_id = vec2f(floor(offset_x), row);
-    let cell_fract = vec2f(fract(offset_x), fract(scaled.y));
-
-    // Approximate hex distance (simplified)
-    let center = cell_fract - vec2f(0.5, 0.5);
-    let hex_dist = max(abs(center.x), abs(center.y) * 0.866 + abs(center.x) * 0.5);
-    let d_edge = 0.5 - hex_dist;
-
-    return vec3f(cell_id, d_edge);
+    return cell_hex_fields(uv, density, 0.0, 1.0).xyz;
 }
 
-// BRICK variant: offset alternating rows
+// BRICK: ordinary staggered rectangles; whole periodic columns, no hidden relief.
 fn cell_brick(uv: vec2f, density: f32, seed: f32) -> vec3f {
-    let scaled = uv * vec2f(density, density * 0.5);
-
+    let count = round(density);
+    let scaled = uv * vec2f(count, count * 0.5);
     let row = floor(scaled.y);
-    let row_seed = cell_hash2(vec2f(row, density), seed + 11.0);
-    var offset_x = scaled.x;
-    if fract(row * 0.5) < 0.25 {
-        offset_x += 0.5;
+    let shift = select(0.0, 0.5, fract(row * 0.5) < 0.25);
+    let p = scaled + vec2f(shift, 0.0);
+    let id = vec2f(cell_offset_id_x(floor(p.x), count), row);
+    let local = fract(p);
+    let edge = min(min(local.x, 1.0 - local.x), min(local.y, 1.0 - local.y));
+    return vec3f(id, edge);
+}
+
+// Filled rectangles retain their edge support across an empty-cell owner.
+// GRID preserves its fractional terminal rectangle; BRICK uses whole columns.
+fn cell_rect_fields(uv: vec2f, density: f32, seed: f32, fill: f32, brick: bool) -> vec4f {
+    let count = select(density, round(density), brick);
+    let height = select(count, count * 0.5, brick);
+    var info = cell_grid(uv, density);
+    if brick { info = cell_brick(uv, density, seed); }
+    let p = uv * vec2f(count, height);
+    let columns = i32(ceil(count));
+    let base_row = i32(floor(p.y));
+    var solid_edge = -100.0;
+    for (var dy = -1; dy <= 1; dy += 1) {
+        let row = base_row + dy;
+        let shift = select(0.0, 0.5, brick && (row & 1) == 0);
+        let base_col = i32(floor(p.x + shift));
+        for (var dx = -1; dx <= 1; dx += 1) {
+            let raw = base_col + dx;
+            // UV is in one chart; these neighbours need at most one wrap.
+            let cycle = select(0.0, 1.0, raw >= columns) - select(0.0, 1.0, raw < 0);
+            let col = raw - i32(cycle) * columns;
+            let id = vec2f(f32(col), f32(row));
+            let left = cycle * count + f32(col) - shift;
+            let right = cycle * count + min(f32(col) + 1.0, count) - shift;
+            let bottom = f32(row);
+            let edge = min(min(p.x - left, right - p.x), min(p.y - bottom, bottom + 1.0 - p.y));
+            if cell_hash2(id, seed) < fill { solid_edge = max(solid_edge, edge); }
+        }
     }
-    // Break perfect repeated mortar columns. A tiny row-specific shift keeps the
-    // brick read, but stops the brightest seams from marching as rigid guide bars.
-    offset_x += (row_seed - 0.5) * 0.16;
+    return vec4f(info, solid_edge);
+}
 
-    let cell_id = vec2f(floor(offset_x), row);
-    let brick_seed = cell_hash2(cell_id, seed + 29.0);
-    let row_phase = fract(scaled.y);
-    let warped_x = fract(offset_x + (row_phase - 0.5) * mix(-0.08, 0.08, brick_seed));
-    let warped_y = fract(scaled.y + (fract(offset_x) - 0.5) * mix(-0.035, 0.035, row_seed));
-    let cell_fract = vec2f(warped_x, warped_y);
+fn cell_grid_fields(uv: vec2f, density: f32, seed: f32, fill: f32) -> vec4f {
+    return cell_rect_fields(uv, density, seed, fill, false);
+}
 
-    let vertical_wave = epu_relief_wave(
-        vec2f(cell_id.x * 0.23 + cell_fract.y * 0.91, cell_id.y * 0.37 + cell_fract.x * 0.19),
-        seed * 0.013 + brick_seed * 0.71 + 0.11
-    );
-    let horizontal_wave = epu_relief_wave(
-        vec2f(cell_id.y * 0.29 + cell_fract.x * 0.83, cell_id.x * -0.17 + cell_fract.y * 0.27),
-        seed * 0.017 + row_seed * 0.63 + 0.43
-    );
-    let vertical_gate = smoothstep(-0.2, 0.72, vertical_wave);
-    let horizontal_gate = smoothstep(-0.24, 0.68, horizontal_wave);
-
-    // Break mortar continuity before compositing. The line family still reads as
-    // brick, but low-frequency gating closes sections of the vertical/horizontal
-    // seams so they cannot survive as full-chart tracery or seam rails.
-    let x_edge = min(cell_fract.x, 1.0 - cell_fract.x);
-    let y_edge = min(cell_fract.y, 1.0 - cell_fract.y);
-    let joint_taper = smoothstep(0.0, 0.22, y_edge);
-    let vertical_lane = smoothstep(0.04, 0.26, y_edge);
-    let horizontal_lane = smoothstep(0.04, 0.22, x_edge);
-    let x_mortar = x_edge
-        * mix(0.8, 1.0, joint_taper)
-        * (1.0 + (1.0 - vertical_gate) * vertical_lane * 0.9);
-    let y_mortar = y_edge * (1.0 + (1.0 - horizontal_gate) * horizontal_lane * 0.75);
-    let d_edge = min(x_mortar, y_mortar);
-
-    return vec3f(cell_id, d_edge);
+fn cell_brick_fields(uv: vec2f, density: f32, seed: f32, fill: f32) -> vec4f {
+    return cell_rect_fields(uv, density, seed, fill, true);
 }
 
 // VORONOI variant: find nearest point from jittered grid
-fn cell_voronoi(uv: vec2f, density: f32, seed: f32) -> vec3f {
-    let scaled = uv * density;
-    let base_cell = floor(scaled);
-
-    var min_dist = 100.0;
-    var min_dist2 = 100.0;
-    var closest_cell = base_cell;
-
-    // Search 3x3 neighborhood
-    for (var dy = -1.0; dy <= 1.0; dy += 1.0) {
-        for (var dx = -1.0; dx <= 1.0; dx += 1.0) {
-            let neighbor = base_cell + vec2f(dx, dy);
-            let wrapped = vec2f(wrap_periodic_x(neighbor.x, density), neighbor.y);
-            let jitter = cell_hash2_vec2(neighbor, seed);
-            let point = wrapped + jitter * 0.8 + vec2f(0.1);
-            let delta = vec2f(
-                shortest_periodic_delta(scaled.x, point.x, density),
-                scaled.y - point.y
-            );
-            let d = length(delta);
-
-            if d < min_dist {
-                min_dist2 = min_dist;
-                min_dist = d;
-                closest_cell = wrapped;
-            } else if d < min_dist2 {
-                min_dist2 = d;
+// Radius two covers both nearest sites: two sites are within sqrt(3.25),
+// while a site outside this window is at least two cell units away.
+fn cell_site_fields(uv: vec2f, period: f32, seed: f32, jitter_scale: f32, fill_seed: f32, fill: f32) -> vec4f {
+    let scaled = uv * period;
+    let base = vec2i(floor(scaled));
+    let n = i32(period);
+    var first = 100.0;
+    var second = 100.0;
+    var owner = vec2f(0.0);
+    var nearest_filled = 100.0;
+    for (var dy = -2; dy <= 2; dy += 1) {
+        for (var dx = -2; dx <= 2; dx += 1) {
+            // n=4 aliases the two outer columns: never count a site twice.
+            if n == 4 && dx == 2 { continue; }
+            let raw_x = base.x + dx;
+            let id = vec2f(vec2i((raw_x + n) % n, base.y + dy));
+            let jitter = cell_hash2_vec2(id, seed);
+            let point = id + jitter * jitter_scale + vec2f(select(0.1, 0.0, jitter_scale == 1.0));
+            let d = length(vec2f(shortest_periodic_delta(scaled.x, point.x, period), scaled.y - point.y));
+            if cell_hash2(id, fill_seed) < fill { nearest_filled = min(nearest_filled, d); }
+            if d < first {
+                second = first;
+                first = d;
+                owner = id;
+            } else if d < second {
+                second = d;
             }
         }
     }
+    let edge = (second - first) * 0.5;
+    // Extend filled-site support into empty ownership, rather than dropping
+    // the edge band at the bisector. All-site geometry/identity stays unchanged.
+    // Omitted sites are too distant to affect the existing 0.005 edge band.
+    var solid_edge = -100.0;
+    if cell_hash2(owner, fill_seed) < fill {
+        solid_edge = edge;
+    } else if nearest_filled < 100.0 {
+        solid_edge = (first - nearest_filled) * 0.5;
+    }
+    return vec4f(owner, edge, solid_edge);
+}
 
-    // Edge distance approximation (distance to second-nearest minus nearest)
-    let d_edge = (min_dist2 - min_dist) * 0.5;
+fn cell_periodic_candidates(uv: vec2f, period: f32, seed: f32, jitter_scale: f32) -> vec3f {
+    return cell_site_fields(uv, period, seed, jitter_scale, seed, 0.0).xyz;
+}
 
-    return vec3f(closest_cell, d_edge);
+fn cell_voronoi(uv: vec2f, density: f32, seed: f32) -> vec3f {
+    return cell_periodic_candidates(uv, round(density), seed, 0.8);
 }
 
 // SHATTER variant: voronoi with higher jitter
 fn cell_shatter(uv: vec2f, density: f32, seed: f32) -> vec3f {
-    let scaled = uv * density;
-    let base_cell = floor(scaled);
-
-    var min_dist = 100.0;
-    var min_dist2 = 100.0;
-    var closest_cell = base_cell;
-
-    // Search 3x3 neighborhood with more aggressive jitter
-    for (var dy = -1.0; dy <= 1.0; dy += 1.0) {
-        for (var dx = -1.0; dx <= 1.0; dx += 1.0) {
-            let neighbor = base_cell + vec2f(dx, dy);
-            let wrapped = vec2f(wrap_periodic_x(neighbor.x, density), neighbor.y);
-            let jitter = cell_hash2_vec2(neighbor, seed + 42.0);
-            // Full cell jitter for shattered look
-            let point = wrapped + jitter;
-            let delta = vec2f(
-                shortest_periodic_delta(scaled.x, point.x, density),
-                scaled.y - point.y
-            );
-            let d = length(delta);
-
-            if d < min_dist {
-                min_dist2 = min_dist;
-                min_dist = d;
-                closest_cell = wrapped;
-            } else if d < min_dist2 {
-                min_dist2 = d;
-            }
-        }
-    }
-
-    let d_edge = (min_dist2 - min_dist) * 0.5;
-
-    return vec3f(closest_cell, d_edge);
+    return cell_periodic_candidates(uv, round(density), seed + 42.0, 1.0);
 }
 
-// RADIAL variant: starburst pattern with rings and spokes
+// RADIAL: regular annular sectors and one centre cell at each pole.
+// Distances use the same normalized cell-coordinate metric as GRID/BRICK.
+fn cell_radial_fields(uv: vec2f, density: f32, axis: vec3f, dir: vec3f, seed: f32, fill: f32) -> vec4f {
+    let columns = round(density);
+    let rings = f32((u32(columns) + 1u) / 2u);
+    let radius = min(1.0, length(cross(dir, axis)));
+    let y = radius * rings;
+    let center_edge = 1.0 - y;
+    var all_edge = center_edge;
+    var solid_edge = select(-100.0, center_edge, cell_hash2(vec2f(0.0), seed) < fill);
+    if radius == 0.0 { return vec4f(0.0, 0.0, all_edge, solid_edge); }
+    let x = uv.x * columns;
+    let base_col = i32(floor(x));
+    let base_row = min(i32(floor(y)), i32(rings) - 1);
+    var owner = vec2f(cell_offset_id_x(f32(base_col), columns), f32(base_row));
+    if y < 1.0 { owner = vec2f(0.0); }
+    for (var dy = -1; dy <= 1; dy += 1) {
+        let row = base_row + dy;
+        if row < 1 || row >= i32(rings) { continue; }
+        for (var dx = -1; dx <= 1; dx += 1) {
+            let col = base_col + dx;
+            let id = vec2f(cell_offset_id_x(f32(col), columns), f32(row));
+            let edge = min(min(x - f32(col), f32(col) + 1.0 - x), min(y - f32(row), f32(row) + 1.0 - y));
+            all_edge = max(all_edge, edge);
+            if cell_hash2(id, seed) < fill { solid_edge = max(solid_edge, edge); }
+        }
+    }
+    return vec4f(owner, all_edge, solid_edge);
+}
 fn cell_radial(uv: vec2f, density: f32, axis: vec3f, dir: vec3f) -> vec3f {
+    return cell_radial_fields(uv, density, axis, dir, 0.0, 1.0).xyz;
+}
+
+// WARPED_RADIAL: periodic warped cells; ownership and edges use one phase field.
+// Fused accumulation is local: existing shared relief and regular RADIAL stay unchanged.
+fn cell_warped_wave(p: vec2f, phase: f32) -> f32 {
+    let q0 = fma(p.x,2.73,fma(p.y,-4.11,phase*TAU));
+    let q1 = fma(p.x,-5.27,fma(p.y,-1.93,-phase*PI));
+    let q2 = fma(p.x,3.17,fma(p.y,6.21,phase*(TAU*0.61803398875)));
+    return (sin(q0) + sin(q1) + sin(q2)) * (1.0 / 3.0);
+}
+
+fn cell_warped_uv(uv: vec2f, phase: f32, u_amount: f32, v_amount: f32) -> vec2f {
+    let uc = epu_periodic_centered(uv.x);
+    let seam_gate = smoothstep(0.025, 0.12, epu_periodic_edge_distance(uv.x));
+    let v_edge = min(uv.y, 1.0 - uv.y);
+    let v_gate = smoothstep(0.03, 0.14, v_edge);
+    let relief_gate = seam_gate * v_gate;
+    let gated_u_amount = u_amount * relief_gate;
+    let gated_v_amount = v_amount * relief_gate;
+    let p0 = vec2f(uc * 2.3, uv.y * 1.7);
+    let p1 = vec2f(uc * -3.1 + uv.y * 0.38, uv.y * 1.29 - uc * 0.62);
+    let wave0 = cell_warped_wave(p0, phase);
+    let wave1 = cell_warped_wave(p1, phase + 0.37);
+    let u = fract(uv.x + wave0 * gated_u_amount + wave1 * gated_u_amount * 0.45);
+    let v = uv.y + wave1 * gated_v_amount + wave0 * gated_v_amount * 0.22;
+    return vec2f(u, v);
+}
+
+fn cell_warped_smooth_hash2(p: vec2f, seed: f32) -> f32 {
+    let q=p-vec2f(.5);let i=floor(q);let f=fract(q);let w=f*f*(vec2f(3.)-2.*f);
+    return mix(mix(cell_hash2(i,seed),cell_hash2(i+vec2f(1.,0.),seed),w.x),
+        mix(cell_hash2(i+vec2f(0.,1.),seed),cell_hash2(i+vec2f(1.,1.),seed),w.x),w.y);
+}
+
+fn cell_warped_periodic_wave(p:vec2f, period:vec2f, u:f32, seed:f32)->f32 {
+ return mix(cell_warped_wave(p,seed),cell_warped_wave(p-period,seed),smoothstep(0.,1.,u));
+}
+
+fn cell_warped_periodic_hash(p:vec2f, period:vec2f, u:f32, seed:f32)->f32 {
+ return mix(cell_warped_smooth_hash2(p,seed),cell_warped_smooth_hash2(p-period,seed),smoothstep(0.,1.,u));
+}
+
+fn cell_warped_radial_phases(density: f32, axis: vec3f, dir: vec3f) -> vec2f {
     // Use angle and radius from axis
     let ref_vec = select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(axis.y) > 0.9);
     let t_axis = normalize(cross(ref_vec, axis));
@@ -244,8 +346,8 @@ fn cell_radial(uv: vec2f, density: f32, axis: vec3f, dir: vec3f) -> vec3f {
     let z_proj = dot(dir, axis);
 
     let angle01 = fract(atan2(b_proj, t_proj) / TAU + 0.5);
-    let radius01 = sqrt(max(0.0, 1.0 - z_proj * z_proj));
-    let radial_uv = epu_wrapped_relief_uv(
+    let radius01 = min(1.0, length(cross(dir, axis)));
+    let radial_uv = cell_warped_uv(
         vec2f(angle01, radius01),
         density * 0.019 + z_proj * 0.41,
         0.038 * smoothstep(0.1, 0.42, radius01),
@@ -256,19 +358,20 @@ fn cell_radial(uv: vec2f, density: f32, axis: vec3f, dir: vec3f) -> vec3f {
 
     // Ring and spoke counts based on density
     let ring_count = max(density * 0.5, 1.0);
-    let spoke_count = max(density, 1.0);
-    let base_ring_seed = floor(radius_phase * ring_count);
-    let base_spoke_seed = floor(angle_phase * spoke_count);
+    let spoke_count = round(density);
     let center_relief = smoothstep(0.08, 0.34, radius_phase);
     let ring_relief = epu_relief_envelope(radius_phase, 0.06, 0.22, 0.82, 0.99);
-    let angular_relief = epu_relief_wave(vec2f(t_proj, b_proj) * vec2f(2.4, 2.1), density * 0.017);
-    let radial_relief = epu_relief_wave(
-        vec2f(angle_phase * spoke_count, radius_phase * ring_count),
+    let angular_relief = cell_warped_wave(vec2f(t_proj, b_proj) * vec2f(2.4, 2.1), density * 0.017);
+    // Density counts cells; it must not also multiply warp frequency and
+    // drive the edge gradient quadratically towards sub-f32-width features.
+    let relief_counts=min(vec2f(spoke_count,ring_count),vec2f(8.,4.));
+    let radial_relief = cell_warped_periodic_wave(
+        vec2f(angle_phase,radius_phase)*relief_counts,vec2f(relief_counts.x,0.),angle_phase,
         density * 0.043 + z_proj * 0.5
     );
-    let ring_warp = (cell_hash2(vec2f(base_spoke_seed, base_ring_seed), density * 0.37) - 0.5)
+    let ring_warp = (cell_warped_periodic_hash(vec2f(angle_phase * spoke_count, radius_phase * ring_count),vec2f(spoke_count,0.),angle_phase,density * 0.37) - 0.5)
         * mix(0.0, 0.16 / ring_count, ring_relief);
-    let spoke_warp = (cell_hash2(vec2f(base_ring_seed, base_spoke_seed), density * 0.73) - 0.5)
+    let spoke_warp = (cell_warped_periodic_hash(vec2f(radius_phase * ring_count, angle_phase * spoke_count),vec2f(0.,spoke_count),angle_phase,density * 0.73) - 0.5)
         * (0.14 / spoke_count)
         * center_relief;
     let ring_count_local = ring_count * mix(1.0, mix(0.9, 1.18, angular_relief * 0.5 + 0.5), ring_relief);
@@ -278,24 +381,32 @@ fn cell_radial(uv: vec2f, density: f32, axis: vec3f, dir: vec3f) -> vec3f {
         0.0,
         0.9999
     ) * ring_count_local;
-    let spoke_phase = fract(angle_phase + spoke_warp + radial_relief * 0.085 * center_relief) * spoke_count_local;
-    let ring_id = floor(ring_phase);
-    let spoke_id = floor(spoke_phase);
-    let cell_id = vec2f(spoke_id, ring_id);
-    let edge_relief = epu_relief_wave(vec2f(radius_phase * ring_count, angle_phase * spoke_count), density * 0.061 + 0.23);
-    let ring_edge = mix(
-        0.5,
-        epu_periodic_edge_distance(ring_phase + edge_relief * 0.08 * ring_relief),
-        ring_relief
-    );
-    let spoke_edge = mix(
-        0.5,
-        epu_periodic_edge_distance(spoke_phase + edge_relief * 0.06 * center_relief),
-        center_relief
-    );
-    let d_edge = min(ring_edge, spoke_edge);
+    let u_window=8.0*angle_phase*angle_phase*(1.0-angle_phase)*(1.0-angle_phase);
+    let spoke_phase = (angle_phase + spoke_warp + radial_relief * 0.085 * center_relief) * spoke_count
+        + (spoke_count_local-spoke_count)*u_window;
+    let edge_relief = cell_warped_periodic_wave(vec2f(radius_phase * relief_counts.y, angle_phase * relief_counts.x),vec2f(0.,relief_counts.x),angle_phase,density * 0.061 + 0.23);
 
-    return vec3f(cell_id, d_edge);
+    return vec2f(spoke_phase + edge_relief * 0.06 * center_relief, ring_phase + edge_relief * 0.08 * ring_relief);
+}
+
+fn cell_warped_radial_fields(density:f32, axis:vec3f, dir:vec3f, seed:f32, fill:f32)->vec4f {
+ let phase=cell_warped_radial_phases(density,axis,dir);
+ let x=phase.x;let y=phase.y;
+ let col=i32(floor(x+0.5));let row=max(0,i32(floor(y+0.5)));
+ var owner=vec2f(cell_offset_id_x(f32(col),round(density)),f32(row));if row==0 {owner=vec2f(0.);}
+ let center_edge=0.5-y;
+ var all_edge=center_edge;
+ var solid_edge=select(-100.,center_edge,cell_hash2(vec2f(0.),seed)<fill);
+ for(var dy=-1;dy<=1;dy+=1){
+  let r=row+dy;if r<1 {continue;}
+  for(var dx=-1;dx<=1;dx+=1){
+   let c=col+dx;let id=vec2f(cell_offset_id_x(f32(c),round(density)),f32(r));
+   let edge=min(0.5-abs(x-f32(c)),0.5-abs(y-f32(r)));
+   all_edge=max(all_edge,edge);
+   if cell_hash2(id,seed)<fill {solid_edge=max(solid_edge,edge);}
+  }
+ }
+ return vec4f(owner,all_edge,solid_edge);
 }
 
 fn eval_cell(
@@ -308,7 +419,7 @@ fn eval_cell(
 
     // Extract parameters
     let outline_brightness = u8_to_01(instr_intensity(instr));
-    let density = mix(4.0, 64.0, u8_to_01(instr_a(instr)));
+    let density = cell_density(instr_a(instr));
     let fill_ratio = u8_to_01(instr_b(instr));
     let gap_width = u8_to_01(instr_c(instr)) * 0.2;
     let seed = f32(instr_d(instr));
@@ -321,21 +432,15 @@ fn eval_cell(
 
     // Compute cell info based on variant: vec3(cell_id.xy, d_edge)
     var cell_info: vec3f;
-    var brick_stress = 0.0;
     switch variant {
-        case 0u: { cell_info = cell_grid(uv, density); }      // GRID
-        case 1u: { cell_info = cell_hex(uv, density); }       // HEX
-        case 2u: { cell_info = cell_voronoi(uv, density, seed); }  // VORONOI
-        case 3u: { cell_info = cell_radial(uv, density, axis, dir); }  // RADIAL
-        case 4u: { cell_info = cell_shatter(uv, density, seed); }  // SHATTER
-        case 5u: { // BRICK
-            cell_info = cell_brick(uv, density, seed);
-            let seam_band = 1.0 - smoothstep(0.03, 0.11, epu_periodic_edge_distance(uv.x));
-            let pole_band = 1.0 - smoothstep(0.05, 0.18, min(uv.y, 1.0 - uv.y));
-            let horizon_band = 1.0 - smoothstep(0.045, 0.16, abs(uv.y - 0.5));
-            brick_stress = max(seam_band, max(pole_band, horizon_band));
-        }
-        default: { cell_info = cell_grid(uv, density); }
+        case 0u: { let fields = cell_grid_fields(uv, density, seed, fill_ratio); cell_info = vec3f(fields.xy, fields.w); } // GRID
+        case 1u: { let fields = cell_hex_fields(uv, density, seed, fill_ratio); cell_info = vec3f(fields.xy, fields.w); }       // HEX
+        case 2u: { let fields = cell_site_fields(uv, round(density), seed, 0.8, seed, fill_ratio); cell_info = vec3f(fields.xy, fields.w); }  // VORONOI
+        case 3u: { let fields = cell_radial_fields(uv, density, axis, dir, seed, fill_ratio); cell_info = vec3f(fields.xy, fields.w); } // RADIAL
+        case 4u: { let fields = cell_site_fields(uv, round(density), seed + 42.0, 1.0, seed, fill_ratio); cell_info = vec3f(fields.xy, fields.w); }  // SHATTER
+        case 5u: { let fields = cell_brick_fields(uv, density, seed, fill_ratio); cell_info = vec3f(fields.xy, fields.w); } // BRICK
+        case 6u: { let fields = cell_warped_radial_fields(density, axis, dir, seed, fill_ratio); cell_info = vec3f(fields.xy, fields.w); } // WARPED_RADIAL
+        default: { let fields = cell_grid_fields(uv, density, seed, fill_ratio); cell_info = vec3f(fields.xy, fields.w); }
     }
 
     let cell_id = cell_info.xy;
@@ -343,7 +448,7 @@ fn eval_cell(
 
     // Determine if cell is solid based on hash and fill ratio
     let cell_value = cell_hash2(cell_id, seed);
-    let is_solid = cell_value < fill_ratio;
+    let is_solid = cell_info.z > -99.0;
     var solid_w = select(0.0, 1.0, is_solid);
 
     // Compute regions from cell geometry
@@ -362,7 +467,7 @@ fn eval_cell(
     if !is_solid {
         // Non-solid cell: all sky (opening)
         output_regions = RegionWeights(1.0, 0.0, 0.0);
-        w_sky = 1.0;
+        w_sky = gap_alpha;
         w_wall = 0.0;
         w_floor = 0.0;
     } else {
@@ -381,66 +486,33 @@ fn eval_cell(
 
     // Add outline effect at gap boundary (only for solid cells)
     let outline_width = gap_width * 0.3;
-    var outline_taper = 1.0;
-    switch variant {
-        case 3u: { // RADIAL
-            let radial_center = epu_relief_envelope(uv.y, 0.08, 0.26, 0.78, 0.98);
-            let radial_gate = smoothstep(
-                -0.25,
-                0.7,
-                epu_relief_wave(vec2f(cell_id.x * 0.37, uv.y * density * 0.91 + cell_id.y * 0.11), seed * 0.017)
-            );
-            outline_taper = mix(1.0, mix(0.64, 1.0, radial_gate), radial_center);
-        }
-        case 5u: { // BRICK
-            let brick_gate = smoothstep(
-                -0.22,
-                0.7,
-                epu_relief_wave(vec2f(cell_id.y * 0.41 + fract(uv.x * density), uv.y * density * 1.27), seed * 0.013)
-            );
-            outline_taper = mix(0.74, 1.0, brick_gate);
-        }
-        default: {}
+    let outline_taper = 1.0;
+    // A zero-width outline contributes nothing; never evaluate a zero denominator.
+    var outline = 0.0;
+    if outline_width > 0.0 {
+        outline = smoothstep(outline_width, 0.0, outline_dist)
+            * outline_alpha
+            * outline_brightness
+            * outline_taper
+            * solid_w;
     }
-    var chart_outline_gate = 1.0;
-    switch variant {
-        case 5u: { // BRICK
-            let seam_gate = smoothstep(0.025, 0.12, epu_periodic_edge_distance(uv.x));
-            let pole_gate = smoothstep(0.04, 0.18, min(uv.y, 1.0 - uv.y));
-            let horizon_gate = smoothstep(0.04, 0.16, abs(uv.y - 0.5));
-            chart_outline_gate = seam_gate * mix(0.32, 1.0, pole_gate) * mix(0.25, 1.0, horizon_gate);
-        }
-        default: {}
-    }
-    let outline = smoothstep(outline_width, 0.0, outline_dist)
-        * outline_alpha
-        * outline_brightness
-        * outline_taper
-        * chart_outline_gate
-        * solid_w;
 
     // Get colors
     let sky_color = instr_color_a(instr);
     let wall_color = instr_color_b(instr);
-    var floor_color = wall_color * 0.5;
-    if variant == 5u {
-        // In stressed cylindrical zones, keep BRICK region structure but
-        // compress wall/floor contrast so panel and ring reads soften.
-        floor_color = mix(floor_color, wall_color, brick_stress * 0.8);
-    }
+    let floor_color = wall_color * 0.5;
 
     // Blend colors based on weights
     let base_rgb = sky_color * w_sky + wall_color * w_wall + floor_color * w_floor;
 
     // Outline tinted by the brighter of the two cell colors (not hardcoded white)
-    var outline_color = max(sky_color, wall_color);
-    if variant == 5u {
-        outline_color = mix(outline_color, mix(wall_color, base_rgb, 0.7), brick_stress * 0.85);
-    }
-    let rgb = base_rgb + outline_color * outline;
+    let outline_color = max(sky_color, wall_color);
+    var rgb = base_rgb + outline_color * outline;
 
     // Total weight
     let w = w_sky + w_wall + w_floor;
+    // LayerSample carries straight color; apply_blend applies the weight once.
+    if w > 0.0 { rgb /= w; } else { rgb = vec3f(0.0); }
 
     // CELL is an enclosure source: return radiance sample + output regions.
     return BoundsResult(LayerSample(rgb, epu_saturate(w)), output_regions, 1.0);

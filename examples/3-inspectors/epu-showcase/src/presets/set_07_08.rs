@@ -71,7 +71,7 @@ pub(super) const PRESET_ASTRAL_VOID: [[u64; 2]; 8] = [
             0x6b83ef,
             0x1a2755,
         ),
-        lo(44, 96, 38, 0x14, 8, DIR_RIGHT, 6, 1),
+        lo(44, 96, 38, 0x10, 8, DIR_RIGHT, 6, 1),
     ],
     // L6: MOTTLE/SOFT - deepen the soft recession layer so the field breaks into broad pockets instead of reading as one shell.
     [
@@ -124,7 +124,7 @@ pub(super) const PRESET_VOLCANIC_CORE: [[u64; 2]; 8] = [
             0x0d0703,
             0x030100,
         ),
-        lo(255, 120, 102, 178, 0, DIR_UP, 15, 7),
+        lo(255, 120, 102, 178, 0, DIR_DOWN, 15, 7),
     ],
     // L2: CELL/SHATTER - add a little more crack-linked floor segmentation so the infernal fracture field overtakes the last smooth plates.
     [

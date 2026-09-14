@@ -48,7 +48,7 @@ fn evaluate_layer(
     let opcode = instr_opcode(instr);
     let region_mask = instr_region(instr);
 
-    // Always compute region weight from mask - both bounds and features can use it
+    // Feature dispatch consumes the mask. Bounds dispatch does not read these bits.
     let region_w = region_weight(regions, region_mask);
 
     switch opcode {
@@ -57,7 +57,7 @@ fn evaluate_layer(
         // ====================================================================
         case OP_DECAL:   { return eval_decal(dir, instr, region_w); }
         case OP_GRID:    { return eval_grid(dir, instr, region_w); }
-        case OP_SCATTER: { return eval_scatter(dir, instr, region_w); }
+        case OP_SCATTER, OP_SCATTER_PHASED: { return eval_scatter(dir, instr, region_w); }
         case OP_FLOW:    { return eval_flow(dir, instr, bounds_dir, region_w); }
 
         // Additional radiance opcodes (0x0C..0x13)
@@ -96,4 +96,29 @@ fn evaluate_layer(
 
         default: { return LayerSample(vec3f(0.0), 0.0); }
     }
+}
+
+// Shared by direct backgrounds/reflections and the cached lighting compute pass.
+// Preserve the existing direct-render contract: each bounds opcode owns the
+// regions it returns. Modifiers receive prior regions explicitly; the evaluator
+// must not introduce another composition or leak the initial all-sky default.
+fn evaluate_epu_layers(dir: vec3f, layers: array<vec4u, 8>) -> vec3f {
+    var bounds_dir = vec3f(0.0, 1.0, 0.0);
+    var regions = RegionWeights(1.0, 0.0, 0.0);
+    var radiance = vec3f(0.0);
+    for (var i = 0u; i < 8u; i++) {
+        let instr = layers[i];
+        let opcode = instr_opcode(instr);
+        if opcode == OP_NOP { continue; }
+        let blend = instr_blend(instr);
+        if opcode < OP_FEATURE_MIN {
+            bounds_dir = bounds_dir_from_layer(instr, opcode, bounds_dir);
+            let result = evaluate_bounds_layer(dir, instr, opcode, bounds_dir, regions);
+            regions = result.regions;
+            radiance = apply_blend(radiance, result.sample, blend);
+        } else {
+            radiance = apply_blend(radiance, evaluate_layer(dir, instr, bounds_dir, regions), blend);
+        }
+    }
+    return radiance;
 }

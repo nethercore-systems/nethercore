@@ -8,7 +8,7 @@
 // field param_a = { label="width", map="u8_lerp", min=0.005, max=0.5 }
 // field param_b = { label="y_offset", map="u8_lerp", min=-0.5, max=0.5 }
 // field param_c = { label="softness", map="u8_01" }
-// field param_d = { label="phase", map="u8_01" }
+// field param_d = { label="phase", map="u8_lerp", min=0.0, max=0.99609375 }
 // @epu_meta_end
 
 // ============================================================================
@@ -27,10 +27,10 @@
 //   param_a: Band width (0..255 -> 0.005..0.5)
 //   param_b: Y offset from equator (0..255 -> -0.5..0.5)
 //   param_c: Edge softness (0..255 -> 0.0..1.0)
-//   param_d: Modulation phase offset (0..255 -> 0.0..1.0)
+//   param_d: Cyclic modulation position (byte / 256, including zero)
 //   direction: Band axis/normal (oct-u16)
 //   alpha_a: Coverage alpha (0..15 -> 0.0..1.0)
-//   alpha_b: Unused (set to 0)
+//   alpha_b: Modulation depth (0..15); zero = plain ring, 15 = four-wave 40..100%
 //
 // Meta (via meta5):
 //   domain_id: Ignored
@@ -61,8 +61,9 @@ fn eval_band_radiance(
     let offset = mix(-0.5, 0.5, u8_to_01(instr_b(instr)));
     // param_c: Edge softness (0..255 -> 0.0..1.0)
     let softness = u8_to_01(instr_c(instr));
-    // param_d: Modulation phase offset (0..255 -> 0.0..1.0)
+    // Phase is cyclic, never an off sentinel. Depth is independent of position.
     let phase_offset = epu_loop_phase01(instr_d(instr));
+    let depth = instr_alpha_b_f32(instr);
 
     // 3. Compute distance from band center
     let dist = abs(u - offset);
@@ -78,9 +79,9 @@ fn eval_band_radiance(
     let edge_color = instr_color_b(instr);
     let rgb = mix(center_color, edge_color, edge_factor);
 
-    // 7. Apply azimuthal modulation if phase_offset > 0
+    // 7. Zero depth retains the plain ring at every phase.
     var modulated = band;
-    if phase_offset > 0.0 {
+    if depth > 0.0 {
         // Build orthonormal basis (t, b) around axis
         // Choose a reference vector that is not parallel to axis
         let ref_vec = select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(axis.y) > 0.9);
@@ -95,7 +96,7 @@ fn eval_band_radiance(
 
         // Modulate: 0.7 + 0.3 * sin(phase * 8 * PI)
         // This creates 4 wavelengths around the band
-        modulated = band * (0.7 + 0.3 * sin(phase * 8.0 * PI));
+        modulated = band * mix(1.0, 0.7 + 0.3 * sin(phase * 8.0 * PI), depth);
     }
 
     // Extract intensity (0..255 -> 0.0..1.0)

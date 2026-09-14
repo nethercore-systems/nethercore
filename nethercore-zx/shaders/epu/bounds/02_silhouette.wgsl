@@ -7,7 +7,7 @@
 // field intensity = { label="edge_soft", map="u8_lerp", min=0.005, max=0.1 }
 // field param_a = { label="height", map="u8_lerp", min=-0.3, max=0.5 }
 // field param_b = { label="height_span", map="u8_lerp", min=0.1, max=1.0 }
-// field param_c = { label="octaves", map="u8_01" }
+// field param_c = { label="advanced packed: MOUNTAINS octaves = 1 + high nibble / 2 (integer); inactive for other variants; low nibble reserved", map="u8_lerp", min=0.0, max=255.0 }
 // field param_d = { label="wall_depth", map="u8_lerp", min=0.05, max=1.2 }
 // @epu_meta_end
 
@@ -21,7 +21,7 @@
 //   param_a: Horizon height bias (0..255 -> -0.3..0.5)
 //   param_b: Height span / silhouette relief (0..255 -> 0.1..1.0)
 //   param_c[7:4]: Layer count / octaves (0..15 -> 1..8)
-//   param_c[3:0]: Reserved (set to 0)
+//   param_c[3:0]: Reserved/inactive (0 for new layers; preserve existing values)
 //   param_d: Wall depth below the silhouette roofline (0..255 -> 0.05..1.2)
 //   direction: Up axis (oct-u16)
 //   alpha_a: Strength (0..15 -> 0.0..1.0)

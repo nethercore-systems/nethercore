@@ -143,9 +143,9 @@ fn sample_normal_map(tex: texture_2d<f32>, uv: vec2<f32>, tbn: mat3x3<f32>, flag
         return tbn[2];
     }
 
-    // A/B pass: bypass sampled BC5 perturbation entirely so we can isolate whether
-    // the persistent shell survives with no sampled normal-map detail at all.
-    _ = tex;
-    _ = uv;
-    return tbn[2];
+    // BC5 stores tangent-space XY in [0,1]; reconstruct positive Z, then
+    // normalize after the basis transform (including quantization overshoot).
+    let xy = textureSample(tex, sampler_linear, uv).rg * 2.0 - 1.0;
+    let z = sqrt(max(0.0, 1.0 - dot(xy, xy)));
+    return normalize(tbn * vec3f(xy, z));
 }
