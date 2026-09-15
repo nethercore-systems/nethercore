@@ -82,6 +82,7 @@ image = { workspace = true }
 gif = "0.13"
 
 [build-dependencies]
+ffi-gen = { path = "../tools/ffi-gen" }
 naga = { version = "23", features = ["wgsl-in"] }
 zx-common = { path = "../zx-common", default-features = false }
 

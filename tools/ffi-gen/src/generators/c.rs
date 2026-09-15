@@ -2,19 +2,19 @@
 
 use anyhow::Result;
 use std::fmt::Write as FmtWrite;
-use std::path::PathBuf;
 
 use crate::model::FfiModel;
 
 /// Load C helper template for a specific console
 fn load_c_helpers(console: &str) -> Result<String> {
-    let template_path = PathBuf::from(format!("tools/ffi-gen/templates/c_helpers_{}.h", console));
+    let root = crate::find_workspace_root()?;
+    let template_path = root.join(format!("tools/ffi-gen/templates/c_helpers_{}.h", console));
 
     // Try console-specific template first, fall back to generic
     if template_path.exists() {
         Ok(std::fs::read_to_string(&template_path)?)
     } else {
-        let generic_path = PathBuf::from("tools/ffi-gen/templates/c_helpers.h");
+        let generic_path = root.join("tools/ffi-gen/templates/c_helpers.h");
         Ok(std::fs::read_to_string(&generic_path)?)
     }
 }

@@ -2,13 +2,13 @@
 
 use anyhow::Result;
 use std::fmt::Write as FmtWrite;
-use std::path::PathBuf;
 
 use crate::model::FfiModel;
 
 /// Load Zig helper template for a specific console
 fn load_zig_helpers(console: &str) -> Result<String> {
-    let template_path = PathBuf::from(format!(
+    let root = crate::find_workspace_root()?;
+    let template_path = root.join(format!(
         "tools/ffi-gen/templates/zig_helpers_{}.zig",
         console
     ));
@@ -17,7 +17,7 @@ fn load_zig_helpers(console: &str) -> Result<String> {
     if template_path.exists() {
         Ok(std::fs::read_to_string(&template_path)?)
     } else {
-        let generic_path = PathBuf::from("tools/ffi-gen/templates/zig_helpers.zig");
+        let generic_path = root.join("tools/ffi-gen/templates/zig_helpers.zig");
         Ok(std::fs::read_to_string(&generic_path)?)
     }
 }
