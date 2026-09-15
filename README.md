@@ -79,6 +79,12 @@ hardware acceptance checks remain open:
 
 Automated input/audio tests do not certify those hardware cases.
 
+Hosted Linux/Vulkan GPU verification has a separate known blocker: the unchanged
+EPU suite reports 13 failures on llvmpipe, also present before these player/toolchain
+repairs. See the [exact cases and acceptance limits](docs/plans/epu-checkpoint.md#hosted-gpu-ci-blocker).
+Full hosted CI and cross-backend GPU acceptance are **not green**; the paused EPU
+investigation is not part of these shipping repairs.
+
 ## What's Here
 
 | Directory | Description |
