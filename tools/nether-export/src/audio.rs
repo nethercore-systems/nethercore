@@ -65,7 +65,9 @@ pub fn load_wav(input: &Path) -> Result<Vec<i16>> {
     );
     let samples = if spec.channels == 2 {
         samples
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|frame| ((i32::from(frame[0]) + i32::from(frame[1])) / 2) as i16)
             .collect()
     } else {

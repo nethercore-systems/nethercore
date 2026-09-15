@@ -26,7 +26,7 @@ fn enqueue_stereo(
 ) -> usize {
     let mut frame = [0.0; 8];
     let mut consumed = 0;
-    for stereo in samples.chunks_exact(2) {
+    for stereo in samples.as_chunks::<2>().0 {
         if producer.vacant_len() < channels {
             break;
         }

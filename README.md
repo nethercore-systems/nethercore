@@ -67,6 +67,18 @@ cargo run
 | **Nethercore ZX** | 5th gen | PS1/N64/Saturn | Available | [docs/book/](./docs/book/) |
 | **Nethercore Chroma** | 4th gen | Genesis/SNES/Neo Geo | Coming Soon | — |
 
+## ZX validation limits
+
+The player and authoring repairs have software regression coverage, but these
+hardware acceptance checks remain open:
+
+- Physical controller triggers at rest, partial/full travel and release, plus
+  disconnect/remap behavior on a connected controller.
+- Audible device-output verification and mono/multichannel channel-layout checks.
+  Opening a stereo stream is not a listening or compatibility sign-off.
+
+Automated input/audio tests do not certify those hardware cases.
+
 ## What's Here
 
 | Directory | Description |
