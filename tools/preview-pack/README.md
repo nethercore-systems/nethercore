@@ -16,6 +16,12 @@ cargo xtask build-examples
 pwsh .\tools\preview-pack\assemble-preview-pack.ps1 -IncludeLocalTools
 ```
 
+Missing advertised ROMs or requested tools fail assembly. With `-IncludeLocalTools`,
+Python 3 runs each packaged ROM through 30 headless init/update frames, with a
+20-second native-process deadline. Logs, cartridge hashes and exact frame counts
+are retained under `runtime-checks/`. The same gate runs in CI; it does not certify
+GPU rendering, audible output or physical controllers.
+
 The packet is written to:
 
 ```text

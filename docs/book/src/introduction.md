@@ -13,9 +13,15 @@ Nethercore ZX is a 5th-generation fantasy console targeting PS1/N64/Saturn aesth
 | **ROM (Cartridge)** | 16MB (WASM code + data pack assets) |
 | **RAM** | 4MB (WASM linear memory for game state) |
 | **VRAM** | 4MB (GPU textures and mesh buffers) |
-| **Compute budget** | WASM GAS metering |
+| **Compute budget** | CPU-time warnings and wall-clock callback watchdogs |
 | **Netcode** | Deterministic rollback via GGRS |
 | **Max players** | 4 (any mix of local + remote) |
+
+The 4 ms CPU target produces over-budget warnings; it is not deterministic GAS
+or fuel metering. The ordinary player separately applies coarse wall-clock
+watchdogs: roughly 10 seconds for guest start/init and 1 second for update/render.
+A stuck callback ends with an error. OS scheduling affects the exact interruption
+time; these safety deadlines are not an instruction-count guarantee.
 
 ## Game Lifecycle
 
@@ -196,7 +202,7 @@ gif_max_seconds = 60  # Max duration
 ## Quick Links
 
 - [Cheat Sheet](./cheat-sheet.md) - All functions on one page
-- [Getting Started](./getting-started.md) - Your first game
+- [Getting Started](./getting-started/first-game.md) - Your first game
 - [Render Modes](./guides/render-modes.md) - Mode 0-3 explained
 - [Rollback Safety](./guides/rollback-safety.md) - Writing deterministic code
 

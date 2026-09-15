@@ -20,6 +20,50 @@ impl crate::console::ConsoleInput for TestInput {}
 // ============================================================================
 
 #[test]
+fn ordinary_guest_callbacks_are_bounded() {
+    for phase in [
+        "start",
+        "init",
+        "update",
+        "render",
+        "post_connect",
+        "action",
+    ] {
+        let (send, receive) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let engine = WasmEngine::new_bounded().unwrap();
+            let linker = wasmtime::Linker::new(engine.engine());
+            let entry = if phase == "start" {
+                "(func $entry (loop $forever br $forever)) (start $entry)".to_string()
+            } else {
+                format!("(func (export \"{phase}\") (loop $forever br $forever))")
+            };
+            let wasm =
+                wat::parse_str(format!("(module (memory (export \"memory\") 1) {entry})")).unwrap();
+            let module = engine.load_module(&wasm).unwrap();
+            let result = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).and_then(
+                |mut game| match phase {
+                    "start" => Ok(()),
+                    "init" => game.init(),
+                    "update" => game.update(1.0 / 60.0),
+                    "render" => game.render(),
+                    "post_connect" => game.post_connect(),
+                    _ => game.call_action("action", &[]),
+                },
+            );
+            let _ = send.send(result.map_err(|error| format!("{error:#}")));
+        });
+        let result = receive
+            .recv_timeout(std::time::Duration::from_secs(12))
+            .unwrap_or_else(|_| panic!("ordinary {phase} never returned"));
+        assert!(
+            result.unwrap_err().contains("interrupt"),
+            "{phase} must be interrupted"
+        );
+    }
+}
+
+#[test]
 fn test_wasm_engine_creation() {
     let engine = WasmEngine::new();
     assert!(engine.is_ok());

@@ -91,6 +91,7 @@ impl RomLoader for ZXRomLoader {
             let console = NethercoreZX::with_datapack_and_render_mode(data_pack, render_mode);
 
             Ok(LoadedRom {
+                content_hash: rom.metadata.netplay.rom_hash,
                 code: rom.code,
                 console,
                 game_name,
@@ -104,6 +105,7 @@ impl RomLoader for ZXRomLoader {
             let metadata = raw_wasm_metadata_from_path(path, &fallback_name);
 
             Ok(LoadedRom {
+                content_hash: xxhash_rust::xxh3::xxh3_64(&wasm),
                 code: wasm,
                 console: NethercoreZX::with_datapack_and_render_mode(None, metadata.render_mode),
                 game_name: metadata.game_name,

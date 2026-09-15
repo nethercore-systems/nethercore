@@ -493,6 +493,43 @@ version = "1.0.0"
     }
 
     #[test]
+    fn shipping_wav_preserves_pcm_converts_stereo_and_rejects_truncation() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("sample.wav");
+        let wav = |channels: u16, rate: u32, samples: &[i16]| {
+            let mut bytes = b"RIFF".to_vec();
+            bytes.extend_from_slice(&(36 + samples.len() as u32 * 2).to_le_bytes());
+            bytes.extend_from_slice(b"WAVEfmt ");
+            bytes.extend_from_slice(&16u32.to_le_bytes());
+            bytes.extend_from_slice(&1u16.to_le_bytes());
+            bytes.extend_from_slice(&channels.to_le_bytes());
+            bytes.extend_from_slice(&rate.to_le_bytes());
+            bytes.extend_from_slice(&(rate * u32::from(channels) * 2).to_le_bytes());
+            bytes.extend_from_slice(&(channels * 2).to_le_bytes());
+            bytes.extend_from_slice(&16u16.to_le_bytes());
+            bytes.extend_from_slice(b"data");
+            bytes.extend_from_slice(&(samples.len() as u32 * 2).to_le_bytes());
+            bytes.extend(samples.iter().flat_map(|sample| sample.to_le_bytes()));
+            bytes
+        };
+        let target = [-32768, -1, 0, 1, 32767];
+        std::fs::write(&path, wav(1, 22050, &target)).unwrap();
+        assert_eq!(load_sound("sample", &path).unwrap().data, target);
+        std::fs::write(&path, wav(2, 44100, &[1000, 3000, 2000, 4000])).unwrap();
+        assert_eq!(load_sound("sample", &path).unwrap().data, [2000]);
+        let mut truncated = wav(1, 22050, &target);
+        truncated.pop();
+        for invalid in [truncated, wav(2, 44100, &[1, 2, 3]), wav(1, 0, &[1, 2])] {
+            std::fs::write(&path, invalid).unwrap();
+            assert!(load_sound("sample", &path).is_err());
+            let output = dir.path().join("sound.nczsnd");
+            std::fs::write(&output, b"previous sound").unwrap();
+            assert!(nether_export::audio::convert_wav(&path, &output).is_err());
+            assert_eq!(std::fs::read(output).unwrap(), b"previous sound");
+        }
+    }
+
+    #[test]
     fn test_load_wav_basic() {
         let dir = tempdir().unwrap();
         let wav_path = dir.path().join("test.wav");

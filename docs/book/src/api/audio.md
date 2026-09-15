@@ -244,7 +244,7 @@ fn update() {
         ENGINE_PLAYING = true;
     }
 
-    // Adjust engine pitch based on speed
+    // Adjust engine volume based on speed; channel_set does not change pitch
     if ENGINE_PLAYING {
         let vol = 0.5 + vehicle.speed * 0.005;
         channel_set(0, vol.min(1.0), 0.0);
@@ -262,7 +262,7 @@ NCZX_EXPORT void update() {
         ENGINE_PLAYING = true;
     }
 
-    // Adjust engine pitch based on speed
+    // Adjust engine volume based on speed; channel_set does not change pitch
     if (ENGINE_PLAYING) {
         float vol = 0.5f + vehicle.speed * 0.005f;
         channel_set(0, fminf(vol, 1.0f), 0.0f);
@@ -280,7 +280,7 @@ export fn update() void {
         ENGINE_PLAYING = true;
     }
 
-    // Adjust engine pitch based on speed
+    // Adjust engine volume based on speed; channel_set does not change pitch
     if (ENGINE_PLAYING) {
         const vol = 0.5 + vehicle.speed * 0.005;
         channel_set(0, @min(vol, 1.0), 0.0);

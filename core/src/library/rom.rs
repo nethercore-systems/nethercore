@@ -11,6 +11,20 @@ use nethercore_shared::{MAX_ROM_BYTES, read_file_with_limit};
 
 use super::{DataDirProvider, LocalGame};
 
+/// Stage a complete file beside its destination, then atomically replace it.
+/// This is replacement safety, not a promise of directory crash durability.
+pub fn atomic_write(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    let parent = path
+        .parent()
+        .ok_or_else(|| std::io::Error::other("Missing parent directory"))?;
+    let mut staged = tempfile::NamedTempFile::new_in(parent)?;
+    staged.write_all(bytes)?;
+    staged.as_file().sync_all()?;
+    staged.persist(path).map_err(|error| error.error)?;
+    Ok(())
+}
+
 /// Metadata extracted from a ROM file.
 #[derive(Debug, Clone)]
 pub struct RomMetadata {

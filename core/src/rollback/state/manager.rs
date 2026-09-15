@@ -6,7 +6,7 @@ use crate::console::{ConsoleInput, ConsoleRollbackState};
 use crate::rollback::config::MAX_STATE_SIZE;
 use crate::wasm::GameInstance;
 
-use super::host_state::{HOST_STATE_SIZE, HostRollbackState};
+use super::host_state::HostRollbackState;
 use super::pool::StatePool;
 use super::snapshot::GameStateSnapshot;
 use super::{InputDataVec, STATE_POOL_SIZE};
@@ -87,11 +87,10 @@ impl RollbackStateManager {
             game_state.elapsed_time,
         );
 
-        let total_size =
-            snapshot_data.len() + console_data.len() + input_data.len() + HOST_STATE_SIZE;
-        if total_size > self.max_state_size {
+        // The console budget limits guest RAM, not separately owned host bookkeeping.
+        if snapshot_data.len() > self.max_state_size {
             return Err(SaveStateError::StateTooLarge {
-                size: total_size,
+                size: snapshot_data.len(),
                 max: self.max_state_size,
             });
         }
@@ -103,7 +102,8 @@ impl RollbackStateManager {
             input_data,
             host_state,
             frame,
-        ))
+        )
+        .with_save_data(game_state.save_data.clone()))
     }
 
     /// Load a game state from a snapshot
@@ -165,6 +165,11 @@ impl RollbackStateManager {
         game_state.rng_state = snapshot.host_state.rng_state;
         game_state.tick_count = snapshot.host_state.tick_count;
         game_state.elapsed_time = snapshot.host_state.elapsed_time();
+        game_state.save_data = snapshot.save_data.clone();
+        game.store_mut()
+            .data_mut()
+            .pending_saves
+            .retain(|save| save.tick <= snapshot.host_state.tick_count);
 
         Ok(())
     }

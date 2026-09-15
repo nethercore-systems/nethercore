@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 
 /// Nether.toml manifest structure
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct NetherManifest {
     pub game: GameSection,
     #[serde(default)]
@@ -22,6 +23,7 @@ pub struct NetherManifest {
 
 /// Game metadata section
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct GameSection {
     pub id: String,
     pub title: String,
@@ -65,6 +67,7 @@ fn default_max_players() -> u8 {
 
 /// Netplay configuration section
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct NetplaySection {
     /// Whether this game supports online netplay.
     /// Default: true (multiplayer is Nethercore's core feature)
@@ -84,6 +87,7 @@ fn default_netplay_enabled() -> bool {
 
 /// Build configuration section
 #[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct BuildSection {
     /// Build script to execute (e.g., "cargo build --target wasm32-unknown-unknown --release")
     pub script: Option<String>,
@@ -93,6 +97,7 @@ pub struct BuildSection {
 
 /// Assets section containing all asset declarations
 #[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct AssetsSection {
     #[serde(default)]
     pub textures: Vec<AssetEntry>,
@@ -116,6 +121,7 @@ pub struct AssetsSection {
 
 /// Single asset entry
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct AssetEntry {
     /// Asset ID. Required for most assets, but optional for wildcard animation imports.
     ///
@@ -153,6 +159,7 @@ pub struct AssetEntry {
 
 /// Cubemap-face EPU environment asset entry
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct EpuEnvironmentEntry {
     /// Asset ID used by `epu_asset(...)`
     pub id: String,
@@ -401,6 +408,22 @@ Consider setting build.wasm in nether.toml. Using newest: {}",
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn shipping_manifest_rejects_unknown_fields_and_fonts() {
+        let base = "[game]\nid='test-game'\ntitle='Test'\nauthor='Author'\nversion='1.0.0'\n";
+        NetherManifest::parse(base).unwrap();
+        for invalid in [
+            "[console]\nrender_mode=2",
+            "[netplay]\nenabeld=false",
+            "[build]\nwams='game.wasm'",
+            "[[assets.fonts]]\nid='font'\npath='font.ttf'",
+            "[[assets.sounds]]\nid='sound'\npath='sound.wav'\ngian=1",
+        ] {
+            let result = NetherManifest::parse(&format!("{base}{invalid}"));
+            assert!(result.is_err(), "silently accepted {invalid}");
+        }
+    }
 
     #[test]
     fn test_manifest_minimal() {

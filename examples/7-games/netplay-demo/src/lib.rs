@@ -259,7 +259,7 @@ static mut ROUND_OVER_TIMER: u32 = 0;
 // rather than polling every frame. Polling in update() is non-deterministic
 // during rollback and causes desync.
 static mut CACHED_PLAYER_COUNT: u32 = 1;
-static mut CACHED_LOCAL_MASK: u32 = 1;
+// local_player_mask is peer-local: never cache it in checksummed WASM state.
 
 // === Helper Functions ===
 
@@ -337,15 +337,12 @@ fn load_player_stats(player_idx: u32) {
 /// Only saves for local players (remote slots don't persist).
 fn save_player_stats(player_idx: u32) {
     unsafe {
-        // Check if this player is local
-        let local_mask = CACHED_LOCAL_MASK;
-        if (local_mask & (1 << player_idx)) == 0 {
-            // Not a local player - skip save
-            return;
-        }
-
+        // Shared stats must change identically on every peer, including checksum.
         let stats = &mut PLAYER_STATS[player_idx as usize];
         stats.checksum = stats.calculate_checksum();
+        if (local_player_mask() & (1 << player_idx)) == 0 {
+            return; // Only the local player's copy is persisted.
+        }
 
         let bytes = stats as *const PlayerStats as *const u8;
         let size = core::mem::size_of::<PlayerStats>() as u32;
@@ -610,7 +607,6 @@ fn update_lobby() {
     unsafe {
         // Update player count (safe to poll in lobby - not during active gameplay)
         CACHED_PLAYER_COUNT = player_count();
-        CACHED_LOCAL_MASK = local_player_mask();
 
         // Mark active players based on current player count
         for i in 0..MAX_PLAYERS {
@@ -913,7 +909,7 @@ fn render_lobby() {
             }
 
             // Show if local or remote
-            let is_local = (CACHED_LOCAL_MASK & (1 << i)) != 0;
+            let is_local = (local_player_mask() & (1 << i)) != 0;
             set_color(if is_local { 0x88FF88FF } else { 0xFF8888FF });
             let locality = if is_local {
                 b"(Local)" as &[u8]
@@ -1074,7 +1070,6 @@ pub extern "C" fn init() {
         // Initialize state
         STATE = GameState::Lobby;
         CACHED_PLAYER_COUNT = player_count();
-        CACHED_LOCAL_MASK = local_player_mask();
 
         // Load stats for initially connected players
         for i in 0..CACHED_PLAYER_COUNT {

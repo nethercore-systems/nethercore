@@ -358,8 +358,7 @@ foreach ($example in $manifest.examples) {
     $exampleId = $example.id
     $sourceRom = Join-Path $DataRoot "$exampleId\rom.nczx"
     if (!(Test-Path $sourceRom)) {
-        Write-Warning "Missing installed ROM for $exampleId at $sourceRom"
-        continue
+        throw "Missing installed ROM for advertised example $exampleId at $sourceRom"
     }
 
     $destDir = Join-Path $OutputDir "roms\$exampleId"
@@ -376,10 +375,7 @@ foreach ($example in $manifest.examples) {
             "id = `"$exampleId`"",
             "title = `"$($example.title)`"",
             "author = `"Nethercore Examples`"",
-            "version = `"0.1.0`"",
-            "",
-            "[build]",
-            "rom = `"rom.nczx`""
+            "version = `"0.1.0`""
         ) -join "`n"
         Write-Utf8File -Path (Join-Path $destDir "nether.toml") -Content $fallbackManifest
     }
@@ -402,8 +398,15 @@ if ($IncludeLocalTools) {
             Copy-Item -Force -Path $selected.FullName -Destination $toolsDir
             Write-Host "Included tool: $toolName from $($selected.FullName)"
         } else {
-            Write-Warning "Missing local tool binary: $toolName"
+            throw "Missing required local tool binary: $toolName"
         }
+    }
+}
+
+if ($IncludeLocalTools) {
+    & python (Join-Path $WorkspaceRoot "scripts/check_preview_runtime.py") $OutputDir
+    if ($LASTEXITCODE -ne 0) {
+        throw "Packaged example runtime-load check failed. See runtime-checks in $OutputDir."
     }
 }
 

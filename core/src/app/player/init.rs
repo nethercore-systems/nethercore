@@ -131,9 +131,14 @@ where
                     ),
                 ];
 
-                let session =
-                    RollbackSession::new_p2p(session_config, socket, players, specs.ram_limit)
-                        .context("Failed to create P2P session")?;
+                let session = RollbackSession::new_verified_p2p(
+                    session_config,
+                    socket,
+                    players,
+                    specs.ram_limit,
+                    rom.content_hash,
+                )
+                .context("Failed to create P2P session")?;
                 let started = Instant::now();
                 runner
                     .load_game_with_session(rom.console, &rom.code, session, None, &rom.game_id)
@@ -180,6 +185,7 @@ where
                     session_file,
                     &self.config,
                     specs,
+                    rom.content_hash,
                 )?;
 
                 let session = session_file_result.session;

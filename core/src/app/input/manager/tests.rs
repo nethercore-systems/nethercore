@@ -6,6 +6,40 @@ use crate::app::input::keycode_serde::{keycode_to_string, string_to_keycode};
 use winit::keyboard::KeyCode;
 
 #[test]
+fn shipping_removed_input_source_is_neutral_next_update() {
+    let mut manager = InputManager::new(InputConfig::default());
+    #[cfg(feature = "gamepad")]
+    {
+        manager.gilrs = None;
+    }
+    manager.player_inputs[3].button_a = true;
+    manager.player_inputs[3].left_trigger = 1.0;
+    manager.update();
+    assert!(!manager.get_player_input(3).button_a);
+    assert_eq!(manager.get_player_input(3).left_trigger, 0.0);
+    let key = manager.config.keyboards.get(0).unwrap().button_a;
+    manager.update_keyboard(key, true);
+    manager.update();
+    assert!(manager.get_player_input(0).button_a);
+    manager.config.keyboards = KeyboardsConfig::default();
+    manager.config.keyboards.p1 = None;
+    manager.update();
+    assert!(!manager.get_player_input(0).button_a);
+}
+
+#[test]
+fn shipping_mapped_triggers_keep_neutral_and_calibrated_travel() {
+    let manager = InputManager::new(InputConfig::default());
+    for value in [None, Some(0.0), Some(-1.0), Some(f32::NAN)] {
+        assert_eq!(manager.mapped_trigger(value), 0.0);
+    }
+    assert_eq!(manager.mapped_trigger(Some(1.0)), 1.0);
+    let expected =
+        (0.5 - manager.config.trigger_deadzone) / (1.0 - manager.config.trigger_deadzone);
+    assert!((manager.mapped_trigger(Some(0.5)) - expected).abs() < 0.00001);
+}
+
+#[test]
 fn test_keycode_to_string_letters() {
     assert_eq!(keycode_to_string(&KeyCode::KeyA), "A");
     assert_eq!(keycode_to_string(&KeyCode::KeyZ), "Z");

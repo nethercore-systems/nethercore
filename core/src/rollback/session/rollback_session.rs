@@ -360,6 +360,11 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>
         game: &mut GameInstance<I, S, R>,
         requests: Vec<GgrsRequest<NethercoreConfig<I>>>,
     ) -> Result<Vec<Vec<(I, InputStatus)>>, SessionError> {
+        if self.session_type != SessionType::Local {
+            return Err(SessionError::Ggrs(
+                "Rollback sessions require handle_requests_ordered".into(),
+            ));
+        }
         let mut advance_inputs = Vec::new();
         let mut rollback_frames_this_call = 0u32;
 
@@ -425,6 +430,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>
     {
         let mut advanced_frames = 0u32;
         let mut rollback_frames_this_call = 0u32;
+        game.store_mut().data_mut().defer_save_commits = true;
 
         for request in requests {
             match request {
@@ -470,6 +476,20 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>
             }
         }
 
+        let confirmed_tick = match &self.inner {
+            SessionInner::Local { .. } => game.state().tick_count,
+            SessionInner::SyncTest { session, .. } => game
+                .state()
+                .tick_count
+                .saturating_sub(session.check_distance() as u64),
+            SessionInner::P2P(session) => (i64::from(session.confirmed_frame()) + 1).max(0) as u64,
+        };
+        game.store_mut()
+            .data_mut()
+            .commit_saves_through(confirmed_tick)
+            .map_err(|e| {
+                SessionError::SaveState(format!("Failed to persist confirmed save data: {e}"))
+            })?;
         Ok(advanced_frames)
     }
 

@@ -101,15 +101,23 @@ fn parse_gltf_file(
     let (document, buffers, _images) =
         gltf::import(input).with_context(|| format!("Failed to load glTF: {:?}", input))?;
 
-    // Get the first mesh
+    anyhow::ensure!(document.meshes().count() == 1,
+        "glTF must contain exactly one mesh; export the intended mesh separately (scene import is unsupported)");
+    // A prepared mesh is the asset unit; never silently choose one renderable part.
     let mesh = document
         .meshes()
         .next()
         .context("No meshes found in glTF")?;
+    anyhow::ensure!(mesh.primitives().count() == 1,
+        "glTF mesh must contain exactly one primitive; merge material parts or export them separately");
     let primitive = mesh
         .primitives()
         .next()
         .context("No primitives found in mesh")?;
+    anyhow::ensure!(
+        primitive.mode() == gltf::mesh::Mode::Triangles,
+        "glTF primitive must contain triangles; triangulate the mesh before export"
+    );
 
     // Extract vertex data
     let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));

@@ -6,55 +6,12 @@ use zx_common::{PackedSound, PackedTracker, TrackerFormat};
 
 use super::utils::detect_tracker_format;
 
-/// Load a sound from a WAV file
+/// Load validated WAV samples through the same converter as nether-export.
 pub fn load_sound(id: &str, path: &std::path::Path) -> Result<PackedSound> {
-    // Read WAV file and convert to 22050Hz mono i16
-    let data =
-        std::fs::read(path).with_context(|| format!("Failed to load sound: {}", path.display()))?;
-
-    // Parse WAV header (simplified - assumes 16-bit PCM)
-    if data.len() < 44 || &data[0..4] != b"RIFF" || &data[8..12] != b"WAVE" {
-        anyhow::bail!("Invalid WAV file: {}", path.display());
-    }
-
-    // Find data chunk
-    let mut offset = 12;
-    let mut audio_data = vec![];
-
-    while offset + 8 < data.len() {
-        let chunk_id = &data[offset..offset + 4];
-        let chunk_size = u32::from_le_bytes([
-            data[offset + 4],
-            data[offset + 5],
-            data[offset + 6],
-            data[offset + 7],
-        ]) as usize;
-
-        if chunk_id == b"data" {
-            let end = (offset + 8 + chunk_size).min(data.len());
-            let samples: Vec<i16> = data[offset + 8..end]
-                .as_chunks::<2>()
-                .0
-                .iter()
-                .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]))
-                .collect();
-            audio_data = samples;
-            break;
-        }
-
-        offset += 8 + chunk_size;
-        if !chunk_size.is_multiple_of(2) {
-            offset += 1; // Padding byte
-        }
-    }
-
-    if audio_data.is_empty() {
-        anyhow::bail!("No audio data found in WAV file: {}", path.display());
-    }
-
     Ok(PackedSound {
         id: id.to_string(),
-        data: audio_data,
+        data: nether_export::audio::load_wav(path)
+            .with_context(|| format!("Failed to load sound '{}' from {}", id, path.display()))?,
     })
 }
 

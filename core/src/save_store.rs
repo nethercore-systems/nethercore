@@ -50,6 +50,66 @@ pub fn map_session_slot_to_controller_slot(
     None
 }
 
+pub(crate) struct PendingSave {
+    pub tick: u64,
+    pub slot: usize,
+    pub data: Option<Vec<u8>>,
+}
+
+impl<I: ConsoleInput, S, R: crate::console::ConsoleRollbackState>
+    crate::wasm::WasmGameContext<I, S, R>
+{
+    pub(crate) fn stage_save(&mut self, slot: usize, data: Option<Vec<u8>>) {
+        self.game.save_data[slot] = data;
+        if self.save_store.is_none() {
+            return;
+        }
+        let tick = self.game.tick_count;
+        // Coalesce repeated calls: at most four effects per unconfirmed tick.
+        if let Some(pending) = self
+            .pending_saves
+            .iter_mut()
+            .rev()
+            .take_while(|pending| pending.tick == tick)
+            .find(|pending| pending.slot == slot)
+        {
+            pending.data = self.game.save_data[slot].clone();
+        } else {
+            self.pending_saves.push_back(PendingSave {
+                tick,
+                slot,
+                data: self.game.save_data[slot].clone(),
+            });
+        }
+    }
+
+    pub(crate) fn commit_saves_through(&mut self, confirmed_tick: u64) -> io::Result<()> {
+        let count = self
+            .pending_saves
+            .iter()
+            .take_while(|save| save.tick <= confirmed_tick)
+            .count();
+        if count == 0 {
+            return Ok(());
+        }
+        if let Some(store) = self.save_store.as_mut() {
+            for save in self.pending_saves.iter().take(count) {
+                if let Some(slot) = map_session_slot_to_controller_slot(
+                    self.game.local_player_mask,
+                    self.game.player_count.min(crate::wasm::MAX_PLAYERS as u32),
+                    save.slot as u32,
+                ) {
+                    store.set_controller_slot(slot, save.data.clone());
+                }
+            }
+            // Keep queued effects on failure. The caller reports the error; no success is invented.
+            store.flush()?;
+        }
+        self.pending_saves.drain(..count);
+        Ok(())
+    }
+}
+
 pub struct SaveStore {
     path: PathBuf,
     slots: [Option<Vec<u8>>; PERSISTENT_SLOTS],
@@ -227,14 +287,8 @@ impl SaveStore {
             f.sync_all()?;
         }
 
-        #[cfg(windows)]
-        {
-            if self.path.exists() {
-                // Windows rename fails if destination exists.
-                fs::remove_file(&self.path)?;
-            }
-        }
-
+        // std::fs::rename replaces existing files on Windows too. Never unlink
+        // the last good save before replacement has succeeded.
         fs::rename(&tmp_path, &self.path)?;
 
         self.dirty = [false; PERSISTENT_SLOTS];
@@ -246,6 +300,32 @@ impl SaveStore {
 mod tests {
     use super::*;
     use crate::wasm::GameState;
+
+    #[cfg(windows)]
+    #[test]
+    fn failed_save_replacement_preserves_previous_file_and_can_retry() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("save.ncsav");
+        let mut store = SaveStore::new(path.clone());
+        store.set_controller_slot(0, Some(vec![3]));
+        store.flush().unwrap();
+        let original = fs::read(&path).unwrap();
+        let lock = fs::OpenOptions::new()
+            .read(true)
+            .share_mode(1)
+            .open(&path)
+            .unwrap();
+        store.set_controller_slot(0, Some(vec![7]));
+        assert!(store.flush().is_err());
+        assert_eq!(fs::read(&path).unwrap(), original);
+        drop(lock);
+        store.flush().unwrap();
+        assert_eq!(
+            SaveStore::load_or_new(path).unwrap().controller_slot(0),
+            Some(&[7][..])
+        );
+    }
 
     #[test]
     fn map_session_slot_to_controller_slot_orders_locals() {

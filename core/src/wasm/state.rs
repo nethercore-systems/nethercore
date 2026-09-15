@@ -2,6 +2,8 @@
 //!
 //! Minimal core game state - console-agnostic.
 
+use std::collections::VecDeque;
+
 use wasmtime::{AsContext, AsContextMut, Memory, ResourceLimiter};
 
 use crate::console::{ConsoleInput, ConsoleRollbackState};
@@ -153,6 +155,10 @@ pub struct WasmGameContext<I: ConsoleInput, S, R: ConsoleRollbackState = ()> {
     pub rollback: R,
     /// RAM limit in bytes (for ResourceLimiter enforcement)
     pub ram_limit: usize,
+    /// Host effects are not part of the checksum and are discarded on rollback.
+    pub(crate) pending_saves: VecDeque<crate::save_store::PendingSave>,
+    pub(crate) defer_save_commits: bool,
+    pub(crate) in_render: bool,
     /// Active save store for this game (host-managed persistent storage)
     pub save_store: Option<crate::save_store::SaveStore>,
     /// Debug inspection registry (for runtime value inspection)
@@ -171,6 +177,9 @@ impl<I: ConsoleInput, S: Default, R: ConsoleRollbackState> Default for WasmGameC
             rollback: R::default(),
             ram_limit: DEFAULT_RAM_LIMIT, // Fallback default (use ConsoleSpecs in production)
             save_store: None,
+            pending_saves: VecDeque::new(),
+            defer_save_commits: false,
+            in_render: false,
             debug_registry: DebugRegistry::new(),
         }
     }
@@ -190,6 +199,9 @@ impl<I: ConsoleInput, S: Default, R: ConsoleRollbackState> WasmGameContext<I, S,
             rollback: R::default(),
             ram_limit,
             save_store: None,
+            pending_saves: VecDeque::new(),
+            defer_save_commits: false,
+            in_render: false,
             debug_registry: DebugRegistry::new(),
         }
     }

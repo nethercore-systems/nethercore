@@ -1,3 +1,32 @@
+#[cfg(test)]
+mod shipping_tests {
+    use super::*;
+
+    #[test]
+    fn shipping_failed_example_is_an_error() {
+        let root = tempfile::tempdir().unwrap();
+        let examples = root.path().join("examples");
+        let games = root.path().join("games");
+        let broken = examples.join("broken");
+        fs::create_dir_all(&broken).unwrap();
+        fs::create_dir_all(&games).unwrap();
+        fs::write(
+            broken.join("Cargo.toml"),
+            "[package]\nname='broken'\nversion='0.1.0'\n",
+        )
+        .unwrap();
+        fs::write(
+            broken.join("nether.toml"),
+            "[game]\nid='broken'\ntitle='Broken'\nauthor='Test'\n",
+        )
+        .unwrap();
+        // Exercise discovery, the real failed process launch, and aggregate status.
+        assert!(
+            build_example_games(&examples, &games, &root.path().join("missing-nether")).is_err()
+        );
+    }
+}
+
 mod cart;
 mod ffi;
 
@@ -22,8 +51,15 @@ struct Cli {
 #[derive(Subcommand)]
 #[allow(clippy::large_enum_variant)]
 enum Commands {
-    /// Build and install example games
-    BuildExamples,
+    /// Build and install Cargo/Rust example games (C/Zig are not discovered)
+    BuildExamples {
+        /// Self-contained examples directory; skips workspace asset generators
+        #[arg(long, requires = "games_dir")]
+        examples_dir: Option<PathBuf>,
+        /// Installation directory (also used for stale-example cleanup)
+        #[arg(long)]
+        games_dir: Option<PathBuf>,
+    },
 
     /// Cart management (create, inspect ROMs)
     Cart {
@@ -42,16 +78,28 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::BuildExamples => build_examples(),
+        Commands::BuildExamples {
+            examples_dir,
+            games_dir,
+        } => build_examples(examples_dir, games_dir),
         Commands::Cart { command } => cart::execute(command),
         Commands::Ffi { command } => ffi::execute(command),
     }
 }
 
-fn build_examples() -> Result<()> {
+fn build_examples(examples_dir: Option<PathBuf>, games_dir: Option<PathBuf>) -> Result<()> {
     let project_root = project_root();
-    let examples_dir = project_root.join("examples");
-    let games_dir = get_games_dir()?;
+    let isolated = examples_dir.is_some();
+    let examples_dir = examples_dir.unwrap_or_else(|| project_root.join("examples"));
+    anyhow::ensure!(
+        examples_dir.is_dir(),
+        "Examples directory does not exist: {}",
+        examples_dir.display()
+    );
+    let games_dir = match games_dir {
+        Some(path) => path,
+        None => get_games_dir()?,
+    };
 
     // Ensure games directory exists
     fs::create_dir_all(&games_dir).context("Failed to create games directory")?;
@@ -59,17 +107,23 @@ fn build_examples() -> Result<()> {
     println!("Games directory: {}", games_dir.display());
 
     // Run asset generators first
-    run_asset_generators(&project_root)?;
+    if !isolated {
+        run_asset_generators(&project_root)?;
+    }
 
     // Build nether CLI first if needed
     let nether_exe = ensure_nether_cli(&project_root)?;
 
+    build_example_games(&examples_dir, &games_dir, &nether_exe)
+}
+
+fn build_example_games(examples_dir: &Path, games_dir: &Path, nether_exe: &Path) -> Result<()> {
     // Library crates that shouldn't be built as standalone examples
     let skip_dirs = ["examples-common"];
 
     // Get all example directories that have a Cargo.toml (are buildable)
     // Supports both flat structure (examples/example-name/) and nested structure (examples/category/example-name/)
-    let examples: Vec<_> = WalkDir::new(&examples_dir)
+    let examples: Vec<_> = WalkDir::new(examples_dir)
         .min_depth(1) // Skip the examples/ root directory
         .max_depth(2) // Support up to examples/category/example/ (depth 2)
         .into_iter()
@@ -88,7 +142,7 @@ fn build_examples() -> Result<()> {
     // Remove stale installed examples that no longer exist in the repo.
     // This avoids confusing runtime errors when the FFI changes (e.g., old ROMs importing removed
     // functions like `epu_draw`).
-    cleanup_stale_examples(&games_dir, &examples)?;
+    cleanup_stale_examples(games_dir, &examples)?;
 
     println!("Building {} examples...", examples.len());
 
@@ -108,7 +162,7 @@ fn build_examples() -> Result<()> {
 
         if has_nether_toml {
             // Use nether build (compile + pack)
-            match build_with_nether(&nether_exe, example_path, &games_dir, &example_name_str) {
+            match build_with_nether(nether_exe, example_path, games_dir, &example_name_str) {
                 Ok(_) => {
                     println!("  ✓ {} installed", example_name_str);
                     success_count.fetch_add(1, Ordering::Relaxed);
@@ -120,7 +174,7 @@ fn build_examples() -> Result<()> {
             }
         } else {
             // No nether.toml - use legacy WASM-only installation
-            match build_wasm_only(example_path, &games_dir, &example_name_str) {
+            match build_wasm_only(example_path, games_dir, &example_name_str) {
                 Ok(_) => {
                     println!(
                         "  ✓ {} installed (WASM-only, no nether.toml)",
@@ -143,6 +197,8 @@ fn build_examples() -> Result<()> {
         fail_count.load(Ordering::Relaxed)
     );
     println!("Examples installed to: {}", games_dir.display());
+    let failed = fail_count.load(Ordering::Relaxed);
+    anyhow::ensure!(failed == 0, "{failed} example(s) failed to build/install");
     println!("You can now run 'cargo run' to play them in Nethercore ZX.");
 
     Ok(())

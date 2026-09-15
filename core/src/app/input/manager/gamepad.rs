@@ -17,12 +17,9 @@ impl InputManager {
             self.apply_stick_deadzone(value)
         };
 
-        // Read trigger axes with deadzone
-        let trigger = |axis: Axis| -> f32 {
-            let value = gamepad.value(axis);
-            // Triggers are typically 0.0 to 1.0, but some report -1.0 to 1.0
-            let normalized = (value + 1.0) / 2.0; // Convert -1..1 to 0..1
-            self.apply_trigger_deadzone(normalized).clamp(0.0, 1.0)
+        // gilrs maps analog triggers to button values already normalized to 0..1.
+        let trigger = |button: Button| {
+            self.mapped_trigger(gamepad.button_data(button).map(|data| data.value()))
         };
 
         RawInput {
@@ -57,8 +54,8 @@ impl InputManager {
             right_stick_y: -axis(Axis::RightStickY), // Invert Y
 
             // Analog triggers
-            left_trigger: trigger(Axis::LeftZ),
-            right_trigger: trigger(Axis::RightZ),
+            left_trigger: trigger(Button::LeftTrigger2),
+            right_trigger: trigger(Button::RightTrigger2),
         }
     }
 }

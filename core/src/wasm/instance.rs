@@ -12,6 +12,8 @@ use crate::debug::types::ActionParamValue;
 pub struct GameInstance<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState = ()>
 {
     store: Store<WasmGameContext<I, S, R>>,
+    // Keep the shared watchdog alive even if the engine wrapper is dropped.
+    epoch_ticker: Option<std::sync::Arc<super::engine::EpochTicker>>,
     /// The WASM instance.
     /// Not directly used after initialization, but must be kept alive to maintain
     /// the lifetime of exported functions and memory references.
@@ -57,6 +59,12 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState> Game
 
         // Enable resource limiter to enforce memory constraints
         store.limiter(|state| state);
+        // Instantiation may execute an untrusted WASM start function.
+        store.set_epoch_deadline(if engine.epoch_ticker.is_some() {
+            1000
+        } else {
+            u64::MAX / 2
+        });
 
         let instance = linker
             .instantiate(&mut store, module)
@@ -84,6 +92,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState> Game
 
         Ok(Self {
             store,
+            epoch_ticker: engine.epoch_ticker.clone(),
             instance,
             init_fn,
             update_fn,
@@ -93,8 +102,15 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState> Game
         })
     }
 
+    fn arm_deadline(&mut self, epochs: u64) {
+        if self.epoch_ticker.is_some() {
+            self.store.set_epoch_deadline(epochs);
+        }
+    }
+
     /// Call the game's init function
     pub fn init(&mut self) -> Result<()> {
+        self.arm_deadline(1000);
         self.store.data_mut().game.in_init = true;
         if let Some(init) = &self.init_fn {
             init.call(&mut self.store, ()).map_err(|e| {
@@ -105,7 +121,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState> Game
             })?;
         }
         self.store.data_mut().game.in_init = false;
-        Ok(())
+        self.commit_local_saves()
     }
 
     /// Call the game's post_connect function (two-phase initialization)
@@ -121,6 +137,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState> Game
     /// 4. `post_connect()` - Player-aware setup (CAN access player_handle)
     /// 5. Game loop begins
     pub fn post_connect(&mut self) -> Result<()> {
+        self.arm_deadline(1000);
         if let Some(post_connect) = &self.post_connect_fn {
             post_connect.call(&mut self.store, ()).map_err(|e| {
                 let error_msg = format!("WASM post_connect() failed: {:#}", e);
@@ -138,6 +155,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState> Game
 
     /// Call the game's update function
     pub fn update(&mut self, delta_time: f32) -> Result<()> {
+        self.arm_deadline(100);
         {
             let state = &mut self.store.data_mut().game;
             state.delta_time = delta_time;
@@ -158,13 +176,26 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState> Game
         // Rotate input state
         let state = &mut self.store.data_mut().game;
         state.input_prev = state.input_curr;
+        self.commit_local_saves()
+    }
+
+    fn commit_local_saves(&mut self) -> Result<()> {
+        let ctx = self.store.data_mut();
+        if !ctx.defer_save_commits {
+            ctx.commit_saves_through(ctx.game.tick_count)
+                .context("Failed to persist confirmed save data")?;
+        }
         Ok(())
     }
 
-    /// Call the game's render function
+    /// Call the game's render function. Save mutations are invalid during presentation.
     pub fn render(&mut self) -> Result<()> {
+        self.arm_deadline(100);
         if let Some(render) = &self.render_fn {
-            render.call(&mut self.store, ()).map_err(|e| {
+            self.store.data_mut().in_render = true;
+            let result = render.call(&mut self.store, ());
+            self.store.data_mut().in_render = false;
+            result.map_err(|e| {
                 let error_msg = format!("WASM render() failed: {:#}", e);
                 eprintln!("{}", error_msg);
                 anyhow::anyhow!(error_msg)
@@ -299,6 +330,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState> Game
     /// This is called when debug values are modified through the debug panel.
     /// Games can optionally export this function to react to debug value changes.
     pub fn call_on_debug_change(&mut self) {
+        self.arm_deadline(100);
         if let Some(func) = &self.on_debug_change_fn
             && let Err(e) = func.call(&mut self.store, ())
         {
@@ -316,6 +348,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState> Game
     /// This is used to invoke WASM functions from the debug panel's action buttons.
     /// The function must be exported by the game.
     pub fn call_action(&mut self, func_name: &str, args: &[ActionParamValue]) -> Result<()> {
+        self.arm_deadline(100);
         let func = self
             .instance
             .get_func(&mut self.store, func_name)

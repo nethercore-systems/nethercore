@@ -1439,7 +1439,10 @@ NCZX_IMPORT uint32_t local_player_mask(void);
 /** * `data_len` — Length of data in bytes (max 64KB) */
 /**  */
 /** # Returns */
-/** 0 on success, 1 if invalid slot, 2 if data too large. */
+/** 0 when staged, 1 if invalid slot, 2 if invalid/oversized data, 3 during render. */
+/** Logical changes are rollback-safe. Local persistence occurs only after the */
+/** frame is confirmed (after the callback offline); disk failure stops the */
+/** player with an error. A zero return is not a disk-flush acknowledgement. */
 NCZX_IMPORT uint32_t save(uint32_t slot, const uint8_t* data_ptr, uint32_t data_len);
 
 /** Loads data from a slot. */
@@ -1464,7 +1467,8 @@ NCZX_IMPORT uint32_t load(uint32_t slot, uint8_t* data_ptr, uint32_t max_len);
 /** - Persistence only applies for local controllers (see `local_player_mask()`). */
 /**  */
 /** # Returns */
-/** 0 on success, 1 if invalid slot. */
+/** 0 when staged, 1 if invalid slot, 3 during render. */
+/** Uses the same confirmed-frame persistence and error handling as save(). */
 NCZX_IMPORT uint32_t delete(uint32_t slot);
 
 /** Set the clear/background color. Must be called during `init()`. */

@@ -85,6 +85,24 @@ pub(super) fn get_games_from_dir(
 
             // Check if this is a game directory
             if path.is_dir() {
+                if let Some(registry) = registry {
+                    for loader in registry.loaders() {
+                        let rom_path = path.join(format!("rom.{}", loader.extension()));
+                        if !rom_path.is_file() {
+                            continue;
+                        }
+                        let bytes = read_file_with_limit(&rom_path, MAX_ROM_BYTES).ok()?;
+                        let metadata = loader.load_metadata(&bytes).ok()?;
+                        return Some(LocalGame {
+                            id: metadata.id,
+                            title: metadata.title,
+                            author: metadata.author,
+                            version: metadata.version,
+                            rom_path,
+                            console_type: loader.console_type().into(),
+                        });
+                    }
+                }
                 let manifest_path = path.join("manifest.json");
                 let manifest_content = std::fs::read_to_string(manifest_path).ok()?;
                 let manifest: LocalGameManifest = serde_json::from_str(&manifest_content).ok()?;

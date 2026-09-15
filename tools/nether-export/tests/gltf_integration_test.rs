@@ -19,6 +19,37 @@ const EXPECTED_FORMAT: u8 = FORMAT_UV | FORMAT_NORMAL | FORMAT_SKINNED;
 
 /// Test that the generated GLB is valid and can be parsed
 #[test]
+fn shipping_mesh_rejects_ambiguous_parts_without_replacing_output() {
+    let source = gltf_generator::generate_skinned_glb();
+    let glb = gltf::binary::Glb::from_slice(&source).unwrap();
+    let original = gltf::Gltf::from_slice(&source)
+        .unwrap()
+        .document
+        .into_json();
+    for primitives in [false, true] {
+        let mut root = original.clone();
+        if primitives {
+            let extra = root.meshes[0].primitives[0].clone();
+            root.meshes[0].primitives.push(extra);
+        } else {
+            root.meshes.push(root.meshes[0].clone());
+        }
+        let bytes = gltf_generator::assemble_glb(&root, glb.bin.as_ref().unwrap());
+        let dir = tempdir().unwrap();
+        let input = dir.path().join("ambiguous.glb");
+        let output = dir.path().join("previous.nczmesh");
+        std::fs::write(&input, bytes).unwrap();
+        std::fs::write(&output, b"previous good mesh").unwrap();
+        assert!(
+            convert_gltf_to_memory(&input).is_err(),
+            "silently dropped geometry"
+        );
+        assert!(nether_export::mesh::convert_gltf(&input, &output, None).is_err());
+        assert_eq!(std::fs::read(output).unwrap(), b"previous good mesh");
+    }
+}
+
+#[test]
 fn test_generate_skinned_glb_valid() {
     let glb_data = gltf_generator::generate_skinned_glb();
 

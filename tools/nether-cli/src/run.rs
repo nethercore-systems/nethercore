@@ -66,7 +66,7 @@ pub struct RunArgs {
     pub input_delay: usize,
 
     /// Launch local P2P test (spawns two connected instances)
-    #[arg(long)]
+    #[arg(long, conflicts_with = "sync_test")]
     pub p2p_test: bool,
 
     /// Watch for file changes and automatically rebuild/relaunch
@@ -458,7 +458,7 @@ fn launch_p2p_test(
     println!("    Player 2: bind=7778, peer=7777, local_player=1");
     println!();
 
-    let input_delay = args.input_delay.to_string();
+    let extra_args = build_player_args(args);
 
     // Handle special "cargo:run" marker
     let is_cargo_run = nethercore_exe.to_string_lossy() == "cargo:run";
@@ -488,7 +488,7 @@ fn launch_p2p_test(
             "--local-player",
             "1",
         ])
-        .args(["--input-delay", &input_delay]);
+        .args(&extra_args);
 
     let mut p2_child = p2_cmd.spawn().context("Failed to spawn player 2")?;
 
@@ -520,22 +520,49 @@ fn launch_p2p_test(
             "--local-player",
             "0",
         ])
-        .args(["--input-delay", &input_delay]);
+        .args(&extra_args);
 
-    let status = p1_cmd.status().context("Failed to run player 1")?;
-
-    // Clean up player 2
-    println!();
-    println!("  Player 1 exited, cleaning up...");
-    let _ = p2_child.kill();
-    let _ = p2_child.wait();
-
-    if !status.success() {
-        anyhow::bail!("Nethercore exited with error");
-    }
-
+    let mut p1_child = match p1_cmd.spawn() {
+        Ok(child) => child,
+        Err(error) => {
+            let _ = p2_child.kill();
+            let _ = p2_child.wait();
+            return Err(error).context("Failed to spawn player 1");
+        }
+    };
+    wait_for_p2p_players(
+        &mut p1_child,
+        &mut p2_child,
+        args.exit_after_frames.is_some() || args.replay.is_some(),
+    )?;
     println!("  P2P test complete.");
     Ok(())
+}
+
+fn wait_for_p2p_players(p1: &mut Child, p2: &mut Child, wait_for_both: bool) -> Result<()> {
+    let result = (|| loop {
+        let first = p1.try_wait().context("Failed to wait for player 1")?;
+        let second = p2.try_wait().context("Failed to wait for player 2")?;
+        for (index, status) in [(1, first), (2, second)] {
+            if let Some(status) = status {
+                anyhow::ensure!(status.success(), "Player {index} exited with {status}");
+            }
+        }
+        if (first.is_some() && second.is_some())
+            || (!wait_for_both && (first.is_some() || second.is_some()))
+        {
+            break Ok(());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    })();
+    // Reap both children on failure or interactive close; finite checks wait for both.
+    for child in [p1, p2] {
+        if child.try_wait().ok().flatten().is_none() {
+            let _ = child.kill();
+        }
+        let _ = child.wait();
+    }
+    result
 }
 
 /// Find the nethercore-zx player executable
@@ -582,4 +609,37 @@ pub(crate) fn find_nethercore_exe() -> Result<(PathBuf, Option<PathBuf>)> {
         - Place nethercore-zx binary next to nether CLI\n\
         - Run from nethercore workspace (developer mode)"
     )
+}
+
+#[cfg(test)]
+mod p2p_process_tests {
+    use super::*;
+
+    #[test]
+    fn shipping_p2p_check_observes_both_exit_statuses() {
+        let exe = std::env::current_exe().unwrap();
+        for fail_second in [false, true] {
+            // Native test-harness children: --list exits successfully; bad flags fail.
+            let spawn = |arg: &str| {
+                Command::new(&exe)
+                    .arg(arg)
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .spawn()
+                    .unwrap()
+            };
+            let mut first = spawn("--list");
+            let mut second = spawn(if fail_second {
+                "--invalid-p2p-fixture-option"
+            } else {
+                "--list"
+            });
+            assert_eq!(
+                wait_for_p2p_players(&mut first, &mut second, true).is_err(),
+                fail_second
+            );
+            assert!(first.try_wait().unwrap().is_some());
+            assert!(second.try_wait().unwrap().is_some());
+        }
+    }
 }

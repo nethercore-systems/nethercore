@@ -5,6 +5,167 @@ use crate::test_utils::TestInput;
 
 use super::test_utils::*;
 
+#[test]
+fn rollback_accepts_full_guest_ram_with_host_overhead() {
+    let (engine, linker) = create_test_engine();
+    let ram_limit = 4 * 1024 * 1024;
+    let wasm = wat::parse_str(
+        r#"(module
+        (memory (export "memory") 64 64)
+        (func (export "init"))
+        (func (export "update")
+            (i32.store8 (i32.const 4194303) (i32.const 42)))
+        (func (export "render")))"#,
+    )
+    .unwrap();
+    let module = engine.load_module(&wasm).unwrap();
+    let mut game = crate::wasm::GameInstance::<TestInput, ()>::with_ram_limit(
+        &engine, &module, &linker, ram_limit,
+    )
+    .unwrap();
+    game.init().unwrap();
+    let mut manager = RollbackStateManager::new(ram_limit);
+    let before = manager.save_state(&mut game, 0).unwrap();
+    assert_eq!(before.data.len(), ram_limit);
+    assert!(before.total_len() > ram_limit);
+    game.update(1.0 / 60.0).unwrap();
+    assert_eq!(game.save_state().unwrap()[ram_limit - 1], 42);
+    manager.load_state(&mut game, &before).unwrap();
+    let restored = manager.save_state(&mut game, 0).unwrap();
+    assert_eq!(before.data, restored.data);
+    assert_eq!(before.checksum, restored.checksum);
+    assert!(
+        RollbackStateManager::new(ram_limit - 1)
+            .save_state(&mut game, 0)
+            .is_err()
+    );
+}
+
+#[test]
+fn rollback_saves_commit_only_after_confirmation() {
+    use crate::save_store::SaveStore;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("game.ncsav");
+    let mut disk = SaveStore::new(path.clone());
+    disk.set_controller_slot(0, Some(vec![3]));
+    disk.flush().unwrap();
+    let (engine, linker) = create_test_engine();
+    let wasm = wat::parse_str(
+        r#"(module
+        (import "env" "save" (func $save (param i32 i32 i32) (result i32)))
+        (import "env" "load" (func $load (param i32 i32 i32) (result i32)))
+        (import "env" "delete" (func $delete (param i32) (result i32)))
+        (import "env" "tick_count" (func $tick (result i64)))
+        (memory (export "memory") 1)
+        (data (i32.const 16) "\07")
+        (func (export "init"))
+        (func (export "update")
+            (i32.store (i32.const 0) (call $load (i32.const 0) (i32.const 32) (i32.const 1)))
+            (call $tick) i64.const 2 i64.eq
+            if (drop (call $delete (i32.const 0))) end
+            (call $tick) i64.const 1 i64.eq
+            if (drop (call $save (i32.const 0) (i32.const 16) (i32.const 1))) end))"#,
+    )
+    .unwrap();
+    let module = engine.load_module(&wasm).unwrap();
+    let mut game = new_test_game_instance(&engine, &module, &linker);
+    disk.prefill_game_save_data(game.state_mut());
+    game.store_mut().data_mut().save_store = Some(disk);
+    game.init().unwrap();
+    let config = crate::rollback::SessionConfig::sync_test_with_params(2, 0).with_players(1);
+    let mut session =
+        RollbackSession::<TestInput, ()>::new_sync_test(config, test_ram_limit()).unwrap();
+    for frame in 0..8 {
+        session.add_local_input(0, TestInput::default()).unwrap();
+        let requests = session.advance_frame().unwrap();
+        session
+            .handle_requests_ordered(&mut game, requests, |game, _| {
+                game.update(1.0 / 60.0)
+                    .map_err(|e| crate::rollback::SessionError::Ggrs(e.to_string()))
+            })
+            .unwrap();
+        let persisted = SaveStore::load_or_new(path.clone()).unwrap();
+        if frame < 2 {
+            assert_eq!(
+                persisted.controller_slot(0),
+                Some(&[3][..]),
+                "unconfirmed writes/deletes must not reach disk"
+            );
+        } else if frame == 2 {
+            assert_eq!(persisted.controller_slot(0), Some(&[7][..]));
+        } else {
+            assert_eq!(persisted.controller_slot(0), None);
+        }
+    }
+    assert!(game.state().save_data[0].is_none());
+}
+
+#[test]
+fn rollback_discards_predicted_save_effects_and_restores_logical_slots() {
+    use crate::save_store::SaveStore;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("save.ncsav");
+    let (engine, linker) = create_test_engine();
+    let wasm = wat::parse_str(r#"(module (memory (export "memory") 1))"#).unwrap();
+    let module = engine.load_module(&wasm).unwrap();
+    let mut game = new_test_game_instance(&engine, &module, &linker);
+    let ctx = game.store_mut().data_mut();
+    ctx.save_store = Some(SaveStore::new(path.clone()));
+    ctx.stage_save(0, Some(vec![3]));
+    ctx.commit_saves_through(0).unwrap();
+    let mut manager = RollbackStateManager::with_defaults();
+    let before = manager.save_state(&mut game, 0).unwrap();
+    for value in [Some(vec![9]), None] {
+        let ctx = game.store_mut().data_mut();
+        ctx.game.tick_count = 1;
+        ctx.stage_save(0, value);
+        assert_ne!(
+            manager.save_state(&mut game, 1).unwrap().checksum,
+            before.checksum
+        );
+        manager.load_state(&mut game, &before).unwrap();
+        assert_eq!(game.state().save_data[0], Some(vec![3]));
+        game.store_mut()
+            .data_mut()
+            .commit_saves_through(u64::MAX)
+            .unwrap();
+        assert_eq!(
+            SaveStore::load_or_new(path.clone())
+                .unwrap()
+                .controller_slot(0),
+            Some(&[3][..])
+        );
+    }
+}
+
+#[test]
+fn ordinary_save_commit_reports_io_failure() {
+    let dir = tempfile::tempdir().unwrap();
+    let blocked = dir.path().join("not-a-directory");
+    std::fs::write(&blocked, b"preserve").unwrap();
+    let (engine, linker) = create_test_engine();
+    let wasm = wat::parse_str(
+        r#"(module
+        (import "env" "save" (func $save (param i32 i32 i32) (result i32)))
+        (memory (export "memory") 1)
+        (func (export "update") (drop (call $save (i32.const 0) (i32.const 0) (i32.const 1)))))"#,
+    )
+    .unwrap();
+    let module = engine.load_module(&wasm).unwrap();
+    let mut game = new_test_game_instance(&engine, &module, &linker);
+    game.store_mut().data_mut().save_store = Some(crate::save_store::SaveStore::new(
+        blocked.join("save.ncsav"),
+    ));
+    let error = game.update(1.0 / 60.0).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("Failed to persist confirmed save")
+    );
+    assert_eq!(std::fs::read(blocked).unwrap(), b"preserve");
+    assert_eq!(game.store().data().pending_saves.len(), 1);
+}
+
 /// Test basic save and load state functionality
 ///
 /// The new save_state API snapshots entire WASM linear memory automatically.

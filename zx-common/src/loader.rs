@@ -55,62 +55,60 @@ impl RomLoader for ZXRomLoader {
         let rom = ZXRom::from_bytes(&bytes)
             .with_context(|| format!("Failed to load NCZX ROM: {}", rom_path.display()))?;
 
-        // 2. Validate game ID (prevent path traversal / invalid paths)
-        if !is_safe_game_id(&rom.metadata.id) {
-            anyhow::bail!("Invalid game id in ROM metadata: '{}'", rom.metadata.id);
-        }
-
-        // 3. Get game directory
-        let games_dir = data_dir_provider
+        let data_dir = data_dir_provider
             .data_dir()
-            .ok_or_else(|| anyhow::anyhow!("Data directory not available"))?
-            .join("games");
+            .context("Data directory not available")?;
+        self.install_validated(&rom, &bytes, &data_dir)
+    }
+}
 
-        let game_dir = games_dir.join(&rom.metadata.id);
+impl ZXRomLoader {
+    /// Shared native install/update path. The cartridge is authoritative;
+    /// manifest and thumbnail files are rebuildable library caches.
+    pub fn install_bytes(&self, bytes: &[u8], data_dir: &Path) -> Result<LocalGame> {
+        anyhow::ensure!(
+            bytes.len() as u64 <= MAX_ROM_BYTES,
+            "ROM exceeds size limit"
+        );
+        let rom = ZXRom::from_bytes(bytes).context("Invalid NCZX cartridge")?;
+        self.install_validated(&rom, bytes, data_dir)
+    }
 
-        // 4. Create game directory
-        std::fs::create_dir_all(&game_dir)
-            .with_context(|| format!("Failed to create game directory: {}", game_dir.display()))?;
-
-        // 5. Extract WASM code
-        std::fs::write(game_dir.join("rom.wasm"), &rom.code).with_context(|| {
-            format!(
-                "Failed to write WASM code to: {}",
-                game_dir.join("rom.wasm").display()
-            )
-        })?;
-
-        // 6. Extract thumbnail ONLY (screenshots stay in ROM to save disk space)
-        if let Some(ref thumb) = rom.thumbnail {
-            std::fs::write(game_dir.join("thumbnail.png"), thumb).with_context(|| {
-                format!(
-                    "Failed to write thumbnail to: {}",
-                    game_dir.join("thumbnail.png").display()
-                )
-            })?;
+    fn install_validated(&self, rom: &ZXRom, bytes: &[u8], data_dir: &Path) -> Result<LocalGame> {
+        anyhow::ensure!(
+            is_safe_game_id(&rom.metadata.id),
+            "Invalid game id in ROM metadata: '{}'",
+            rom.metadata.id
+        );
+        let engine = nethercore_core::wasm::WasmEngine::new()?;
+        engine
+            .load_module(&rom.code)
+            .context("Invalid cartridge WASM")?;
+        let manifest = serde_json::to_vec_pretty(&rom.to_local_manifest())?;
+        let game_dir = data_dir.join("games").join(&rom.metadata.id);
+        std::fs::create_dir_all(&game_dir)?;
+        let rom_path = game_dir.join("rom.nczx");
+        nethercore_core::library::rom::atomic_write(&rom_path, bytes)
+            .context("Failed to replace installed cartridge")?;
+        // Commit point: cache failures do not misreport a successful installation.
+        for (name, contents) in std::iter::once(("manifest.json", manifest.as_slice())).chain(
+            rom.thumbnail
+                .as_deref()
+                .map(|thumbnail| ("thumbnail.png", thumbnail)),
+        ) {
+            if let Err(error) =
+                nethercore_core::library::rom::atomic_write(&game_dir.join(name), contents)
+            {
+                eprintln!("Installed cartridge; could not refresh {name}: {error}");
+            }
         }
-
-        // 7. Write manifest.json for backward compatibility with existing library system
-        let manifest = rom.to_local_manifest();
-        std::fs::write(
-            game_dir.join("manifest.json"),
-            serde_json::to_string_pretty(&manifest)?,
-        )
-        .with_context(|| {
-            format!(
-                "Failed to write manifest to: {}",
-                game_dir.join("manifest.json").display()
-            )
-        })?;
-
-        // 8. Return LocalGame
         Ok(LocalGame {
             id: rom.metadata.id.clone(),
             title: rom.metadata.title.clone(),
             author: rom.metadata.author.clone(),
             version: rom.metadata.version.clone(),
-            rom_path: game_dir.join("rom.wasm"),
-            console_type: ZX_ROM_FORMAT.console_type.to_string(),
+            rom_path,
+            console_type: ZX_ROM_FORMAT.console_type.into(),
         })
     }
 }
@@ -132,6 +130,41 @@ mod tests {
         fn data_dir(&self) -> Option<PathBuf> {
             Some(self.path.clone())
         }
+    }
+
+    #[test]
+    fn shipping_install_retains_full_cart_and_reloads_without_stale_manifest() {
+        let dir = TempDir::new().unwrap();
+        let provider = TestDataDirProvider {
+            path: dir.path().into(),
+        };
+        let mut rom = create_test_rom();
+        let mut data = crate::ZXDataPack::new();
+        data.data.push(crate::PackedData {
+            id: "level".into(),
+            data: b"level-A".to_vec(),
+        });
+        rom.data_pack = Some(data);
+        let path = dir.path().join("source.nczx");
+        std::fs::write(&path, rom.to_bytes().unwrap()).unwrap();
+        let installed = ZXRomLoader.install(&path, &provider).unwrap();
+        let readback = ZXRom::from_bytes(&std::fs::read(&installed.rom_path).unwrap()).unwrap();
+        assert_eq!(
+            readback.data_pack.unwrap().find_data("level").unwrap().data,
+            b"level-A"
+        );
+        assert_eq!(readback.metadata.render_mode, rom.metadata.render_mode);
+        std::fs::write(
+            installed.rom_path.parent().unwrap().join("manifest.json"),
+            b"stale",
+        )
+        .unwrap();
+        let mut registry = nethercore_core::library::RomLoaderRegistry::new();
+        registry.register(Box::new(ZXRomLoader));
+        let games = nethercore_core::library::get_local_games_with_loaders(&provider, &registry);
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].version, rom.metadata.version);
+        assert_eq!(games[0].rom_path, installed.rom_path);
     }
 
     fn create_test_rom() -> ZXRom {
@@ -156,7 +189,7 @@ mod tests {
                     ..Default::default()
                 },
             },
-            code: b"\0asm\x01\x00\x00\x00test code".to_vec(),
+            code: b"\0asm\x01\x00\x00\x00".to_vec(),
             data_pack: None,
             thumbnail: Some(b"fake png data".to_vec()),
             screenshots: vec![],
@@ -231,7 +264,7 @@ mod tests {
 
         // Check files were created
         let game_dir = temp_dir.path().join("games").join("test-game");
-        assert!(game_dir.join("rom.wasm").exists());
+        assert!(game_dir.join("rom.nczx").exists());
         assert!(game_dir.join("thumbnail.png").exists());
         assert!(game_dir.join("manifest.json").exists());
     }

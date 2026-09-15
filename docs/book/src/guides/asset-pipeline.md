@@ -39,8 +39,11 @@ static PLAYER_MESH: &[u8] = include_bytes!("assets/player.nczxmesh");
 static GRASS_TEX: &[u8] = include_bytes!("assets/grass.nczxtex");
 
 fn init() {
-    let player = load_zmesh(PLAYER_MESH.as_ptr() as u32, PLAYER_MESH.len() as u32);
-    let grass = load_ztex(GRASS_TEX.as_ptr() as u32, GRASS_TEX.len() as u32);
+    unsafe {
+        let player = load_zmesh(PLAYER_MESH.as_ptr(), PLAYER_MESH.len() as u32);
+        let grass = load_ztex(GRASS_TEX.as_ptr(), GRASS_TEX.len() as u32);
+        assert!(player != 0 && grass != 0);
+    }
 }
 ```
 {{#endtab}}
@@ -54,8 +57,8 @@ extern const unsigned char grass_nczxtex_data[];
 extern const unsigned int grass_nczxtex_size;
 
 NCZX_EXPORT void init(void) {
-    uint32_t player = load_zmesh((uint32_t)player_nczxmesh_data, player_nczxmesh_size);
-    uint32_t grass = load_ztex((uint32_t)grass_nczxtex_data, grass_nczxtex_size);
+    uint32_t player = load_zmesh(player_nczxmesh_data, player_nczxmesh_size);
+    uint32_t grass = load_ztex(grass_nczxtex_data, grass_nczxtex_size);
 }
 ```
 {{#endtab}}
@@ -66,8 +69,8 @@ const player_mesh = @embedFile("assets/player.nczxmesh");
 const grass_tex = @embedFile("assets/grass.nczxtex");
 
 export fn init() void {
-    const player = load_zmesh(@intFromPtr(player_mesh.ptr), player_mesh.len);
-    const grass = load_ztex(@intFromPtr(grass_tex.ptr), grass_tex.len);
+    const player = load_zmesh(player_mesh, player_mesh.len);
+    const grass = load_ztex(grass_tex, grass_tex.len);
 }
 ```
 {{#endtab}}
@@ -77,6 +80,112 @@ export fn init() void {
 One manifest, one command, simple FFI calls.
 
 ---
+
+## Supported asset contract
+
+The supported unit is a **prepared mesh**, not a DCC scene. Extension support
+below does not mean scene, material-graph, or arbitrary rig support.
+
+- glTF/GLB mesh import requires exactly **one mesh, one triangle primitive**.
+  Additional meshes, material primitives and non-triangle topology fail instead
+  of silently choosing the first part. Export parts separately or merge them in
+  the authoring tool; assign explicit asset IDs and assemble them in game code.
+- Mesh-local vertex coordinates are imported. Scene hierarchy and node transforms
+  are not baked by the mesh converter. Apply transforms before exporting static
+  props. For skinned assets, keep mesh, bind matrices and animation in consistent
+  spaces; do not independently bake one part of a rig.
+- Mesh attributes include positions and the supplied first UV/color sets, normals,
+  tangents and supported skin weights. Materials, material textures and DCC shader
+  graphs are **not** reconstructed. Export textures separately, supply UVs/normals
+  needed by the chosen vertex format, and bind the game's material explicitly.
+- Skeleton and clip conversion are separate from scene import. The exporter has
+  `skeleton --list` / `animation --list` and explicit skin/animation indices;
+  direct cartridge declarations support `skin_name` / `animation_name`. Keep a
+  matching mesh/skin/clip set. This is not a promise of arbitrary rig fidelity.
+- WAV import preserves mono 22050-Hz signed 16-bit PCM exactly. Mono/stereo PCM
+  at 8/16/24/32 bits and supported 32-bit float WAV are decoded; stereo channels
+  are averaged and other rates use the converter's linear resampling to 22050 Hz.
+  Other channel layouts, non-finite samples, partial frames and invalid RIFF/chunk
+  lengths fail. Downmix unsupported layouts in the authoring tool.
+- Automatic TTF/OTF font conversion is not supported. Font declarations fail
+  actionably; runtime atlas/metrics APIs are a separate manual workflow, not an
+  automatic font importer. Do not list a font and assume it was packed.
+- `nether.toml` rejects unknown tables/keys rather than silently defaulting them.
+  `assets.toml` is the exporter's separate format; do not paste its tables into a
+  cartridge manifest. Use the current documented fields, not guessed aliases.
+
+Build and launch the packed `.nczx`, then edit/rebuild and check it again. A
+successful conversion is not proof of the intended material appearance, bone
+mapping or animation; review the actual rendered asset. Failed conversion must
+not be mistaken for a new successful cartridge.
+
+## Prepared prop through the normal cartridge route
+
+Reuse the [first-game Rust project](../getting-started/first-game.md), its Cargo
+configuration and matching `src/zx` SDK. Export one triangulated, UV-mapped prop
+as `prop.obj`, with positions near the origin and applied transforms; save its
+texture separately as `paint.png`. For glTF/GLB, export one mesh with one triangle
+primitive, not an entire scene or multiple material slots. No material graph or
+scene transform will be reconstructed for you.
+
+Set the existing `game.render_mode` to `0` (Lambert), then add these declarations
+to **`nether.toml`**, not the exporter's `assets.toml`:
+
+```toml
+[[assets.meshes]]
+id = "prop"
+path = "prop.obj"
+
+[[assets.textures]]
+id = "paint"
+path = "paint.png"
+```
+
+Keep the first game's SDK imports and panic handler. For a stationary prop view,
+replace its square state and callbacks with the following Rust snippet (this is
+part of that existing project, not a standalone source file):
+
+```rust
+static mut MESH: u32 = 0;
+static mut TEX: u32 = 0;
+
+#[no_mangle]
+pub extern "C" fn init() {
+    unsafe {
+        set_clear_color(0x182040FF);
+        MESH = rom_mesh(b"prop".as_ptr(), 4);
+        TEX = rom_texture(b"paint".as_ptr(), 5);
+        camera_set(0.0, 0.0, 3.0, 0.0, 0.0, 0.0);
+        camera_fov(60.0);
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn update() {}
+
+#[no_mangle]
+pub extern "C" fn render() {
+    unsafe {
+        set_color(0xFFFFFFFF);
+        texture_bind(TEX);
+        draw_mesh(MESH);
+        draw_sprite(16.0, 16.0, 96.0, 96.0);
+    }
+}
+```
+
+```bash
+nether build
+nether run --no-build
+```
+
+The prop should appear in front of the camera, with the same texture also shown
+as a square in the upper-left. UVs are copied as stored: image V=0 samples the top
+row, so check OBJ UV orientation rather than assuming an automatic flip. The 3D
+mesh uses Lambert lighting; the 2D sprite is unlit, so identical brightness is not
+expected. Change a vertex in the source prop, repeat both commands, and confirm
+the new silhouette. Rejected conversion is an error, not a new cartridge: keep
+and launch the previous good `.nczx` until the source is corrected.
 
 ## Supported Input Formats
 
@@ -432,8 +541,8 @@ extern const unsigned char jump_nczxsnd_data[];
 extern const unsigned int jump_nczxsnd_size;
 
 NCZX_EXPORT void init(void) {
-    uint32_t player = load_zmesh((uint32_t)player_nczxmesh_data, player_nczxmesh_size);
-    uint32_t grass = load_ztex((uint32_t)grass_nczxtex_data, grass_nczxtex_size);
+    uint32_t player = load_zmesh(player_nczxmesh_data, player_nczxmesh_size);
+    uint32_t grass = load_ztex(grass_nczxtex_data, grass_nczxtex_size);
     uint32_t jump = load_zsound((uint32_t)jump_nczxsnd_data, jump_nczxsnd_size);
 }
 ```
@@ -452,8 +561,8 @@ const grass_tex = @embedFile("assets/grass.nczxtex");
 const jump_sfx = @embedFile("assets/jump.nczxsnd");
 
 export fn init() void {
-    const player = load_zmesh(@intFromPtr(player_mesh.ptr), player_mesh.len);
-    const grass = load_ztex(@intFromPtr(grass_tex.ptr), grass_tex.len);
+    const player = load_zmesh(player_mesh, player_mesh.len);
+    const grass = load_ztex(grass_tex, grass_tex.len);
     const jump = load_zsound(@intFromPtr(jump_sfx.ptr), jump_sfx.len);
 }
 ```

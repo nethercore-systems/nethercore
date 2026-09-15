@@ -43,6 +43,9 @@ impl NonBlockingSocket<String> for LocalSocket {
         loop {
             match self.socket.recv_from(&mut self.recv_buf) {
                 Ok((len, from)) => {
+                    if self.handle_content_probe(&self.recv_buf[..len], from) {
+                        continue;
+                    }
                     // Deserialize the GGRS message
                     match bincode::deserialize::<ggrs::Message>(&self.recv_buf[..len]) {
                         Ok(msg) => {

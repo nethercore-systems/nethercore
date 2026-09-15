@@ -45,7 +45,7 @@ rfd.workspace = true
 dirs = "5.0"
 
 # HTTP client for update checking
-reqwest = { workspace = true, features = ["rustls-tls"] }
+reqwest = { workspace = true, features = ["rustls-tls", "brotli"] }
 
 # Async runtime for update checking
 tokio = { workspace = true, features = ["rt", "time"] }
@@ -61,6 +61,10 @@ serde = { workspace = true, features = ["derive"] }
 
 # Binary encoding for session config serialization
 bitcode.workspace = true
+
+[dev-dependencies]
+tempfile = { workspace = true }
+brotli = "8"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winreg = "0.52"

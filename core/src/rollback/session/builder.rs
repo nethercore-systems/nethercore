@@ -142,6 +142,25 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>
         Self::new_p2p_with_config(config, player_config, socket, players, max_state_size)
     }
 
+    /// Verify cartridge identity on real UDP peers before GGRS can advance.
+    pub fn new_verified_p2p(
+        config: SessionConfig,
+        mut socket: crate::rollback::LocalSocket,
+        players: Vec<(usize, PlayerType<String>)>,
+        max_state_size: usize,
+        content_hash: u64,
+    ) -> anyhow::Result<Self> {
+        let peers = players
+            .iter()
+            .filter_map(|(_, kind)| match kind {
+                PlayerType::Remote(address) => Some(address.parse()),
+                _ => None,
+            })
+            .collect::<Result<Vec<std::net::SocketAddr>, _>>()?;
+        socket.verify_content(content_hash, &peers, Duration::from_secs(10))?;
+        Ok(Self::new_p2p(config, socket, players, max_state_size)?)
+    }
+
     /// Create a new P2P session with explicit player configuration
     ///
     /// This allows full control over the player session configuration.

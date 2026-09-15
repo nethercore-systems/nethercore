@@ -51,6 +51,8 @@ pub trait RomLoader: Sized {
 pub struct LoadedRom<C: Console + Clone> {
     /// WASM bytecode
     pub code: Vec<u8>,
+    /// Canonical cartridge compatibility identity, including packed data.
+    pub content_hash: u64,
     /// Console instance configured for this ROM
     pub console: C,
     /// Game title (from ROM metadata or file stem fallback)

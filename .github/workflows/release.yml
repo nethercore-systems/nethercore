@@ -87,7 +87,7 @@ jobs:
 
       - name: Build release binaries
         run: |
-          cargo build --release --target ${{ matrix.platform.target }} -p nethercore-library -p nether-cli
+          cargo build --release --target ${{ matrix.platform.target }} -p nethercore-library -p nether-cli -p nethercore-zx
 
       - name: Prepare release directory
         shell: bash
@@ -95,6 +95,8 @@ jobs:
           mkdir -p release
           cp target/${{ matrix.platform.target }}/release/nethercore${{ matrix.platform.bin_ext }} release/
           cp target/${{ matrix.platform.target }}/release/nether${{ matrix.platform.bin_ext }} release/
+          cp target/${{ matrix.platform.target }}/release/nethercore-zx${{ matrix.platform.bin_ext }} release/
+          cp -r include release/
           cp LICENSE-MIT release/
           cp LICENSE-APACHE release/
           cp README.md release/
@@ -170,6 +172,8 @@ jobs:
             Each package contains:
             - `nethercore` - The library app for browsing and playing games
             - `nether` - CLI tool for building, packing, and running games
+            - `nethercore-zx` - ZX cartridge player (keep beside the other executables)
+            - `include/` - Version-matched Rust, C and Zig bindings
 
             ---
             *This is a rolling release that is updated automatically with each push to main.*

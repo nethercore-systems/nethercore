@@ -1,6 +1,5 @@
 //! Tests for FFI functions
 
-use super::save::persist_controller_mapped_slot_from_state;
 use super::*;
 use crate::test_utils::TestInput;
 use crate::wasm::GameState;
@@ -208,11 +207,11 @@ fn test_save_persists_only_local_slots() {
     ctx.game.local_player_mask = 0b0100;
     ctx.save_store = Some(crate::save_store::SaveStore::new(save_path.clone()));
 
-    ctx.game.save_data[2] = Some(vec![7]);
-    persist_controller_mapped_slot_from_state(&mut ctx, 2);
+    ctx.stage_save(2, Some(vec![7]));
+    ctx.commit_saves_through(0).unwrap();
 
-    ctx.game.save_data[1] = Some(vec![9]);
-    persist_controller_mapped_slot_from_state(&mut ctx, 1);
+    ctx.stage_save(1, Some(vec![9]));
+    ctx.commit_saves_through(0).unwrap();
 
     let store = crate::save_store::SaveStore::load_or_new(save_path).unwrap();
     assert_eq!(store.controller_slot(0).unwrap(), &[7]);
@@ -231,10 +230,10 @@ fn test_delete_persists_for_local_slot() {
     ctx.game.local_player_mask = 0b0100;
     ctx.save_store = Some(crate::save_store::SaveStore::new(save_path.clone()));
 
-    ctx.game.save_data[2] = Some(vec![7]);
-    persist_controller_mapped_slot_from_state(&mut ctx, 2);
-    ctx.game.save_data[2] = None;
-    persist_controller_mapped_slot_from_state(&mut ctx, 2);
+    ctx.stage_save(2, Some(vec![7]));
+    ctx.commit_saves_through(0).unwrap();
+    ctx.stage_save(2, None);
+    ctx.commit_saves_through(0).unwrap();
 
     let store = crate::save_store::SaveStore::load_or_new(save_path).unwrap();
     assert!(store.controller_slot(0).is_none());

@@ -37,7 +37,7 @@ pub struct UpdateInfo {
     pub local_version: String,
     pub remote_version: String,
     pub download_size: i64,
-    pub rom_filename: String,
+    pub platform_game_id: String,
 }
 
 /// Result of checking for an update
@@ -71,8 +71,32 @@ pub fn check_for_update(game: &LocalGame) -> UpdateCheckResult {
     rt.block_on(async { check_for_update_async(game).await })
 }
 
+fn published_game_id(game: &LocalGame) -> Result<String> {
+    let id = if game.rom_path.extension().is_some_and(|ext| ext == "nczx") {
+        let bytes = nethercore_shared::read_file_with_limit(
+            &game.rom_path,
+            nethercore_shared::MAX_ROM_BYTES,
+        )?;
+        zx_common::ZXRom::from_bytes(&bytes)?
+            .metadata
+            .platform_game_id
+            .unwrap_or_else(|| game.id.clone())
+    } else {
+        game.id.clone()
+    };
+    anyhow::ensure!(
+        nethercore_shared::is_safe_game_id(&id),
+        "Invalid published game identity"
+    );
+    Ok(id)
+}
+
 async fn check_for_update_async(game: &LocalGame) -> UpdateCheckResult {
-    let url = format!("{}/api/games/{}/version", API_BASE_URL, game.id);
+    let platform_game_id = match published_game_id(game) {
+        Ok(id) => id,
+        Err(error) => return UpdateCheckResult::CheckFailed(error.to_string()),
+    };
+    let url = format!("{}/api/games/{}/version", API_BASE_URL, platform_game_id);
 
     // Create client with timeout
     let client = match reqwest::Client::builder()
@@ -115,20 +139,13 @@ async fn check_for_update_async(game: &LocalGame) -> UpdateCheckResult {
     // Note: This doesn't handle semantic versioning properly, but it's sufficient
     // for our use case where versions are sequential
     if remote_version != game.version && !game.version.is_empty() {
-        let rom_filename = game
-            .rom_path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or("rom.wasm")
-            .to_string();
-
         UpdateCheckResult::UpdateAvailable(UpdateInfo {
             game_id: game.id.clone(),
             game_title: game.title.clone(),
             local_version: game.version.clone(),
             remote_version,
             download_size: version_info.rom_size,
-            rom_filename,
+            platform_game_id,
         })
     } else {
         UpdateCheckResult::UpToDate
@@ -166,68 +183,75 @@ pub fn download_update(update: &UpdateInfo, data_dir: &Path) -> Result<()> {
         .build()
         .context("Failed to create runtime")?;
 
-    rt.block_on(async { download_update_async(update, data_dir).await })
+    rt.block_on(async { download_update_async(update, data_dir, API_BASE_URL).await })
 }
 
-async fn download_update_async(update: &UpdateInfo, data_dir: &Path) -> Result<()> {
+async fn download_update_async(update: &UpdateInfo, data_dir: &Path, api_base: &str) -> Result<()> {
+    use nethercore_shared::{MAX_ROM_BYTES, is_safe_game_id};
+    anyhow::ensure!(
+        is_safe_game_id(&update.game_id) && is_safe_game_id(&update.platform_game_id),
+        "Invalid update identity"
+    );
     let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(300)) // 5 minute timeout for downloads
-        .build()
-        .context("Failed to create HTTP client")?;
-
-    // 1. Get presigned download URL
-    let url_endpoint = format!("{}/api/games/{}/rom-url", API_BASE_URL, update.game_id);
-    let url_response: RomUrlResponse = client
-        .get(&url_endpoint)
+        .timeout(Duration::from_secs(300))
+        .build()?;
+    let endpoint = format!("{}/api/games/{}/rom-url", api_base, update.platform_game_id);
+    let url: RomUrlResponse = client
+        .get(endpoint)
         .send()
-        .await
-        .context("Failed to get download URL")?
+        .await?
+        .error_for_status()?
         .json()
         .await
-        .context("Failed to parse download URL response")?;
-
-    // 2. Download the ROM file
-    tracing::info!("Downloading ROM update from presigned URL...");
-    let rom_response = client
-        .get(&url_response.url)
+        .context("Invalid download URL response")?;
+    let mut response = client
+        .get(&url.url)
         .send()
-        .await
-        .context("Failed to download ROM")?;
-
-    if !rom_response.status().is_success() {
-        anyhow::bail!("Download failed with HTTP {}", rom_response.status());
+        .await?
+        .error_for_status()
+        .context("ROM download failed")?;
+    // reqwest decodes supported Brotli responses and removes Content-Encoding.
+    anyhow::ensure!(
+        response
+            .headers()
+            .get(reqwest::header::CONTENT_ENCODING)
+            .is_none_or(|encoding| encoding == "identity"),
+        "Unsupported download Content-Encoding"
+    );
+    anyhow::ensure!(
+        response
+            .content_length()
+            .is_none_or(|len| len <= MAX_ROM_BYTES),
+        "ROM download exceeds size limit"
+    );
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response.chunk().await.context("Incomplete ROM download")? {
+        anyhow::ensure!(
+            bytes.len() as u64 + chunk.len() as u64 <= MAX_ROM_BYTES,
+            "Decoded ROM exceeds size limit"
+        );
+        bytes.extend_from_slice(&chunk);
     }
-
-    let rom_bytes = rom_response
-        .bytes()
-        .await
-        .context("Failed to read ROM data")?;
-
-    // 3. Write the ROM file to the game directory
-    let game_dir = data_dir.join("games").join(&update.game_id);
-    let rom_path = game_dir.join(&update.rom_filename);
-
-    std::fs::write(&rom_path, &rom_bytes).context("Failed to write ROM file")?;
-
-    // 4. Update the manifest with the new version
-    let manifest_path = game_dir.join("manifest.json");
-    if manifest_path.exists() {
-        let manifest_content =
-            std::fs::read_to_string(&manifest_path).context("Failed to read manifest")?;
-
-        // Parse, update version, and write back
-        let mut manifest: serde_json::Value =
-            serde_json::from_str(&manifest_content).context("Failed to parse manifest")?;
-
-        manifest["version"] = serde_json::Value::String(update.remote_version.clone());
-        manifest["updated_at"] = serde_json::Value::String(chrono::Utc::now().to_rfc3339());
-
-        let updated_manifest =
-            serde_json::to_string_pretty(&manifest).context("Failed to serialize manifest")?;
-
-        std::fs::write(&manifest_path, updated_manifest).context("Failed to write manifest")?;
-    }
-
+    let mut rom = zx_common::ZXRom::from_bytes(&bytes).context("Invalid update cartridge")?;
+    anyhow::ensure!(
+        rom.metadata.id == update.game_id,
+        "Update belongs to a different game"
+    );
+    anyhow::ensure!(
+        rom.metadata.version == update.remote_version,
+        "Update version does not match its announcement"
+    );
+    anyhow::ensure!(
+        rom.metadata
+            .platform_game_id
+            .as_ref()
+            .is_none_or(|id| id == &update.platform_game_id),
+        "Update belongs to a different published game"
+    );
+    rom.metadata.platform_game_id = Some(update.platform_game_id.clone());
+    // The shared installer validates WASM and atomically replaces the complete cart.
+    // Nothing in the current installation is changed until that validation succeeds.
+    zx_common::ZXRomLoader.install_bytes(&rom.to_bytes()?, data_dir)?;
     tracing::info!(
         "Update installed successfully: v{} -> v{}",
         update.local_version,
@@ -297,6 +321,197 @@ pub fn check_and_prompt_for_update(game: &LocalGame, data_dir: &Path) -> bool {
             tracing::debug!("Update check failed for {}: {}", game.id, reason);
             // Silently continue with current version
             false
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::{BufRead, BufReader, Write};
+    use std::net::TcpListener;
+    use zx_common::{PackedData, ZXDataPack, ZXMetadata, ZXRom, ZXRomLoader};
+
+    fn cart(id: &str, version: &str) -> ZXRom {
+        ZXRom {
+            version: nethercore_shared::ZX_ROM_FORMAT.version,
+            metadata: ZXMetadata {
+                id: id.into(),
+                title: "Update fixture".into(),
+                author: "Test".into(),
+                version: version.into(),
+                description: String::new(),
+                tags: vec![],
+                platform_game_id: Some("published-game".into()),
+                platform_author_id: None,
+                created_at: String::new(),
+                tool_version: String::new(),
+                render_mode: Some(0),
+                default_resolution: None,
+                target_fps: Some(60),
+                netplay: nethercore_shared::netplay::NetplayMetadata::new(
+                    nethercore_shared::ConsoleType::ZX,
+                    nethercore_shared::TickRate::Fixed60,
+                    2,
+                    0,
+                ),
+            },
+            code: b"\0asm\x01\0\0\0".to_vec(),
+            data_pack: Some({
+                let mut pack = ZXDataPack::default();
+                pack.data
+                    .push(PackedData::new("level", version.as_bytes().to_vec()));
+                pack
+            }),
+            thumbnail: None,
+            screenshots: vec![],
+        }
+    }
+
+    // Two real local HTTP requests: URL lookup, then a download that may break mid-body.
+    fn server(
+        body: Vec<u8>,
+        encoding: &'static str,
+        extra_length: usize,
+    ) -> (String, std::thread::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let url_json =
+            serde_json::json!({"url": format!("{base}/cart"), "expires_at": ""}).to_string();
+        listener.set_nonblocking(true).unwrap();
+        let handle = std::thread::spawn(move || {
+            let deadline = std::time::Instant::now() + Duration::from_secs(10);
+            let mut served = 0;
+            while served < 2 && std::time::Instant::now() < deadline {
+                let (mut stream, _) = match listener.accept() {
+                    Ok(pair) => pair,
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        std::thread::park_timeout(Duration::from_millis(5));
+                        continue;
+                    }
+                    Err(error) => panic!("{error}"),
+                };
+                stream.set_nonblocking(false).unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(2)))
+                    .unwrap();
+                let mut request = String::new();
+                let mut reader = BufReader::new(&mut stream);
+                reader.read_line(&mut request).unwrap();
+                loop {
+                    let mut header = String::new();
+                    if reader.read_line(&mut header).unwrap() == 0 || header == "\r\n" {
+                        break;
+                    }
+                }
+                let (bytes, headers, extra) = if request.contains("/rom-url") {
+                    assert!(request.contains("/api/games/published-game/rom-url"));
+                    (
+                        url_json.as_bytes(),
+                        "Content-Type: application/json\r\n".to_string(),
+                        0,
+                    )
+                } else {
+                    (
+                        body.as_slice(),
+                        if encoding.is_empty() {
+                            String::new()
+                        } else {
+                            format!("Content-Encoding: {encoding}\r\n")
+                        },
+                        extra_length,
+                    )
+                };
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nConnection: close\r\n{headers}Content-Length: {}\r\n\r\n",
+                    bytes.len() + extra
+                );
+                let _ = stream.write_all(response.as_bytes());
+                let _ = stream.write_all(bytes);
+                served += 1;
+            }
+            assert_eq!(
+                served, 2,
+                "native updater did not execute both HTTP requests"
+            );
+        });
+        (base, handle)
+    }
+
+    #[test]
+    fn shipping_native_update_validates_before_replacing() {
+        let valid = cart("update-game", "2.0").to_bytes().unwrap();
+        let mut compressed = vec![];
+        {
+            let mut encoder = brotli::CompressorWriter::new(&mut compressed, 4096, 5, 22);
+            encoder.write_all(&valid).unwrap();
+        }
+        let mut invalid_wasm = cart("update-game", "2.0");
+        invalid_wasm.code.extend_from_slice(b"not wasm sections");
+        let cases = vec![
+            (cart("wrong-game", "2.0").to_bytes().unwrap(), "", 0, false),
+            (
+                cart("update-game", "wrong-version").to_bytes().unwrap(),
+                "",
+                0,
+                false,
+            ),
+            (invalid_wasm.to_bytes().unwrap(), "", 0, false),
+            (b"not a cartridge".to_vec(), "", 0, false),
+            (valid[..valid.len() - 1].to_vec(), "", 0, false),
+            (valid.clone(), "", 40, false),
+            (valid.clone(), "unknown-codec", 0, false),
+            (compressed, "br", 0, true),
+            (valid, "", 0, true),
+        ];
+        for (index, (bytes, encoding, extra, succeeds)) in cases.into_iter().enumerate() {
+            let dir = tempfile::tempdir().unwrap();
+            let original = cart("update-game", "1.0").to_bytes().unwrap();
+            let game = ZXRomLoader.install_bytes(&original, dir.path()).unwrap();
+            assert_eq!(published_game_id(&game).unwrap(), "published-game");
+            let manifest_path = game.rom_path.parent().unwrap().join("manifest.json");
+            let old_manifest = std::fs::read(&manifest_path).unwrap();
+            let update = UpdateInfo {
+                game_id: game.id.clone(),
+                game_title: game.title.clone(),
+                local_version: "1.0".into(),
+                remote_version: "2.0".into(),
+                download_size: bytes.len() as i64,
+                platform_game_id: "published-game".into(),
+            };
+            let (api_base, server) = server(bytes, encoding, extra);
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            let result = rt.block_on(download_update_async(&update, dir.path(), &api_base));
+            server.join().unwrap();
+            assert_eq!(result.is_ok(), succeeds, "update case {index}: {result:?}");
+            if succeeds {
+                let installed = ZXRom::from_bytes(&std::fs::read(&game.rom_path).unwrap()).unwrap();
+                assert_eq!(installed.metadata.id, game.id);
+                assert_eq!(installed.metadata.version, "2.0");
+                assert_eq!(
+                    installed
+                        .data_pack
+                        .unwrap()
+                        .find_data("level")
+                        .unwrap()
+                        .data,
+                    b"2.0"
+                );
+            } else {
+                assert_eq!(
+                    std::fs::read(&game.rom_path).unwrap(),
+                    original,
+                    "case {index} replaced cart"
+                );
+                assert_eq!(
+                    std::fs::read(manifest_path).unwrap(),
+                    old_manifest,
+                    "case {index} replaced manifest"
+                );
+            }
         }
     }
 }

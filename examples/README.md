@@ -155,7 +155,7 @@ ROM-based asset workflows and data packs.
 | Example | Description | Difficulty | Key Features |
 |---------|-------------|------------|--------------|
 | **datapack-demo** | Full ROM workflow: textures, meshes, sounds | 🟡 Intermediate | `rom_texture()`, `rom_mesh()`, `rom_sound()` |
-| **font-demo** | Custom font loading with `rom_font()` | 🟢 Beginner | Bitmap fonts, text rendering |
+| **font-demo** | Texture-atlas text demo (not a `rom_font()` loader demo) | 🟢 Beginner | `rom_texture()`, atlas regions |
 | **level-loader** | Level data loading with `rom_data()` | 🟡 Intermediate | Binary data, custom formats |
 | **asset-test** | Pre-converted asset testing (.nczxmesh, .nczxtex) | 🟡 Intermediate | Asset pipeline validation |
 | **gltf-test** | Tests GLTF import (mesh, skeleton, animation) | 🟡 Intermediate | GLTF pipeline, conversion validation |
@@ -237,7 +237,7 @@ cd 2-graphics/lighting
 cargo build --target wasm32-unknown-unknown --release
 
 # Run with nether CLI
-nether run target/wasm32-unknown-unknown/release/lighting.wasm
+nethercore-zx target/wasm32-unknown-unknown/release/lighting.wasm
 ```
 
 ---
@@ -269,3 +269,17 @@ See [`../docs/contributing/`](../docs/contributing/) for guidelines.
 ---
 
 **Questions?** Check the [book](../docs/book/) or open an issue on GitHub!
+
+## Isolated build verification
+
+`cargo xtask build-examples` discovers Cargo/Rust projects only, not C/Zig
+examples. For self-contained test fixtures, keep installation and stale-example
+cleanup away from your normal library:
+
+```bash
+cargo xtask build-examples --examples-dir <fixture-directory> --games-dir <disposable-install-directory>
+```
+
+The custom source directory skips workspace asset generators; prepare its assets
+first. Any failed example makes the command exit nonzero. A successful build is
+not a runtime, graphics, audio, or controller acceptance result.

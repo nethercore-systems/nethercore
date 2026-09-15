@@ -1426,7 +1426,10 @@ pub extern "C" fn local_player_mask() u32;
 /// * `data_len` — Length of data in bytes (max 64KB)
 ///
 /// # Returns
-/// 0 on success, 1 if invalid slot, 2 if data too large.
+/// 0 when staged, 1 if invalid slot, 2 if invalid/oversized data, 3 during render.
+/// Logical changes are rollback-safe. Local persistence occurs only after the
+/// frame is confirmed (after the callback offline); disk failure stops the
+/// player with an error. A zero return is not a disk-flush acknowledgement.
 pub extern "C" fn save(slot: u32, data_ptr: [*]const u8, data_len: u32) u32;
 
 /// Loads data from a slot.
@@ -1451,7 +1454,8 @@ pub extern "C" fn load(slot: u32, data_ptr: [*]u8, max_len: u32) u32;
 /// - Persistence only applies for local controllers (see `local_player_mask()`).
 ///
 /// # Returns
-/// 0 on success, 1 if invalid slot.
+/// 0 when staged, 1 if invalid slot, 3 during render.
+/// Uses the same confirmed-frame persistence and error handling as save().
 pub extern "C" fn delete(slot: u32) u32;
 
 /// Set the clear/background color. Must be called during `init()`.

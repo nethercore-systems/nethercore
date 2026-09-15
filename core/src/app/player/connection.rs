@@ -74,6 +74,7 @@ pub(super) fn create_session_from_file<C>(
     session_file: &std::path::Path,
     _config: &StandaloneConfig,
     specs: &crate::console::ConsoleSpecs,
+    content_hash: u64,
 ) -> Result<SessionFileResult<C>>
 where
     C: Console + Clone,
@@ -265,8 +266,14 @@ where
         .with_input_delay(session_start.network_config.input_delay as usize);
     session_config.fps = session_start.tick_rate.as_hz() as usize;
 
-    let session = RollbackSession::new_p2p(session_config, socket, players, specs.ram_limit)
-        .context("Failed to create session from NCHS config")?;
+    let session = RollbackSession::new_verified_p2p(
+        session_config,
+        socket,
+        players,
+        specs.ram_limit,
+        content_hash,
+    )
+    .context("Failed to create session from NCHS config")?;
 
     tracing::info!(
         "Session mode: session created, local_players = {:?}",
@@ -380,11 +387,12 @@ where
                 ];
                 tracing::info!("Join mode: creating P2P session (host=remote p0, local=p1)");
 
-                match RollbackSession::new_p2p(
+                match RollbackSession::new_verified_p2p(
                     session_config,
                     joining.socket,
                     players,
                     specs.ram_limit,
+                    rom.content_hash,
                 ) {
                     Ok(session) => {
                         tracing::info!(
@@ -471,11 +479,12 @@ where
                 ];
                 tracing::info!("Host mode: creating P2P session (host=local p0, peer=remote p1)");
 
-                match RollbackSession::new_p2p(
+                match RollbackSession::new_verified_p2p(
                     session_config,
                     waiting.socket,
                     players,
                     specs.ram_limit,
+                    rom.content_hash,
                 ) {
                     Ok(session) => {
                         tracing::info!(

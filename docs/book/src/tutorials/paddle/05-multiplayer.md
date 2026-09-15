@@ -5,7 +5,7 @@ This is where Nethercore's magic happens. Our Paddle game already supports onlin
 ## What You'll Learn
 
 - How Nethercore's rollback netcode works
-- Why all game state must be in static variables
+- Why persistent simulation state must live in snapshotted WASM linear memory
 - Rules for deterministic code
 - What happens during a rollback
 
@@ -48,7 +48,10 @@ Frame 3: [snapshot] → update() → render()
          If rollback needed, restore this and replay
 ```
 
-This is why all game state must be in `static mut` variables - they live in WASM memory and get snapshotted automatically.
+Ordinary Rust statics reside in linear memory and are covered by these snapshots.
+They are not the only valid storage: heap-backed state in that memory is covered
+too. Do not assume arbitrary WASM globals or external host state are snapshotted;
+keep all persistent simulation state on the covered path.
 
 ## The Rules for Rollback-Safe Code
 
@@ -118,7 +121,7 @@ Given the same inputs, `update()` must produce the same results.
 
 {{#tab name="Rust"}}
 ```rust
-let rand = random();  // Deterministic, seeded by runtime
+let rand = random_u32();  // Deterministic, seeded by runtime
 ```
 {{#endtab}}
 
@@ -277,7 +280,7 @@ var ball_vy: f32 = 0.0;
 {{#tab name="Rust"}}
 ```rust
 fn reset_ball(direction: i32) {
-    let rand = random() % 100;  // Uses runtime's seeded RNG
+    let rand = random_u32() % 100;  // Uses runtime's seeded RNG
     // ...
 }
 ```
@@ -327,7 +330,7 @@ fn render() {
 ```c
 NCZX_EXPORT void update(void) {
     // Read input
-    int8_t stick_y = left_stick_y(player);
+    float stick_y = left_stick_y(player);
     // Modify state
     paddle1_y += movement;
 }
@@ -357,24 +360,79 @@ export fn render() void {
 
 {{#endtabs}}
 
-## Testing Multiplayer Locally
+## Test the local paths
 
-To test multiplayer on your local machine:
+For a maintained example, start in `examples/7-games/netplay-demo` in the
+checkout and run `nether build`. The resulting cartridge is `netplay-demo.nczx`.
+It permits up to four players; the commands below exercise two. Put the matching
+`nether` and `nethercore-zx` executables together on PATH. For your own Paddle
+project, substitute its cartridge and explicitly configure `[game].max_players`
+and `[netplay].enabled`.
 
-1. Start the game
-2. Connect a second controller
-3. Both players can play!
+Keep peer-local information such as `local_player_mask()` out of shared,
+snapshotted WASM state. Query it for presentation or local persistence instead.
+Update shared values (including saved-stat checksums) on every peer before
+branching into local-only disk operations.
 
-The `player_count()` function automatically detects connected players.
+### Two controllers on one machine
 
-## Testing Online Multiplayer
+```bash
+nether build
+nether run --no-build --players 2
+```
 
-Online play is handled by the Nethercore runtime:
+Map the second input source to player 2 in player settings. `player_count()`
+reports the configured session, not the number of plugged-in controllers.
+This checks local controls; it does **not** exercise network transport.
 
-1. Player 1 hosts a game
-2. Player 2 joins via game code or direct connect
-3. The runtime handles all networking
-4. Your game code doesn't change at all!
+### Rollback determinism (one process)
+
+```bash
+nether run --no-build --sync-test --check-distance 2 --players 2 --exit-after-frames 120
+```
+
+Require successful frame completion and no sync-test mismatch. A sync test is
+not evidence of a live connection between peers.
+
+### Two real local peers
+
+```bash
+nether run --no-build --p2p-test --exit-after-frames 120
+```
+
+This opens two players on localhost using ports 7777 and 7778. Both must reach
+frame completion without disconnection/desync errors. Keep those ports free.
+To control the processes separately, use the standalone player in two terminals
+with the same packed cartridge:
+
+```bash
+nethercore-zx netplay-demo.nczx --p2p --bind 7777 --peer 7778 --local-player 0 --exit-after-frames 120
+nethercore-zx netplay-demo.nczx --p2p --bind 7778 --peer 7777 --local-player 1 --exit-after-frames 120
+```
+
+For host/join on the same machine, use two terminals and distinct bind ports:
+
+```bash
+nethercore-zx netplay-demo.nczx --host 7777 --players 2 --exit-after-frames 120
+nethercore-zx netplay-demo.nczx --join 127.0.0.1:7777 --bind 7778 --players 2 --exit-after-frames 120
+```
+
+For a LAN test, replace `127.0.0.1` with the host's LAN address and permit the
+selected UDP ports through each machine's firewall. Internet NAT traversal,
+hosted lobbies and accounts are separate from this local walkthrough. A second
+window opening alone is not a successful multiplayer test: require both
+processes to finish their frames without desync/disconnection errors. These
+connection checks are not evidence of cross-machine save synchronization.
+
+From the checkout root, the retained native regression helper can enforce this
+without silently accepting an early process exit (use a new output directory):
+
+```bash
+python scripts/check_local_netplay.py path/to/nethercore-zx.exe path/to/netplay-demo.nczx --output path/to/new-check
+```
+
+Add `--host-join` to exercise that path. It needs a real desktop/GPU; it is not a
+headless substitute for the normal player.
 
 ## What Rollback Looks Like
 

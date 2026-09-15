@@ -1,6 +1,8 @@
 # Publishing Your Game
 
-This guide covers everything you need to know about packaging and publishing your Nethercore game.
+The local build/share path below does not require an account or hosted service.
+The later hosted-publishing section is a separate workflow, not a prerequisite
+or a claim that a deployment has been validated.
 
 ## Overview
 
@@ -19,14 +21,11 @@ The publishing process:
 The nether CLI handles compilation and packaging:
 
 ```bash
-# Build WASM
+# Compile and pack in one command
 nether build
 
-# Package into ROM
+# Repack an already compiled WASM and its assets
 nether pack
-
-# Or do both
-nether build && nether pack
 ```
 
 ### Manual Build
@@ -118,17 +117,26 @@ Always test the final build:
 
 ```bash
 # Test the WASM directly
-nether run target/wasm32-unknown-unknown/release/my_game.wasm
+nethercore-zx target/wasm32-unknown-unknown/release/my_game.wasm
 
 # Or test the packed ROM
-nether run my_game.nczx
+nethercore-zx my-game.nczx
 ```
 
 Verify:
 - Game starts correctly
 - All assets load
 - No console errors
-- Multiplayer works (test with two controllers)
+- Local input works; test real networking separately with the [two-instance guide](../tutorials/paddle/05-multiplayer.md)
+
+### Share without the checkout
+
+Copy the final `.nczx` to another directory and launch it from there with the
+complete extracted SDK/player bundle. Keep `nethercore-zx` beside `nethercore`
+and `nether`; do not rely on a repository's `target/` directory or development
+PATH. The cartridge carries packed assets and configuration—sharing only the
+WASM loses those assets. See the [Windows/Rust first-game journey](../getting-started/first-game.md)
+for exact create, build, edit, pack and launch commands.
 
 ## Upload Requirements
 

@@ -20,7 +20,11 @@ pub fn is_cached(provider: &dyn DataDirProvider, game_id: &str) -> bool {
     }
     provider
         .data_dir()
-        .map(|dir| dir.join("games").join(game_id).join("rom.wasm").exists())
+        .map(|dir| {
+            ["rom.nczx", "rom.wasm"]
+                .iter()
+                .any(|name| dir.join("games").join(game_id).join(name).is_file())
+        })
         .unwrap_or(false)
 }
 
@@ -28,7 +32,9 @@ pub fn is_cached(provider: &dyn DataDirProvider, game_id: &str) -> bool {
 /// Extracted for testability.
 #[cfg(test)]
 pub(super) fn is_cached_in_dir(games_dir: &Path, game_id: &str) -> bool {
-    games_dir.join(game_id).join("rom.wasm").exists()
+    ["rom.nczx", "rom.wasm"]
+        .iter()
+        .any(|name| games_dir.join(game_id).join(name).is_file())
 }
 
 /// Deletes a cached game from the local filesystem.

@@ -277,3 +277,51 @@ fn test_timeout_error_display() {
         display
     );
 }
+
+#[test]
+fn shipping_real_udp_checks_cartridge_identity_and_times_out() {
+    for compatible in [true, false] {
+        let mut a = LocalSocket::bind_any().unwrap();
+        let mut b = LocalSocket::bind_any().unwrap();
+        let (aa, ba) = (a.local_addr(), b.local_addr());
+        let other = std::thread::spawn(move || {
+            b.verify_content(
+                if compatible { 42 } else { 43 },
+                &[aa],
+                Duration::from_secs(2),
+            )
+        });
+        let result = a.verify_content(42, &[ba], Duration::from_secs(2));
+        let peer_result = other.join().unwrap();
+        if compatible {
+            result.unwrap();
+            peer_result.unwrap();
+        } else {
+            assert!(
+                result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("Cartridge content mismatch")
+            );
+            assert!(
+                peer_result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("Cartridge content mismatch")
+            );
+        }
+    }
+    let silent = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+    let mut socket = LocalSocket::bind_any().unwrap();
+    assert!(
+        socket
+            .verify_content(
+                42,
+                &[silent.local_addr().unwrap()],
+                Duration::from_millis(20)
+            )
+            .unwrap_err()
+            .to_string()
+            .contains("timed out")
+    );
+}

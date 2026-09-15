@@ -71,6 +71,7 @@ impl InputManager {
     /// Poll gamepad events and update input state
     #[cfg(feature = "gamepad")]
     pub fn update(&mut self) {
+        self.player_inputs = [RawInput::default(); 4];
         // Process gilrs events directly without collecting into a Vec
         // This avoids per-frame heap allocation
         if let Some(ref mut gilrs) = self.gilrs {
@@ -130,6 +131,7 @@ impl InputManager {
     /// Poll events and update input state (keyboard only when gamepad feature is disabled)
     #[cfg(not(feature = "gamepad"))]
     pub fn update(&mut self) {
+        self.player_inputs = [RawInput::default(); 4];
         // Process keyboard input for all players with keyboard enabled
         for player in 0..4 {
             if let Some(keyboard_input) = self.read_keyboard_input_for_player(player) {
@@ -162,6 +164,7 @@ impl InputManager {
 /// Merge two RawInput sources (keyboard + gamepad for the same player).
 /// Digital buttons: OR (either source can trigger)
 /// Analog: use the value with the larger absolute magnitude
+#[cfg(any(feature = "gamepad", test))]
 fn merge_inputs(a: RawInput, b: RawInput) -> RawInput {
     RawInput {
         // Digital buttons: OR

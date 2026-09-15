@@ -142,6 +142,8 @@ pub fn load_manifest(path: &Path) -> Result<Manifest> {
 
 /// Validate a manifest without building
 pub fn validate(manifest: &Manifest) -> Result<()> {
+    anyhow::ensure!(manifest.fonts.is_empty(),
+        "Automatic font conversion is unsupported; remove [fonts] and use a prepared atlas/metrics with the runtime font APIs");
     // Check that all source files exist
     for (name, entry) in &manifest.meshes {
         if !entry.path().exists() {
@@ -168,6 +170,7 @@ pub fn validate(manifest: &Manifest) -> Result<()> {
 
 /// Build all assets from a manifest
 pub fn build_all(manifest: &Manifest, output_override: Option<&Path>) -> Result<()> {
+    validate(manifest)?;
     let output_dir = output_override.unwrap_or(&manifest.output.dir);
     std::fs::create_dir_all(output_dir)?;
 
@@ -205,14 +208,6 @@ pub fn build_all(manifest: &Manifest, output_override: Option<&Path>) -> Result<
         crate::audio::convert_wav(entry.path(), &output)?;
     }
 
-    // Fonts are deferred
-    if !manifest.fonts.is_empty() {
-        tracing::warn!(
-            "Font conversion not yet implemented, skipping {} fonts",
-            manifest.fonts.len()
-        );
-    }
-
     // Generate Rust code if configured
     if let Some(codegen) = &manifest.codegen {
         if let Some(rust_path) = &codegen.rust {
@@ -222,4 +217,21 @@ pub fn build_all(manifest: &Manifest, output_override: Option<&Path>) -> Result<
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn shipping_font_request_fails_before_creating_output() {
+        let dir = tempfile::tempdir().unwrap();
+        let font = dir.path().join("font.ttf");
+        std::fs::write(&font, b"font input").unwrap();
+        let text = format!("[fonts]\ncustom = {:?}\n", font.to_string_lossy());
+        let manifest: super::Manifest = toml::from_str(&text).unwrap();
+        let output = dir.path().join("output");
+        assert!(super::validate(&manifest).is_err());
+        let error = super::build_all(&manifest, Some(&output)).unwrap_err();
+        assert!(error.to_string().contains("font"));
+        assert!(!output.exists());
+    }
 }

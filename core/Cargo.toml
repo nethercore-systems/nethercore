@@ -78,7 +78,8 @@ png = { workspace = true }           # PNG encoding with metadata (for signed sc
 gif = { workspace = true }           # GIF encoding
 chrono = { workspace = true }        # Timestamps for filenames
 
+tempfile = { workspace = true }      # Unique sibling staging for atomic installs
+
 [dev-dependencies]
 # WAT text format parser for test WASM modules
 wat = { workspace = true }
-tempfile = { workspace = true }      # Temporary directories for tests

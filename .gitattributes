@@ -1,0 +1,6 @@
+# Binding generators emit LF; keep helpers and generated ZX bindings identical
+# across Windows and Unix checkouts so the exact freshness check stays useful.
+/include/zx.h text eol=lf
+/include/zx.zig text eol=lf
+/tools/ffi-gen/templates/c_helpers.h text eol=lf
+/tools/ffi-gen/templates/zig_helpers.zig text eol=lf

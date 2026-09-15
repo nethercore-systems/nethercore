@@ -134,6 +134,22 @@ pub struct ZXMetadata {
 }
 
 impl ZXRom {
+    /// Identity of executable content, not build timestamps or preview artwork.
+    pub fn content_hash(&self) -> u64 {
+        let mut hash = xxhash_rust::xxh3::Xxh3::new();
+        hash.update(b"NCZX-content-v1");
+        hash.update(&(self.code.len() as u64).to_le_bytes());
+        hash.update(&self.code);
+        hash.update(&bitcode::encode(&self.data_pack));
+        hash.update(&bitcode::encode(&(
+            self.metadata.render_mode.unwrap_or_default(),
+            self.metadata.netplay.console_type,
+            self.metadata.netplay.tick_rate,
+            self.metadata.netplay.max_players,
+        )));
+        hash.digest()
+    }
+
     /// Serialize ROM to bytes with magic header
     ///
     /// The output format is:
@@ -141,7 +157,9 @@ impl ZXRom {
     /// - Remaining bytes: Bitcode-encoded ZXRom struct
     pub fn to_bytes(&self) -> anyhow::Result<Vec<u8>> {
         let mut bytes = ZX_ROM_FORMAT.magic.to_vec();
-        let encoded = bitcode::encode(self);
+        let mut canonical = self.clone();
+        canonical.metadata.netplay.rom_hash = canonical.content_hash();
+        let encoded = bitcode::encode(&canonical);
         bytes.extend(encoded);
         Ok(bytes)
     }
@@ -159,11 +177,13 @@ impl ZXRom {
         }
 
         // Decode remaining bytes
-        let rom: ZXRom = bitcode::decode(&bytes[4..])
+        let mut rom: ZXRom = bitcode::decode(&bytes[4..])
             .map_err(|e| anyhow::anyhow!("Failed to decode NCZX ROM: {}", e))?;
 
         // Validate
         rom.validate()?;
+        // Recompute legacy or forged embedded hashes before they reach netplay.
+        rom.metadata.netplay.rom_hash = rom.content_hash();
 
         Ok(rom)
     }
@@ -228,6 +248,33 @@ impl ZXRom {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shipping_identity_includes_data_but_not_timestamp() {
+        let mut first = create_test_rom();
+        let mut data = ZXDataPack::new();
+        data.data.push(crate::PackedData {
+            id: "level".into(),
+            data: b"level-A".to_vec(),
+        });
+        first.data_pack = Some(data);
+        let loaded = ZXRom::from_bytes(&first.to_bytes().unwrap()).unwrap();
+        first.metadata.created_at = "another build".into();
+        let rebuilt = ZXRom::from_bytes(&first.to_bytes().unwrap()).unwrap();
+        assert_eq!(
+            loaded.metadata.netplay.rom_hash,
+            rebuilt.metadata.netplay.rom_hash
+        );
+        first.data_pack.as_mut().unwrap().data[0].data = b"level-B".to_vec();
+        let different = ZXRom::from_bytes(&first.to_bytes().unwrap()).unwrap();
+        assert!(
+            loaded
+                .metadata
+                .netplay
+                .validate_compatibility(&different.metadata.netplay)
+                .is_err()
+        );
+    }
 
     fn create_test_rom() -> ZXRom {
         ZXRom {

@@ -2,7 +2,6 @@ use anyhow::{Context, Result};
 use clap::Args;
 use nethercore_shared::{read_file_with_limit, MAX_WASM_BYTES};
 use std::path::PathBuf;
-use xxhash_rust::xxh3::xxh3_64;
 
 use nethercore_shared::netplay::NetplayMetadata;
 use nethercore_shared::ConsoleType;
@@ -40,9 +39,6 @@ pub fn execute(args: PackArgs) -> Result<()> {
         .with_context(|| format!("Failed to read WASM file: {}", wasm_path.display()))?;
     println!("  WASM: {} ({} bytes)", wasm_path.display(), code.len());
 
-    let rom_hash = xxh3_64(&code);
-    println!("  ROM hash: {:016x}", rom_hash);
-
     let render_mode = ctx.manifest.game.render_mode;
     let mode_name = validation::render_mode_name(render_mode);
     println!("  Render mode: {} ({})", render_mode, mode_name);
@@ -61,7 +57,7 @@ pub fn execute(args: PackArgs) -> Result<()> {
         ConsoleType::ZX,
         ctx.manifest.tick_rate(),
         max_players,
-        rom_hash,
+        0, // Finalized after assets and cartridge configuration are assembled.
     );
 
     if ctx.manifest.netplay.enabled {
@@ -73,7 +69,9 @@ pub fn execute(args: PackArgs) -> Result<()> {
         println!("  Netplay: disabled");
     }
 
-    let rom = output::build_rom(&ctx.manifest, code, data_pack, render_mode, netplay);
+    let mut rom = output::build_rom(&ctx.manifest, code, data_pack, render_mode, netplay);
+    rom.metadata.netplay.rom_hash = rom.content_hash();
+    println!("  ROM hash: {:016x}", rom.metadata.netplay.rom_hash);
 
     rom.validate().context("ROM validation failed")?;
 

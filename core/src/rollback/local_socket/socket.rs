@@ -25,6 +25,7 @@ pub struct LocalSocket {
     pub(super) peer_addr: Option<SocketAddr>,
     /// Receive buffer
     pub(super) recv_buf: Vec<u8>,
+    content_hash: Option<u64>,
 }
 
 impl LocalSocket {
@@ -65,7 +66,88 @@ impl LocalSocket {
             local_addr,
             peer_addr: None,
             recv_buf: vec![0u8; RECV_BUFFER_SIZE],
+            content_hash: None,
         })
+    }
+
+    /// Bounded, versioned compatibility exchange. This is not authentication.
+    pub fn verify_content(
+        &mut self,
+        hash: u64,
+        peers: &[SocketAddr],
+        timeout: Duration,
+    ) -> anyhow::Result<()> {
+        self.content_hash = Some(hash);
+        let mut probe = *b"NCID1?00000000";
+        probe[6..].copy_from_slice(&hash.to_le_bytes());
+        let mut pending = peers.to_vec();
+        let deadline = Instant::now() + timeout;
+        while !pending.is_empty() {
+            anyhow::ensure!(
+                Instant::now() < deadline,
+                "Cartridge compatibility handshake timed out; use matching player versions"
+            );
+            for peer in &pending {
+                self.socket.send_to(&probe, peer)?;
+            }
+            let next_probe = (Instant::now() + Duration::from_millis(100)).min(deadline);
+            while Instant::now() < next_probe && !pending.is_empty() {
+                let mut bytes = [0; 128];
+                match self.socket.recv_from(&mut bytes) {
+                    Ok((len, from)) if peers.contains(&from) => {
+                        let packet = &bytes[..len];
+                        if packet.len() != probe.len()
+                            || !packet.starts_with(b"NCID1")
+                            || !matches!(packet[5], b'?' | b'!')
+                        {
+                            continue;
+                        }
+                        self.handle_content_probe(packet, from);
+                        anyhow::ensure!(
+                            packet[6..] == hash.to_le_bytes(),
+                            "Cartridge content mismatch with {from}"
+                        );
+                        if packet[5] == b'!' {
+                            pending.retain(|peer| *peer != from);
+                        }
+                    }
+                    Ok(_) => {}
+                    Err(error)
+                        if matches!(
+                            error.kind(),
+                            std::io::ErrorKind::WouldBlock
+                                | std::io::ErrorKind::TimedOut
+                                | std::io::ErrorKind::ConnectionReset
+                        ) =>
+                    {
+                        std::thread::sleep(Duration::from_millis(1));
+                    }
+                    Err(error) => return Err(error.into()),
+                }
+            }
+        }
+        tracing::info!(
+            "Cartridge compatibility verified for {} peer(s)",
+            peers.len()
+        );
+        Ok(())
+    }
+
+    // Continue acknowledging retries after GGRS starts, so a lost final ACK
+    // cannot leave one side waiting. ACKs never provoke another ACK.
+    pub(super) fn handle_content_probe(&self, packet: &[u8], from: SocketAddr) -> bool {
+        let Some(hash) = self.content_hash else {
+            return false;
+        };
+        if packet.len() != 14 || !packet.starts_with(b"NCID1") {
+            return false;
+        }
+        if packet[5] == b'?' {
+            let mut ack = *b"NCID1!00000000";
+            ack[6..].copy_from_slice(&hash.to_le_bytes());
+            let _ = self.socket.send_to(&ack, from);
+        }
+        true
     }
 
     /// Bind to the default local testing port

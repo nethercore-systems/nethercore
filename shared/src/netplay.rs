@@ -32,10 +32,10 @@ pub struct NetplayMetadata {
     /// Games with max_players == 1 are single-player only.
     pub max_players: u8,
 
-    /// xxHash3 of the WASM bytecode section
+    /// xxHash3 of canonical executable content (WASM, packed assets and game configuration).
     ///
-    /// Used by NCHS to ensure all players have identical game code.
-    /// Computed during `nether pack`.
+    /// Used by NCHS to ensure players have identical simulation content.
+    /// Computed during packing and recomputed by the cartridge loader.
     pub rom_hash: u64,
 }
 

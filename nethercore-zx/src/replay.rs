@@ -846,6 +846,7 @@ mod tests {
         let rom = LoadedRom {
             code: wasm,
             console: NethercoreZX::new(),
+            content_hash: 0,
             game_name: "fixture".to_string(),
             game_id: "fixture".to_string(),
         };
@@ -957,6 +958,7 @@ assert = "$a_b > $prev_a_b"
         LoadedRom {
             code: wat::parse_str(wat).unwrap(),
             console: NethercoreZX::new(),
+            content_hash: 0,
             game_name: "fixture".to_string(),
             game_id: "fixture".to_string(),
         }

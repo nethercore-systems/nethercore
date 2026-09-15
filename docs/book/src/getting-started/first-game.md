@@ -11,6 +11,12 @@ Let's create a simple game that draws a colored square and responds to input. Th
 cargo new --lib my-first-game
 cd my-first-game
 ```
+Copy the SDK's entire `include/zx` directory to `src/zx` (not just `mod.rs`).
+On Windows, with `$env:NETHERCORE_HOME` set as in [Prerequisites](./prerequisites.md):
+
+```powershell
+Copy-Item -Recurse "$env:NETHERCORE_HOME\include\zx" src\zx
+```
 {{#endtab}}
 
 {{#tab name="C/C++"}}
@@ -52,6 +58,7 @@ crate-type = ["cdylib"]
 [profile.release]
 opt-level = "s"
 lto = true
+panic = "abort"
 ```
 
 Key settings:
@@ -146,22 +153,15 @@ fn panic(_: &PanicInfo) -> ! {
     core::arch::wasm32::unreachable()
 }
 
-// FFI imports from the Nethercore runtime
-#[link(wasm_import_module = "env")]
-extern "C" {
-    fn set_clear_color(color: u32);
-    fn button_pressed(player: u32, button: u32) -> u32;
-    fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32);
-    fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
-}
+// Use the version-matched SDK, not hand-maintained import signatures.
+mod zx;
+use zx::*;
 
-// Game state - stored in static variables for rollback safety
+// This Rust static resides in the snapshotted WASM linear memory
 static mut SQUARE_Y: f32 = 200.0;
 
-// Button constants
-const BUTTON_UP: u32 = 0;
-const BUTTON_DOWN: u32 = 1;
-const BUTTON_A: u32 = 4;
+// Use the version-matched SDK's button indices.
+use zx::button::{UP as BUTTON_UP, DOWN as BUTTON_DOWN, A as BUTTON_A};
 
 #[no_mangle]
 pub extern "C" fn init() {
@@ -196,24 +196,25 @@ pub extern "C" fn update() {
 pub extern "C" fn render() {
     unsafe {
         // Draw title text
+        set_color(0xFFFFFFFF);
         let title = b"Hello Nethercore!";
         draw_text(
             title.as_ptr(),
             title.len() as u32,
             80.0, 50.0, 32.0,
-            0xFFFFFFFF,
         );
 
         // Draw the moving square
-        draw_rect(200.0, SQUARE_Y, 80.0, 80.0, 0xFF6B6BFF);
+        set_color(0xFF6B6BFF);
+        draw_rect(200.0, SQUARE_Y, 80.0, 80.0);
 
         // Draw instructions
+        set_color(0x888888FF);
         let hint = b"D-pad: Move   A: Reset";
         draw_text(
             hint.as_ptr(),
             hint.len() as u32,
             60.0, 500.0, 18.0,
-            0x888888FF,
         );
     }
 }
@@ -254,13 +255,16 @@ NCZX_EXPORT void update(void) {
 
 NCZX_EXPORT void render(void) {
     /* Draw title text */
-    NCZX_DRAW_TEXT("Hello Nethercore!", 80.0f, 50.0f, 32.0f, NCZX_COLOR_WHITE);
+    set_color(NCZX_COLOR_WHITE);
+    NCZX_DRAW_TEXT("Hello Nethercore!", 80.0f, 50.0f, 32.0f);
 
     /* Draw the moving square */
-    draw_rect(200.0f, square_y, 80.0f, 80.0f, 0xFF6B6BFF);
+    set_color(0xFF6B6BFF);
+    draw_rect(200.0f, square_y, 80.0f, 80.0f);
 
     /* Draw instructions */
-    NCZX_DRAW_TEXT("D-pad: Move   A: Reset", 60.0f, 500.0f, 18.0f, 0x888888FF);
+    set_color(0x888888FF);
+    NCZX_DRAW_TEXT("D-pad: Move   A: Reset", 60.0f, 500.0f, 18.0f);
 }
 ```
 
@@ -278,8 +282,9 @@ Create `src/main.zig`:
 // FFI imports from the Nethercore runtime
 extern fn set_clear_color(color: u32) void;
 extern fn button_pressed(player: u32, button: u32) u32;
-extern fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32) void;
-extern fn draw_text(ptr: [*]const u8, len: u32, x: f32, y: f32, size: f32, color: u32) void;
+extern fn set_color(color: u32) void;
+extern fn draw_rect(x: f32, y: f32, w: f32, h: f32) void;
+extern fn draw_text(ptr: [*]const u8, len: u32, x: f32, y: f32, size: f32) void;
 
 // Button constants
 const BUTTON_UP: u32 = 0;
@@ -315,14 +320,17 @@ export fn update() void {
 export fn render() void {
     // Draw title text
     const title = "Hello Nethercore!";
-    draw_text(title.ptr, title.len, 80.0, 50.0, 32.0, 0xFFFFFFFF);
+    set_color(0xFFFFFFFF);
+    draw_text(title.ptr, title.len, 80.0, 50.0, 32.0);
 
     // Draw the moving square
-    draw_rect(200.0, square_y, 80.0, 80.0, 0xFF6B6BFF);
+    set_color(0xFF6B6BFF);
+    draw_rect(200.0, square_y, 80.0, 80.0);
 
     // Draw instructions
     const hint = "D-pad: Move   A: Reset";
-    draw_text(hint.ptr, hint.len, 60.0, 500.0, 18.0, 0x888888FF);
+    set_color(0x888888FF);
+    draw_text(hint.ptr, hint.len, 60.0, 500.0, 18.0);
 }
 ```
 
@@ -384,7 +392,7 @@ var square_y: f32 = 200.0;
 
 {{#endtabs}}
 
-All game state lives in static/global variables. This is intentional - the Nethercore runtime automatically snapshots all WASM memory for rollback netcode. No manual state serialization needed!
+This example's mutable state resides in WASM linear memory, which the runtime snapshots for rollback. Ordinary Rust statics can live there; `static mut` itself does not defeat rollback. This is not a promise to capture arbitrary WASM globals, external state, or render-only host objects. Keep simulation changes in `update()`, not `render()`.
 
 ### Colors
 
@@ -409,7 +417,7 @@ Output: `target/wasm32-unknown-unknown/release/my_first_game.wasm`
 ### Run in the Nethercore player:
 
 ```bash
-nether run target/wasm32-unknown-unknown/release/my_first_game.wasm
+nethercore-zx target/wasm32-unknown-unknown/release/my_first_game.wasm
 ```
 {{#endtab}}
 
@@ -425,7 +433,7 @@ Output: `game.wasm`
 ### Run in the Nethercore player:
 
 ```bash
-nether run game.wasm
+nethercore-zx game.wasm
 ```
 {{#endtab}}
 
@@ -441,13 +449,60 @@ Output: `zig-out/bin/game.wasm`
 ### Run in the Nethercore player:
 
 ```bash
-nether run zig-out/bin/game.wasm
+nethercore-zx zig-out/bin/game.wasm
 ```
 {{#endtab}}
 
 {{#endtabs}}
 
 Or load the `.wasm` file directly in the Nethercore Library application.
+
+### Pack, edit and share the Rust game
+
+In the project directory, create `nether.toml`:
+
+```toml
+[game]
+id = "my-first-game"
+title = "My First Game"
+author = "Your Name"
+version = "0.1.0"
+max_players = 1
+tick_rate = 60
+render_mode = 0
+compress_textures = true
+
+[netplay]
+enabled = false
+
+[build]
+wasm = "target/wasm32-unknown-unknown/release/my_first_game.wasm"
+```
+
+```powershell
+nether pack
+nether run --no-build
+```
+
+`nether run` takes a **project**, not a positional WASM filename. The standalone
+player takes a positional `PATH` for an existing WASM or cartridge. Close the player window
+before editing. Change `SQUARE_Y`'s initial value to `300.0`, then rebuild and run:
+
+```powershell
+nether build
+nether run --no-build
+```
+
+Share the generated `my-first-game.nczx` beside `nether.toml`, not just its WASM. Your recipient
+extracts the complete player bundle, changes to a directory outside the source
+checkout, and launches it with an absolute cartridge path:
+
+```powershell
+& "$env:NETHERCORE_HOME\nethercore-zx.exe" "C:\Games\my-first-game.nczx"
+```
+
+Choose the actual paths on your machine. No source checkout, game compiler,
+account, or hosted service is required by that player invocation.
 
 ## What You've Learned
 

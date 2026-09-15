@@ -57,7 +57,7 @@ impl<C: Console> ConsoleRunner<C> {
     /// Returns an error if graphics or audio initialization fails.
     pub fn new(console: C, window: Arc<Window>) -> Result<Self> {
         let graphics = console.create_graphics(window)?;
-        let wasm_engine = WasmEngine::new()?;
+        let wasm_engine = WasmEngine::new_bounded()?;
         let specs = C::specs();
 
         // Note: We don't store the console here because the Runtime takes ownership

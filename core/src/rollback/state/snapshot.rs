@@ -23,7 +23,9 @@ pub struct GameStateSnapshot {
     pub input_data: InputDataVec,
     /// Host-side state (RNG, tick count, elapsed time) that must be rolled back
     pub host_state: HostRollbackState,
-    /// xxHash3 checksum for desync detection (covers all state)
+    /// Logical save slots are simulation state; disk commit timing is not.
+    pub save_data: [Option<Vec<u8>>; crate::wasm::MAX_SAVE_SLOTS],
+    /// xxHash3 checksum for desync detection (shared simulation state)
     pub checksum: u64,
     /// Frame number this snapshot was taken at
     pub frame: i32,
@@ -37,6 +39,7 @@ impl GameStateSnapshot {
             console_data: SmallVec::new(),
             input_data: SmallVec::new(),
             host_state: HostRollbackState::default(),
+            save_data: Default::default(),
             checksum: 0,
             frame: -1,
         }
@@ -51,6 +54,7 @@ impl GameStateSnapshot {
             console_data: SmallVec::new(),
             input_data: SmallVec::new(),
             host_state,
+            save_data: Default::default(),
             checksum,
             frame,
         }
@@ -70,6 +74,7 @@ impl GameStateSnapshot {
             console_data,
             input_data,
             host_state,
+            save_data: Default::default(),
             checksum,
             frame,
         }
@@ -85,9 +90,17 @@ impl GameStateSnapshot {
             console_data: SmallVec::new(),
             input_data: SmallVec::new(),
             host_state,
+            save_data: Default::default(),
             checksum,
             frame,
         }
+    }
+
+    pub fn with_save_data(mut self, saves: [Option<Vec<u8>>; crate::wasm::MAX_SAVE_SLOTS]) -> Self {
+        self.save_data = saves;
+        // Controller saves can differ between peers even when the game never reads
+        // them. Restore them locally, but hash shared simulation state only.
+        self
     }
 
     /// Check if this snapshot is empty
@@ -102,7 +115,11 @@ impl GameStateSnapshot {
 
     /// Get total snapshot size including all state
     pub fn total_len(&self) -> usize {
-        self.data.len() + self.console_data.len() + self.input_data.len() + HOST_STATE_SIZE
+        self.data.len()
+            + self.console_data.len()
+            + self.input_data.len()
+            + HOST_STATE_SIZE
+            + self.save_data.iter().flatten().map(Vec::len).sum::<usize>()
     }
 
     /// Compute xxHash3 checksum for desync detection
@@ -129,5 +146,26 @@ impl GameStateSnapshot {
 impl Default for GameStateSnapshot {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod local_save_tests {
+    use super::GameStateSnapshot;
+
+    #[test]
+    fn shipping_local_saves_restore_without_false_peer_desync() {
+        let mut a: [Option<Vec<u8>>; crate::wasm::MAX_SAVE_SLOTS] = Default::default();
+        let mut b: [Option<Vec<u8>>; crate::wasm::MAX_SAVE_SLOTS] = Default::default();
+        a[0] = Some(vec![1]);
+        b[1] = Some(vec![2]);
+        let left = GameStateSnapshot::from_data(vec![42], 1).with_save_data(a);
+        let right = GameStateSnapshot::from_data(vec![42], 1).with_save_data(b);
+        assert_eq!(
+            left.checksum, right.checksum,
+            "per-controller disk data is local, not peer identity"
+        );
+        assert_eq!(left.save_data[0].as_deref(), Some(&[1][..]));
+        assert_eq!(right.save_data[1].as_deref(), Some(&[2][..]));
     }
 }

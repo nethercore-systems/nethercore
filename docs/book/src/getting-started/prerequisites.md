@@ -24,7 +24,12 @@ This guide shows setup for each language. Pick one and follow its setup instruct
 
 Install Rust using rustup:
 
-**Windows/macOS/Linux:**
+**Windows:** download and run the Windows installer at [rustup.rs](https://rustup.rs/).
+Install its requested Visual Studio C++ build tools, then open a fresh PowerShell window.
+The commands below assume the Rust route on Windows; other language/toolchain routes
+are separate and are not implied by that validation.
+
+**macOS/Linux:**
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
@@ -46,7 +51,7 @@ rustup target add wasm32-unknown-unknown
 rustc --version
 
 # Check WASM target is installed
-rustup target list --installed | grep wasm32
+rustup target list --installed
 ```
 
 You should see:
@@ -109,19 +114,19 @@ Target: wasm32-unknown-wasi
 
 ### Install Zig
 
-**macOS (Homebrew):**
-```bash
-brew install zig
-```
+The binding compile job in `.github/workflows/ffi-check.yml` pins **Zig 0.11.0**.
+Use that version for the matching bindings, rather than an unpinned package-manager
+release. This is a binding-compatibility baseline; the selected end-to-end
+onboarding route in this guide is Windows/Rust, not a claim that every Zig
+version or platform has been exercised.
 
-**Linux/Windows:**
-
-Download from [ziglang.org/download](https://ziglang.org/download/):
+Download the 0.11.0 archive for your OS from
+[ziglang.org/download](https://ziglang.org/download/). Linux example:
 ```bash
 # Extract and add to PATH
-wget https://ziglang.org/download/0.13.0/zig-linux-x86_64-0.13.0.tar.xz
-tar xf zig-linux-x86_64-0.13.0.tar.xz
-export PATH=$PATH:$(pwd)/zig-linux-x86_64-0.13.0
+wget https://ziglang.org/download/0.11.0/zig-linux-x86_64-0.11.0.tar.xz
+tar xf zig-linux-x86_64-0.11.0.tar.xz
+export PATH=$PATH:$(pwd)/zig-linux-x86_64-0.11.0
 ```
 
 ### Get the Nethercore Bindings
@@ -131,7 +136,7 @@ Copy the native Zig bindings from the Nethercore repository:
 cp include/zx.zig your-game/
 ```
 
-Or declare the FFI imports directly in your code (see examples).
+Use the version-matched bindings; avoid copying signatures from older tutorials.
 
 ### Verify Installation
 
@@ -141,7 +146,7 @@ zig version
 
 You should see:
 ```
-0.x.y
+0.11.0
 ```
 
 {{#endtab}}
@@ -173,7 +178,29 @@ Any text editor works, but we recommend one with language support:
 
 {{#endtabs}}
 
-## Optional: Nethercore CLI
+## Install the SDK and player
+
+Extract a version-matched Nethercore distribution to a directory of your choice.
+Keep `nethercore.exe`, `nethercore-zx.exe`, `nether.exe` and `include/` together.
+The library and CLI discover the ZX executable beside themselves; a CLI alone is
+not a complete player installation. Do not mix bindings and executables from
+different builds.
+
+In PowerShell, set the directory you extracted (change the example path):
+
+```powershell
+$env:NETHERCORE_HOME = "$HOME\Nethercore"
+$env:PATH = "$env:NETHERCORE_HOME;$env:PATH"
+nether --help
+nethercore-zx --help
+```
+
+These environment changes apply to this terminal only. The Rust toolchain above
+is needed for development, not for launching a shared cartridge.
+
+### Building the CLI from source instead
+
+From the runtime checkout (this installs the CLI, not the standalone player):
 
 The `nether` CLI tool provides convenient commands for building and running games:
 

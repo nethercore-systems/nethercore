@@ -7,6 +7,7 @@
 
 mod binary_packing;
 mod glb_assembly;
+pub(crate) use glb_assembly::assemble_glb;
 mod gltf_json;
 mod mesh_data;
 mod partial_trs;
