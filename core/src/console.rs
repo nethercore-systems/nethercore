@@ -489,7 +489,10 @@ pub trait Graphics: Send {
 }
 
 /// Trait for audio backends
-pub trait Audio: Send {
+///
+/// Backends may own thread-local device handles and stay with the runtime on
+/// its owning thread. Audio workers receive `Send` snapshots or buffers instead.
+pub trait Audio {
     /// Play a sound
     fn play(&mut self, handle: SoundHandle, volume: f32, looping: bool);
 
@@ -513,3 +516,32 @@ pub trait Audio: Send {
 /// Handle to a loaded sound
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SoundHandle(pub u32);
+
+#[cfg(test)]
+mod tests {
+    use super::{Audio, SoundHandle};
+    use std::{cell::Cell, rc::Rc};
+
+    #[test]
+    fn audio_backend_can_retain_owner_thread_handles() {
+        // Like a native device handle, Rc must not cross a thread boundary.
+        struct LocalAudio(Rc<Cell<Option<SoundHandle>>>);
+
+        impl Audio for LocalAudio {
+            fn play(&mut self, handle: SoundHandle, _volume: f32, _looping: bool) {
+                self.0.set(Some(handle));
+            }
+
+            fn stop(&mut self, _handle: SoundHandle) {
+                self.0.set(None);
+            }
+        }
+
+        let playing = Rc::new(Cell::new(None));
+        let mut audio: Box<dyn Audio> = Box::new(LocalAudio(playing.clone()));
+        audio.play(SoundHandle(1), 1.0, false);
+        assert_eq!(playing.get(), Some(SoundHandle(1)));
+        audio.stop(SoundHandle(1));
+        assert_eq!(playing.get(), None);
+    }
+}
