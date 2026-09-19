@@ -2,7 +2,35 @@
 
 **Standing creative direction — retain regular RADIAL and the restored organic capability.** The shown regular result “looks fine” to Robert; WARPED_RADIAL now coexists and has the bounded technical pass recorded below. Its substantially coarser appearance still needs Robert’s verdict. Neither scoped result is whole-EPU visual acceptance.
 
-## Current checkpoint — working product paused for the usage break
+## Current bounded batch — SCATTER exact-pole portability locally verified
+
+**Full EPU goal remains open.** On base
+`b3628e59bb6f2d09574962c33c9ca3ddc220d799`, the SCATTER NaN family was reproduced,
+minimally repaired and locally verified. A fresh native rerun again passed both
+cases: 1,036,800 pixels, zero failures/exclusions/changes, maximum error 1 at limit 2;
+both owned players exited. Robert authorized small validated commit/push checkpoints
+on 2026-09-20. Checkpoint SCATTER separately; continue the remaining portability
+families without treating this local pass as hosted CI or whole-EPU acceptance.
+
+- **RED → GREEN:** software DX12 reproduced zero-projection normalization NaNs.
+  Two exact-zero guards in the shared CYL/POLAR helpers fix both legacy and phased
+  SCATTER without changing fades, non-pole equations, packed fields, seeds or phase.
+  Two software-backend checks pass; NVIDIA Vulkan reports **12 passed / 0 failed /
+  1 ignored** (performance probe). New coverage: 192 pole rows, 960 exact non-pole
+  mapping pairs, 1,920 rejecting shifted controls. Default/failed-adapter selection,
+  formatting, focused Clippy and source preservation are checked.
+- **Real exported guests:** legacy CYL and phased POLAR pass through the canonical
+  SDK/WASM/cartridge/player path. **1,036,800 native pixels**, zero failed/excluded/
+  changed pixels; maximum error **1 / limit 2**, both wrong-direction controls
+  reject. Six owned capture players were reaped, including final-player relink
+  requalification. The raster oracle uses the player's runtime-buffer input model;
+  earlier compute/literal-input mismatches are retained, not erased or waived.
+- **Handoff:** [bounded follow-up and commands](epu-checkpoint.md#bounded-scatter-pole-follow-up-2026-09-18).
+  Local receipt: `tmp/epu-review/scatter-pole-20260918-144339/closure.json`.
+  Hosted llvmpipe verification, remaining failure families, full technical closure,
+  human visual/usefulness acceptance and the performance gate remain open.
+
+## Prior checkpoint — working product paused for the usage break
 
 **CI-only follow-up:** the fixed-size chunk conversion is committed as
 `1c2416ac281e84ea1d68fc724d1b43561d7f5ae7`. Hosted format, bindings and Clippy

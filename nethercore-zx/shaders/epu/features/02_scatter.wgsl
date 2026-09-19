@@ -52,7 +52,10 @@ fn hash3(p: vec3f) -> vec4f {
 fn scatter_cyl_uv(dir: vec3f, axis: vec3f) -> vec2f {
     let up = normalize(axis);
     let v = dot(dir, up);
-    let proj = normalize(dir - up * v);
+    let projected = dir - up * v;
+    // Azimuth is undefined at either pole; never normalize a zero projection.
+    if all(projected == vec3<f32>(0.0)) { return vec2<f32>(0.0, v); }
+    let proj = normalize(projected);
     // Reference for azimuth
     var right = cross(up, vec3f(0.0, 0.0, 1.0));
     if length(right) < 0.01 {
@@ -69,7 +72,10 @@ fn scatter_polar_uv(dir: vec3f, axis: vec3f) -> vec2f {
     let up = normalize(axis);
     let v = dot(dir, up);
     let rad = sqrt(max(0.0, 1.0 - v * v));
-    let proj = normalize(dir - up * v);
+    let projected = dir - up * v;
+    // Match CYL's canonical azimuth at either pole.
+    if all(projected == vec3<f32>(0.0)) { return vec2<f32>(0.0, rad); }
+    let proj = normalize(projected);
     var right = cross(up, vec3f(0.0, 0.0, 1.0));
     if length(right) < 0.01 {
         right = cross(up, vec3f(1.0, 0.0, 0.0));

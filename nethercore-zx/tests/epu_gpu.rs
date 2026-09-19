@@ -460,12 +460,27 @@ fn patches_noise_is_continuous_across_lattice_boundary() {
 }
 
 fn gpu() -> (wgpu::Device, wgpu::Queue) {
-    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
-    let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-        power_preference: wgpu::PowerPreference::HighPerformance,
+    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+        backends: wgpu::Backends::default().with_env(),
         ..Default::default()
-    }))
-    .expect("GPU required: do not silently skip behavioral regression");
+    });
+    // Explicit portability runs must not silently fall back to another adapter.
+    let adapter = if std::env::var_os("WGPU_ADAPTER_NAME").is_some() {
+        assert!(
+            !std::env::var("WGPU_ADAPTER_NAME")
+                .unwrap()
+                .trim()
+                .is_empty()
+        );
+        wgpu::util::initialize_adapter_from_env(&instance, None)
+            .expect("requested GPU adapter required")
+    } else {
+        pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::HighPerformance,
+            ..Default::default()
+        }))
+        .expect("GPU required: do not silently skip behavioral regression")
+    };
     println!("GPU {:?}", adapter.get_info());
     pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
         required_features: wgpu::Features::TEXTURE_COMPRESSION_BC,

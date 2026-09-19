@@ -1,6 +1,67 @@
 # EPU working checkpoint
 
-Status: paused for the requested usage break. The local Windows/native checkpoint is verified, but hosted Vulkan GPU checks fail: this is **not a CI-green or cross-platform-accepted checkpoint**, nor completion of the EPU plan. Resume only when Robert asks. The exact hosted blocker and evidence are recorded below.
+Status: the **bounded SCATTER pole follow-up is locally verified**, including a fresh two-case native rerun. On 2026-09-20 Robert authorized small validated commit/push checkpoints so work can pause safely; SCATTER is the first such checkpoint on base `b3628e59bb6f2d09574962c33c9ca3ddc220d799`. Hosted Vulkan/llvmpipe acceptance and the broader EPU plan remain open. Keep subsequent failure investigations separate until validated.
+
+## Bounded SCATTER pole follow-up 2026-09-18
+
+Three finite tasks completed: reproduce one failure family, repair only its cause,
+and verify/document the local result. No new algorithms, scene changes or performance work.
+
+- **Reproduction:** the unchanged `domain_boundary_scatter_angular_limits` check
+  and a new direct-coordinate regression fail on Microsoft Basic Render Driver
+  (DX12, driver `10.0.26100.9278`), exposing `[NaN, 1, NaN, 0]` at an exact pole.
+  The old boundary check passes on NVIDIA RTX 3080 / Vulkan (`591.86`). This is
+  backend-dependent undefined zero-vector normalization, not a tolerance problem.
+- **Repair:** `scatter_cyl_uv` and `scatter_polar_uv` return canonical azimuth zero
+  only when their projection is exactly zero. Existing height/radius, support fades,
+  all non-singular equations, seed/phase handling and packed API remain unchanged.
+  Both legacy SCATTER and SCATTER_PHASED use these shared helpers.
+- **Focused checks:** both software-DX12 regressions pass; the NVIDIA SCATTER filter
+  reports **12 passed / 0 failed / 1 ignored** (the pre-existing hardware cost probe).
+  The added check covers **192 pole rows, 960 non-pole mapping pairs and 1,920
+  rejected shifted-azimuth controls**, comparing non-pole GPU f32 before half storage.
+  Default adapter selection passes; an explicitly nonexistent adapter fails closed,
+  with no silent fallback. The test harness uses wgpu's existing `WGPU_BACKEND` and
+  `WGPU_ADAPTER_NAME` controls; these are not new cartridge/runtime settings.
+- **Real route:** inspector export → canonical SDK → WASM → packed cartridge →
+  native player passes for legacy CYL and phased POLAR. **1,036,800 pixels**, zero
+  failed/excluded/changed pixels, maximum channel error **1** at fixed limit **2**;
+  both wrong-direction controls reject. All **six owned capture players** exited,
+  including two final-player requalification runs after Cargo relinked it.
+- **Other checks:** workspace formatting, focused GPU-target Clippy with warnings
+  denied, source/helper preservation and the retained-artifact verifier pass.
+  SDK, example scenes and other production shaders were not changed.
+
+Evidence: `tmp/epu-review/scatter-pole-20260918-144339/closure.json`.
+Recompute it without launching a GPU test/player:
+
+```bash
+python tmp/epu-review/scatter-pole-20260918-144339/verify.py
+```
+
+To reproduce the focused software-backend check, use this guide's canonical
+Windows target/temp environment, then:
+
+```bash
+WGPU_BACKEND=dx12 WGPU_ADAPTER_NAME='Microsoft Basic Render Driver'   cargo test --locked --offline -p nethercore-zx --test epu_gpu   scatter::scatter_pole_coordinates_are_finite_and_preserve_nonpoles   -- --exact --nocapture --test-threads=1
+```
+
+Retained harness failures are not renderer RED or hidden passes. The generic
+compute surrogate disagreed at six legacy-CYL pixels; the literal-input raster
+surrogate still disagreed at two (maximum error 14 in both attempts). Matching the
+native triangle interpolation **and storage-backed camera/instruction inputs**
+passes at the original tolerance, without changing any guest/camera values or
+excluding pixels. These observations do not establish a particular compiler/FMA
+cause. A shader-edit typo and the post-test player relink were caught and repaired;
+original failure logs/receipts and all earlier captures remain intact.
+
+**Remaining:** exact hosted Vulkan/llvmpipe rerun, other hosted failure families
+(including reflection), then the plan's remaining engineering, human visual/
+usefulness review and deferred performance gate. This batch does not reduce the
+historical CI failure count by assumption or claim whole-EPU completion. The next
+bounded engineering batch should classify another hosted failure family before
+TRACE/new scene work; human acceptance remains Robert's decision.
+
 
 ## Hosted GPU CI blocker
 
@@ -28,8 +89,9 @@ Exact failing tests:
 - `grid_regular::grid_regular_chart_wrap`
 - `reflection::reflection_imported_runtime_basis_switch_continuity`
 
-The failures are not yet classified as production defects versus nonportable
-probe geometry/oracles. Concrete retained examples include:
+At the recorded run these failures were unclassified. The bounded follow-up
+above classifies the SCATTER pole NaNs as a production defect; the other families
+and the exact hosted rerun remain open. Concrete retained examples include:
 
 - CELESTIAL's current UV evaluator has zero failures, but the archived negative
   control rejects 36,732 records rather than the asserted 36,744.

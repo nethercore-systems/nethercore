@@ -2,6 +2,99 @@
 use super::*;
 
 #[test]
+fn scatter_pole_coordinates_are_finite_and_preserve_nonpoles() {
+    // Frozen pre-fix helpers: use only at nonzero radii, where normalize is defined.
+    let legacy = r#"fn pole_baseline_cyl_uv(dir: vec3f, axis: vec3f) -> vec2f {
+    let up = normalize(axis);
+    let v = dot(dir, up);
+    let proj = normalize(dir - up * v);
+    // Reference for azimuth
+    var right = cross(up, vec3f(0.0, 0.0, 1.0));
+    if length(right) < 0.01 {
+        right = cross(up, vec3f(1.0, 0.0, 0.0));
+    }
+    right = normalize(right);
+    let fwd = cross(right, up);
+    let u = atan2(dot(proj, fwd), dot(proj, right)) / TAU;
+    return vec2f(u, v);
+}
+
+// Polar UV mapping for scatter domain
+fn pole_baseline_polar_uv(dir: vec3f, axis: vec3f) -> vec2f {
+    let up = normalize(axis);
+    let v = dot(dir, up);
+    let rad = sqrt(max(0.0, 1.0 - v * v));
+    let proj = normalize(dir - up * v);
+    var right = cross(up, vec3f(0.0, 0.0, 1.0));
+    if length(right) < 0.01 {
+        right = cross(up, vec3f(1.0, 0.0, 0.0));
+    }
+    right = normalize(right);
+    let fwd = cross(right, up);
+    let angle = atan2(dot(proj, fwd), dot(proj, right)) / TAU;
+    return vec2f(angle, rad);
+}"#;
+    let body = r#"
+@group(0) @binding(0) var result: texture_storage_2d<rgba16float, write>;
+@compute @workgroup_size(1) fn probe(@builtin(global_invocation_id) p: vec3u) {
+    let case_id = p.y / 16u;
+    let axis = array<vec3f,6>(vec3f(1.,0.,0.),vec3f(-1.,0.,0.),
+        vec3f(0.,1.,0.),vec3f(0.,-1.,0.),vec3f(0.,0.,1.),vec3f(0.,0.,-1.))[case_id%6u];
+    let sign = select(1.,-1.,case_id>=6u);
+    let radius = array<f32,6>(0.,0.00001,0.001,0.05,0.2,0.8)[p.x/2u];
+    var right = cross(axis,vec3f(0.,0.,1.));
+    if length(right)<0.01 { right=cross(axis,vec3f(1.,0.,0.)); }
+    right=normalize(right);
+    let forward=cross(right,axis);
+    let angle=(f32(p.y%16u)+0.37)/16.*TAU;
+    let dir=normalize(axis*(sign*sqrt(1.-radius*radius))
+        +radius*(right*cos(angle)+forward*sin(angle)));
+    let cyl=scatter_cyl_uv(dir,axis);
+    let polar=scatter_polar_uv(dir,axis);
+    var out=vec4f(cyl,polar);
+    if p.x%2u==1u {
+        if radius==0. {
+            out=vec4f(select(0.,1.,cyl.x==0.),select(0.,1.,cyl.y==sign),
+                select(0.,1.,polar.x==0.),select(0.,1.,polar.y==0.));
+        } else {
+            let old_cyl=pole_baseline_cyl_uv(dir,axis);
+            let old_polar=pole_baseline_polar_uv(dir,axis);
+            // Compare GPU f32 before half storage; shifted azimuths must reject.
+            out=vec4f(select(0.,1.,all(cyl==old_cyl)),select(0.,1.,all(polar==old_polar)),
+                select(0.,1.,any(cyl!=old_cyl+vec2f(0.125,0.))),
+                select(0.,1.,any(polar!=old_polar+vec2f(0.125,0.))));
+        }
+    }
+    textureStore(result,p.xy,out);
+}
+"#;
+    let pixels = probe_image(&format!("{legacy}\n{body}"), 12, 12 * 16);
+    assert_eq!(pixels.len(), 12 * 12 * 16);
+    for (y, row) in pixels.as_chunks::<12>().0.iter().enumerate() {
+        for radius in 0..6 {
+            let actual = row[radius * 2];
+            assert!(
+                actual.iter().all(|v| v.is_finite()),
+                "row={y} radius={radius} {actual:?}"
+            );
+            assert_eq!(
+                row[radius * 2 + 1],
+                [1.0; 4],
+                "pole/unchanged/wrong-angle gate row={y} radius={radius}"
+            );
+        }
+        let sign = if y / 16 < 6 { 1.0 } else { -1.0 };
+        assert_eq!(row[0], [0.0, sign, 0.0, 0.0], "canonical pole row={y}");
+    }
+    println!(
+        "SCATTER_POLE_COORDS exact_poles={} nonpole_pairs={} shifted_controls={} current_nonfinite=0 f32_nonpole_differences=0",
+        12 * 16,
+        12 * 16 * 5,
+        12 * 16 * 5 * 2
+    );
+}
+
+#[test]
 fn scatter_exact_point_centers_keep_their_core() {
     let source = include_str!("../../shaders/epu/features/02_scatter.wgsl");
     let evaluator = &source[source.find("fn eval_scatter(").unwrap()..];
