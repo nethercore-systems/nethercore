@@ -2,16 +2,17 @@
 name = "font-demo"
 version = "0.1.0"
 edition = "2021"
-description = "Demonstrates loading texture atlases for bitmap fonts"
+description = "ROM-backed custom fonts, measured alignment, wrapping and focus"
 
 [lib]
 crate-type = ["cdylib"]
 
 [dependencies]
-libm = "0.2"
+examples-common = { path = "../../examples-common" }
 
 [profile.release]
 opt-level = "s"
 lto = true
+panic = "abort"
 
 [workspace]

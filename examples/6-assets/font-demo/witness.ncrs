@@ -1,0 +1,170 @@
+console = "zx"
+seed = 4919
+players = 1
+
+[[frames]]
+f = 0
+snap = true
+assert = "$fonts_ok == 1"
+
+[[frames]]
+f = 5
+p1 = "b"
+
+[[frames]]
+f = 7
+snap = true
+assert = "$alignment == 1"
+
+[[frames]]
+f = 10
+p1 = "b"
+
+[[frames]]
+f = 12
+snap = true
+assert = "$alignment == 2"
+
+[[frames]]
+f = 15
+p1 = "b"
+
+[[frames]]
+f = 17
+snap = true
+assert = "$alignment == 0"
+
+[[frames]]
+f = 20
+p1 = "a"
+
+[[frames]]
+f = 22
+snap = true
+assert = "$variable == 1"
+
+[[frames]]
+f = 25
+p1 = "b"
+
+[[frames]]
+f = 27
+snap = true
+assert = "$alignment == 1"
+
+[[frames]]
+f = 30
+p1 = "b"
+
+[[frames]]
+f = 32
+snap = true
+assert = "$alignment == 2"
+
+[[frames]]
+f = 35
+p1 = "x"
+
+[[frames]]
+f = 37
+snap = true
+assert = "$narrow == 1"
+
+[[frames]]
+f = 40
+p1 = "b"
+
+[[frames]]
+f = 42
+snap = true
+assert = "$alignment == 0"
+
+[[frames]]
+f = 45
+p1 = "b"
+
+[[frames]]
+f = 47
+snap = true
+assert = "$alignment == 1"
+
+[[frames]]
+f = 50
+p1 = "a"
+
+[[frames]]
+f = 52
+snap = true
+assert = "$variable == 0"
+
+[[frames]]
+f = 55
+p1 = "b"
+
+[[frames]]
+f = 57
+snap = true
+assert = "$alignment == 2"
+
+[[frames]]
+f = 60
+p1 = "b"
+
+[[frames]]
+f = 62
+snap = true
+assert = "$alignment == 0"
+
+[[frames]]
+f = 65
+p1 = "down"
+
+[[frames]]
+f = 66
+p1 = "down"
+
+[[frames]]
+f = 67
+snap = true
+assert = "$focus == 1"
+
+[[frames]]
+f = 68
+snap = true
+assert = "$focus == 1"
+
+[[frames]]
+f = 70
+p1 = "down"
+
+[[frames]]
+f = 72
+snap = true
+assert = "$focus == 2"
+
+[[frames]]
+f = 75
+p1 = "down"
+
+[[frames]]
+f = 77
+snap = true
+assert = "$focus == 0"
+
+[[frames]]
+f = 80
+p1 = "up"
+
+[[frames]]
+f = 82
+snap = true
+assert = "$focus == 2"
+
+[[frames]]
+f = 85
+p1 = "y"
+
+[[frames]]
+f = 87
+snap = true
+assert = "$variable == 0"

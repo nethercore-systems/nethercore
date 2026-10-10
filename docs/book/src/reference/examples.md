@@ -103,7 +103,7 @@ images establish human acceptance.
 | Example | Description |
 |---------|-------------|
 | **datapack-demo** | Full ROM asset workflow (textures, meshes, sounds) |
-| **font-demo** | Custom font loading with rom_font |
+| **font-demo** | ROM texture + fixed/variable font metrics, measured alignment, guest wrap/fallback/focus |
 | **level-loader** | Level data loading with rom_data |
 | **asset-test** | Pre-converted asset testing (.nczxmesh, .nczxtex) |
 | **gltf-test** | GLTF import pipeline validation (mesh, skeleton, animation) |

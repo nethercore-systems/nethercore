@@ -1,0 +1,151 @@
+console = "zx"
+seed = 4919
+players = 1
+
+[[frames]]
+f = 0
+screenshot = true
+
+[[frames]]
+f = 5
+p1 = "b"
+
+[[frames]]
+f = 7
+screenshot = true
+
+[[frames]]
+f = 10
+p1 = "b"
+
+[[frames]]
+f = 12
+screenshot = true
+
+[[frames]]
+f = 15
+p1 = "b"
+
+[[frames]]
+f = 17
+screenshot = true
+
+[[frames]]
+f = 20
+p1 = "a"
+
+[[frames]]
+f = 22
+screenshot = true
+
+[[frames]]
+f = 25
+p1 = "b"
+
+[[frames]]
+f = 27
+screenshot = true
+
+[[frames]]
+f = 30
+p1 = "b"
+
+[[frames]]
+f = 32
+screenshot = true
+
+[[frames]]
+f = 35
+p1 = "x"
+
+[[frames]]
+f = 37
+screenshot = true
+
+[[frames]]
+f = 40
+p1 = "b"
+
+[[frames]]
+f = 42
+screenshot = true
+
+[[frames]]
+f = 45
+p1 = "b"
+
+[[frames]]
+f = 47
+screenshot = true
+
+[[frames]]
+f = 50
+p1 = "a"
+
+[[frames]]
+f = 52
+screenshot = true
+
+[[frames]]
+f = 55
+p1 = "b"
+
+[[frames]]
+f = 57
+screenshot = true
+
+[[frames]]
+f = 60
+p1 = "b"
+
+[[frames]]
+f = 62
+screenshot = true
+
+[[frames]]
+f = 65
+p1 = "down"
+
+[[frames]]
+f = 66
+p1 = "down"
+
+[[frames]]
+f = 67
+screenshot = true
+
+[[frames]]
+f = 68
+screenshot = true
+
+[[frames]]
+f = 70
+p1 = "down"
+
+[[frames]]
+f = 72
+screenshot = true
+
+[[frames]]
+f = 75
+p1 = "down"
+
+[[frames]]
+f = 77
+screenshot = true
+
+[[frames]]
+f = 80
+p1 = "up"
+
+[[frames]]
+f = 82
+screenshot = true
+
+[[frames]]
+f = 85
+p1 = "y"
+
+[[frames]]
+f = 87
+screenshot = true

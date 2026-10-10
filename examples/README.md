@@ -188,7 +188,7 @@ ROM-based asset workflows and data packs.
 | Example | Description | Difficulty | Key Features |
 |---------|-------------|------------|--------------|
 | **datapack-demo** | Full ROM workflow: textures, meshes, sounds | 🟡 Intermediate | `rom_texture()`, `rom_mesh()`, `rom_sound()` |
-| **font-demo** | Texture-atlas text demo (not a `rom_font()` loader demo) | 🟢 Beginner | `rom_texture()`, atlas regions |
+| **font-demo** | ROM-backed fixed/variable custom text and a small menu | 🟡 Intermediate | Measured alignment, guest wrapping, missing-glyph fallback and focus |
 | **level-loader** | Level data loading with `rom_data()` | 🟡 Intermediate | Binary data, custom formats |
 | **asset-test** | Pre-converted asset testing (.nczxmesh, .nczxtex) | 🟡 Intermediate | Asset pipeline validation |
 | **gltf-test** | Tests GLTF import (mesh, skeleton, animation) | 🟡 Intermediate | GLTF pipeline, conversion validation |
