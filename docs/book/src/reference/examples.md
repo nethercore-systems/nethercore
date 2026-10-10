@@ -1,6 +1,6 @@
 # Example Games
 
-The repository contains **47 source example projects** in 8 categories (Rust, C and Zig). The [development ledger](../../../plans/zx-examples-development.md) distinguishes source presence from runtime qualification and the planned 90-project curriculum.
+The repository contains **53 source example projects** in 8 categories (Rust, C and Zig). The [development ledger](../../../plans/zx-examples-development.md) distinguishes source presence from runtime qualification and the planned 90-project curriculum.
 
 ## Location
 
@@ -9,13 +9,13 @@ Examples are organized by category:
 ```
 examples/
 ├── 1-getting-started/   (8 examples)
-├── 2-graphics/          (7 examples)
+├── 2-graphics/          (10 examples)
 ├── 3-inspectors/        (7 examples)
 ├── 4-animation/         (6 examples)
 ├── 5-audio/             (5 examples)
 ├── 6-assets/            (8 examples)
 ├── 7-games/             (3 examples)
-├── 8-advanced/          (3 examples)
+├── 8-advanced/          (6 examples)
 └── examples-common/     (support library)
 ```
 
@@ -125,6 +125,8 @@ images establish human acceptance.
 | **viewport-test** | 2P/4P cameras, local HUD coordinates, scissored masks/ink and independent input |
 | **rear-mirror** | Rear-view mirror using viewport |
 | **stencil-boolean-masks** | Union/intersection/subtraction/parity with nested holes and swapped operands |
+| **texture-shaped-stencil** | Transparent sprite holes and Bayer-dithered edges define the stencil silhouette |
+| **blob-shadows** | Radial texture coverage, floor clipping, foreground occlusion and depth-write diagnostics |
 
 ### Support Library
 

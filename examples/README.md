@@ -1,6 +1,6 @@
 # Nethercore Examples
 
-**50 source example projects** organized into 8 categories. Source presence is not runtime qualification; the [90-project development ledger](../docs/plans/zx-examples-development.md) records verified coverage and work still pending.
+**53 source example projects** organized into 8 categories. Source presence is not runtime qualification; the [90-project development ledger](../docs/plans/zx-examples-development.md) records verified coverage and work still pending.
 
 ## 📁 Organization
 
@@ -13,7 +13,7 @@ examples/
 ├── 5-audio/             →  5 examples   (Sound effects, tracker music)
 ├── 6-assets/            →  8 examples   (ROM loading, data packs, GLTF/GLB pipeline)
 ├── 7-games/             →  3 examples   (Complete games)
-├── 8-advanced/          →  3 examples   (Stencils, viewports, mirrors)
+├── 8-advanced/          →  6 examples   (Stencils, viewports, mirrors)
 └── examples-common/     →  Support library
 ```
 
@@ -106,7 +106,7 @@ rustc --edition 2021 --test examples/examples-common/src/hud.rs -o /absolute/pat
 
 ---
 
-### 2. Graphics & Rendering (7 examples)
+### 2. Graphics & Rendering (10 examples)
 
 Core rendering techniques and procedural meshes.
 
@@ -210,7 +210,7 @@ Fully playable games demonstrating complete game loops.
 
 ---
 
-### 8. Advanced Rendering (4 examples)
+### 8. Advanced Rendering (6 examples)
 
 Stencil buffers, viewports, and advanced techniques.
 
@@ -220,6 +220,8 @@ Stencil buffers, viewports, and advanced techniques.
 | **viewport-test** | 2P/4P camera and viewport-local HUD lab | 🟡 Intermediate | Independent camera input, clipped masks/ink, reset and scissor witnesses |
 | **rear-mirror** | Rear-view mirror for racing | 🔴 Advanced | Secondary viewport |
 | **stencil-boolean-masks** | Full-byte stencil set operations | 🟡 Intermediate | Union, intersection, subtraction, parity, holes and operand order |
+| **texture-shaped-stencil** | Sprite-shaped stencil coverage | 🟡 Intermediate | Transparent holes, fractional alpha, Bayer phases and a bounding-box counterexample |
+| **blob-shadows** | Radial-alpha ground shadows | 🟡 Intermediate | Receiver edges, foreground depth, disabled depth writes and a late inlay witness |
 
 ---
 
@@ -234,7 +236,7 @@ Stencil buffers, viewports, and advanced techniques.
 
 ## 📊 Statistics
 
-- **Source Projects:** 51
+- **Source Projects:** 53
 - **Languages:** Rust, C, Zig
 - **Game Projects:** 3
 
