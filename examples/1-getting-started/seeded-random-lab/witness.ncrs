@@ -1,0 +1,60 @@
+console = "zx"
+seed = 4919
+players = 1
+
+[[frames]]
+f = 0
+snap = true
+assert = "$points == 32"
+
+[[frames]]
+f = 1
+p1 = "right"
+snap = true
+assert = "$cursor == 1"
+
+[[frames]]
+f = 2
+p1 = "right"
+snap = true
+assert = "$cursor == 2"
+
+[[frames]]
+f = 3
+p1 = "right"
+snap = true
+assert = "$cursor == 3"
+
+[[frames]]
+f = 8
+p1 = "a"
+snap = true
+assert = "$cursor == 0"
+
+[[frames]]
+f = 10
+p1 = "b"
+snap = true
+assert = "$generation == 2"
+
+[[frames]]
+f = 12
+p1 = "x"
+snap = true
+assert = "$auto == 1"
+
+[[frames]]
+f = 30
+snap = true
+assert = "$max_lane <= 3"
+
+[[frames]]
+f = 60
+p1 = "a"
+snap = true
+assert = "$cursor == 0"
+
+[[frames]]
+f = 90
+snap = true
+assert = "$points == 32"

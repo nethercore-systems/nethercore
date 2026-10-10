@@ -1,0 +1,77 @@
+console = "zx"
+seed = 4919
+players = 4
+
+[[frames]]
+f = 0
+snap = true
+assert = "$players == 4"
+
+[[frames]]
+f = 1
+p1 = "a"
+snap = true
+assert = "$p1_pressed == 16"
+
+[[frames]]
+f = 2
+p1 = "a"
+snap = true
+assert = "$p1_presses == 1"
+
+[[frames]]
+f = 3
+snap = true
+assert = "$p1_released == 16"
+
+[[frames]]
+f = 4
+p1 = "a+x"
+p2 = "b"
+p3 = "up"
+p4 = "l"
+snap = true
+assert = "$p1_presses == 3"
+
+[[frames]]
+f = 5
+snap = true
+assert = "$p1_released == 80"
+
+[[frames]]
+f = 6
+p1 = "select"
+snap = true
+assert = "$p1_presses == 0"
+
+[[frames]]
+f = 8
+p1 = { lstick = [0.1, 0.0], rstick = [-1.0, 1.0], lt = 0.5, rt = 1.0 }
+snap = true
+assert = "$p1_filtered_x == 0"
+
+[[frames]]
+f = 9
+p1 = { lstick = [0.5, 0.0], rstick = [1.0, -1.0], lt = 1.0, rt = 0.0 }
+snap = true
+assert = "$p1_filtered_x > 0.4"
+
+[[frames]]
+f = 10
+snap = true
+assert = "$p4_presses == 1"
+
+[[frames]]
+f = 11
+snap = true
+assert = "$p2_presses == 1"
+
+[[frames]]
+f = 12
+snap = true
+assert = "$p3_presses == 1"
+
+[[frames]]
+f = 20
+snap = true
+assert = "$p1_held == 0"

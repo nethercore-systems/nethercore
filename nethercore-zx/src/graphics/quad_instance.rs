@@ -67,6 +67,17 @@ unsafe impl bytemuck::Pod for QuadInstance {}
 unsafe impl bytemuck::Zeroable for QuadInstance {}
 
 impl QuadInstance {
+    /// Keep this screen position anchored to a local pixel origin during rotation.
+    /// The shader rotates around the center, so move that center, not the pivot.
+    pub(crate) fn with_screen_origin(mut self, origin: [f32; 2]) -> Self {
+        let dx = self.size[0] * 0.5 - origin[0];
+        let dy = self.size[1] * 0.5 - origin[1];
+        let (s, c) = self.rotation.sin_cos();
+        self.position[0] += dx * c - dy * s - self.size[0] * 0.5;
+        self.position[1] += dx * s + dy * c - self.size[1] * 0.5;
+        self
+    }
+
     /// Create a new quad instance with default values
     pub fn new(
         position: [f32; 3],

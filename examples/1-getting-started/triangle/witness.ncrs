@@ -1,0 +1,56 @@
+console = "zx"
+seed = 4919
+players = 1
+
+[[frames]]
+f = 0
+snap = true
+assert = "$reverse == 0"
+
+[[frames]]
+f = 5
+p1 = "a"
+snap = true
+assert = "$reverse == 1"
+
+[[frames]]
+f = 10
+p1 = "b"
+snap = true
+assert = "$camera_back == 1"
+
+[[frames]]
+f = 15
+p1 = "a"
+snap = true
+assert = "$reverse == 0"
+
+[[frames]]
+f = 20
+p1 = "l"
+snap = true
+assert = "$two_sided == 1"
+
+[[frames]]
+f = 25
+p1 = "y"
+snap = true
+assert = "$camera_back == 0"
+
+[[frames]]
+f = 30
+p1 = "x"
+snap = true
+assert = "$rotation == 1"
+
+[[frames]]
+f = 35
+p1 = "x"
+snap = true
+assert = "$rotation == 2"
+
+[[frames]]
+f = 40
+p1 = "y"
+snap = true
+assert = "$two_sided == 0"

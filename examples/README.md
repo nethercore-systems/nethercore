@@ -1,12 +1,12 @@
 # Nethercore Examples
 
-**44 source example projects** organized into 8 categories. Source presence is not runtime qualification; the [90-project development ledger](../docs/plans/zx-examples-development.md) records verified coverage and work still pending.
+**47 source example projects** organized into 8 categories. Source presence is not runtime qualification; the [90-project development ledger](../docs/plans/zx-examples-development.md) records verified coverage and work still pending.
 
 ## 📁 Organization
 
 ```
 examples/
-├── 1-getting-started/   →  5 examples   (FFI basics, languages)
+├── 1-getting-started/   →  8 examples   (FFI basics, languages, input/time/RNG)
 ├── 2-graphics/          →  7 examples   (Rendering, meshes, materials)
 ├── 3-inspectors/        →  7 examples   (Debug inspector, render modes, environments)
 ├── 4-animation/         →  6 examples   (Skeletal animation)
@@ -66,7 +66,7 @@ cargo run -- paddle
 
 ## 📂 All Examples by Category
 
-### 1. Getting Started (5 examples)
+### 1. Getting Started (8 examples)
 
 Learn the basics across multiple languages.
 
@@ -76,7 +76,33 @@ Learn the basics across multiple languages.
 | **save-slots** | Persistent save slots (save/load/delete) | 🟢 Beginner | Rust |
 | **[hello-world-c](1-getting-started/hello-world-c/README.md)** | Identical to hello-world, demonstrates C FFI | 🟢 Beginner | C |
 | **[hello-world-zig](1-getting-started/hello-world-zig/README.md)** | Identical to hello-world, demonstrates Zig FFI | 🟢 Beginner | Zig |
-| **triangle** | Minimal 3D rendering with a single colored triangle | 🟢 Beginner | Rust |
+| **[triangle](1-getting-started/triangle/README.md)** | One triangle: winding, camera, culling and model rotation | 🟢 Beginner | Rust |
+| **[input-lab](1-getting-started/input-lab/README.md)** | Four input slots, button edges, sticks, radial deadzone and triggers | 🟢 Beginner | Rust |
+| **[fixed-clock-lab](1-getting-started/fixed-clock-lab/README.md)** | Simulation ticks versus zero/repeated draws | 🟢 Beginner | Rust |
+| **[seeded-random-lab](1-getting-started/seeded-random-lab/README.md)** | Repeatable bounded routes from recorded RNG seeds | 🟢 Beginner | Rust |
+
+#### Foundation checks
+
+With Python 3.11+, Pillow, Rust's WASM target and matching native tools, from the
+repository root:
+
+```sh
+python examples/1-getting-started/check_foundations.py --nether /absolute/path/to/nether --player /absolute/path/to/nethercore-zx --output /absolute/path/outside/checkout/foundation-evidence --render
+```
+
+Use real executable paths (including `.exe` on Windows) and an empty output
+directory. This builds and runs all four lessons after relocation, rejects a
+wrong assertion in each, checks native pixels/state and runs the same controls
+through 120 input frames of forced rollback. Reports bind source, ROM, tools,
+logs and captured pixels. Without `--render`, only headless checks run; that
+subset does not certify presentation or rollback. Human review and remote/CI
+delivery remain separate. The shared allocation-free label formatter is directly
+testable without changing Cargo workspace membership:
+
+```sh
+rustc --edition 2021 --test examples/examples-common/src/hud.rs -o /absolute/path/outside/checkout/hud-test
+/absolute/path/outside/checkout/hud-test
+```
 
 ---
 

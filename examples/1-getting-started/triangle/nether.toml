@@ -3,3 +3,10 @@ id = "triangle"
 title = "Triangle"
 author = "Nethercore Examples"
 version = "0.1.0"
+render_mode = 0
+tick_rate = 60
+max_players = 1
+compress_textures = false
+
+[netplay]
+enabled = false

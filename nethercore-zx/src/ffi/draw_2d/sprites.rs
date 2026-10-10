@@ -164,9 +164,9 @@ fn draw_sprite_ex(
     let u1 = src_x + src_w;
     let v1 = src_y + src_h;
 
-    // Apply origin offset and viewport offset to position
-    let screen_x = vp.x as f32 + x - origin_x;
-    let screen_y = vp.y as f32 + y - origin_y;
+    // The requested origin stays at (x, y), including under rotation.
+    let screen_x = vp.x as f32 + x;
+    let screen_y = vp.y as f32 + y;
 
     // Convert layer to depth for ordering
     let depth = SCREEN_SPACE_DEPTH;
@@ -182,7 +182,8 @@ fn draw_sprite_ex(
         [u0, v0, u1, v1],
         shading_state_index.0,
         (state.view_matrices.len() - 1) as u32,
-    );
+    )
+    .with_screen_origin([origin_x, origin_y]);
 
     state.add_quad_instance(instance, state.current_z_index);
 }

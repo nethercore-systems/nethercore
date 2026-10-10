@@ -114,10 +114,10 @@ fn draw_line(
 
     // Create rotated rectangle
     // Position the rectangle so it starts at (x1, y1) and extends to (x2, y2)
-    // The rectangle origin is at top-left, so we need to offset by half thickness
+    // Anchor the rotated rectangle's left-center to the start point.
     let instance = crate::graphics::QuadInstance::sprite(
         screen_x1,
-        screen_y1 - thickness / 2.0,
+        screen_y1,
         depth,
         length,
         thickness,
@@ -125,7 +125,8 @@ fn draw_line(
         [0.0, 0.0, 1.0, 1.0],
         shading_state_index.0,
         view_idx,
-    );
+    )
+    .with_screen_origin([0.0, thickness * 0.5]);
 
     state.add_quad_instance(instance, state.current_z_index);
 }
@@ -175,7 +176,7 @@ fn draw_circle(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, radius: f3
         // Create a rectangle from center pointing outward
         // The rectangle extends from center to edge
         let instance = crate::graphics::QuadInstance::sprite(
-            screen_x - segment_width / 2.0,
+            screen_x,
             screen_y,
             depth,
             segment_width,
@@ -184,7 +185,8 @@ fn draw_circle(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, radius: f3
             [0.0, 0.0, 1.0, 1.0],
             shading_state_index.0,
             view_idx,
-        );
+        )
+        .with_screen_origin([segment_width * 0.5, 0.0]);
 
         state.add_quad_instance(instance, state.current_z_index);
     }
@@ -247,7 +249,7 @@ fn draw_circle_outline(
         // Create rotated rectangle for this line segment
         let instance = crate::graphics::QuadInstance::sprite(
             x1,
-            y1 - thickness / 2.0,
+            y1,
             depth,
             length,
             thickness,
@@ -255,7 +257,8 @@ fn draw_circle_outline(
             [0.0, 0.0, 1.0, 1.0],
             shading_state_index.0,
             view_idx,
-        );
+        )
+        .with_screen_origin([0.0, thickness * 0.5]);
 
         state.add_quad_instance(instance, state.current_z_index);
     }

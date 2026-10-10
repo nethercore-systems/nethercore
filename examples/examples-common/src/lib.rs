@@ -17,6 +17,7 @@ pub mod shapes;
 pub mod color;
 pub mod debug;
 pub mod texture;
+pub mod hud;
 
 pub use ffi::*;
 pub use camera::*;

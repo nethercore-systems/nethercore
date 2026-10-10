@@ -1,6 +1,6 @@
 # Example Games
 
-The repository contains **44 source example projects** in 8 categories (Rust, C and Zig). The [development ledger](../../../plans/zx-examples-development.md) distinguishes source presence from runtime qualification and the planned 90-project curriculum.
+The repository contains **47 source example projects** in 8 categories (Rust, C and Zig). The [development ledger](../../../plans/zx-examples-development.md) distinguishes source presence from runtime qualification and the planned 90-project curriculum.
 
 ## Location
 
@@ -8,7 +8,7 @@ Examples are organized by category:
 
 ```
 examples/
-├── 1-getting-started/   (5 examples)
+├── 1-getting-started/   (8 examples)
 ├── 2-graphics/          (7 examples)
 ├── 3-inspectors/        (7 examples)
 ├── 4-animation/         (6 examples)
@@ -40,7 +40,16 @@ New to Nethercore? Follow this progression:
 | **hello-world-c** | Same example in C (demonstrates C FFI) |
 | **hello-world-zig** | Same example in Zig (demonstrates Zig FFI) |
 | **save-slots** | Persistent save slots |
-| **triangle** | Minimal 3D rendering |
+| **triangle** | Winding, camera side, culling and model rotation with one triangle |
+| **input-lab** | Four controller slots, button edges, radial deadzone, sticks and triggers |
+| **fixed-clock-lab** | Simulation ticks versus zero/repeated draws; native/headless endpoint checks |
+| **seeded-random-lab** | Bounded route generation, repeated/different seeds and runner reset |
+
+The four foundation lessons include controls, build/run instructions and replay
+witnesses. `examples/1-getting-started/check_foundations.py --help` describes the
+combined build, relocation, negative-assertion, native and forced-rollback check.
+Native checks require a display and Pillow; neither headless success nor captured
+images establish human acceptance.
 
 ### 2. Graphics & Rendering
 
@@ -140,7 +149,7 @@ To build and install all examples at once:
 cargo xtask build-examples
 ```
 
-This builds the Cargo-based examples and installs them into your Nethercore data directory under `games/` (the command prints the exact path).
+This builds Rust, C and Zig examples through their project manifests and installs them into your Nethercore data directory under `games/` (the command prints the exact path). All three language toolchains are required; a missing toolchain is a failure, not a skipped success.
 
 ## Example Structure
 

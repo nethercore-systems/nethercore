@@ -1,6 +1,6 @@
 # ZX examples development contract: 90-project curriculum
 
-Status: WORKING — Astra authorized by the user; Phase 0 preservation/build preflight.
+Status: WORKING — the current execution request explicitly retains the current single development owner and removes the stale model/effort requirement. Foundation qualification and delivery reconciliation continue; required CI remains unresolved.
 Plan review: 2026-10-10, owner source/contract review; not independent runtime certification.
 Reviewed baseline: `ceed1becb4545313950e3ac089ff7ae4caae2a81`; local `main` and live `origin/main` agreed when inspected. Re-read live state before execution.
 
@@ -68,7 +68,7 @@ Work in coherent bounded batches, one owner, not 90 concurrent jobs. Baseline-ve
 
 ## Verification and delivery mechanics
 
-Read live help and current repo scripts before using flags. Reuse `nether build`, `nether pack`, `nethercore-zx`, existing replay (`.ncrs`), `cargo xtask build-examples` and the actual CI workflows. Do not invent a `nether test` or assume a tool option exists. `xtask build-examples` currently discovers Cargo only and may clean stale installed examples; isolate the owned installation output and preserve unrelated user library entries. Discover the existing `--games-dir` behavior before executing a broad build.
+Read live help and current repo scripts before using flags. Reuse `nether build`, `nether pack`, `nethercore-zx`, existing replay (`.ncrs`), `cargo xtask build-examples` and the actual CI workflows. Do not invent a `nether test` or assume a tool option exists. The repaired `xtask build-examples` discovers either Cargo or `nether.toml` projects, including C/Zig, and may clean stale installed examples; isolate the owned installation output and preserve unrelated user library entries. Discover the existing `--games-dir` behavior before executing a broad build.
 
 For a change, run its nearest check, build/package and actual witness first. A final bounded run covers the affected crates and the advertised example matrix. Repository/workflow checks include Rust format, bindings, workspace clippy/tests and preview/example build; exact current commands live in `CLAUDE.md`, `xtask/src/main.rs` and `.github/workflows/`. Do not blindly run a binding generator over unrelated dirty FFI files. Add only the minimal existing-tool integration needed to make missing C/Zig/example failures fail the aggregate gate.
 
@@ -99,16 +99,25 @@ Not in this execution: guest RTT, new projector/decal ABI, explicit depth-bias A
 
 ## Live checkpoint
 
-- Work state: WORKING; Phase 0 ownership captured; language/build/player qualification started. No delivery yet.
-- Qualified: 3/90 (01-03, G1-G4); shipped: 0/90. Exact committed-tree/remote CI gates remain open.
-- Active batch/item: Phase 0 / 01-03 first-cartridge Rust, C and Zig routes.
-- Next action: commit the first-cartridge/discovery repair, reconstruct that exact commit for clean-source checks, push/read back main and inspect applicable CI. Continue foundation work while CI runs; do not take over the EPU failures.
-- Owner: `20261010_100903_97bf0099`, current `gpt-6-astra` session; the user's "just use astra" supersedes the earlier Sol-only preflight. No worker delegation or persistent model configuration changes.
-- Baseline/ownership receipt: `tmp/zx-examples/20261010-astra/ownership.json`; 34 starting dirty/untracked files preserved with SHA-256 and full diffs. `main`, HEAD and remote main agree at the reviewed baseline. No competing Cargo/Zig/Clang/player processes were found at activation. Unrelated EPU source/bindings are excluded from task commits.
-- In-flight build/render attempts: none. The isolated committed-baseline host build completed successfully; all three final first-cartridge behavior/render/sync checks passed.
-- Last verified delivery/CI: none for this curriculum.
-- Blockers: model/toolchain blockers cleared (scoped, SHA-256-verified Zig 0.13.0; Clang 18.1.8; Rust 1.94.1). Baseline CI run `35462947681`, job `105949967926`, failed 12 `epu_gpu` tests on Linux llvmpipe before this work; exact log retained in the run receipt. Preserve that workstream and do not bypass required CI. Advanced pilots remain unproved.
-- Resume rule: read this checkpoint and relevant item/receipt, reconcile live work and artifacts, continue the next unfinished dependency. Never infer progress from generated folders or a prior assistant summary.
+- Work state: WORKING. The latest execution request explicitly says to continue with the current single owner and removes model/effort requirements. No model migration, new worker or further owner gate is needed. Preserve all five gates and the exact 90-entry scope.
+- Automatic continuation: the saved goal was last read back ACTIVE with the same current-owner clause now supplied by the continuation. The later attempted pause/old-contract restoration DID NOT RUN because its approval expired. Do not run `checkpoint_zx_owner_gate.py`: it would restore an obsolete requirement. No goal-control write or global configuration change is needed for this continuation.
+- Qualified: 7/90 (01-03 and 05-08, local G1-G4); shipped: 0/90. Required CI is unresolved. Human review remains unreviewed.
+- Active batch/item: 01-03 delivery reconciliation; uncommitted 05-08 foundation lessons and a narrow shared screen-origin repair.
+- Next action: stage only the tested foundation/runtime-repair paths and verify their actual committed tree before delivery. Keep denied CI-log retrieval on hold while independent work proceeds.
+- Owner/session: `20261010_100903_97bf0099`; routing key `agent:main:telegram:dm:2086218583:36859`. Current single Astra owner retained under the latest request. No worker, global model change, runtime patch or replacement session was started.
+- Ownership: retain `tmp/zx-examples/20261010-astra/ownership.json`, the initial 34-file preservation receipt and backups. Unrelated EPU source/bindings remain outside task commits. After the user's explicit continuation, fresh Git status/numstat confirmed the task-owned foundation/runtime edits and the preserved foreign EPU work. `proc_d8fdf3342d2f` is exited with code 0, not an active competing builder; no duplicate verifier was started.
+- Completed build: the delayed `proc_8d6e2f467cf3` notification confirms the baseline player/CLI/xtask build exited 0. Do not infer current binary identity from that notification: the same export/target directories were subsequently used for an explicitly uncommitted runtime-repair probe.
+- Completed committed-tree verifier: `proc_d8fdf3342d2f` exited 0. Its output reports format, host build, unit, Clippy, bindings, binding compile and first-cartridge checks passing for exact reconstruction `45836b8819b08eb5253a24374b9e5bae404e5ad0`. This is not a committed-tree pass for the later uncommitted foundation/runtime edits.
+- Last verified delivery: `45836b8` and caption follow-up `09068cbf73aa74f06fc86dec3dc5cbef228122e8` were pushed to `origin/main`; exact remote readback matched the latter SHA at delivery. All three caption-fixed cartridges passed relocated replay, negative assertions, matching native pixels and rollback smoke; receipt: `tmp/zx-examples/20261010-astra/first-cartridges-caption-fixed/receipt.json`.
+- Fresh hosted readback for that exact SHA: documentation `38022168501`, FFI bindings `38022168579`, Latest Release `38022168543` and Tool Preview Packet `38022168475` all completed successfully, including all listed jobs. CI `38022168502` failed job `114125306629` (Tests + Lint), step `Tests`. Full run/job results: `tmp/zx-examples/20261010-astra/first-batch-ci.json`. Retrieve the failed test log before classifying this failure as baseline or introduced; its cause has not been established by this checkpoint.
+- CI log access: the attempted `fetch_zx_ci_log.py` invocation for job `114125306629` was blocked before execution by an approval timeout. No retry or alternate credential route was used. Fresh authorization is required before retrying that denied operation; the exact failure cause remains unclassified.
+- Uncommitted repair evidence: `screen_space_geometry_preserves_requested_origins` exercises the actual WASM line/circle/outline/sprite imports. RED then GREEN logs are `origin-red.log` and `origin-green.log`; all six drawing tests passed after the shared origin correction. `origin-native-red-green.json` records the actual RNG plot changing from 27 disconnected components to one, with a centered runner. No public API or shader change was required. These local probes do not certify the eventual committed tree.
+- Foundation evidence: `foundations-layer-fixed/receipt.json` records successful current-source host build, relocated pack/state/native checks and pixel checks for input-lab and triangle. All source hashes listed in that receipt matched the checkout at reconciliation. Explicit input UI layers and bounded labels repaired the earlier missing controls; triangle's checker covers visible/culled/edge-on states and exact reset pixels. The initial triangle oracle used the wrong replay frame mapping; that checker error was corrected against `capture.ncrs`, without changing the replay to manufacture a pass.
+- Clock/RNG evidence: `foundations-state-checked/summary.json` records both checkers exiting 0. Clock headless/native states agree at host ticks 60/120/180, and one/four draws produce identical endpoint marker pixels. RNG seed 4919 repeats equal named state, seed 4920 changes the bounded route, and native generation hashes agree with headless state. Per-example receipts and actual captures are retained. These are UNCOMMITTED local probes, not G5 delivery or human acceptance.
+- Remaining foundation checks: new README/control/build/witness documentation is present for 05-08, but final committed-source qualification and delivery remain open. The targeted shared HUD Cargo invocation exited 101 before testing because the support package is outside workspace membership; its failure remains in `hud-label-test.log`. Running the actual dependency-free module via `rustc --edition 2021 --test examples/examples-common/src/hud.rs` passed its bounded UTF-8/overflow test; log: `hud-module-tests.log`. No workspace manifest change was needed. Full source-bound negative/sync checks are being consolidated in `examples/1-getting-started/check_foundations.py`.
+- Consolidated foundation qualification: `examples/1-getting-started/check_foundations.py --render` exited 0 for all four lessons; receipt/media: `tmp/zx-examples/20261010-astra/foundations-qualified-preflight/`. Triangle: 41 ticks/9 assertions/9 captures; input: 21/13/8; clock: 181/10/12; RNG: 91/10/6. Each rejects one deliberately false state assertion and executes the scripted controls through 120 input frames of forced rollback with check distance 2. Actual native layouts were inspected; input's README was corrected to describe the implemented radial hard deadzone. All source-listed lesson files match the tested verification export; unrelated dirty/line-ending-different live bindings were not used. This remains a pre-commit receipt, not G5.
+- Other constraints: keep the verified local Zig 0.13.0, Clang 18.1.8 and Rust 1.94.1 routes. The separate pre-task baseline CI receipt reported 12 EPU GPU failures; preserve that workstream and do not bypass required CI. Advanced proof-first pilots remain unproved.
+- Resume rule: read the latest execution request, this checkpoint and exact receipts, reconcile live work/artifacts and continue the unfinished dependency. The current-owner requirement is resolved; do not resurrect the obsolete Sol-only blocker. A denied CI-log operation is not permission to retry it, nor a reason to stop independent authorized work. Never infer SHIPPED from folders, a prior summary, compilation alone or model image review.
 
 ## Exact worklist
 
@@ -185,7 +194,7 @@ For each entry replace the progress line as work proceeds: PLANNED -> IMPLEMENTI
 - **Build/repair:** Label winding, camera, vertices and model transform; retain one triangle.
 - **Witness:** A/B winding and camera changes have predictable visible results.
 - **Boundary:** Keep this a tiny example, not a lighting showcase.
-- **Progress:** PLANNED; evidence: none; delivery: none; human: unreviewed.
+- **Progress:** READY (local G1-G4); combined `check_foundations.py --render` passes build/relocation, 41 ticks/9 assertions, a rejected false expectation, nine native views, winding/culling/rotation/reset pixels and 120-frame scripted rollback. Receipt: `foundations-qualified-preflight/receipt.json`; committed-tree/remote/CI G5 pending; human: unreviewed.
 
 
 #### 06. input-lab
@@ -196,7 +205,7 @@ For each entry replace the progress line as work proceeds: PLANNED -> IMPLEMENTI
 - **Build/repair:** Visualize held/pressed/released buttons, both sticks, triggers and local-player slots.
 - **Witness:** Replay exact press/hold/release sequences; each edge appears once.
 - **Boundary:** Expose controller input, not an invented keyboard/mouse guest API.
-- **Progress:** PLANNED; evidence: none; delivery: none; human: unreviewed.
+- **Progress:** READY (local G1-G4); explicit layers repair the observed panel defect. Combined checker passes build/relocation, 21 ticks/13 assertions, rejected false expectation, eight native captures/all stick markers and four-player 120-frame scripted rollback. All panels/labels fit in actual native output; radial-deadzone docs corrected. Receipt: `foundations-qualified-preflight/receipt.json`; committed-tree/remote/CI G5 pending; human: unreviewed.
 
 
 #### 07. fixed-clock-lab
@@ -207,7 +216,7 @@ For each entry replace the progress line as work proceeds: PLANNED -> IMPLEMENTI
 - **Build/repair:** Advance state only in update; compare tick_count, delta_time and repeated renders.
 - **Witness:** The same replay gives the same endpoint when render frequency changes.
 - **Boundary:** Render interpolation is optional and must not advance simulation.
-- **Progress:** PLANNED; evidence: none; delivery: none; human: unreviewed.
+- **Progress:** READY (local G1-G4); combined checker passes build/relocation, 181 ticks/10 assertions, rejected false expectation, zero-render/native state at ticks 60/120/180, one/four-draw identical endpoint pixels, twelve native views and 120-frame scripted rollback. README explains frame pre/post alignment and reset scope. Receipt: `foundations-qualified-preflight/receipt.json`; committed-tree/remote/CI G5 pending; human: unreviewed.
 
 
 #### 08. seeded-random-lab
@@ -218,7 +227,7 @@ For each entry replace the progress line as work proceeds: PLANNED -> IMPLEMENTI
 - **Build/repair:** Use the host RNG only in init/update; replay with a fixed recorded seed to place objects and generate a bounded route. Explain that guest reset does not expose a host reseed API.
 - **Witness:** Two runs of the same recorded seed/input sequence produce equal named guest state; a different replay seed changes the route without exceeding the generation bound.
 - **Boundary:** Do not infer cross-platform determinism solely from equal images.
-- **Progress:** PLANNED; evidence: none; delivery: none; human: unreviewed.
+- **Progress:** READY (local G1-G4); combined checker passes build/relocation, 91 ticks/10 assertions, rejected false expectation, repeated seed 4919 equal named state, changed seed 4920 bounded route, native/headless generation agreement, six native captures and 120-frame scripted rollback. Receipt: `foundations-qualified-preflight/receipt.json`; committed-tree/remote/CI G5 pending; human: unreviewed.
 
 
 ### Graphics primitives

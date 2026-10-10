@@ -1,0 +1,59 @@
+console = "zx"
+seed = 4919
+players = 4
+
+[[frames]]
+f = 0
+screenshot = true
+
+[[frames]]
+f = 1
+p1 = "a"
+screenshot = true
+
+[[frames]]
+f = 2
+p1 = "a"
+screenshot = true
+
+[[frames]]
+f = 3
+screenshot = true
+
+[[frames]]
+f = 4
+p1 = "a+x"
+p2 = "b"
+p3 = "up"
+p4 = "l"
+screenshot = true
+
+[[frames]]
+f = 5
+
+[[frames]]
+f = 6
+p1 = "select"
+
+[[frames]]
+f = 8
+p1 = { lstick = [0.1, 0.0], rstick = [-1.0, 1.0], lt = 0.5, rt = 1.0 }
+screenshot = true
+
+[[frames]]
+f = 9
+p1 = { lstick = [0.5, 0.0], rstick = [1.0, -1.0], lt = 1.0, rt = 0.0 }
+screenshot = true
+
+[[frames]]
+f = 10
+
+[[frames]]
+f = 11
+
+[[frames]]
+f = 12
+
+[[frames]]
+f = 20
+screenshot = true

@@ -1,0 +1,57 @@
+console = "zx"
+seed = 4919
+players = 1
+
+[[frames]]
+f = 0
+snap = true
+assert = "$sim_ticks == 1"
+
+[[frames]]
+f = 10
+p1 = "a"
+snap = true
+assert = "$paused == 1"
+
+[[frames]]
+f = 19
+snap = true
+assert = "$sim_ticks == 10"
+
+[[frames]]
+f = 20
+p1 = "a"
+snap = true
+assert = "$paused == 0"
+
+[[frames]]
+f = 24
+p1 = "b"
+snap = true
+assert = "$copies == 4"
+
+[[frames]]
+f = 40
+p1 = "y"
+snap = true
+assert = "$sim_ticks == 0"
+
+[[frames]]
+f = 60
+snap = true
+assert = "$sim_ticks == 20"
+
+[[frames]]
+f = 120
+snap = true
+assert = "$sim_ticks == 80"
+
+[[frames]]
+f = 179
+snap = true
+assert = "$sim_ticks == 139"
+
+[[frames]]
+f = 180
+snap = true
+assert = "$sim_ticks == 140"
