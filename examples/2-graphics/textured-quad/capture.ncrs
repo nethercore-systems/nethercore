@@ -1,0 +1,59 @@
+console = "zx"
+seed = 4919
+players = 1
+
+[[frames]]
+f = 0
+screenshot = true
+
+[[frames]]
+f = 5
+p1 = "a"
+screenshot = true
+
+[[frames]]
+f = 6
+p1 = "a"
+
+[[frames]]
+f = 10
+p1 = "b"
+screenshot = true
+
+[[frames]]
+f = 15
+p1 = "l"
+screenshot = true
+
+[[frames]]
+f = 20
+p1 = "a"
+screenshot = true
+
+[[frames]]
+f = 25
+p1 = "b"
+screenshot = true
+
+[[frames]]
+f = 30
+p1 = "b"
+screenshot = true
+
+[[frames]]
+f = 35
+p1 = "b"
+screenshot = true
+
+[[frames]]
+f = 40
+p1 = "b"
+screenshot = true
+
+[[frames]]
+f = 45
+p1 = "y"
+screenshot = true
+
+[[frames]]
+f = 47

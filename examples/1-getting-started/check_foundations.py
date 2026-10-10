@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Build/relocate four foundation lessons; check replay negatives and optional native output.
+"""Build/relocate lessons; check replay negatives and optional native output.
 
 Python 3.11+. --render also requires Pillow and a native display. This does not
 establish human acceptance, online netplay, a committed tree or remote delivery.
@@ -19,6 +19,10 @@ parser.add_argument('--nether', required=True, type=Path)
 parser.add_argument('--player', required=True, type=Path)
 parser.add_argument('--output', required=True, type=Path)
 parser.add_argument('--render', action='store_true')
+parser.add_argument('--projects', nargs='+', default=[
+    '1-getting-started/triangle', '1-getting-started/input-lab',
+    '1-getting-started/fixed-clock-lab', '1-getting-started/seeded-random-lab'],
+    help='Paths relative to examples/; default: the four foundation lessons')
 args = parser.parse_args()
 nether, player = args.nether.resolve(strict=True), args.player.resolve(strict=True)
 lesson = Path(__file__).resolve().parent
@@ -27,7 +31,9 @@ out = args.output.resolve()
 assert not out.is_relative_to(root), 'Use an output directory outside the source checkout'
 out.mkdir(parents=True, exist_ok=True)
 assert not any(out.iterdir()), 'Use an empty output directory; preserve earlier receipts'
-names = ('triangle', 'input-lab', 'fixed-clock-lab', 'seeded-random-lab')
+projects = [(root / 'examples' / name).resolve(strict=True) for name in args.projects]
+assert all(p.is_relative_to(root / 'examples') for p in projects), 'Use repository examples'
+assert len({p.name for p in projects}) == len(projects), 'Duplicate lesson/output name'
 
 
 def sha(path):
@@ -36,7 +42,7 @@ def sha(path):
 
 
 paths = [Path(__file__).resolve(), root / 'examples/examples-common/Cargo.toml']
-for directory in [root / 'include', root / 'examples/examples-common/src', *[lesson / n for n in names]]:
+for directory in [root / 'include', root / 'examples/examples-common/src', *projects]:
     paths.extend(p for p in directory.rglob('*') if p.is_file() and 'target' not in p.parts
                  and (p.suffix in {'.rs', '.toml', '.ncrs', '.py', '.md'} or p.name == 'Cargo.lock'))
 sources = {p.relative_to(root).as_posix(): sha(p) for p in sorted(set(paths))}
@@ -55,8 +61,8 @@ def run(label, command, expected=0, timeout=180):
     return re.sub(r'\x1b\[[0-9;]*m', '', log.read_text(errors='replace'))
 
 
-for name in names:
-    project = lesson / name
+for project in projects:
+    name = project.name
     rom, report = out / (name + '.nczx'), out / (name + '.json')
     run(name + '-build', [nether, 'build', '-p', project, '-o', rom], timeout=300)
     witness = (project / 'witness.ncrs').read_text()
@@ -83,6 +89,7 @@ for name in names:
     assert bad['summary']['assertions_failed'] == len(failures) == 1
     assert failures[0]['condition'] == condition and failures[0]['actual'] != 999999
     media = []
+    sync_frames = 0
     if args.render:
         if name in ('fixed-clock-lab', 'seeded-random-lab'):
             command = [sys.executable, project / 'check.py', '--player', player,
@@ -109,20 +116,22 @@ for name in names:
                          if not line.startswith('screenshot ='))
         if max(f['f'] for f in tomllib.loads(text)['frames']) < 119:
             text += '\n\n[[frames]]\nf = 119\n'
+        sync_frames = max(f['f'] for f in tomllib.loads(text)['frames']) + 1
         sync.write_text(text, encoding='utf-8')
         log = run(name + '-sync', [player, rom, '--sync-test', '--check-distance', '2',
                                   '--players', script['players'], '--replay', sync,
-                                  '--exit-after-frames', '120', '--scale', '1'])
-        assert 'Frame limit reached after 120 advanced input frames' in log
+                                  '--exit-after-frames', str(sync_frames), '--scale', '1'])
+        assert f'Frame limit reached after {sync_frames} advanced input frames' in log
         assert 'desync' not in log.lower() and 'ERROR' not in log
     results.append({'id': name, 'frames': data['frames_executed'], 'assertions': assertions,
                     'negative_rejected': True, 'rom_sha256': sha(rom),
                     'native_and_scripted_rollback': args.render,
+                    'sync_input_frames': sync_frames,
                     'captures': [{'path': p.relative_to(out).as_posix(), 'sha256': sha(p)} for p in media]})
     assert all(sha(root / p) == digest for p, digest in sources.items()), 'Source changed during qualification'
     receipt = {'source_sha256': sources, 'player_sha256': sha(player), 'nether_sha256': sha(nether),
                'results': results, 'commands': commands, 'human_review': 'unreviewed'}
     (out / 'receipt.json').write_text(json.dumps(receipt, indent=2), encoding='utf-8')
     print(f'PASS {name}: {data["frames_executed"]} ticks, {assertions} assertions, negative rejected; native/sync={args.render}', flush=True)
-assert len(results) == len(names)
-print('PASS all four foundation lessons; committed-tree/remote/CI and human review are separate gates.')
+assert len(results) == len(projects)
+print(f'PASS all {len(projects)} selected lessons; committed-tree/remote/CI and human review are separate gates.')

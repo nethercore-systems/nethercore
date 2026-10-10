@@ -1,0 +1,274 @@
+console = "zx"
+seed = 4919
+players = 1
+
+[[frames]]
+f = 0
+snap = true
+assert = "$frame == 0"
+
+[[frames]]
+f = 2
+p1 = "x"
+snap = true
+assert = "$age == 1"
+
+[[frames]]
+f = 3
+p1 = "x"
+snap = true
+assert = "$age == 1"
+
+[[frames]]
+f = 4
+snap = true
+assert = "$age == 1"
+
+[[frames]]
+f = 5
+p1 = "a"
+snap = true
+assert = "$age == 2"
+
+[[frames]]
+f = 10
+snap = true
+assert = "$frame == 0"
+
+[[frames]]
+f = 11
+snap = true
+assert = "$frame == 1"
+
+[[frames]]
+f = 12
+snap = true
+assert = "$frame == 1"
+
+[[frames]]
+f = 22
+snap = true
+assert = "$frame == 1"
+
+[[frames]]
+f = 23
+snap = true
+assert = "$frame == 2"
+
+[[frames]]
+f = 30
+snap = true
+assert = "$frame == 2"
+
+[[frames]]
+f = 31
+snap = true
+assert = "$frame == 3"
+
+[[frames]]
+f = 42
+snap = true
+assert = "$frame == 3"
+
+[[frames]]
+f = 43
+snap = true
+assert = "$frame == 0"
+
+[[frames]]
+f = 49
+snap = true
+assert = "$frame == 0"
+
+[[frames]]
+f = 50
+p1 = "b"
+snap = true
+assert = "$mode == 1"
+
+[[frames]]
+f = 57
+snap = true
+assert = "$frame == 0"
+
+[[frames]]
+f = 58
+snap = true
+assert = "$frame == 1"
+
+[[frames]]
+f = 69
+snap = true
+assert = "$frame == 1"
+
+[[frames]]
+f = 70
+snap = true
+assert = "$frame == 2"
+
+[[frames]]
+f = 77
+snap = true
+assert = "$frame == 2"
+
+[[frames]]
+f = 78
+snap = true
+assert = "$frame == 3"
+
+[[frames]]
+f = 89
+snap = true
+assert = "$frame == 3"
+
+[[frames]]
+f = 90
+snap = true
+assert = "$finished == 1"
+
+[[frames]]
+f = 91
+snap = true
+assert = "$finished == 1"
+
+[[frames]]
+f = 92
+p1 = "l"
+snap = true
+assert = "$frame == 0"
+
+[[frames]]
+f = 100
+snap = true
+assert = "$frame == 1"
+
+[[frames]]
+f = 112
+snap = true
+assert = "$frame == 2"
+
+[[frames]]
+f = 120
+snap = true
+assert = "$frame == 3"
+
+[[frames]]
+f = 132
+snap = true
+assert = "$finished == 1"
+
+[[frames]]
+f = 135
+p1 = "b"
+snap = true
+assert = "$mode == 2"
+
+[[frames]]
+f = 142
+snap = true
+assert = "$frame == 0"
+
+[[frames]]
+f = 143
+snap = true
+assert = "$frame == 1"
+
+[[frames]]
+f = 154
+snap = true
+assert = "$frame == 1"
+
+[[frames]]
+f = 155
+snap = true
+assert = "$frame == 2"
+
+[[frames]]
+f = 162
+snap = true
+assert = "$frame == 2"
+
+[[frames]]
+f = 163
+snap = true
+assert = "$frame == 3"
+
+[[frames]]
+f = 174
+snap = true
+assert = "$frame == 3"
+
+[[frames]]
+f = 175
+snap = true
+assert = "$forward == 0"
+
+[[frames]]
+f = 182
+snap = true
+assert = "$frame == 2"
+
+[[frames]]
+f = 183
+snap = true
+assert = "$frame == 1"
+
+[[frames]]
+f = 194
+snap = true
+assert = "$frame == 1"
+
+[[frames]]
+f = 195
+snap = true
+assert = "$forward == 0"
+
+[[frames]]
+f = 202
+snap = true
+assert = "$frame == 0"
+
+[[frames]]
+f = 203
+snap = true
+assert = "$forward == 1"
+
+[[frames]]
+f = 210
+p1 = "a"
+snap = true
+assert = "$age == 6"
+
+[[frames]]
+f = 211
+snap = true
+assert = "$age == 6"
+
+[[frames]]
+f = 230
+snap = true
+assert = "$age == 6"
+
+[[frames]]
+f = 235
+p1 = "x"
+snap = true
+assert = "$age == 7"
+
+[[frames]]
+f = 236
+p1 = "x"
+snap = true
+assert = "$age == 7"
+
+[[frames]]
+f = 238
+p1 = "b"
+snap = true
+assert = "$mode == 0"
+
+[[frames]]
+f = 240
+p1 = "y"
+snap = true
+assert = "$frame == 0"

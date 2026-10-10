@@ -1,0 +1,83 @@
+console = "zx"
+seed = 4919
+players = 1
+
+[[frames]]
+f = 0
+snap = true
+assert = "$filter == 0"
+
+[[frames]]
+f = 1
+assert = "$region == 0"
+
+[[frames]]
+f = 2
+assert = "$inset == 0"
+
+[[frames]]
+f = 5
+p1 = "a"
+snap = true
+assert = "$filter == 1"
+
+[[frames]]
+f = 6
+p1 = "a"
+assert = "$filter == 1"
+
+[[frames]]
+f = 10
+p1 = "b"
+snap = true
+assert = "$region == 1"
+
+[[frames]]
+f = 15
+p1 = "l"
+snap = true
+assert = "$inset == 1"
+
+[[frames]]
+f = 20
+p1 = "a"
+snap = true
+assert = "$filter == 0"
+
+[[frames]]
+f = 25
+p1 = "b"
+snap = true
+assert = "$region == 2"
+
+[[frames]]
+f = 30
+p1 = "b"
+snap = true
+assert = "$region == 3"
+
+[[frames]]
+f = 35
+p1 = "b"
+snap = true
+assert = "$region == 4"
+
+[[frames]]
+f = 40
+p1 = "b"
+snap = true
+assert = "$region == 0"
+
+[[frames]]
+f = 45
+p1 = "y"
+snap = true
+assert = "$inset == 0"
+
+[[frames]]
+f = 46
+assert = "$filter == 0"
+
+[[frames]]
+f = 47
+assert = "$region == 0"

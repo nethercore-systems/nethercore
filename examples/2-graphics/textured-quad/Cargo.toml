@@ -12,5 +12,6 @@ examples-common = { path = "../../examples-common" }
 [profile.release]
 opt-level = "s"
 lto = true
+panic = "abort"
 
 [workspace]

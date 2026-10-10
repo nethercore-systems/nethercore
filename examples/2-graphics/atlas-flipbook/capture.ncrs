@@ -1,0 +1,126 @@
+console = "zx"
+seed = 4919
+players = 1
+
+[[frames]]
+f = 0
+screenshot = true
+
+[[frames]]
+f = 2
+p1 = "x"
+
+[[frames]]
+f = 3
+p1 = "x"
+screenshot = true
+
+[[frames]]
+f = 5
+p1 = "a"
+
+[[frames]]
+f = 11
+screenshot = true
+
+[[frames]]
+f = 23
+screenshot = true
+
+[[frames]]
+f = 31
+screenshot = true
+
+[[frames]]
+f = 43
+screenshot = true
+
+[[frames]]
+f = 50
+p1 = "b"
+screenshot = true
+
+[[frames]]
+f = 58
+screenshot = true
+
+[[frames]]
+f = 70
+screenshot = true
+
+[[frames]]
+f = 78
+screenshot = true
+
+[[frames]]
+f = 90
+screenshot = true
+
+[[frames]]
+f = 92
+p1 = "l"
+screenshot = true
+
+[[frames]]
+f = 100
+screenshot = true
+
+[[frames]]
+f = 132
+screenshot = true
+
+[[frames]]
+f = 135
+p1 = "b"
+screenshot = true
+
+[[frames]]
+f = 143
+screenshot = true
+
+[[frames]]
+f = 155
+screenshot = true
+
+[[frames]]
+f = 163
+screenshot = true
+
+[[frames]]
+f = 175
+screenshot = true
+
+[[frames]]
+f = 195
+screenshot = true
+
+[[frames]]
+f = 203
+screenshot = true
+
+[[frames]]
+f = 210
+p1 = "a"
+screenshot = true
+
+[[frames]]
+f = 230
+screenshot = true
+
+[[frames]]
+f = 235
+p1 = "x"
+screenshot = true
+
+[[frames]]
+f = 236
+p1 = "x"
+
+[[frames]]
+f = 238
+p1 = "b"
+
+[[frames]]
+f = 240
+p1 = "y"
+screenshot = true

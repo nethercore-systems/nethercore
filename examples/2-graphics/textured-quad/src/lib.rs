@@ -1,101 +1,184 @@
-//! Textured Quad Example
-//!
-//! Demonstrates texture loading and 2D drawing:
-//! - `load_texture()` to create a texture from RGBA pixel data
-//! - `texture_bind()` to bind the texture for drawing
-//! - `draw_sprite()` for basic 2D sprite rendering with color tinting
-//!
-//! A simple 8x8 checkerboard texture is rendered at screen center,
-//! with a color tint that cycles over time.
-//!
-//! Note: Rollback state is automatic (entire WASM memory is snapshotted). No save_state/load_state needed.
-
+//! An asymmetric labeled atlas separates UV orientation from per-draw sampling.
 #![no_std]
 #![no_main]
-
-use core::panic::PanicInfo;
-use examples_common::checkerboard_8x8;
+use examples_common::{checkerboard_8x8, ffi::*, hud};
 
 #[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
-    // Trigger a WASM trap so runtime can catch the error
-    // instead of infinite loop which freezes the game
+fn panic(_: &core::panic::PanicInfo) -> ! {
     core::arch::wasm32::unreachable()
 }
 
-// Import the canonical FFI bindings
-#[path = "../../../../include/zx/mod.rs"]
-mod ffi;
-use ffi::*;
-
-/// Texture handle for our checkerboard
 static mut TEXTURE: u32 = 0;
+static mut FILTER: u32 = 0;
+static mut REGION: u32 = 0;
+static mut INSET: u32 = 0;
 
-/// 8x8 checkerboard pattern (0xRRGGBBAA format) - cyan/magenta
-const CHECKERBOARD: [u8; 256] = checkerboard_8x8(0x00FFFFFF, 0xFF00FFFF);
+const fn atlas() -> [u8; 1024] {
+    let tiles = [
+        checkerboard_8x8(0xe63636ff, 0x5a1010ff),
+        checkerboard_8x8(0x36dd66ff, 0x105020ff),
+        checkerboard_8x8(0x3677ffff, 0x102050ff),
+        checkerboard_8x8(0xffd336ff, 0x605010ff),
+    ];
+    let digits = [
+        [2, 6, 2, 2, 7],
+        [6, 1, 2, 4, 7],
+        [6, 1, 2, 1, 6],
+        [5, 5, 7, 1, 1],
+    ];
+    let mut pixels = [0u8; 1024];
+    let mut y = 0;
+    while y < 16 {
+        let mut x = 0;
+        while x < 16 {
+            let tile = (y / 8) * 2 + x / 8;
+            let lx = x % 8;
+            let ly = y % 8;
+            let ink = lx >= 2
+                && lx <= 4
+                && ly >= 1
+                && ly <= 5
+                && (digits[tile][ly - 1] & (1 << (4 - lx))) != 0;
+            let mut c = 0;
+            while c < 4 {
+                pixels[(y * 16 + x) * 4 + c] = if ink {
+                    255
+                } else {
+                    tiles[tile][(ly * 8 + lx) * 4 + c]
+                };
+                c += 1;
+            }
+            x += 1;
+        }
+        y += 1;
+    }
+    pixels
+}
+const ATLAS: [u8; 1024] = atlas();
 
 #[no_mangle]
 pub extern "C" fn init() {
     unsafe {
-        // Dark blue background
-        set_clear_color(0x1a1a2eFF);
-
-        // Load the checkerboard texture
-        TEXTURE = load_texture(8, 8, CHECKERBOARD.as_ptr());
-
-        // Use nearest-neighbor filtering for crisp pixel art look
-        texture_filter(0);
+        set_clear_color(0x142031ff);
+        TEXTURE = load_texture(16, 16, ATLAS.as_ptr());
+        for (name, ptr) in [
+            ("filter", core::ptr::addr_of!(FILTER)),
+            ("region", core::ptr::addr_of!(REGION)),
+            ("inset", core::ptr::addr_of!(INSET)),
+        ] {
+            debug_watch_u32(name.as_ptr(), name.len() as u32, ptr.cast());
+        }
     }
 }
 
 #[no_mangle]
 pub extern "C" fn update() {
-    // No game state to update in this demo
+    unsafe {
+        if button_pressed(0, button::A) != 0 {
+            FILTER ^= 1;
+        }
+        if button_pressed(0, button::B) != 0 {
+            REGION = (REGION + 1) % 5;
+        }
+        if button_pressed(0, button::L1) != 0 {
+            INSET ^= 1;
+        }
+        if button_pressed(0, button::Y) != 0 {
+            FILTER = 0;
+            REGION = 0;
+            INSET = 0;
+        }
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
-        // Bind our texture
+        let filter = FILTER;
+        let region = REGION;
+        let inset = INSET;
+        // Rebind explicitly: text/shape helpers may select a different texture.
         texture_bind(TEXTURE);
-
-        // Create a cycling color tint based on elapsed time
-        // Uses simple triangle wave (no trig needed in no_std)
-        let t = elapsed_time();
-
-        // Triangle wave: goes 0 -> 1 -> 0 over period
-        fn triangle_wave(t: f32, period: f32) -> f32 {
-            let phase = (t / period) % 1.0;
-            if phase < 0.5 {
-                phase * 2.0
-            } else {
-                2.0 - phase * 2.0
-            }
+        texture_filter(0);
+        set_color(0xffffffff);
+        draw_sprite(64.0, 154.0, 320.0, 320.0);
+        texture_filter(filter);
+        let (mut u, mut v, mut width) = if region == 0 {
+            (0.0, 0.0, 1.0)
+        } else {
+            (
+                ((region - 1) % 2) as f32 * 0.5,
+                ((region - 1) / 2) as f32 * 0.5,
+                0.5,
+            )
+        };
+        let mut height = width;
+        if inset != 0 {
+            // Half a texel at each edge; deliberately visible, not hidden in a helper.
+            u += 0.5 / 16.0;
+            v += 0.5 / 16.0;
+            width -= 1.0 / 16.0;
+            height -= 1.0 / 16.0;
         }
-
-        // Offset each color channel for rainbow effect
-        let r = (triangle_wave(t, 3.0) * 255.0) as u8;
-        let g = (triangle_wave(t + 1.0, 3.0) * 255.0) as u8;
-        let b = (triangle_wave(t + 2.0, 3.0) * 255.0) as u8;
-
-        // Pack into 0xRRGGBBAA format
-        let tint = ((r as u32) << 24) | ((g as u32) << 16) | ((b as u32) << 8) | 0xFF;
-
-        // Draw the textured quad centered on screen (540p = 960x540)
-        // Sprite is 128x128 pixels at screen center
-        let sprite_size = 128.0;
-        let x = (960.0 - sprite_size) / 2.0;
-        let y = (540.0 - sprite_size) / 2.0;
-
-        // Draw with color tint
-        set_color(tint);
-        draw_sprite(x, y, sprite_size, sprite_size);
-
-        // Draw a few more at corners to show multiple sprites (white, no tint)
-        set_color(0xFFFFFFFF);
-        draw_sprite(16.0, 16.0, 64.0, 64.0);
-        draw_sprite(960.0 - 80.0, 16.0, 64.0, 64.0);
-        draw_sprite(16.0, 540.0 - 80.0, 64.0, 64.0);
-        draw_sprite(960.0 - 80.0, 540.0 - 80.0, 64.0, 64.0);
+        draw_sprite_region(520.0, 154.0, 320.0, 320.0, u, v, width, height);
+        texture_filter(0); // Restore nearest for labels; the preceding draws keep their own state.
+        hud::text(
+            32.0,
+            24.0,
+            24.0,
+            0xffffffff,
+            format_args!("TEXTURED QUAD / UV and filtering"),
+        );
+        hud::text(
+            32.0,
+            66.0,
+            14.0,
+            0xabc1d6ff,
+            format_args!("A: filter | B: UV region | L1: half-texel inset | Y: reset"),
+        );
+        hud::text(
+            64.0,
+            116.0,
+            17.0,
+            0xffcd66ff,
+            format_args!("REFERENCE / nearest / full"),
+        );
+        hud::text(
+            520.0,
+            102.0,
+            16.0,
+            0xffcd66ff,
+            format_args!(
+                "SUBJECT {} / tile {}",
+                if filter == 0 { "nearest" } else { "linear" },
+                region
+            ),
+        );
+        hud::text(
+            520.0,
+            128.0,
+            12.0,
+            0xabc1d6ff,
+            format_args!("UV {:.3},{:.3} + {:.3},{:.3}", u, v, width, height),
+        );
+        hud::text(
+            32.0,
+            488.0,
+            12.0,
+            0xffffffff,
+            format_args!(
+                "1 red TL | 2 green TR | 3 blue BL | 4 gold BR | Inset {}",
+                inset
+            ),
+        );
+        hud::text(
+            32.0,
+            516.0,
+            11.0,
+            0xabc1d6ff,
+            format_args!(
+                "Keys Z/X/Q/V | F3 state | Linear tile edges can bleed; inset excludes neighbors."
+            ),
+        );
     }
 }
