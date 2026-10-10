@@ -4,3 +4,11 @@ title = "Viewport Test"
 author = "Nethercore Examples"
 version = "0.1.0"
 render_mode = 0
+tick_rate = 60
+max_players = 4
+compress_textures = false
+description = "Independent viewport cameras, local HUD coordinates and clipped stencil masks"
+tags = ["demo", "viewport", "split-screen"]
+
+[netplay]
+enabled = false

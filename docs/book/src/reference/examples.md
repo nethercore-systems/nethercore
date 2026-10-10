@@ -122,7 +122,7 @@ images establish human acceptance.
 | Example | Description |
 |---------|-------------|
 | **stencil-demo** | Four stencil introductions: pass order, mask ink, portal depth-clear counterexample and reset |
-| **viewport-test** | Split-screen rendering (2P, 4P) |
+| **viewport-test** | 2P/4P cameras, local HUD coordinates, scissored masks/ink and independent input |
 | **rear-mirror** | Rear-view mirror using viewport |
 
 ### Support Library

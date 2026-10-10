@@ -1,210 +1,218 @@
-//! Viewport Test Example
-//!
-//! Demonstrates split-screen rendering with the viewport() function.
-//!
-//! Features:
-//! - 2-player horizontal split
-//! - 4-player quad split
-//! - Per-viewport camera with automatic aspect ratio
-//! - Press A to toggle between 2P and 4P modes
-//!
-//! Each viewport shows the same scene from a different camera angle,
-//! with camera aspect ratio automatically matching the viewport dimensions.
-
+//! Split-screen cameras, viewport-local HUDs and scissored stencil masks.
 #![no_std]
 #![no_main]
-
 use core::panic::PanicInfo;
+use examples_common::{ffi::*, hud};
+mod state;
+use state::State;
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
     core::arch::wasm32::unreachable()
 }
 
-// Import the canonical FFI bindings
-#[path = "../../../../include/zx/mod.rs"]
-mod ffi;
-use ffi::*;
-
-
-// Input button constants
-const BUTTON_A: u32 = 4;
-
-// Screen dimensions
-const SCREEN_WIDTH: u32 = 960;
-const SCREEN_HEIGHT: u32 = 540;
-
-// Mesh handles
-static mut CUBE_MESH: u32 = 0;
-static mut SPHERE_MESH: u32 = 0;
-static mut FLOOR_MESH: u32 = 0;
-
-// State
-static mut IS_4_PLAYER: bool = false;
-static mut PREV_A_BUTTON: u32 = 0;
-static mut TIME: f32 = 0.0;
-
-// Camera positions for each player (orbit around scene)
-static mut CAMERA_ANGLES: [f32; 4] = [0.0, 90.0, 180.0, 270.0];
+static mut CUBE: u32 = 0;
+static mut SPHERE: u32 = 0;
+static mut FLOOR: u32 = 0;
+static mut STATE: State = State::RESET;
+const COLORS: [u32; 4] = [0x40c8f0ff, 0xf0b040ff, 0xc060e0ff, 0x70d880ff];
 
 #[no_mangle]
 pub extern "C" fn init() {
     unsafe {
-        set_clear_color(0x2a2a3aFF);
-
-        // Generate scene objects
-        CUBE_MESH = cube(1.0, 1.0, 1.0);
-        SPHERE_MESH = sphere(0.5, 16, 8);
-        FLOOR_MESH = plane(10.0, 10.0, 4, 4);
+        set_clear_color(0x1a1a2eff);
+        CUBE = cube(1.0, 1.0, 1.0);
+        SPHERE = sphere(0.5, 16, 8);
+        FLOOR = plane(10.0, 10.0, 4, 4);
+        for (name, ptr) in [
+            ("quad", core::ptr::addr_of!(STATE.quad)),
+            ("mask", core::ptr::addr_of!(STATE.mask)),
+            ("ink", core::ptr::addr_of!(STATE.ink)),
+            ("paused", core::ptr::addr_of!(STATE.paused)),
+            ("tick", core::ptr::addr_of!(STATE.tick)),
+        ] {
+            debug_watch_u32(name.as_ptr(), name.len() as u32, ptr.cast());
+        }
+        for (p, name) in ["cam1", "cam2", "cam3", "cam4"].iter().enumerate() {
+            debug_watch_f32(
+                name.as_ptr(),
+                name.len() as u32,
+                core::ptr::addr_of!(STATE.angles[p]).cast(),
+            );
+        }
     }
 }
 
 #[no_mangle]
 pub extern "C" fn update() {
     unsafe {
-        TIME += 1.0 / 60.0;
-
-        // Toggle between 2P and 4P mode
-        let a_button = button_held(0, BUTTON_A);
-        if a_button != 0 && PREV_A_BUTTON == 0 {
-            IS_4_PLAYER = !IS_4_PLAYER;
-        }
-        PREV_A_BUTTON = a_button;
-
-        // Update camera angles based on player input
-        for i in 0..4 {
-            let stick_x = left_stick_x(i);
-            if stick_x.abs() > 0.1 {
-                CAMERA_ANGLES[i as usize] += stick_x * 2.0;
+        let mut pressed = 0;
+        for key in [button::A, button::B, button::X, button::Y, button::L1] {
+            if button_pressed(0, key) != 0 {
+                pressed |= 1 << key;
             }
         }
+        let sticks = [
+            left_stick_x(0),
+            left_stick_x(1),
+            left_stick_x(2),
+            left_stick_x(3),
+        ];
+        (&mut *core::ptr::addr_of_mut!(STATE)).step(pressed, sticks);
     }
 }
 
-/// Draw the scene from the current camera position
-unsafe fn draw_scene() {
-    // Floor
+unsafe fn scene(state: State, player: usize) {
+    let radians = state.angles[player].to_radians();
+    camera_set(
+        libm::cosf(radians) * 8.0,
+        5.0,
+        libm::sinf(radians) * 8.0,
+        0.0,
+        0.0,
+        0.0,
+    );
+    camera_fov(60.0); // Projection aspect is the current viewport's width/height.
+    if state.ink != 0 {
+        // Deliberately oversize: the actual viewport scissor must clip every edge.
+        let [_, _, w, h] = state.rect(player);
+        set_color(COLORS[player]);
+        draw_rect(-64.0, -64.0, w as f32 + 128.0, h as f32 + 128.0);
+        return;
+    }
     push_identity();
     push_translate(0.0, -1.0, 0.0);
-    set_color(0x404050FF);
-    draw_mesh(FLOOR_MESH);
-
-    // Central cube (rotating)
+    set_color(0x404050ff);
+    draw_mesh(FLOOR);
     push_identity();
-    push_rotate_y(TIME * 30.0);
-    set_color(0xFF6644FF);
-    draw_mesh(CUBE_MESH);
-
-    // Orbiting spheres
-    for i in 0..4 {
-        let angle = TIME * 60.0 + (i as f32) * 90.0;
-        let rad = angle.to_radians();
-        let x = libm::cosf(rad) * 3.0;
-        let z = libm::sinf(rad) * 3.0;
-
+    push_rotate_y(state.tick as f32 * 0.5);
+    set_color(0xff6644ff);
+    draw_mesh(CUBE);
+    for (i, color) in [0x44ff88ff, 0x4488ffff, 0xff44aaff, 0xffaa44ff]
+        .iter()
+        .enumerate()
+    {
+        let angle = (state.tick as f32 + i as f32 * 90.0).to_radians();
         push_identity();
-        push_translate(x, 0.0, z);
-
-        // Different color for each sphere
-        let colors = [0x44FF88FF, 0x4488FFFF, 0xFF44AAFF, 0xFFAA44FF];
-        set_color(colors[i as usize]);
-        draw_mesh(SPHERE_MESH);
+        push_translate(libm::cosf(angle) * 3.0, 0.0, libm::sinf(angle) * 3.0);
+        set_color(*color);
+        draw_mesh(SPHERE);
     }
+    // One off-axis tower makes world orientation legible from all four cameras.
+    push_identity();
+    push_translate(-1.5, 0.5, 2.2);
+    push_scale(0.35, 2.0, 0.35);
+    set_color(0xffff66ff);
+    draw_mesh(CUBE);
 }
 
-/// Set camera for a player viewport
-unsafe fn setup_camera(player: usize) {
-    let angle = CAMERA_ANGLES[player];
-    let rad = angle.to_radians();
-    let distance = 8.0;
-    let height = 5.0;
-
-    let cam_x = libm::cosf(rad) * distance;
-    let cam_z = libm::sinf(rad) * distance;
-
-    camera_set(cam_x, height, cam_z, 0.0, 0.0, 0.0);
-    camera_fov(60.0);
-}
-
-/// Draw player label in the viewport
-unsafe fn draw_player_label(player: usize) {
-    let text = match player {
-        0 => "P1",
-        1 => "P2",
-        2 => "P3",
-        3 => "P4",
-        _ => "??",
-    };
-    set_color(0xFFFFFFFF);
-        draw_text(text.as_ptr(), text.len() as u32, 10.0, 10.0, 24.0);
+unsafe fn local_hud(state: State, player: usize) {
+    let [_, _, w, h] = state.rect(player);
+    let (w, h) = (w as f32, h as f32);
+    z_index(2);
+    set_color(COLORS[player]);
+    draw_rect(0.0, 0.0, w, 2.0);
+    draw_rect(0.0, h - 2.0, w, 2.0);
+    draw_rect(0.0, 0.0, 2.0, h);
+    draw_rect(w - 2.0, 0.0, 2.0, h);
+    set_color(0x101824ff);
+    draw_rect(2.0, 2.0, w - 4.0, 34.0);
+    draw_rect(w - 44.0, h - 24.0, 42.0, 22.0);
+    z_index(3);
+    hud::text(
+        10.0,
+        8.0,
+        18.0,
+        0xffffffff,
+        format_args!("P{} / CAM {:.1}", player + 1, state.angles[player]),
+    );
+    hud::text(
+        w - 34.0,
+        h - 18.0,
+        10.0,
+        0xffffffff,
+        format_args!("BR{}", player + 1),
+    );
 }
 
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
-        if IS_4_PLAYER {
-            // 4-player quad split
-            let half_w = SCREEN_WIDTH / 2;
-            let half_h = SCREEN_HEIGHT / 2;
-
-            // Top-left (P1)
-            viewport(0, 0, half_w, half_h);
-            setup_camera(0);
-            draw_scene();
-            draw_player_label(0);
-
-            // Top-right (P2)
-            viewport(half_w, 0, half_w, half_h);
-            setup_camera(1);
-            draw_scene();
-            draw_player_label(1);
-
-            // Bottom-left (P3)
-            viewport(0, half_h, half_w, half_h);
-            setup_camera(2);
-            draw_scene();
-            draw_player_label(2);
-
-            // Bottom-right (P4)
-            viewport(half_w, half_h, half_w, half_h);
-            setup_camera(3);
-            draw_scene();
-            draw_player_label(3);
-
-            // Draw divider lines on fullscreen viewport
-            viewport_clear();
-            set_color(0x000000FF);
-        draw_rect(half_w as f32 - 1.0, 0.0, 2.0, SCREEN_HEIGHT as f32);
-            set_color(0x000000FF);
-        draw_rect(0.0, half_h as f32 - 1.0, SCREEN_WIDTH as f32, 2.0);
-        } else {
-            // 2-player horizontal split
-            let half_w = SCREEN_WIDTH / 2;
-
-            // Left (P1)
-            viewport(0, 0, half_w, SCREEN_HEIGHT);
-            setup_camera(0);
-            draw_scene();
-            draw_player_label(0);
-
-            // Right (P2)
-            viewport(half_w, 0, half_w, SCREEN_HEIGHT);
-            setup_camera(1);
-            draw_scene();
-            draw_player_label(1);
-
-            // Draw divider line on fullscreen viewport
-            viewport_clear();
-            set_color(0x000000FF);
-        draw_rect(half_w as f32 - 1.0, 0.0, 2.0, SCREEN_HEIGHT as f32);
+        let state = STATE;
+        z_index(0);
+        // Build every mask before any scene. Distinct references expose an
+        // unclipped later mask overwriting an earlier viewport's stencil.
+        if state.mask != 0 {
+            for player in 0..state.count() {
+                let [x, y, w, h] = state.rect(player);
+                viewport(x, y, w, h);
+                begin_pass_stencil_write(player as u32 + 1, 0);
+                set_color(0xffffffff);
+                draw_circle(120.0, h as f32 * 0.5, (h as f32 * 0.75).min(270.0));
+            }
         }
-
-        // HUD overlay on fullscreen
+        for player in 0..state.count() {
+            let [x, y, w, h] = state.rect(player);
+            viewport(x, y, w, h);
+            if state.mask != 0 {
+                begin_pass_stencil_test(player as u32 + 1, 0);
+            } else {
+                begin_pass(0);
+            }
+            z_index(0);
+            scene(state, player);
+            begin_pass(0); // Local UI must not inherit the scene's stencil test.
+            local_hud(state, player);
+        }
         viewport_clear();
-        let mode_text = if IS_4_PLAYER { "4-Player Mode (Press A to switch)" } else { "2-Player Mode (Press A to switch)" };
-        set_color(0xCCCCCCFF,
+        begin_pass(0);
+        z_index(4);
+        set_color(0x101824ff);
+        draw_rect(0.0, 0.0, 960.0, 64.0);
+        draw_rect(0.0, 492.0, 960.0, 48.0);
+        z_index(5);
+        hud::text(
+            12.0,
+            8.0,
+            22.0,
+            0xffffffff,
+            format_args!("VIEWPORT CAMERA LAB"),
         );
-        draw_text(
-            mode_text.as_ptr(), mode_text.len() as u32, SCREEN_WIDTH as f32 / 2.0 - 180.0, SCREEN_HEIGHT as f32 - 30.0, 16.0);
+        hud::text(
+            500.0,
+            14.0,
+            12.0,
+            0xccccccff,
+            format_args!(
+                "{}P  MASK={} INK={} PAUSE={}",
+                state.count(),
+                state.mask,
+                state.ink,
+                state.paused
+            ),
+        );
+        hud::text(
+            12.0,
+            42.0,
+            12.0,
+            0xffffffff,
+            format_args!("A 2P/4P | B mask | L1 ink | X play/pause | Y reset"),
+        );
+        hud::text(
+            12.0,
+            506.0,
+            12.0,
+            0xffffffff,
+            format_args!("P1-P4 left stick: own camera | depth clear affects WHOLE attachment"),
+        );
+        hud::text(
+            12.0,
+            525.0,
+            10.0,
+            0xccccccff,
+            format_args!(
+                "Local split-screen; not a networking/joining demonstration. Starts paused."
+            ),
+        );
     }
 }

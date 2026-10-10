@@ -1,0 +1,174 @@
+console = "zx"
+seed = 6719
+players = 4
+
+[[frames]]
+f = 0
+screenshot = true
+
+[[frames]]
+f = 4
+p1 = "l"
+
+[[frames]]
+f = 6
+screenshot = true
+
+[[frames]]
+f = 8
+p1 = "b"
+
+[[frames]]
+f = 10
+screenshot = true
+
+[[frames]]
+f = 12
+p1 = "a"
+
+[[frames]]
+f = 13
+p1 = "a"
+
+[[frames]]
+f = 14
+screenshot = true
+
+[[frames]]
+f = 16
+p1 = "b"
+
+[[frames]]
+f = 18
+screenshot = true
+
+[[frames]]
+f = 20
+p1 = "l"
+
+[[frames]]
+f = 22
+screenshot = true
+
+[[frames]]
+f = 24
+p1 = "b"
+
+[[frames]]
+f = 26
+screenshot = true
+
+[[frames]]
+f = 28
+p1 = "b"
+
+[[frames]]
+f = 30
+screenshot = true
+
+[[frames]]
+f = 32
+p1 = "a"
+
+[[frames]]
+f = 34
+screenshot = true
+
+[[frames]]
+f = 36
+p1 = "a"
+
+[[frames]]
+f = 38
+screenshot = true
+
+[[frames]]
+f = 40
+p1 = { lstick = [1.0, 0.0] }
+p2 = { lstick = [-1.0, 0.0] }
+p3 = { lstick = [0.05, 0.0] }
+p4 = { lstick = [1.0, 0.0] }
+
+[[frames]]
+f = 41
+p1 = { lstick = [1.0, 0.0] }
+p2 = { lstick = [-1.0, 0.0] }
+p3 = { lstick = [0.05, 0.0] }
+p4 = { lstick = [1.0, 0.0] }
+
+[[frames]]
+f = 42
+p1 = { lstick = [1.0, 0.0] }
+p2 = { lstick = [-1.0, 0.0] }
+
+[[frames]]
+f = 43
+p1 = { lstick = [1.0, 0.0] }
+
+[[frames]]
+f = 44
+p1 = { lstick = [1.0, 0.0] }
+
+[[frames]]
+f = 45
+p1 = { lstick = [1.0, 0.0] }
+
+[[frames]]
+f = 47
+screenshot = true
+
+[[frames]]
+f = 50
+p3 = { lstick = [-1.0, 0.0] }
+
+[[frames]]
+f = 52
+screenshot = true
+
+[[frames]]
+f = 55
+p1 = "x"
+
+[[frames]]
+f = 61
+p1 = "x"
+
+[[frames]]
+f = 63
+screenshot = true
+
+[[frames]]
+f = 64
+screenshot = true
+
+[[frames]]
+f = 68
+p1 = "y"
+
+[[frames]]
+f = 70
+screenshot = true
+
+[[frames]]
+f = 72
+p1 = "a"
+
+[[frames]]
+f = 74
+screenshot = true
+
+[[frames]]
+f = 76
+p1 = "l+b"
+
+[[frames]]
+f = 78
+screenshot = true
+
+[[frames]]
+f = 80
+p1 = "y"
+
+[[frames]]
+f = 82
+screenshot = true

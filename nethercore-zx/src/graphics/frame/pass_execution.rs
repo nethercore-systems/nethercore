@@ -15,7 +15,7 @@ use hashbrown::HashMap;
 
 /// State tracked during render pass execution to minimize redundant GPU state changes.
 struct RenderPassState {
-    current_viewport: Option<super::super::Viewport>,
+    current_viewport: Option<(super::super::Viewport, bool)>,
     current_pass_id: Option<u32>,
     bound_pipeline: Option<PipelineKey>,
     bound_texture_slots: Option<[TextureHandle; 4]>,
@@ -280,13 +280,22 @@ impl ZXGraphics {
                     break;
                 }
 
-                // Set viewport and scissor rect if changed (split-screen support)
-                if state.current_viewport != Some(cmd_viewport) {
+                // Screen-space quads already contain the viewport's pixel origin
+                // and convert against the full screen in the shader. Do not map
+                // them through the smaller viewport twice; retain its scissor.
+                // Cache the route too: a mesh/quad switch can keep the same rect.
+                let viewport_key = (cmd_viewport, is_screen_space_quad);
+                if state.current_viewport != Some(viewport_key) {
+                    let gpu_viewport = if is_screen_space_quad {
+                        super::super::Viewport::FULLSCREEN
+                    } else {
+                        cmd_viewport
+                    };
                     render_pass.set_viewport(
-                        cmd_viewport.x as f32,
-                        cmd_viewport.y as f32,
-                        cmd_viewport.width as f32,
-                        cmd_viewport.height as f32,
+                        gpu_viewport.x as f32,
+                        gpu_viewport.y as f32,
+                        gpu_viewport.width as f32,
+                        gpu_viewport.height as f32,
                         0.0,
                         1.0,
                     );
@@ -296,7 +305,7 @@ impl ZXGraphics {
                         cmd_viewport.width,
                         cmd_viewport.height,
                     );
-                    state.current_viewport = Some(cmd_viewport);
+                    state.current_viewport = Some(viewport_key);
                 }
 
                 // Set stencil reference if pass changed
