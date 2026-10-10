@@ -1,7 +1,16 @@
 [game]
-name = "Hello World (Zig)"
-version = "1.0.0"
-description = "A simple hello world game written in Zig"
+id = "hello-world-zig"
+title = "Hello World (Zig)"
+author = "Nethercore Examples"
+version = "0.1.0"
+render_mode = 0
+tick_rate = 60
+max_players = 1
+compress_textures = false
+
+[netplay]
+enabled = false
 
 [build]
-entry = "zig-out/bin/game.wasm"
+script = "zig build"
+wasm = "zig-out/bin/game.wasm"

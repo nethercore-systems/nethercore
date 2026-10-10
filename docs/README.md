@@ -18,6 +18,10 @@ For the canonical ZX ABI signatures, see [include/zx.rs](../include/zx.rs).
 - Getting started: [docs/contributing/getting-started.md](./contributing/getting-started.md)
 - Distributing games: [docs/contributing/distributing-games.md](./contributing/distributing-games.md)
 
+## Development Plans
+
+- ZX example curriculum: [90-project development contract and progress ledger](./plans/zx-examples-development.md)
+
 ## Maintenance
 
 - Refactor / cleanup TODOs: [docs/maintenance/refactor-todos.md](./maintenance/refactor-todos.md)

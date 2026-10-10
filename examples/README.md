@@ -1,6 +1,6 @@
 # Nethercore Examples
 
-**39 working examples** organized into 8 categories to help you learn game development with Nethercore.
+**44 source example projects** organized into 8 categories. Source presence is not runtime qualification; the [90-project development ledger](../docs/plans/zx-examples-development.md) records verified coverage and work still pending.
 
 ## 📁 Organization
 
@@ -8,11 +8,11 @@
 examples/
 ├── 1-getting-started/   →  5 examples   (FFI basics, languages)
 ├── 2-graphics/          →  7 examples   (Rendering, meshes, materials)
-├── 3-inspectors/        →  6 examples   (Debug inspector, render modes, environments)
-├── 4-animation/         →  3 examples   (Skeletal animation)
+├── 3-inspectors/        →  7 examples   (Debug inspector, render modes, environments)
+├── 4-animation/         →  6 examples   (Skeletal animation)
 ├── 5-audio/             →  5 examples   (Sound effects, tracker music)
-├── 6-assets/            →  7 examples   (ROM loading, data packs, GLTF/GLB pipeline)
-├── 7-games/             →  2 examples   (Complete games)
+├── 6-assets/            →  8 examples   (ROM loading, data packs, GLTF/GLB pipeline)
+├── 7-games/             →  3 examples   (Complete games)
 ├── 8-advanced/          →  3 examples   (Stencils, viewports, mirrors)
 └── examples-common/     →  Support library
 ```
@@ -39,7 +39,7 @@ nether build
 Build all examples at once:
 
 ```bash
-# From repository root - builds all Rust examples and installs them to your Nethercore data directory under `games/` (prints the exact path)
+# From repository root - builds Rust, C and Zig examples and installs them to your Nethercore data directory under `games/` (prints the exact path)
 cargo xtask build-examples
 
 # Run any example from the library
@@ -72,10 +72,10 @@ Learn the basics across multiple languages.
 
 | Example | Description | Difficulty | Language |
 |---------|-------------|------------|----------|
-| **hello-world** | 2D drawing, text, rectangles, basic input | 🟢 Beginner | Rust |
+| **[hello-world](1-getting-started/hello-world/README.md)** | 2D drawing, text, rectangles, basic input | 🟢 Beginner | Rust |
 | **save-slots** | Persistent save slots (save/load/delete) | 🟢 Beginner | Rust |
-| **hello-world-c** | Identical to hello-world, demonstrates C FFI | 🟢 Beginner | C |
-| **hello-world-zig** | Identical to hello-world, demonstrates Zig FFI | 🟢 Beginner | Zig |
+| **[hello-world-c](1-getting-started/hello-world-c/README.md)** | Identical to hello-world, demonstrates C FFI | 🟢 Beginner | C |
+| **[hello-world-zig](1-getting-started/hello-world-zig/README.md)** | Identical to hello-world, demonstrates Zig FFI | 🟢 Beginner | Zig |
 | **triangle** | Minimal 3D rendering with a single colored triangle | 🟢 Beginner | Rust |
 
 ---
@@ -98,7 +98,7 @@ Core rendering techniques and procedural meshes.
 
 ---
 
-### 3. Inspectors (6 examples)
+### 3. Inspectors (7 examples)
 
 Interactive debuggers for render modes and environment effects.
 
@@ -111,16 +111,17 @@ Interactive debuggers for render modes and environment effects.
 | **mode2-inspector** | Mode 2 | Metallic-Roughness PBR (Mode 2) explorer |
 | **mode3-inspector** | Mode 3 | Specular-Shininess Blinn-Phong explorer |
 
-#### Debug + EPU (2)
+#### Debug + EPU (3)
 
 | Example | Description |
 |---------|-------------|
 | **debug-demo** | Debug inspection system (F4 panel) |
 | **epu-showcase** | EPU environment presets + inspector |
+| **epu-inspector** | Packed eight-layer EPU instruction explorer |
 
 ---
 
-### 4. Animation & Skinning (3 examples)
+### 4. Animation & Skinning (6 examples)
 
 GPU skeletal animation and keyframe playback.
 
@@ -129,6 +130,9 @@ GPU skeletal animation and keyframe playback.
 | **skinned-mesh** | GPU skeletal animation basics | 🟡 Intermediate | `set_bones()`, basic transforms |
 | **animation-demo** | Keyframe animation playback from ROM | 🟡 Intermediate | ROM-based anim data |
 | **multi-skinned-rom** | Multiple animated characters (ROM data) | 🟡 Intermediate | ROM skeleton + anim |
+| **ik-demo** | Inverse kinematics | 🟡 Intermediate | Guest-side joint solving |
+| **multi-skinned-procedural** | Multiple procedural characters | 🟡 Intermediate | Per-instance bones |
+| **skeleton-stress-test** | Skeleton budget inspection | 🔴 Advanced | Instancing and bone budgets |
 
 ---
 
@@ -161,10 +165,11 @@ ROM-based asset workflows and data packs.
 | **gltf-test** | Tests GLTF import (mesh, skeleton, animation) | 🟡 Intermediate | GLTF pipeline, conversion validation |
 | **glb-inline** | Raw GLB references with multiple animations | 🟡 Intermediate | Direct `.glb` in `nether.toml`, animation selectors |
 | **glb-rigid** | Rigid transform animation imported from GLB | 🟡 Intermediate | `keyframe_read()`, multi-mesh transforms |
+| **epu-textures-demo** | Six-face environment textures | 🟡 Intermediate | `rom_texture()`, `epu_textures()` |
 
 ---
 
-### 7. Complete Games (2 examples)
+### 7. Complete Games (3 examples)
 
 Fully playable games demonstrating complete game loops.
 
@@ -172,6 +177,7 @@ Fully playable games demonstrating complete game loops.
 |---------|-------------|------------|--------------|
 | **paddle** | Classic 2-player paddle game | 🟢 Beginner | AI, rollback netcode, sound, [tutorial](../docs/book/src/tutorials/paddle/index.md) |
 | **platformer** | 2D platformer mini-game | 🟡 Intermediate | Physics, collision, billboards, UI |
+| **netplay-demo** | Multiplayer arena and session feedback | 🟡 Intermediate | Player/session input |
 
 ---
 
@@ -198,9 +204,9 @@ Stencil buffers, viewports, and advanced techniques.
 
 ## 📊 Statistics
 
-- **Total Examples:** 39
+- **Source Projects:** 44
 - **Languages:** Rust, C, Zig
-- **Complete Games:** 2
+- **Game Projects:** 3
 
 ---
 
@@ -272,9 +278,10 @@ See [`../docs/contributing/`](../docs/contributing/) for guidelines.
 
 ## Isolated build verification
 
-`cargo xtask build-examples` discovers Cargo/Rust projects only, not C/Zig
-examples. For self-contained test fixtures, keep installation and stale-example
-cleanup away from your normal library:
+`cargo xtask build-examples` discovers Cargo projects and manifest-declared C/Zig
+builds. All three language toolchains are required; failures are not skipped.
+For self-contained test fixtures, keep installation and stale-example cleanup
+away from your normal library:
 
 ```bash
 cargo xtask build-examples --examples-dir <fixture-directory> --games-dir <disposable-install-directory>

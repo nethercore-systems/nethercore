@@ -26,6 +26,20 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
+      - name: Setup Zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.13.0
+
+      - name: Check C example toolchain
+        shell: pwsh
+        run: |
+          "C:\Program Files\LLVM\bin" | Out-File $env:GITHUB_PATH -Append -Encoding utf8
+          & "C:\Program Files\LLVM\bin\clang.exe" --version
+          if ($LASTEXITCODE -ne 0) { throw "Clang is required; C examples cannot be skipped" }
+          & "C:\Program Files\LLVM\bin\wasm-ld.exe" --version
+          if ($LASTEXITCODE -ne 0) { throw "Clang's WASM linker is required" }
+
       - name: Cache Cargo
         uses: actions/cache@v4
         with:
@@ -39,6 +53,20 @@ jobs:
 
       - name: Build player, library, and CLI
         run: cargo build --release -p nethercore-zx -p nethercore-library -p nether-cli
+
+      - name: Verify Rust C Zig first cartridges after relocation
+        shell: pwsh
+        run: |
+          python examples/1-getting-started/hello-world/check.py --nether "$pwd/target/release/nether.exe" --player "$pwd/target/release/nethercore-zx.exe" --output "$env:RUNNER_TEMP/zx-first-cartridges"
+          if ($LASTEXITCODE -ne 0) { throw "A first-cartridge language failed" }
+
+      - name: Upload first-cartridge checks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: first-cartridge-checks
+          path: ${{ runner.temp }}/zx-first-cartridges
+          retention-days: 14
 
       - name: Build examples
         run: cargo xtask build-examples

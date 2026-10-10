@@ -1,7 +1,16 @@
 [game]
-name = "Hello World (C)"
-version = "1.0.0"
-description = "A simple hello world game written in C"
+id = "hello-world-c"
+title = "Hello World (C)"
+author = "Nethercore Examples"
+version = "0.1.0"
+render_mode = 0
+tick_rate = 60
+max_players = 1
+compress_textures = false
+
+[netplay]
+enabled = false
 
 [build]
-entry = "game.wasm"
+script = "clang --target=wasm32-unknown-unknown -ffreestanding -nostdlib -Oz -Wall -Wextra -Werror -I../../../include -Wl,--no-entry -Wl,--export=init -Wl,--export=update -Wl,--export=render -Wl,--allow-undefined -o game.wasm game.c"
+wasm = "game.wasm"

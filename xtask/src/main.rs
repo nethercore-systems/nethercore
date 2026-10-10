@@ -25,6 +25,23 @@ mod shipping_tests {
             build_example_games(&examples, &games, &root.path().join("missing-nether")).is_err()
         );
     }
+
+    #[test]
+    fn shipping_non_cargo_examples_are_not_silently_skipped() {
+        for name in ["hello-world-c", "hello-world-zig"] {
+            let root = tempfile::tempdir().unwrap();
+            let examples = root.path().join("examples");
+            let games = root.path().join("games");
+            let project = examples.join(name);
+            fs::create_dir_all(&project).unwrap();
+            fs::create_dir_all(&games).unwrap();
+            fs::write(project.join("nether.toml"), "[game]\nid='fixture'\n").unwrap();
+            // No Cargo.toml: the missing compiler/CLI must fail, not report 0/0 green.
+            let error = build_example_games(&examples, &games, &root.path().join("missing-nether"))
+                .expect_err("a non-Cargo example must participate in the aggregate gate");
+            assert!(error.to_string().contains("1 example(s) failed"), "{error}");
+        }
+    }
 }
 
 mod cart;
@@ -51,7 +68,7 @@ struct Cli {
 #[derive(Subcommand)]
 #[allow(clippy::large_enum_variant)]
 enum Commands {
-    /// Build and install Cargo/Rust example games (C/Zig are not discovered)
+    /// Build and install example games (Rust, C and Zig)
     BuildExamples {
         /// Self-contained examples directory; skips workspace asset generators
         #[arg(long, requires = "games_dir")]
@@ -121,7 +138,7 @@ fn build_example_games(examples_dir: &Path, games_dir: &Path, nether_exe: &Path)
     // Library crates that shouldn't be built as standalone examples
     let skip_dirs = ["examples-common"];
 
-    // Get all example directories that have a Cargo.toml (are buildable)
+    // Manifests also declare non-Cargo builds (C/Zig); never silently skip them.
     // Supports both flat structure (examples/example-name/) and nested structure (examples/category/example-name/)
     let examples: Vec<_> = WalkDir::new(examples_dir)
         .min_depth(1) // Skip the examples/ root directory
@@ -133,7 +150,7 @@ fn build_example_games(examples_dir: &Path, games_dir: &Path, nether_exe: &Path)
             let name = entry.file_name();
             let name_str = name.to_string_lossy();
             path.is_dir()
-                && path.join("Cargo.toml").exists()
+                && (path.join("Cargo.toml").exists() || path.join("nether.toml").exists())
                 && !skip_dirs.contains(&name_str.as_ref())
                 && !name_str.starts_with('_') // Skip _lib/ and other private directories
         })

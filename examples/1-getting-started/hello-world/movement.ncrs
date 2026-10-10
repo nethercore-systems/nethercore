@@ -1,0 +1,195 @@
+# Shared Rust/C/Zig contract: press edges, hold, release, clamps, cancellation, reset.
+console = "zx"
+seed = 4919
+players = 1
+
+[[frames]]
+f = 0
+assert = "$square_y == 240"
+snap = true
+
+[[frames]]
+f = 1
+p1 = "up"
+assert = "$square_y == 230"
+snap = true
+
+[[frames]]
+f = 2
+p1 = "up"
+assert = "$square_y == 230"
+snap = true
+
+[[frames]]
+f = 4
+p1 = "up"
+assert = "$square_y == 220"
+snap = true
+
+[[frames]]
+f = 6
+p1 = "up"
+
+[[frames]]
+f = 8
+p1 = "up"
+
+[[frames]]
+f = 10
+p1 = "up"
+
+[[frames]]
+f = 12
+p1 = "up"
+
+[[frames]]
+f = 14
+p1 = "up"
+
+[[frames]]
+f = 16
+p1 = "up"
+
+[[frames]]
+f = 18
+p1 = "up"
+
+[[frames]]
+f = 20
+p1 = "up"
+assert = "$square_y == 160"
+snap = true
+
+[[frames]]
+f = 22
+p1 = "up"
+
+[[frames]]
+f = 24
+p1 = "up"
+
+[[frames]]
+f = 26
+p1 = "up"
+assert = "$square_y == 160"
+snap = true
+
+[[frames]]
+f = 30
+p1 = "a"
+assert = "$square_y == 240"
+snap = true
+
+[[frames]]
+f = 32
+p1 = "down"
+assert = "$square_y == 250"
+snap = true
+
+[[frames]]
+f = 33
+p1 = "down"
+
+[[frames]]
+f = 34
+p1 = "down"
+assert = "$square_y == 250"
+snap = true
+
+[[frames]]
+f = 36
+p1 = "down"
+
+[[frames]]
+f = 38
+p1 = "down"
+
+[[frames]]
+f = 40
+p1 = "down"
+
+[[frames]]
+f = 42
+p1 = "down"
+
+[[frames]]
+f = 44
+p1 = "down"
+
+[[frames]]
+f = 46
+p1 = "down"
+
+[[frames]]
+f = 48
+p1 = "down"
+
+[[frames]]
+f = 50
+p1 = "down"
+
+[[frames]]
+f = 52
+p1 = "down"
+
+[[frames]]
+f = 54
+p1 = "down"
+
+[[frames]]
+f = 56
+p1 = "down"
+
+[[frames]]
+f = 58
+p1 = "down"
+
+[[frames]]
+f = 60
+p1 = "down"
+
+[[frames]]
+f = 62
+p1 = "down"
+
+[[frames]]
+f = 64
+p1 = "down"
+
+[[frames]]
+f = 66
+p1 = "down"
+
+[[frames]]
+f = 68
+p1 = "down"
+assert = "$square_y == 384"
+snap = true
+
+[[frames]]
+f = 70
+assert = "$square_y == 384"
+snap = true
+
+[[frames]]
+f = 72
+p1 = "up"
+assert = "$square_y == 374"
+snap = true
+
+[[frames]]
+f = 74
+p1 = "up+down"
+assert = "$square_y == 374"
+snap = true
+
+[[frames]]
+f = 76
+p1 = "a"
+assert = "$square_y == 240"
+snap = true
+
+[[frames]]
+f = 90
+assert = "$square_y == 240"
+snap = true

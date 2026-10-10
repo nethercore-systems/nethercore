@@ -1,6 +1,6 @@
 # Example Games
 
-The Nethercore repository includes **46 working examples** organized into 8 categories. Each example is a complete, buildable project (Rust, C, or Zig).
+The repository contains **44 source example projects** in 8 categories (Rust, C and Zig). The [development ledger](../../../plans/zx-examples-development.md) distinguishes source presence from runtime qualification and the planned 90-project curriculum.
 
 ## Location
 
@@ -8,13 +8,13 @@ Examples are organized by category:
 
 ```
 examples/
-├── 1-getting-started/   (4 examples)
-├── 2-graphics/          (6 examples)
-├── 3-inspectors/        (13 examples)
+├── 1-getting-started/   (5 examples)
+├── 2-graphics/          (7 examples)
+├── 3-inspectors/        (7 examples)
 ├── 4-animation/         (6 examples)
 ├── 5-audio/             (5 examples)
-├── 6-assets/            (7 examples)
-├── 7-games/             (2 examples)
+├── 6-assets/            (8 examples)
+├── 7-games/             (3 examples)
 ├── 8-advanced/          (3 examples)
 └── examples-common/     (support library)
 ```
@@ -36,9 +36,10 @@ New to Nethercore? Follow this progression:
 
 | Example | Description |
 |---------|-------------|
-| **hello-world** | Basic 2D drawing, text, input handling |
+| **hello-world** | Basic 2D drawing, text, input handling; [source and replay checks](https://github.com/nethercore-systems/nethercore/tree/main/examples/1-getting-started/hello-world) |
 | **hello-world-c** | Same example in C (demonstrates C FFI) |
 | **hello-world-zig** | Same example in Zig (demonstrates Zig FFI) |
+| **save-slots** | Persistent save slots |
 | **triangle** | Minimal 3D rendering |
 
 ### 2. Graphics & Rendering

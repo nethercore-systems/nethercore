@@ -79,8 +79,8 @@ pub fn generate_zig_bindings(model: &FfiModel, console: &str) -> Result<String> 
             }
         }
 
-        // Function declaration
-        write!(output, "pub extern \"C\" fn {}(", func.name)?;
+        // Zig extern strings name the WASM import module, not the calling convention.
+        write!(output, "pub extern \"env\" fn {}(", func.name)?;
 
         for (i, param) in func.params.iter().enumerate() {
             if i > 0 {
@@ -176,7 +176,7 @@ mod tests {
 
         let zig = generate_zig_bindings(&model, "test").unwrap();
 
-        assert!(zig.contains("pub extern \"C\" fn test_fn(x: u32) f32;"));
+        assert!(zig.contains("pub extern \"env\" fn test_fn(x: u32) f32;"));
         assert!(zig.contains("/// Test function"));
         assert!(
             zig.contains("/// Test function\n///\n/// Next paragraph\n///\n/// Last paragraph\n")
