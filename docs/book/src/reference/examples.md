@@ -121,7 +121,7 @@ images establish human acceptance.
 
 | Example | Description |
 |---------|-------------|
-| **stencil-demo** | All 4 stencil masking modes |
+| **stencil-demo** | Four stencil introductions: pass order, mask ink, portal depth-clear counterexample and reset |
 | **viewport-test** | Split-screen rendering (2P, 4P) |
 | **rear-mirror** | Rear-view mirror using viewport |
 

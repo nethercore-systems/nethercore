@@ -216,7 +216,7 @@ Stencil buffers, viewports, and advanced techniques.
 
 | Example | Description | Difficulty | Key Features |
 |---------|-------------|------------|--------------|
-| **stencil-demo** | All 4 stencil masking modes | 🔴 Advanced | Circle, inverted, diagonal, multiple masks |
+| **stencil-demo** | Four stencil introductions with pass-order labels | 🟡 Intermediate | Circle/inverted/diagonal/portal, mask ink, depth-clear witness and reset |
 | **viewport-test** | Split-screen rendering (2P, 4P) | 🟡 Intermediate | Multiple viewports |
 | **rear-mirror** | Rear-view mirror for racing | 🔴 Advanced | Secondary viewport |
 

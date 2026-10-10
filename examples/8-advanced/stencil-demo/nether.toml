@@ -4,3 +4,11 @@ title = "Stencil Demo"
 author = "Nethercore Examples"
 version = "0.1.0"
 render_mode = 0
+tick_rate = 60
+max_players = 1
+compress_textures = false
+description = "Four stencil masks, ordered passes and a depth-clear counterexample"
+tags = ["demo", "stencil", "rendering"]
+
+[netplay]
+enabled = false
