@@ -1,13 +1,13 @@
 # Nethercore Examples
 
-**49 source example projects** organized into 8 categories. Source presence is not runtime qualification; the [90-project development ledger](../docs/plans/zx-examples-development.md) records verified coverage and work still pending.
+**50 source example projects** organized into 8 categories. Source presence is not runtime qualification; the [90-project development ledger](../docs/plans/zx-examples-development.md) records verified coverage and work still pending.
 
 ## 📁 Organization
 
 ```
 examples/
 ├── 1-getting-started/   →  8 examples   (FFI basics, languages, input/time/RNG)
-├── 2-graphics/          →  9 examples   (Rendering, atlas playback, pivots, meshes, materials)
+├── 2-graphics/          → 10 examples   (Rendering, atlases, pivots, transforms, meshes)
 ├── 3-inspectors/        →  7 examples   (Debug inspector, render modes, environments)
 ├── 4-animation/         →  6 examples   (Skeletal animation)
 ├── 5-audio/             →  5 examples   (Sound effects, tracker music)
@@ -117,6 +117,7 @@ Core rendering techniques and procedural meshes.
 | **textured-quad** | Numbered atlas, UV regions and per-draw sampling | 🟢 Beginner | Nearest/linear comparison, half-texel inset, reset and native witness |
 | **atlas-flipbook** | Guest-owned sprite animation timing | 🟢 Beginner | Loop/once/ping-pong, unequal frame durations, pause/tick/rewind and native witness |
 | **sprite-pivot-lab** | Center/edge origins and explicit two-link composition | 🟢 Beginner | Eight rotation stops, UV regions, marked anchors and independent native probes |
+| **transform-composition-lab** | T*R versus R*T and a two-joint crane | 🟢 Beginner | Eight angles, API/matrix parity, scalar projected-bound checks and explicit hierarchy |
 | **procedural-shapes** | 7 built-in mesh generators with texture toggle | 🟡 Intermediate | B button toggles textured/plain modes |
 | **lighting** | Full PBR lighting with 4 dynamic lights | 🟡 Intermediate | Mode 2 PBR, sky system, metallic/roughness |
 | **epu-multi-reflections** | Two shiny spheres switching immediate-mode EPU sources | 🟡 Intermediate | `epu_set()`, `epu_textures()`, `draw_epu()` |

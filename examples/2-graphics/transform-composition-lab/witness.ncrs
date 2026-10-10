@@ -1,0 +1,151 @@
+console = "zx"
+seed = 4919
+players = 1
+
+[[frames]]
+f = 0
+snap = true
+assert = "$step == 1"
+
+[[frames]]
+f = 5
+p1 = "a"
+snap = true
+assert = "$right_x == 0"
+
+[[frames]]
+f = 6
+p1 = "a"
+snap = true
+assert = "$step == 2"
+
+[[frames]]
+f = 10
+p1 = "a"
+snap = true
+assert = "$step == 3"
+
+[[frames]]
+f = 15
+p1 = "a"
+snap = true
+assert = "$step == 4"
+
+[[frames]]
+f = 20
+p1 = "a"
+snap = true
+assert = "$step == 5"
+
+[[frames]]
+f = 25
+p1 = "a"
+snap = true
+assert = "$step == 6"
+
+[[frames]]
+f = 30
+p1 = "a"
+snap = true
+assert = "$step == 7"
+
+[[frames]]
+f = 35
+p1 = "a"
+snap = true
+assert = "$step == 0"
+
+[[frames]]
+f = 40
+p1 = "a"
+snap = true
+assert = "$step == 1"
+
+[[frames]]
+f = 45
+p1 = "x"
+snap = true
+assert = "$explicit == 1"
+
+[[frames]]
+f = 50
+p1 = "a"
+snap = true
+assert = "$step == 2"
+
+[[frames]]
+f = 55
+p1 = "a"
+snap = true
+assert = "$step == 3"
+
+[[frames]]
+f = 60
+p1 = "a"
+snap = true
+assert = "$step == 4"
+
+[[frames]]
+f = 65
+p1 = "a"
+snap = true
+assert = "$step == 5"
+
+[[frames]]
+f = 70
+p1 = "a"
+snap = true
+assert = "$step == 6"
+
+[[frames]]
+f = 75
+p1 = "a"
+snap = true
+assert = "$step == 7"
+
+[[frames]]
+f = 80
+p1 = "a"
+snap = true
+assert = "$step == 0"
+
+[[frames]]
+f = 85
+p1 = "a"
+snap = true
+assert = "$step == 1"
+
+[[frames]]
+f = 90
+p1 = "b"
+snap = true
+assert = "$flip == 1"
+
+[[frames]]
+f = 95
+p1 = "a"
+snap = true
+assert = "$elbow_x == 7"
+
+[[frames]]
+f = 100
+p1 = "a"
+snap = true
+assert = "$step == 3"
+
+[[frames]]
+f = 105
+p1 = "y"
+snap = true
+assert = "$explicit == 0"
+
+[[frames]]
+f = 106
+p1 = "y"
+snap = true
+assert = "$step == 1"
+
+[[frames]]
+f = 107
+snap = true
+assert = "$flip == 0"

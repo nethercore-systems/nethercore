@@ -101,9 +101,9 @@ Not in this execution: guest RTT, new projector/decal ABI, explicit depth-bias A
 
 - Work state: WORKING. The latest execution request explicitly says to continue with the current single owner and removes model/effort requirements. No model migration, new worker or further owner gate is needed. Preserve all five gates and the exact 90-entry scope.
 - Automatic continuation: the saved goal was last read back ACTIVE with the same current-owner clause now supplied by the continuation. The later attempted pause/old-contract restoration DID NOT RUN because its approval expired. Do not run `checkpoint_zx_owner_gate.py`: it would restore an obsolete requirement. No goal-control write or global configuration change is needed for this continuation.
-- Qualified: 10/90 (01-03, 05-09, 16-17, local G1-G4); shipped: 0/90. Required foundation CI failed; graphics CI is pending. Human review remains unreviewed.
-- Active batch/item: 09+16 delivered and nine lessons rechecked from exact `7bc1cc55caede6ac6cfcc804902e4f5680ed00cb`. 17 sprite-pivot-lab is locally qualified and being delivered; graphics CI watch active. Save-slots real persistence remains authorization-blocked; independent work continues.
-- Next action: commit/verify 17 from its exact tree, then implement 20 transform-composition-lab (the prerequisite of 19/21) in Phase A. Do not retry denied native input or older CI-log retrieval without fresh consent. Do not mark any item SHIPPED while applicable CI remains red/pending.
+- Qualified: 11/90 (01-03, 05-09, 16-17, 20, local G1-G4); shipped: 0/90. Required foundation CI failed; subsequent CI remains pending. Human review remains unreviewed.
+- Active batch/item: 17 is delivered and exact-tree verified at `d2cb997b3119565e68343d2ae8d0fb9a78be8ccb`; 20 is locally qualified and being delivered. Graphics/pivot CI watches remain separate from local success. Save-slots real persistence remains authorization-blocked; independent work continues.
+- Next action: implement and qualify 20 transform-composition-lab (the prerequisite of 19/21) in Phase A. 17 is delivered as `d2cb997b3119565e68343d2ae8d0fb9a78be8ccb`; fresh exact-export format/unit/build/native/negative/rollback verification passed, remote main readback matched, and its applicable CI watch is active (`proc_d233b487913e`). Evidence: `pivot-committed-verification/receipt.json`, `pivot-committed/`, `pivot-delivery.json`. Do not retry denied native input or older CI-log retrieval without fresh consent. Do not mark any item SHIPPED while applicable CI remains red/pending.
 - Owner/session: `20261010_100903_97bf0099`; routing key `agent:main:telegram:dm:2086218583:36859`. Current single Astra owner retained under the latest request. No worker, global model change, runtime patch or replacement session was started.
 - Ownership: retain `tmp/zx-examples/20261010-astra/ownership.json`, the initial 34-file preservation receipt and backups. Unrelated EPU source/bindings remain outside task commits. After the user's explicit continuation, fresh Git status/numstat confirmed the task-owned foundation/runtime edits and the preserved foreign EPU work. `proc_d8fdf3342d2f` is exited with code 0, not an active competing builder; no duplicate verifier was started.
 - Completed build: the delayed `proc_8d6e2f467cf3` notification confirms the baseline player/CLI/xtask build exited 0. Do not infer current binary identity from that notification: the same export/target directories were subsequently used for an explicitly uncommitted runtime-repair probe.
@@ -338,7 +338,7 @@ For each entry replace the progress line as work proceeds: PLANNED -> IMPLEMENTI
 - **Build/repair:** Show origin markers, rotation, subregions and a composed hierarchy using guest coordinates.
 - **Witness:** Rotation around center and edge pivots matches marked reference points.
 - **Boundary:** A handful of transforms is enough; do not invent a scene graph.
-- **Progress:** READY locally (G1-G4); center/edge origins, eight clockwise stops, atlas subregions, marked reference points and explicit two-link composition implemented. Unit, 68-tick/19-assertion replay, negative control, fourteen native images, independent endpoint/coverage probes, reset and forced rollback pass. Evidence: `pivot-qualified/receipt.json` in the run directory above. Delivery: pending exact committed verification; human: unreviewed.
+- **Progress:** READY locally (G1-G4); center/edge origins, eight clockwise stops, atlas subregions, marked reference points and explicit two-link composition implemented. Unit, 68-tick/19-assertion replay, negative control, fourteen native images, independent endpoint/coverage probes, reset and forced rollback pass. Evidence: `pivot-qualified/receipt.json` in the run directory above. Delivery: `d2cb997b3119565e68343d2ae8d0fb9a78be8ccb`, exact committed export/relocated native checks and remote main readback pass; applicable CI pending. Human: unreviewed.
 
 
 #### 18. ui-layering-lab
@@ -371,7 +371,7 @@ For each entry replace the progress line as work proceeds: PLANNED -> IMPLEMENTI
 - **Build/repair:** Use push_identity and explicit guest matrices to build a two-joint crane.
 - **Witness:** Translate-then-rotate differs from rotate-then-translate exactly as labeled.
 - **Boundary:** The API's push names do not provide a generic push/pop hierarchy stack.
-- **Progress:** PLANNED; evidence: none; delivery: none; human: unreviewed.
+- **Progress:** READY locally (G1-G4); explicit T*R/R*T, API/matrix comparison, eight angles, relative-child crane and reset implemented. Pure matrix checks, 108-tick/25-assertion replay, negative assertion, 22 native captures, independent scalar box projections/225 snapshot fields and 120-frame forced rollback pass. Evidence: `transform-qualified/receipt.json`; repeated idle captures rejected. The initial image classifier also counted cyan-lit crane surfaces in the cyan bar: panel-local classification fixed this oracle defect without changing guest code or the declared three-pixel tolerance. Delivery: pending exact committed verification/remote/CI; human: unreviewed.
 
 
 #### 21. mesh-submission-lab
