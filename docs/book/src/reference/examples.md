@@ -57,6 +57,7 @@ images establish human acceptance.
 |---------|-------------|
 | **textured-quad** | Numbered atlas: UV corners/regions, nearest versus linear, half-texel inset and reset |
 | **atlas-flipbook** | Tick-owned loop/once/ping-pong sprite playback; pause, single tick, rewind and native boundary checks |
+| **sprite-pivot-lab** | Marked center/edge pivots, rotated atlas regions and explicit parent/child coordinates |
 | **procedural-shapes** | Built-in mesh generators with texture toggle (B button) |
 | **lighting** | PBR rendering with 4 dynamic lights |
 | **billboard** | GPU-instanced billboards |

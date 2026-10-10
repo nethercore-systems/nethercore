@@ -1,0 +1,112 @@
+console = "zx"
+seed = 4919
+players = 1
+
+[[frames]]
+f = 0
+snap = true
+assert = "$tip_y == 330"
+
+[[frames]]
+f = 5
+p1 = "a"
+snap = true
+assert = "$step == 1"
+
+[[frames]]
+f = 6
+p1 = "a"
+snap = true
+assert = "$step == 1"
+
+[[frames]]
+f = 10
+p1 = "a"
+snap = true
+assert = "$tip_x == 730"
+
+[[frames]]
+f = 15
+p1 = "a"
+snap = true
+assert = "$step == 3"
+
+[[frames]]
+f = 20
+p1 = "a"
+snap = true
+assert = "$tip_y == 210"
+
+[[frames]]
+f = 25
+p1 = "a"
+snap = true
+assert = "$step == 5"
+
+[[frames]]
+f = 30
+p1 = "a"
+snap = true
+assert = "$tip_x == 850"
+
+[[frames]]
+f = 35
+p1 = "a"
+snap = true
+assert = "$step == 7"
+
+[[frames]]
+f = 40
+p1 = "a"
+snap = true
+assert = "$tip_y == 330"
+
+[[frames]]
+f = 45
+p1 = "x"
+snap = true
+assert = "$region == 1"
+
+[[frames]]
+f = 50
+p1 = "b"
+snap = true
+assert = "$tip_y == 210"
+
+[[frames]]
+f = 55
+p1 = "a"
+snap = true
+assert = "$step == 1"
+
+[[frames]]
+f = 60
+p1 = "a"
+snap = true
+assert = "$tip_x == 850"
+
+[[frames]]
+f = 61
+snap = true
+assert = "$tip_y == 350"
+
+[[frames]]
+f = 62
+snap = true
+assert = "$flip == 1"
+
+[[frames]]
+f = 65
+p1 = "y"
+snap = true
+assert = "$step == 0"
+
+[[frames]]
+f = 66
+snap = true
+assert = "$region == 0"
+
+[[frames]]
+f = 67
+snap = true
+assert = "$flip == 0"
