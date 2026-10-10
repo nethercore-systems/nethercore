@@ -1,0 +1,14 @@
+[game]
+id = "texture-shaped-stencil"
+title = "Texture-Shaped Stencil"
+author = "Nethercore Examples"
+version = "0.1.0"
+render_mode = 0
+tick_rate = 60
+max_players = 1
+compress_textures = false
+description = "Transparent holes and Bayer-dithered sprite edges become a stencil silhouette"
+tags = ["demo", "stencil", "texture"]
+
+[netplay]
+enabled = false
