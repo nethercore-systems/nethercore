@@ -1,0 +1,14 @@
+[game]
+id = "stencil-region-stack"
+title = "Stencil Region Stack"
+author = "Nethercore Examples"
+version = "0.1.0"
+render_mode = 0
+tick_rate = 60
+max_players = 1
+compress_textures = false
+description = "Nested full-reference stencil regions, parent restoration and safe sibling reuse"
+tags = ["demo", "stencil", "region-stack"]
+
+[netplay]
+enabled = false
