@@ -22,7 +22,7 @@ fn text(s: []const u8, x: f32, y: f32, size: f32, color: u32) void {
 
 export fn render() void {
     text("Hello Nethercore!", 48, 36, 32, 0xffffffff);
-    text("960 x 540 | top-left origin | x=448 | 64 x 64 | y=160..384", 48, 92, 18, 0xabc1d6ff);
+    text("960 x 540 | top-left origin | x=448 | 64 x 64 | y=160..384", 48, 92, 14, 0xabc1d6ff);
     zx.set_color(0x344c66ff);
     zx.draw_rect(96, 156, 768, 4);
     zx.draw_rect(96, 448, 768, 4);

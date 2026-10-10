@@ -46,7 +46,7 @@ pub extern "C" fn render() {
         draw_text(title.as_ptr(), title.len() as u32, 48.0, 36.0, 32.0);
         set_color(0xabc1d6ff);
         let lesson = b"960 x 540 | top-left origin | x=448 | 64 x 64 | y=160..384";
-        draw_text(lesson.as_ptr(), lesson.len() as u32, 48.0, 92.0, 18.0);
+        draw_text(lesson.as_ptr(), lesson.len() as u32, 48.0, 92.0, 14.0);
         set_color(0x344c66ff);
         draw_rect(96.0, 156.0, 768.0, 4.0);
         draw_rect(96.0, 448.0, 768.0, 4.0);
