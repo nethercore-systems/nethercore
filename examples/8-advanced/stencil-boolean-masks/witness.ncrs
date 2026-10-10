@@ -1,0 +1,321 @@
+console = "zx"
+seed = 6919
+players = 1
+
+[[frames]]
+f = 0
+snap = true
+assert = "$mode == 0"
+
+[[frames]]
+f = 2
+p1 = "a"
+
+[[frames]]
+f = 3
+p1 = "a"
+
+[[frames]]
+f = 4
+snap = true
+assert = "$mode == 1"
+
+[[frames]]
+f = 6
+p1 = "a"
+
+[[frames]]
+f = 7
+p1 = "a"
+
+[[frames]]
+f = 8
+snap = true
+assert = "$mode == 2"
+
+[[frames]]
+f = 10
+p1 = "a"
+
+[[frames]]
+f = 11
+p1 = "a"
+
+[[frames]]
+f = 12
+snap = true
+assert = "$mode == 3"
+
+[[frames]]
+f = 14
+p1 = "a+b"
+
+[[frames]]
+f = 15
+p1 = "a+b"
+
+[[frames]]
+f = 16
+snap = true
+assert = "$mode == 0"
+
+[[frames]]
+f = 18
+p1 = "a"
+
+[[frames]]
+f = 19
+p1 = "a"
+
+[[frames]]
+f = 20
+snap = true
+assert = "$mode == 1"
+
+[[frames]]
+f = 22
+p1 = "a"
+
+[[frames]]
+f = 23
+p1 = "a"
+
+[[frames]]
+f = 24
+snap = true
+assert = "$mode == 2"
+
+[[frames]]
+f = 26
+p1 = "a"
+
+[[frames]]
+f = 27
+p1 = "a"
+
+[[frames]]
+f = 28
+snap = true
+assert = "$mode == 3"
+
+[[frames]]
+f = 30
+p1 = "a+b"
+
+[[frames]]
+f = 31
+p1 = "a+b"
+
+[[frames]]
+f = 32
+snap = true
+assert = "$mode == 0"
+
+[[frames]]
+f = 34
+p1 = "a"
+
+[[frames]]
+f = 35
+p1 = "a"
+
+[[frames]]
+f = 36
+snap = true
+assert = "$mode == 1"
+
+[[frames]]
+f = 38
+p1 = "a"
+
+[[frames]]
+f = 39
+p1 = "a"
+
+[[frames]]
+f = 40
+snap = true
+assert = "$mode == 2"
+
+[[frames]]
+f = 42
+p1 = "a"
+
+[[frames]]
+f = 43
+p1 = "a"
+
+[[frames]]
+f = 44
+snap = true
+assert = "$mode == 3"
+
+[[frames]]
+f = 46
+p1 = "a+b+x"
+
+[[frames]]
+f = 47
+p1 = "a+b+x"
+
+[[frames]]
+f = 48
+snap = true
+assert = "$mode == 0"
+
+[[frames]]
+f = 50
+p1 = "a"
+
+[[frames]]
+f = 51
+p1 = "a"
+
+[[frames]]
+f = 52
+snap = true
+assert = "$mode == 1"
+
+[[frames]]
+f = 54
+p1 = "a"
+
+[[frames]]
+f = 55
+p1 = "a"
+
+[[frames]]
+f = 56
+snap = true
+assert = "$mode == 2"
+
+[[frames]]
+f = 58
+p1 = "a"
+
+[[frames]]
+f = 59
+p1 = "a"
+
+[[frames]]
+f = 60
+snap = true
+assert = "$mode == 3"
+
+[[frames]]
+f = 62
+p1 = "a+b"
+
+[[frames]]
+f = 63
+p1 = "a+b"
+
+[[frames]]
+f = 64
+snap = true
+assert = "$mode == 0"
+
+[[frames]]
+f = 66
+p1 = "a"
+
+[[frames]]
+f = 67
+p1 = "a"
+
+[[frames]]
+f = 68
+snap = true
+assert = "$mode == 1"
+
+[[frames]]
+f = 70
+p1 = "a"
+
+[[frames]]
+f = 71
+p1 = "a"
+
+[[frames]]
+f = 72
+snap = true
+assert = "$mode == 2"
+
+[[frames]]
+f = 74
+p1 = "a"
+
+[[frames]]
+f = 75
+p1 = "a"
+
+[[frames]]
+f = 76
+snap = true
+assert = "$mode == 3"
+
+[[frames]]
+f = 78
+p1 = "a+b"
+
+[[frames]]
+f = 79
+p1 = "a+b"
+
+[[frames]]
+f = 80
+snap = true
+assert = "$mode == 0"
+
+[[frames]]
+f = 82
+p1 = "a"
+
+[[frames]]
+f = 83
+p1 = "a"
+
+[[frames]]
+f = 84
+snap = true
+assert = "$mode == 1"
+
+[[frames]]
+f = 86
+p1 = "a"
+
+[[frames]]
+f = 87
+p1 = "a"
+
+[[frames]]
+f = 88
+snap = true
+assert = "$mode == 2"
+
+[[frames]]
+f = 90
+p1 = "a"
+
+[[frames]]
+f = 91
+p1 = "a"
+
+[[frames]]
+f = 92
+snap = true
+assert = "$mode == 3"
+
+[[frames]]
+f = 94
+p1 = "y+a+b+x"
+
+[[frames]]
+f = 96
+snap = true
+assert = "$mode == 0"
+
+[[frames]]
+f = 97
+snap = true
+assert = "$mode == 0"

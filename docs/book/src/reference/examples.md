@@ -124,6 +124,7 @@ images establish human acceptance.
 | **stencil-demo** | Four stencil introductions: pass order, mask ink, portal depth-clear counterexample and reset |
 | **viewport-test** | 2P/4P cameras, local HUD coordinates, scissored masks/ink and independent input |
 | **rear-mirror** | Rear-view mirror using viewport |
+| **stencil-boolean-masks** | Union/intersection/subtraction/parity with nested holes and swapped operands |
 
 ### Support Library
 

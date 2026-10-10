@@ -1,0 +1,14 @@
+[game]
+id = "stencil-boolean-masks"
+title = "Stencil Boolean Masks"
+author = "Nethercore Examples"
+version = "0.1.0"
+render_mode = 0
+tick_rate = 60
+max_players = 1
+compress_textures = false
+description = "Full-byte stencil union, intersection, subtraction and parity"
+tags = ["demo", "stencil", "boolean-masks"]
+
+[netplay]
+enabled = false

@@ -210,7 +210,7 @@ Fully playable games demonstrating complete game loops.
 
 ---
 
-### 8. Advanced Rendering (3 examples)
+### 8. Advanced Rendering (4 examples)
 
 Stencil buffers, viewports, and advanced techniques.
 
@@ -219,6 +219,7 @@ Stencil buffers, viewports, and advanced techniques.
 | **stencil-demo** | Four stencil introductions with pass-order labels | 🟡 Intermediate | Circle/inverted/diagonal/portal, mask ink, depth-clear witness and reset |
 | **viewport-test** | 2P/4P camera and viewport-local HUD lab | 🟡 Intermediate | Independent camera input, clipped masks/ink, reset and scissor witnesses |
 | **rear-mirror** | Rear-view mirror for racing | 🔴 Advanced | Secondary viewport |
+| **stencil-boolean-masks** | Full-byte stencil set operations | 🟡 Intermediate | Union, intersection, subtraction, parity, holes and operand order |
 
 ---
 
@@ -233,7 +234,7 @@ Stencil buffers, viewports, and advanced techniques.
 
 ## 📊 Statistics
 
-- **Source Projects:** 44
+- **Source Projects:** 51
 - **Languages:** Rust, C, Zig
 - **Game Projects:** 3
 
